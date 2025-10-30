@@ -1,7 +1,7 @@
 {
   # Ensure this is unique among all clans you want to use.
-  meta.name = "__CHANGE_ME__";
-  meta.tld = "changeme";
+  meta.name = "omnissiah";
+  meta.tld = "omnissiah";
 
   inventory.machines = {
     # Define machines here.
