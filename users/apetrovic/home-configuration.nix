@@ -1,9 +1,26 @@
-{...}:
+{lib, ...}:
 {
+  imports = [
+    ./starship.nix
+  ];
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   home.username = "apetrovic";
   home.homeDirectory = "/home/apetrovic";
+
+  stylix = {
+    enable = true;
+    image = ../../wallpapers/everforest/1.png;
+  };
+
+
+  programs.bash = {
+    enable = true;
+    initExtra = ''
+      fastfetch
+      eval "$(starship init bash)"
+    '';
+  };
 
   # This value determines the Home Manager release that your
   # configuration is compatible with. This helps avoid breakage

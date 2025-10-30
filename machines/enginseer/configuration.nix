@@ -4,6 +4,8 @@
       imports = [
         self.inputs.nix-flatpak.nixosModules.nix-flatpak
         self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
+        self.inputs.stylix.nixosModules.stylix
+
         ../../modules/cosmic.nix
       ];
 
