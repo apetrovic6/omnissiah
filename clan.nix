@@ -3,20 +3,27 @@
   meta.name = "omnissiah";
   meta.tld = "omnissiah";
 
+  imports = [
+    # ./inventory/machines.nix
+  ];
 
   modules."@imperium/laptop" = import ./service-modules/laptop.nix;
 
-  inventory.machines = {
-    # Define machines here.
-    enginseer = {
-      tags = [ "laptop" ];
-      deploy.targetHost = "root@192.168.1.50";
-    };
-  };
+
+  inventory.machines =  import ./inventory/machines.nix;
+
+  # inventory.machines = {
+  #   # Define machines here.
+  #   enginseer = {
+  #     tags = [ "laptop" ];
+  #     deploy.targetHost = "root@192.168.1.50";
+  #   };
+  # };
 
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
+
     laptop = {
       module.input = "self" ;
       module.name = "@imperium/laptop";
