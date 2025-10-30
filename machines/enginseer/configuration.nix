@@ -1,4 +1,4 @@
-{self, ...}:
+{self, pgks,...}:
 {
 
       imports = [
@@ -7,7 +7,7 @@
 
   boot.loader = {
     systemd-boot.enable = true;
-    efi.canTouchEfiVariables = true;
+    efi.canTouchEfiVariables = false;
     grub.devices = [
       "/dev/disk/by-id/nvme-WD_PC_SN560_SDDPNQE-1T00-1102_23461C801092"
     ];
@@ -19,4 +19,6 @@
     enable = true;
     xwayland.enable = true;
   };
+
+  nixpkgs.config.allowUnfree = true;
 }

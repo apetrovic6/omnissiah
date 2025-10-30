@@ -5,8 +5,6 @@
 
   inventory.machines = {
     # Define machines here.
-    # jon = { };
-  
     enginseer = {
       tags = [];
     };
