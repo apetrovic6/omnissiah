@@ -9,6 +9,8 @@
 
   modules."@imperium/laptop" = import ./service-modules/laptop.nix;
   modules."@imperium/base" = import ./service-modules/base.nix;
+  modules."@imperium/workstation" = import ./service-modules/workstation.nix;
+  modules."@imperium/dev" = import ./service-modules/dev.nix;
 
 
   # Docs: See https://docs.clan.lol/reference/clanServices
@@ -28,7 +30,19 @@
       roles.default.tags.base = {};
     };
     
+    workstation = {
+      module.input = "self" ;
+      module.name = "@imperium/workstation";
 
+      roles.default.tags.workstation = {};
+    };
+
+    dev = {
+      module.input = "self" ;
+      module.name = "@imperium/dev";
+
+      roles.default.tags.dev = {};
+    };
 
     # Docs: https://docs.clan.lol/reference/clanServices/admin/
     # Admin service for managing machines

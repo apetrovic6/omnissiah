@@ -6,16 +6,14 @@
     environment.systemPackages = with pkgs; [
       btop
       pciutils
-      nvim
+      neovim
       vim
       wget
       git
       fastfetch
       yazi
       killall
-      lm-sensors
     ];
-  };
 
   nix.gc.automatic = true;
   nix.settings.auto-optimise-store = true;
@@ -30,4 +28,7 @@
   services.tailscale = {
     enable = true;
   };
+
+  nixpkgs.config.allowUnfree = true;
+};
 }
