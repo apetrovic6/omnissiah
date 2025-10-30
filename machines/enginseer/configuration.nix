@@ -1,8 +1,9 @@
-{self, pgks,...}:
+{self, ...}:
 {
 
       imports = [
         self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
+        ../../modules/cosmic.nix
       ];
 
   boot.loader = {
@@ -13,12 +14,5 @@
     ];
   };
   
-
-  services.displayManager.cosmic-greeter.enable = true;
-  services.desktopManager.cosmic = {
-    enable = true;
-    xwayland.enable = true;
-  };
-
   nixpkgs.config.allowUnfree = true;
 }

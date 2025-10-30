@@ -3,51 +3,8 @@
   meta.name = "omnissiah";
   meta.tld = "omnissiah";
 
-  modules."@imperium/machine-type" = {...}: {
-    _class = "clan.service";
-    manifest.name = "machine-type";
 
-    roles.laptop.perInstance.nixosModule = {lib, pkgs, ...} :{
-    
-      networking.networkmanager.enable = true;
-
-
-       environment.systemPackages = [ pkgs.bitwarden-desktop ];
-
-      # Safe, vendor-neutral power management (works well with GNOME and others)
-      services.power-profiles-daemon.enable = true;
-
-      # Battery/energy info for desktop environments and tools
-      services.upower.enable = true;
-
-      # Helps on Intel CPUs; mkDefault so you can override per-machine if needed
-      services.thermald.enable = lib.mkDefault true;
-
-      # Sensible behavior on lid close
-      services.logind = {
-        lidSwitch = "suspend";
-        lidSwitchExternalPower = "suspend";
-        lidSwitchDocked = "ignore";
-      };
-
-
-      # Optional quality-of-life bits (commented for now)
-       powerManagement.powertop.enable = true; # run powertop --auto-tune at boot
-       services.fwupd.enable = true;           # firmware updates (UEFI, Thunderbolt, etc.)
-
-# Sleep behavior: suspend quickly, then hibernate later to save battery
-    systemd.sleep.extraConfig = ''
-      SuspendState=suspend
-      HibernateMode=shutdown
-      HibernateDelaySec=1h
-      SuspendEstimationSec=0
-    '';
-    # Use suspend-then-hibernate on lid close / idle (matches logind defaults above)
-    systemd.targets."sleep".wantedBy = [ "suspend-then-hibernate.target" ];
-    systemd.services."systemd-suspend-then-hibernate".enable = true;
-    };
-    };
- 
+  modules."@imperium/laptop" = import ./service-modules/laptop.nix;
 
   inventory.machines = {
     # Define machines here.
@@ -61,15 +18,12 @@
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
-
-    machine-type = {
+    laptop = {
       module.input = "self" ;
-      module.name = "@imperium/machine-type";
+      module.name = "@imperium/laptop";
 
       roles.laptop.tags.laptop = {};
     };
-
-
     
 
 
