@@ -1,7 +1,7 @@
 
 {
   _class = "clan.service";
-  manifest.name = "role-laptop";
+  manifest.name = "laptop";
 
   # Single role called "default" (selected by the 'laptop' tag)
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {

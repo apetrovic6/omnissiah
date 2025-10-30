@@ -15,14 +15,13 @@
   };
 
 
-
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
     laptop = {
       module.input = "self" ;
       module.name = "@imperium/laptop";
 
-      roles.laptop.tags.laptop = {};
+      roles.default.tags.laptop = {};
     };
     
 
