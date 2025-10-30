@@ -5,7 +5,7 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "clan-core/nixpkgs";
 
-
+    nix-flatpak.url = "github:gmodena/nix-flatpak?ref=latest";
     import-tree.url = "github:vic/import-tree";
 
     home-manager = {
@@ -19,7 +19,6 @@
   outputs =
     inputs@{
       flake-parts,
-      nixos-hardware,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
