@@ -17,8 +17,20 @@
       killall
     ];
 
+    fonts = {
+      packages = with pkgs; [
+        fira-code
+        fira-code-symbols
+        fira-mono
+      ];
+    };
+
   nix.gc.automatic = true;
   nix.settings.auto-optimise-store = true;
+
+    programs.dconf = {
+      enable = true;
+    };
 
   services.xserver = {
     xkb = {

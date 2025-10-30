@@ -9,7 +9,11 @@
       insomnia
       postman
       devenv
+      lazydocker
+      lazygit
     ];
+
+    programs.adb.enable = true;
 
     programs.direnv = {
       enable = true;

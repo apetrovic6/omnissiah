@@ -1,7 +1,11 @@
 {
   inputs = {
+    nixpkgs-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
-    nixpkgs.follows = "clan-core/nixpkgs";
+
+    nixpkgs.follows = "nixpkgs-unstable";
+
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "clan-core/nixpkgs";
 
@@ -14,6 +18,16 @@
     };
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
+
+    # darwin = {
+    #   url = "github:nix-darwin/nix-darwin";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    # };
+
+    stylix = {
+     url = "github:nix-community/stylix";
+     inputs.nixpkgs.follows = "nixpkgs";
+     };
   };
 
   outputs =

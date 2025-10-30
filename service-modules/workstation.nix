@@ -7,6 +7,7 @@
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
     imports = [
       ../modules/core/flatpaks.nix
+      ../modules/core/stylix.nix
     ];
 
     environment.systemPackages = with pkgs; [
