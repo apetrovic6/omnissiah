@@ -1,6 +1,8 @@
 {
   _class = "clan.service";
-  manifest.name = "base";
+  manifest.name = "workstation";
+
+  roles.default.description = "Base packages and services";
 
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
     environment.systemPackages = with pkgs; [
@@ -10,7 +12,7 @@
       wezterm
 
       zathura
-      gnome.file-roller
+      file-roller
       obsidian
 
       brave
@@ -22,10 +24,12 @@
       vesktop
     ];
 
-   sound.enable = true;
-  hardware.pulseaudio.enable = false;
-  security.rtkit.enable = true;
-  services.pipewire = {
+    programs.localsend = {
+      enable = true;
+    };
+
+    security.rtkit.enable = true;
+    services.pipewire = {
     enable = true;
     alsa.enable = true;
     alsa.support32Bit = true;

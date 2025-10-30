@@ -2,6 +2,8 @@
   _class = "clan.service";
   manifest.name = "base";
 
+  roles.default.description = "Some basic tools and settings that are needed everywhere";
+
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
     environment.systemPackages = with pkgs; [
       btop

@@ -1,13 +1,14 @@
 {
   _class = "clan.service";
-  manifest.name = "base";
+  manifest.name = "dev";
+
+  roles.default.description = "Dev related tools";
 
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
     environment.systemPackages = with pkgs; [
       insomnia
       postman
       devenv
-
     ];
 
     programs.direnv = {

@@ -2,6 +2,8 @@
   _class = "clan.service";
   manifest.name = "laptop";
 
+  roles.default.description = "Laptop specific configuration";
+
   # Single role called "default" (selected by the 'laptop' tag)
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
     # Networking & power basics for laptops
