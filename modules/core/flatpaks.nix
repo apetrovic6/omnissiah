@@ -4,6 +4,7 @@
   #   extraPortals = [ pkgs.xdg-desktop-portal-hyprland ];
   #   configPackages = [ pkgs.hyprland ];
   # };
+  
   services = {
     flatpak = {
       enable = true;
@@ -13,6 +14,7 @@
       # Examples:
       packages = [
         "com.bambulab.BambuStudio"
+        "com.thincast.client"
 
         #"com.github.tchx84.Flatseal" #Manage flatpak permissions - should always have this
         #"com.rtosta.zapzap"              # WhatsApp client

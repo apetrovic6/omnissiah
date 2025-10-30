@@ -5,6 +5,10 @@
   roles.default.description = "Base packages and services";
 
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
+    imports = [
+      ../modules/core/flatpaks.nix
+    ];
+
     environment.systemPackages = with pkgs; [
       alacritty
       kitty
@@ -22,6 +26,9 @@
       vlc
 
       vesktop
+
+      remmina
+      freerdp
     ];
 
     programs.localsend = {
