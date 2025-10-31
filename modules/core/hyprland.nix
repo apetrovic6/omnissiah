@@ -21,6 +21,10 @@ options.services.imperium.hyprland = {
     trusted-public-keys = ["hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="];
   };
 
+  environment.variables = {
+    GDK_BACKEND = "wayland,x11,*"
+  };
+
   programs.hyprland = {
     enable = true;
     xwayland.enable = true;
