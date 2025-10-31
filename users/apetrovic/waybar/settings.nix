@@ -255,10 +255,12 @@ with lib;
           padding: 0 5px;
           margin: 5px  2px;
           transition: ${betterTransition};
+          border: none;          /* belt-and-suspenders */
         }
 
         #workspaces button.active {
           transition: ${betterTransition};
+          border: none;          /* belt-and-suspenders */
         }
 
         #workspaces button:hover {
@@ -267,6 +269,7 @@ with lib;
           background:  #${config.lib.stylix.colors.base08};
           opacity: 0.8;
           transition: ${betterTransition};
+          border: none;          /* belt-and-suspenders */
         }
 
         #workspaces button.visible {
