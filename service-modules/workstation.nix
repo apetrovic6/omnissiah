@@ -8,7 +8,10 @@
     imports = [
       ../modules/core/flatpaks.nix
       ../modules/core/stylix.nix
+      ../modules/hyprland/hyprland.nix
     ];
+
+    services.imperium.hyprland.enable = true;
 
     environment.systemPackages = with pkgs; [
       alacritty

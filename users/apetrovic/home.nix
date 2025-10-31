@@ -6,9 +6,10 @@
     # self.inputs.stylix.homeModules.stylix
   ];
 
-  # home-manager.sharedModules = [
-  #   self.inputs.stylix.homeModules.stylix
-  # ];
+  home-manager.extraSpecialArgs = {inherit self;};
+
+   home-manager.sharedModules = [
+   ];
 
   home-manager.users.apetrovic = {
     imports = [

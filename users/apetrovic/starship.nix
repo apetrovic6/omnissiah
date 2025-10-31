@@ -38,7 +38,7 @@
         untracked  = "? ";
         modified   = " ";
         stashed    = "";
-        staged     = "";
+        staged     = "" ;
         renamed    = "";
         deleted    = "";
       };

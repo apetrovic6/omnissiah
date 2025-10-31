@@ -74,8 +74,8 @@
           "docker"
         ];
       };
-
-      roles.default.extraModules = [ ./users/apetrovic/home.nix ]; # 
+      
+      roles.default.extraModules = [ ./users/apetrovic/home.nix ];
     };
 
     # Docs: https://docs.clan.lol/reference/clanServices/zerotier/

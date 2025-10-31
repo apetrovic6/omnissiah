@@ -1,8 +1,9 @@
-{lib, ...}:
+{self, pkgs, ...}:
 {
   imports = [
     ./starship.nix
   ];
+
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   home.username = "apetrovic";
@@ -13,6 +14,12 @@
     image = ../../wallpapers/everforest/1.png;
   };
 
+ wayland.windowManager.hyprland = {
+            enable = true;
+            # set the flake package
+            package = self.inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
+            portalPackage = self.inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
+          };
 
   programs.bash = {
     enable = true;
