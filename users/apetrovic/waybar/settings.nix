@@ -15,7 +15,6 @@ with lib;
         ];
         modules-right = [
           "group/tray-expander"
-          "memory"
           "bluetooth"
           "pulseaudio"
           "cpu"
@@ -33,6 +32,7 @@ with lib;
           "tray"
           "idle_inhibitor"
           "cpu"
+          "memory"
         ];
        };
 
@@ -241,7 +241,7 @@ with lib;
           background: rgba(0,0,0,0);
         }
 
-        #window, #pulseaudio, #cpu, #memory, #idle_inhibitor, #workspaces, #clock, #custom-startmenu {
+        #window, #pulseaudio, #cpu, #memory, #idle_inhibitor, #workspaces, #clock, #custom-startmenu, #group-trayexpander, #bluetooth {
           font-weight: bold;
           margin: 4px 4px;
           padding: 0px 18px;
@@ -258,13 +258,6 @@ with lib;
           transition: ${betterTransition};
         }
 
-        #workspaces button.active {
-          color: #${config.lib.stylix.colors.base00};
-          background:  #${config.lib.stylix.colors.base08};
-          transition: ${betterTransition};
-          opacity: 1.0;
-        }
-
         #workspaces button:hover {
           font-weight: bold;
           border-radius: 16px;
@@ -273,6 +266,11 @@ with lib;
           opacity: 0.8;
           transition: ${betterTransition};
         }
+
+        #workspaces button.active {
+          transition: ${betterTransition};
+        }
+
 
         tooltip {
           background: #${config.lib.stylix.colors.base00};
