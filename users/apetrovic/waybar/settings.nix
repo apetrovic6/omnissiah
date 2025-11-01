@@ -13,7 +13,7 @@ with lib;
       height = 26;
 
       "modules-left" = [ "custom/startmenu" "hyprland/workspaces" ];
-      "modules-center" = [ "clock" "custom/update" "custom/screenrecording-indicator" ];
+      "modules-center" = [ "clock" "custom/screenrecording-indicator" ];
       "modules-right" = [
         "group/tray-expander"
         "bluetooth"
@@ -59,33 +59,18 @@ with lib;
           on-click = "sleep 0.1 && nwg-drawer -mb 200 -mt 200 -mr 200 -ml 200";
         };
 
-      # "custom/omarchy" = {
-      #   format = "<span font='omarchy'>\\ue900</span>";
-      #   on-click = "omarchy-menu";
-      #   "on-click-right" = "omarchy-launch-terminal";
-      #   "tooltip-format" = "Omarchy Menu\n\nSuper + Alt + Space";
-      # };
-
-      "custom/update" = {
-        format = "";
-        exec = "omarchy-update-available";
-        on-click = "omarchy-launch-floating-terminal-with-presentation omarchy-update";
-        "tooltip-format" = "Omarchy update available";
-        signal = 7;
-        interval = 21600;
-      };
 
       cpu = {
         interval = 5;
         format = "󰍛";
-        "on-click" = ''${"$"}TERMINAL -e btop'';
+        "on-click" = ''$TERMINAL -e btop'';
       };
 
       clock = {
         format = "{:L%A %H:%M}";
         "format-alt" = "{:L%d %B W%V %Y}";
-        tooltip = false;
-        "on-click-right" = "omarchy-launch-floating-terminal-with-presentation omarchy-tz-select";
+          tooltip = true;
+          tooltip-format = "<big>{:%A, %d.}</big>\n<tt><small>{calendar}</small></tt>";
       };
 
       network = {
@@ -178,7 +163,7 @@ with lib;
   border: none;
   border-radius: 0;
   min-height: 0;
-  font-family: 'Fira Mono';
+  font-family: 'monospace';
   font-size: 12px;
 }
 
