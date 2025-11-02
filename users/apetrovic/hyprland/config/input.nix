@@ -2,7 +2,7 @@
 {
   # https://wiki.hyprland.org/Configuring/Variables/#input
  wayland.windowManager.hyprland.settings.input =  {
-    kb_layout = ["us" "hr"];
+    kb_layout = ["us"];
     kb_variant = "";
     kb_model = "";
     kb_options = "compose:caps";

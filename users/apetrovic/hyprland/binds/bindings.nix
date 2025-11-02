@@ -1,12 +1,18 @@
-{config, pkgs, lib, ... }:
-let
+{ pkgs, lib, ... }:
+with pkgs;
+let 
+  inherit (lib) getExe;
     modifier = "SUPER";
-    launcher = "walker";
-    browser = "brave";
-    terminal = "ghostty";
-    passwordManager = "bitwarden";
-    fileManager = "thunar";
-    cliFileManager = "yazi";
+
+    launcher =  getExe walker;
+    browser = getExe librewolf;
+     terminal = getExe ghostty;
+    # passwordManager = getExe bitwarden-desktop;
+    fileManager = getExe xfce.thunar;
+    cliFileManager = getExe yazi;
+    # messenger = getExe signal-desktop-bin;
+
+    passwordManager =  "bitwarden";
     messenger = "signal";
 in
 {
@@ -23,7 +29,8 @@ in
 
     # Terminal apps
     "${modifier}, N, Neovim, exec, ${terminal} -e nvim"
-    "${modifier}, D, Lazy Docker, exec, ${terminal} -e lazydocker"
+    #"${modifier}, D, Lazy Docker, exec, ${terminal} -e lazydocker"
+    "${modifier}, D, Lazy Docker, exec, ${getExe lazydocker}"
     "${modifier}, F, Terminal File Manager, exec, ${terminal} -e ${cliFileManager}"
 
     # Hyprpanel
