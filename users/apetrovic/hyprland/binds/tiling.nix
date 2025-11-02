@@ -7,16 +7,14 @@ in
 {
   wayland.windowManager.hyprland.settings = {
     bindd = [
-    "${modifier}, Return,Terminal, exec, ${terminal}"
-
        # Close windows
       "${modifier}, W, Close window, killactive,"
 
       # Control tiling
-      "${modifier}, J, Toggle window split, togglesplit, # dwindle"
-      "${modifier}, P, Pseudo window, pseudo, # dwindle"
+      "${modifier}, J, Toggle window split, togglesplit,"
+      "${modifier}, P, Pseudo window, pseudo,"
       "${modifier}, T, Toggle window floating/tiling, togglefloating,"
-      "${modifier}, F, Full screen, fullscreen, 0"
+      "${modifier} ALT, F, Full screen, fullscreen, 0"
       "${modifier} CTRL, F, Tiled full screen, fullscreenstate, 0 2"
       "${modifier} ALT, F, Full width, fullscreen, 1"
 

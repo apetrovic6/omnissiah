@@ -1,6 +1,7 @@
-{ ... }:
+{config, pkgs, lib, ... }:
 let
     modifier = "SUPER";
+    launcher = "walker";
     browser = "brave";
     terminal = "ghostty";
     passwordManager = "bitwarden";
@@ -10,11 +11,10 @@ let
 in
 {
   wayland.windowManager.hyprland.settings.bindd = [
-    "${modifier}, Return,Terminal, exec, ${terminal}"
-
     # Launchers
+    "${modifier}, SPACE, Launcher, exec, ${launcher}"
     "${modifier}, RETURN, Terminal, exec, ${terminal}"
-    "${modifier}, F, File manager, exec, ${fileManager}"
+    "${modifier} SHIFT, F, File manager, exec, ${fileManager}"
     "${modifier}, B, Web browser, exec, ${browser}"
     #"${modifier}, M, Music player, exec, ${music}"
     "${modifier}, G, Messenger, exec, ${messenger}"
@@ -23,9 +23,12 @@ in
 
     # Terminal apps
     "${modifier}, N, Neovim, exec, ${terminal} -e nvim"
-    "${modifier}, T, Top, exec, ${terminal} -e btop"
     "${modifier}, D, Lazy Docker, exec, ${terminal} -e lazydocker"
-    "${modifier} SHIFT, F, Terminal File Manager, exec, ${terminal} -e ${cliFileManager}"
+    "${modifier}, F, Terminal File Manager, exec, ${terminal} -e ${cliFileManager}"
+
+    # Hyprpanel
+    "${modifier} SHIFT, SPACE, Toggle Hyprpanel, exec, hyprpanel-toggle"
+    "${modifier} SHIFT, N, Notifications, exec, hyprpanel t notificationsmenu"
   ];
 }
 
