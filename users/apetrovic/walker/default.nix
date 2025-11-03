@@ -18,17 +18,32 @@ programs.walker = {
 
   # All options from the config.toml can be used here https://github.com/abenz1267/walker/blob/master/resources/config.toml
   config = {
-    theme = "ugala";
-    placeholders."default" = { input = "Search"; list = "No Results"; };
+    theme = "bugala";
+    placeholders = {
+        "default" = { input = "Search"; list = "No Results"; };
+        "files" = { input = "Browse Files"; list = "No Files Found"; };
+        "calc" = { input = "Calculate"; list = "Enter Expression"; };
+        "runner" = { input = "Run Command"; list = "No Commands"; };
+        "websearch" = { input = "Search Web"; list = ""; };
+        "clipboard" = { input = "Clipboard"; list = "Clipboard Empty"; };
+        "symbols" = { input = "Symbol"; list = "No Symbols"; };
+        "todo" = { input = "Todo"; list = "No Todos"; };
+      };
+
     providers.prefixes = [
       {provider = "websearch"; prefix = "@";}
-      {provider = "providerlist"; prefix = "_";}
+      {provider = "providerlist"; prefix = ";";}
       {provider = "clipboard"; prefix = ":";}
       {provider = "files"; prefix = "/";}
       {provider = "runner"; prefix = ">";}
       {provider = "windows"; prefix = "$";}
+      {provider = "symbols"; prefix = ".";}
+      {provider = "todo"; prefix = "!";}
     ];
-      #keybinds.quick_activate = ["F1" "F2" "F3"];
+
+      # providers.actions = [];
+
+     keybinds.quick_activate = [];
   };
 };
 }
