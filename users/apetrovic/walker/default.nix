@@ -21,8 +21,12 @@ programs.walker = {
     theme = "ugala";
     placeholders."default" = { input = "Search"; list = "No Results"; };
     providers.prefixes = [
-      {provider = "websearch"; prefix = "+";}
+      {provider = "websearch"; prefix = "@";}
       {provider = "providerlist"; prefix = "_";}
+      {provider = "clipboard"; prefix = ":";}
+      {provider = "files"; prefix = "/";}
+      {provider = "runner"; prefix = ">";}
+      {provider = "windows"; prefix = "$";}
     ];
       #keybinds.quick_activate = ["F1" "F2" "F3"];
   };
