@@ -2,10 +2,10 @@
 {
   # https://wiki.hyprland.org/Configuring/Variables/#input
  wayland.windowManager.hyprland.settings.input =  {
-    kb_layout = ["us"];
+    kb_layout = "us,hr";
     kb_variant = "";
     kb_model = "";
-    kb_options = "compose:caps";
+    kb_options = "grp:alt_shift_toggle";  # Alt+Shift cycles layouts
     kb_rules = "";
 
     follow_mouse = 1;
