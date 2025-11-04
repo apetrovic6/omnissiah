@@ -17,12 +17,15 @@ let
 in
 {
   wayland.windowManager.hyprland.settings.bindd = [
-    # Launchers
+    # Walker
     "${modifier}, SPACE, Launcher, exec, ${launcher}"
+
     "${modifier}, RETURN, Terminal, exec, ${terminal}"
     "${modifier} SHIFT, F, File manager, exec, ${fileManager}"
     "${modifier}, B, Web browser, exec, ${browser}"
+
     #"${modifier}, M, Music player, exec, ${music}"
+    #
     "${modifier}, G, Messenger, exec, ${messenger}"
     "${modifier}, O, Obsidian, exec, obsidian -disable-gpu"
     "${modifier}, SLASH, Password manager, exec, ${passwordManager}"
@@ -34,7 +37,8 @@ in
     "${modifier}, F, Terminal File Manager, exec, ${terminal} -e ${cliFileManager}"
 
     # Hyprpanel
-    "${modifier} SHIFT, SPACE, Toggle Hyprpanel, exec, hyprpanel-toggle"
+    #"${modifier} SHIFT, SPACE, Toggle Hyprpanel, exec, hyprpanel-toggle"
+    "${modifier} SHIFT, SPACE, Toggle Hyprpanel, exec, hyprpanel toggleWindow bar-0"
     "${modifier} SHIFT, N, Notifications, exec, hyprpanel t notificationsmenu"
   ];
 }

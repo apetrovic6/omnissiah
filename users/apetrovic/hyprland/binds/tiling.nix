@@ -11,7 +11,7 @@ in
       "${modifier}, W, Close window, killactive,"
 
       # Control tiling
-      "${modifier} SHIFT, J, Toggle window split, togglesplit,"
+      "${modifier}, J, Toggle window split, togglesplit,"
       "${modifier}, P, Pseudo window, pseudo,"
       "${modifier}, T, Toggle window floating/tiling, togglefloating,"
       "${modifier} ALT, F, Full screen, fullscreen, 0"
