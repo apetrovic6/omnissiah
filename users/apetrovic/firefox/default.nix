@@ -1,6 +1,8 @@
 {...}:
 {
   programs.firefox.enable = true;
+  programs.firefox.profiles.apetrovic.extensions.force = true;
+
   programs.librewolf = {
   enable = true;
 

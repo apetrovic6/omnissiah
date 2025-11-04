@@ -8,8 +8,8 @@
     enableZshIntegration = true;
 
     settings = {
-      window-padding-x = 12;
-      window-padding-y = 12;
+      window-padding-x = 10;
+      window-padding-y = 10;
       keybind = [
         # Splits
         "ctrl+s=new_split:auto"
