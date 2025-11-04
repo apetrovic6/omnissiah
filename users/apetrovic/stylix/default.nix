@@ -3,7 +3,7 @@
   stylix = {
     enable = true;
     autoEnable = true;
-    image = ../../wallpapers/lofi/3.jpg;
+    image = ../../../wallpapers/lofi/3.jpg;
     polarity = "dark";
 
     opacity = {
@@ -15,8 +15,8 @@
 
     fonts = {
       monospace = {
-        package = pkgs.nerd-fonts.fira-mono;
-        name = "fira-mono";
+        package = pkgs.nerd-fonts.jetbrains-mono;
+        name = "jetbrains-mono";
       };
 
       sizes = {
@@ -25,12 +25,22 @@
         desktop = 10;
         popups = 10;
       };
-  };
+    };
 
     targets = {
       alacritty = {
         enable = true;
       };
+
+      hyprpanel.enable = true;
+
+      gtk = {
+        enable = true;
+        flatpakSupport.enable = true;
+      };
+
+      zellij.enable = true;
+      tmux.enable = true;
 
     ghostty = {
       enable = true;
@@ -62,8 +72,14 @@
 
     hyprlock = {
       enable = true;
-      useWallpaper = true;
+      useWallpaper = false;
     };
+
+      firefox = {
+        enable = true;
+        colorTheme.enable = true;
+        profileNames = [ "apetrovic" ];
+      };
 
       librewolf = {
         enable = true;
