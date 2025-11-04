@@ -2,6 +2,5 @@
 {
   imports = [
     ./ugala
-    ./bugala
   ];
 }

@@ -18,7 +18,7 @@ programs.walker = {
 
   # All options from the config.toml can be used here https://github.com/abenz1267/walker/blob/master/resources/config.toml
   config = {
-    theme = "bugala";
+    theme = "ugala";
     placeholders = {
         "default" = { input = "Search"; list = "No Results"; };
         "files" = { input = "Browse Files"; list = "No Files Found"; };

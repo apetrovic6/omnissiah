@@ -3,7 +3,7 @@
 
   imports = [../../../stylix/colors.nix];
 
-programs.walker.themes.ugala =  {
+programs.walker.themes.ugala =  with config.hyperium.palette; {
     # Check out the default css theme as an example https://github.com/abenz1267/walker/blob/master/resources/themes/default/style.css
     style =  /* css */ ''
      * {
@@ -26,17 +26,16 @@ scrollbar {
   box-shadow:
     0 19px 38px rgba(0, 0, 0, 0.3),
     0 15px 12px rgba(0, 0, 0, 0.22);
-  background: alpha(#${config.lib.stylix.colors.base00}, 0.8);
+  background: alpha(${backgroundDefault}, 0.8);
   padding: 20px;
   border-radius: 20px;
-  /*border: 1px solid alpha(#${config.lib.stylix.colors.base08}, 0.75);*/
-  border: 1px solid ${config.imperium.palette.border};
+  border: 1px solid alpha(${border}, 0.75);
 }
 
 .preview-box,
 .elephant-hint,
 .placeholder {
-  color: @text;
+  color: ${textDefault};
 }
 
 .box {
@@ -52,7 +51,7 @@ scrollbar {
 
 .input {
   caret-color: @selected-text;
-  background: darker(alpha(#${config.lib.stylix.colors.base00}, 0.5));
+  background: darker(${backgroundAlpha50});
   padding: 10px;
 }
 
@@ -70,7 +69,7 @@ scrollbar {
 }
 
 .list {
-  color: @text;
+  color: ${textDefault};
 }
 
 child {
@@ -83,14 +82,14 @@ child {
 
 .item-quick-activation {
   margin-left: 10px;
-  background: alpha(#${config.lib.stylix.colors.base00}, 0.25);
+  background: alpha(${background}, 0.25);
   border-radius: 5px;
   padding: 10px;
 }
 
 child:hover .item-box,
 child:selected .item-box {
-  background: darker(alpha(#${config.lib.stylix.colors.base00}, 0.5));
+  background: darker(alpha(${backgroundDefault}, 0.5));
 }
 
 .item-text-box {
@@ -114,10 +113,10 @@ child:selected .item-box {
 }
 
 .preview {
-  border: 1px solid alpha(#${config.lib.stylix.colors.base00}, 0.25);
+  border: 1px solid alpha(${border}, 0.25);
   padding: 10px;
   border-radius: 10px;
-  color: @foreground;
+  color: ${foreground};
 }
 
 .calc .item-text {
@@ -152,10 +151,10 @@ child:selected .item-box {
 }
 
 .keybinds-wrapper {
-  border-top: 1px solid darker(#${config.lib.stylix.colors.base08});
+  border-top: 1px solid darker(${border});
   font-size: 12px;
   opacity: 0.5;
-  color: #${config.lib.stylix.colors.base0B};
+  color: #${backgroundDefault};
 }
 
 .keybinds {
@@ -165,7 +164,7 @@ child:selected .item-box {
 }
 
 .keybind-bind {
-  /* color: lighter(@window_bg_color); */
+  color: lighter(${textAlternate});
   font-weight: bold;
 }
 
