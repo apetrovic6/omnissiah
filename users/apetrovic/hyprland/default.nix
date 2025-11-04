@@ -16,6 +16,12 @@
             portalPackage = self.inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
 
     settings = {
+  # Blur Walker’s layer surface (namespace is “walker”)
+    layerrule = [
+      "blur, walker"
+      "blurpopups, walker"      # if Walker shows popups/tooltips
+      "ignorealpha 0.5, walker" # reduces halo at fully transparent pixels
+    ];
       decoration = {
         rounding = 10;
 
