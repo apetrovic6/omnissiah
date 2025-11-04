@@ -3,8 +3,7 @@
 
       imports = [
         self.inputs.nix-flatpak.nixosModules.nix-flatpak
-        self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
-        self.inputs.stylix.nixosModules.stylix
+    #        self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
 
         ../../modules/cosmic.nix
       ];
@@ -17,5 +16,4 @@
     ];
   };
   
-  nixpkgs.config.allowUnfree = true;
 }
