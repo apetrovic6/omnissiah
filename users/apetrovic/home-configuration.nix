@@ -1,25 +1,75 @@
-{self, pkgs, ...}:
+{ pkgs,self,  ...}:
 {
   imports = [
+    self.inputs.walker.homeManagerModules.default
+
     ./starship.nix
+    ./hyprland
+    ./hyprpanel
+    ./walker
+    ./stylix
+    ./ghostty
+    ./scripts
+    ./firefox
   ];
 
+  xdg = {
+    enable = true;
+
+  };
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   home.username = "apetrovic";
   home.homeDirectory = "/home/apetrovic";
 
-  stylix = {
+
+  programs.obsidian.enable = true;
+
+  nixpkgs.config.allowUnfree = true;
+
+  programs.cava = {
     enable = true;
-    image = ../../wallpapers/everforest/1.png;
   };
 
- wayland.windowManager.hyprland = {
-            enable = true;
-            # set the flake package
-            package = self.inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
-            portalPackage = self.inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
-          };
+  programs.cavalier = {
+    enable = true;
+  };
+
+  programs.eza = {
+    enable = true;
+    git = true;
+  };
+
+  programs.bat = {
+    enable = true;
+  };
+
+  programs.git = {
+    enable = true;
+    lfs.enable = true;
+    settings.user = {
+      name = "apetrovic";
+      email = "petrovicante6@gmail.com";
+    };
+  };
+
+  programs.btop.enable = true;
+  
+  programs.alacritty.enable = true;
+
+
+  programs.yazi = {
+    enable = true;
+    enableBashIntegration = true;
+    enableZshIntegration = true;
+  };
+
+
+  programs.lazygit = {
+    enable = true;
+    enableBashIntegration = true;
+    enableZshIntegration = true;
+  };
 
   programs.bash = {
     enable = true;
@@ -28,6 +78,7 @@
       eval "$(starship init bash)"
     '';
   };
+
 
   # This value determines the Home Manager release that your
   # configuration is compatible with. This helps avoid breakage

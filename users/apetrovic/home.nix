@@ -3,13 +3,12 @@
 {
   imports = [ 
     self.inputs.home-manager.nixosModules.default
-    # self.inputs.stylix.homeModules.stylix
   ];
 
-  home-manager.extraSpecialArgs = {inherit self;};
+    home-manager.extraSpecialArgs = {inherit self;};
 
-   home-manager.sharedModules = [
-   ];
+  home-manager.backupFileExtension = "bak";
+   home-manager.sharedModules = [];
 
   home-manager.users.apetrovic = {
     imports = [
