@@ -702,11 +702,12 @@
           "nixpkgs"
         ],
         "stylix": "stylix",
+        "treefmt-nix": "treefmt-nix_2",
         "walker": "walker"
       },
       "locked": {
-        "lastModified": 1762438299,
-        "narHash": "sha256-PqkLI1QHLCs4kcVT8I3Ahmvew3i6XQ6yQspui4elhN0=",
+        "lastModified": 1762445524,
+        "narHash": "sha256-YhF1i/rIWnazCaRJFJJi7zjU68rItmXbMqy2SqrJq94=",
         "path": "/home/apetrovic/clan/magos",
         "type": "path"
       },
@@ -873,6 +874,22 @@
       }
     },
     "nixpkgs_4": {
+      "locked": {
+        "lastModified": 1761236834,
+        "narHash": "sha256-+pthv6hrL5VLW2UqPdISGuLiUZ6SnAXdd2DdUE+fV2Q=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "d5faa84122bc0a1fd5d378492efce4e289f8eac1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_5": {
       "locked": {
         "lastModified": 1757068644,
         "narHash": "sha256-NOrUtIhTkIIumj1E/Rsv1J37Yi3xGStISEo8tZm3KW4=",
@@ -1187,13 +1204,31 @@
         "type": "github"
       }
     },
+    "treefmt-nix_2": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_4"
+      },
+      "locked": {
+        "lastModified": 1762410071,
+        "narHash": "sha256-aF5fvoZeoXNPxT0bejFUBXeUjXfHLSL7g+mjR/p5TEg=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "97a30861b13c3731a84e09405414398fbf3e109f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
     "walker": {
       "inputs": {
         "elephant": [
           "magos",
           "elephant"
         ],
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_5",
         "systems": "systems_5"
       },
       "locked": {

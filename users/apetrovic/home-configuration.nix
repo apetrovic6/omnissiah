@@ -4,7 +4,6 @@
     self.inputs.magos.homeManagerModules.default
 
     ./hyprland
-    ./hyprpanel
     ./scripts
     ./firefox
   ];

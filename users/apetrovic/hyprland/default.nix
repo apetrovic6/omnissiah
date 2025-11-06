@@ -2,7 +2,6 @@
 {
   imports = [
     ./binds
-    ./hypridle
     ./exec.nix
     ./config
   ];

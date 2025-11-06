@@ -19,7 +19,7 @@ in
 {
   wayland.windowManager.hyprland.settings.bindd = [
     # Walker
-    "${modifier}, SPACE, Launcher, exec, ${launcher} -m desktopapplications"
+    "${modifier}, SPACE, Launcher, exec, walker -m desktopapplications"
 
     "${modifier}, RETURN, Terminal, exec, ${terminal}"
     "${modifier} SHIFT, F, File manager, exec, ${fileManager}"

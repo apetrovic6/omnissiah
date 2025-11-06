@@ -87,11 +87,10 @@ options.services.magos.hyprland = {
   };
 
   environment.systemPackages = with pkgs; [
-    # hyprpaper
-    # hyprpicker
+    hyprpaper
+    hyprpicker
     wlogout
-      adwaita-fonts
-    # mako
+    adwaita-fonts
     # grimblast
     # swaybg
     hyprcursor
