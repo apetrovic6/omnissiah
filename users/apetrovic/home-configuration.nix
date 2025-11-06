@@ -1,22 +1,27 @@
-{ pkgs,self,  ...}:
+{ pkgs,self,  lib,...}:
 {
   imports = [
-    self.inputs.walker.homeManagerModules.default
+    self.inputs.magos.homeManagerModules.default
 
-    ./starship.nix
     ./hyprland
     ./hyprpanel
-    ./walker
-    ./stylix
-    ./ghostty
     ./scripts
     ./firefox
   ];
 
+
   xdg = {
     enable = true;
-
   };
+
+magos.hm.stylix = {
+     enable = true;  # plain false overrides mkDefault true
+     image = ../../wallpapers/lofi/3.jpg;  # optional
+     polarity = "dark";
+
+    targets.firefox.profileNames = ["apetrovic"];
+};
+
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   home.username = "apetrovic";
@@ -55,9 +60,6 @@
 
   programs.btop.enable = true;
   
-  programs.alacritty.enable = true;
-
-
   programs.yazi = {
     enable = true;
     enableBashIntegration = true;

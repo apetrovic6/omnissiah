@@ -12,6 +12,11 @@
     nix-flatpak.url = "github:gmodena/nix-flatpak?ref=latest";
     import-tree.url = "github:vic/import-tree";
 
+    magos = {
+      url = "path:/home/apetrovic/clan/magos";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -26,17 +31,7 @@
     #   inputs.nixpkgs.follows = "nixpkgs";
     # };
     
-    elephant.url = "github:abenz1267/elephant";
-    walker = {
-      url = "github:abenz1267/walker";
-      inputs.elephant.follows = "elephant";
-    };
-  
 
-    stylix = {
-     url = "github:nix-community/stylix";
-     inputs.nixpkgs.follows = "nixpkgs";
-     };
 
   };
 

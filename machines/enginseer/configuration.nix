@@ -3,10 +3,9 @@
 
       imports = [
         self.inputs.nix-flatpak.nixosModules.nix-flatpak
-    #        self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
-
-        ../../modules/cosmic.nix
+        self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
       ];
+
 
   boot.loader = {
     systemd-boot.enable = true;

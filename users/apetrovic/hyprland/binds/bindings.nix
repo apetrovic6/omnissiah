@@ -6,6 +6,7 @@ let
 
     launcher =  getExe walker;
     browser = getExe librewolf;
+     # terminal = getExe ghostty;
      terminal = getExe ghostty;
     # passwordManager = getExe bitwarden-desktop;
     fileManager = getExe xfce.thunar;
@@ -18,7 +19,7 @@ in
 {
   wayland.windowManager.hyprland.settings.bindd = [
     # Walker
-    "${modifier}, SPACE, Launcher, exec, ${launcher}"
+    "${modifier}, SPACE, Launcher, exec, ${launcher} -m desktopapplications"
 
     "${modifier}, RETURN, Terminal, exec, ${terminal}"
     "${modifier} SHIFT, F, File manager, exec, ${fileManager}"

@@ -7,10 +7,9 @@
 
   roles.default.perInstance.nixosModule = { self, config, lib, pkgs, ... }: {
     imports = [
-      #self.inputs.stylix.nixosModules.stylix
+      self.inputs.magos.nixosModules.default
 
       ../modules/core/flatpaks.nix
-      ../modules/core/stylix.nix
       ../modules/core/hyprland.nix
       ../modules/core/bluetooth.nix
     ];
@@ -26,14 +25,15 @@
 
     services.magos.bluetooth.enable = true;
 
-    services.magos.stylix = {
-      enable = true;
-      image = ../wallpapers/lofi/3.jpg;
+    magos.stylix = {
+      #enable = true;
+              image = ../wallpapers/lofi/2.jpg;
     };
 
     boot.plymouth = {
       enable = true;
     };
+
 
     services.greetd = {
       enable = true;
@@ -50,19 +50,18 @@
       enable = true;
 
       settings = {
-        background.path = config.stylix.image;
+        # background.path = config.stylix.image;
         timezone = "Europe/Zagreb";
       };
 
-      font = lib.mkForce {
-        package = config.stylix.fonts.monospace.package;
-        name = config.stylix.fonts.monospace.name;
-        size = config.stylix.fonts.sizes.desktop;
-      };
+      # font = lib.mkForce {
+      #   package = config.stylix.fonts.monospace.package;
+      #   name = config.stylix.fonts.monospace.name;
+      #   size = config.stylix.fonts.sizes.desktop;
+      # };
     };
 
     environment.systemPackages = with pkgs; [
-      ghostty
       xfce.thunar
       zathura
       file-roller

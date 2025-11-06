@@ -3,7 +3,6 @@
   imports = [
     ./binds
     ./hypridle
-    ./hyprlock
     ./exec.nix
     ./config
   ];
