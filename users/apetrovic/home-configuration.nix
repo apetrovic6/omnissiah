@@ -2,9 +2,6 @@
 {
   imports = [
     self.inputs.magos.homeManagerModules.default
-
-    ./hyprland
-    ./scripts
     ./firefox
   ];
 

@@ -10,12 +10,12 @@
       self.inputs.magos.nixosModules.default
 
       ../modules/core/flatpaks.nix
-      ../modules/core/hyprland.nix
       ../modules/core/bluetooth.nix
     ];
 
-    services.magos.hyprland = {
+    magos.core.hyprland = {
       enable = true;
+      xwayland = true;
       nvidia = {
         enable = true;
         modesetting = true;
@@ -27,7 +27,7 @@
 
     magos.stylix = {
       #enable = true;
-              image = ../wallpapers/lofi/2.jpg;
+              image = ../wallpapers/lofi/3.jpg;
     };
 
     boot.plymouth = {

@@ -24,8 +24,6 @@
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
-    hyprland.url = "github:hyprwm/Hyprland";
-
     # darwin = {
     #   url = "github:nix-darwin/nix-darwin";
     #   inputs.nixpkgs.follows = "nixpkgs";
