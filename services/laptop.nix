@@ -1,4 +1,12 @@
-{
+#
+# {self, ...}: {
+#   flake.nixosModules.service-laptop = {
+#     config,
+#     lib,
+#     pkgs,
+#     ...
+#   }: 
+  {
   _class = "clan.service";
   manifest.name = "laptop";
   manifest.readme = "";
@@ -51,4 +59,6 @@
     # powerManagement.powertop.enable = true;
     # services.auto-cpufreq.enable = true;
   };
+
+  #};
 }

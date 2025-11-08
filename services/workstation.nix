@@ -1,3 +1,12 @@
+
+
+ {self, ...}: {
+   flake.module.service-workstation = {
+     config,
+     lib,
+     pkgs,
+     ...
+   }: 
 {
   _class = "clan.service";
   manifest.name = "workstation";
@@ -9,8 +18,8 @@
     imports = [
       self.inputs.magos.nixosModules.default
 
-      ../modules/core/flatpaks.nix
-      ../modules/core/bluetooth.nix
+      self.nixosModules.flatpak
+      self.nixosModules.bluetooth
     ];
 
     magos.core.hyprland = {
@@ -95,5 +104,6 @@
     # no need to redefine it in your config for now)
     #media-session.enable = true;
   };
+};
 };
 }

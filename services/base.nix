@@ -1,4 +1,13 @@
+
+# {self, ...}: {
+#   flake.nixosModules.service-base = {
+#     config,
+#     lib,
+#     pkgs,
+#     ...
+#   }: 
 {
+
   _class = "clan.service";
   manifest.name = "base";
   manifest.readme = "";
@@ -47,5 +56,7 @@
   };
 
   nixpkgs.config.allowUnfree = true;
-};
+    };
+
+  #};
 }
