@@ -7,10 +7,10 @@
     ./inventory/machines.nix
   ];
 
-  modules."@imperium/laptop" = import ./modules/services/laptop.nix;
-  modules."@imperium/base" = import ./modules/services/base.nix;
-  modules."@imperium/workstation" = import ./modules/services/workstation.nix;
-  modules."@imperium/dev" = import ./modules/services/dev.nix;
+  modules."@imperium/laptop" = import ./services/laptop.nix;
+  modules."@imperium/base" = import ./services/base.nix;
+  modules."@imperium/workstation" = import ./services/workstation.nix;
+  modules."@imperium/dev" = import ./services/dev.nix;
 
 
   # Docs: See https://docs.clan.lol/reference/clanServices

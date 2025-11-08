@@ -1,12 +1,4 @@
 
-
- # {self, ...}: {
- #   flake.module.service-workstation = {
- #     config,
- #     lib,
- #     pkgs,
- #     ...
- #   }: 
 {
   _class = "clan.service";
   manifest.name = "workstation";
@@ -105,5 +97,4 @@
     #media-session.enable = true;
   };
 };
-   #};
 }

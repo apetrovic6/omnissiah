@@ -48,7 +48,6 @@
       ];
       imports = [
         inputs.clan-core.flakeModules.default
-        #inputs.flake-parts.flakeModules.modules
         (import-tree ./modules)
       ];
 
