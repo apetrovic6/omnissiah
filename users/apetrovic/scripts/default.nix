@@ -1,0 +1,6 @@
+{...}:
+{
+  imports = [
+    ./toggle-hyprpanel.nix
+  ];
+}

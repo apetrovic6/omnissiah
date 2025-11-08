@@ -1,11 +1,21 @@
 {
   _class = "clan.service";
   manifest.name = "laptop";
+  manifest.readme = "";
 
   roles.default.description = "Laptop specific configuration";
 
   # Single role called "default" (selected by the 'laptop' tag)
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
+
+    environment.systemPackages = with pkgs; [
+      brightnessctl
+    ];
+
+  environment.variables = {
+      #      AQ_DRM_DEVICES = "/dev/dri/card1:/dev/dri/card1";
+  };
+
     # Networking & power basics for laptops
     networking.networkmanager.enable = true;
     services.power-profiles-daemon.enable = true;
@@ -34,6 +44,8 @@
     '';
     systemd.targets."sleep".wantedBy = [ "suspend-then-hibernate.target" ];
     systemd.services."systemd-suspend-then-hibernate".enable = true;
+
+    
 
     # Room to grow later:
     # powerManagement.powertop.enable = true;

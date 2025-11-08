@@ -1,18 +1,73 @@
-{lib, ...}:
+{ pkgs,self,  lib,...}:
 {
   imports = [
-    ./starship.nix
+    self.inputs.magos.homeManagerModules.default
+    ./firefox
   ];
+
+
+  xdg = {
+    enable = true;
+  };
+
+magos.hm.stylix = {
+     enable = true;  # plain false overrides mkDefault true
+     image = ../../wallpapers/lofi/14.png;  # optional
+     polarity = "dark";
+
+    targets.firefox.profileNames = ["apetrovic"];
+};
+
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   home.username = "apetrovic";
   home.homeDirectory = "/home/apetrovic";
 
-  stylix = {
+
+  programs.obsidian.enable = true;
+
+  nixpkgs.config.allowUnfree = true;
+
+  programs.cava = {
     enable = true;
-    image = ../../wallpapers/everforest/1.png;
   };
 
+  programs.cavalier = {
+    enable = true;
+  };
+
+  programs.eza = {
+    enable = true;
+    git = true;
+  };
+
+  programs.bat = {
+    enable = true;
+  };
+
+  programs.git = {
+    enable = true;
+    lfs.enable = true;
+    settings.user = {
+      name = "apetrovic";
+      email = "petrovicante6@gmail.com";
+    };
+  };
+
+  programs.btop.enable = true;
+  
+  programs.yazi = {
+    enable = true;
+    enableBashIntegration = true;
+    enableZshIntegration = true;
+  };
+
+
+  programs.lazygit = {
+    enable = true;
+    enableBashIntegration = true;
+    enableZshIntegration = true;
+  };
 
   programs.bash = {
     enable = true;
@@ -21,6 +76,7 @@
       eval "$(starship init bash)"
     '';
   };
+
 
   # This value determines the Home Manager release that your
   # configuration is compatible with. This helps avoid breakage

@@ -1,10 +1,12 @@
 {
   _class = "clan.service";
   manifest.name = "base";
+  manifest.readme = "";
 
   roles.default.description = "Some basic tools and settings that are needed everywhere";
 
   roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
+
     environment.systemPackages = with pkgs; [
       btop
       pciutils
@@ -18,10 +20,11 @@
     ];
 
     fonts = {
-      packages = with pkgs; [
+      packages = with pkgs.nerd-fonts; [
         fira-code
-        fira-code-symbols
         fira-mono
+
+        jetbrains-mono
       ];
     };
 
