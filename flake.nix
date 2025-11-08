@@ -36,6 +36,7 @@
   outputs =
     inputs@{
       flake-parts,
+    import-tree,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -47,6 +48,8 @@
       ];
       imports = [
         inputs.clan-core.flakeModules.default
+        #inputs.flake-parts.flakeModules.modules
+        (import-tree ./modules)
       ];
 
       # https://docs.clan.lol/guides/flake-parts
