@@ -8,7 +8,6 @@
     };
 
     genetor = {
-
       machineClass = "darwin";
     };
   };
