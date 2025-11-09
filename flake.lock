@@ -467,27 +467,6 @@
         "type": "github"
       }
     },
-    "home-manager_3": {
-      "inputs": {
-        "nixpkgs": [
-          "nvf",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1762661401,
-        "narHash": "sha256-SVmijc8t23UMwru5f/9X1Ak5bSwvYkm0OQ5SxR7hOB0=",
-        "owner": "nix-community",
-        "repo": "home-manager",
-        "rev": "c053d701d64f0727f62e0269c7940da5805bc9bc",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "repo": "home-manager",
-        "type": "github"
-      }
-    },
     "hyprcursor": {
       "inputs": {
         "hyprlang": [
@@ -1147,7 +1126,6 @@
     "nvf": {
       "inputs": {
         "flake-parts": "flake-parts_5",
-        "home-manager": "home-manager_3",
         "import-tree": "import-tree_3",
         "nixpkgs": [
           "nixpkgs"
@@ -1156,8 +1134,8 @@
         "treefmt": "treefmt"
       },
       "locked": {
-        "lastModified": 1762685364,
-        "narHash": "sha256-h4GWLuxQLYovJv4OM2H5rZtwJr9Pg/Ic2t96osRY+24=",
+        "lastModified": 1762686027,
+        "narHash": "sha256-Ck5dVFSOrbRKyrw2Bszywl95/BRO7xyW93v7HcHARvY=",
         "path": "/home/apetrovic/clan/nvf",
         "type": "path"
       },
