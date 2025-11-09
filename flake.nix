@@ -10,7 +10,9 @@
     flake-parts.inputs.nixpkgs-lib.follows = "clan-core/nixpkgs";
 
     nix-flatpak.url = "github:gmodena/nix-flatpak?ref=latest";
+
     import-tree.url = "github:vic/import-tree";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
 
     magos = {
       url = "path:/home/apetrovic/clan/magos";
@@ -21,7 +23,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
@@ -34,15 +35,26 @@
       url = "github:nix-darwin/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+
+    # Optional: Declarative tap management
+    homebrew-core = {
+      url = "github:homebrew/homebrew-core";
+      flake = false;
+    };
+    homebrew-cask = {
+      url = "github:homebrew/homebrew-cask";
+      flake = false;
+    };
   };
 
-  outputs =
-    inputs@{
-      flake-parts,
+  outputs = inputs @ {
+    flake-parts,
     import-tree,
-      ...
-    }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+    ...
+  }:
+    flake-parts.lib.mkFlake {inherit inputs;} {
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -51,18 +63,26 @@
       ];
       imports = [
         inputs.clan-core.flakeModules.default
+        inputs.treefmt-nix.flakeModule
         (import-tree ./modules)
       ];
 
       # https://docs.clan.lol/guides/flake-parts
       clan = {
-        imports = [ ./clan.nix ];
+        imports = [./clan.nix];
       };
 
-      perSystem =
-        { pkgs, inputs', ... }:
-        {
-          devShells.default = pkgs.mkShell { packages = [ inputs'.clan-core.packages.clan-cli ]; };
+      perSystem = {
+        pkgs,
+        inputs',
+        ...
+      }: {
+        treefmt = {
+          projectRootFile = "flake.nix";
+          programs.alejandra.enable = true; # Nix formatter
+          # add more: programs.prettier.enable = true; etc.
         };
+        devShells.default = pkgs.mkShell {packages = [inputs'.clan-core.packages.clan-cli];};
+      };
     };
 }

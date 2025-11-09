@@ -1,11 +1,8 @@
-{self, ...}:
-{
-
-      imports = [
-        self.inputs.nix-flatpak.nixosModules.nix-flatpak
-        self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
-      ];
-
+{self, ...}: {
+  imports = [
+    self.inputs.nix-flatpak.nixosModules.nix-flatpak
+    self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
+  ];
 
   boot.loader = {
     systemd-boot.enable = true;
@@ -14,5 +11,4 @@
       "/dev/disk/by-id/nvme-WD_PC_SN560_SDDPNQE-1T00-1102_23461C801092"
     ];
   };
-  
 }

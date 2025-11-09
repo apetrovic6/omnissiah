@@ -12,33 +12,31 @@
   modules."@imperium/workstation" = import ./services/workstation.nix;
   modules."@imperium/dev" = import ./services/dev.nix;
 
-
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
-
     laptop = {
-      module.input = "self" ;
+      module.input = "self";
       module.name = "@imperium/laptop";
 
       roles.default.tags.laptop = {};
     };
 
     base = {
-      module.input = "self" ;
+      module.input = "self";
       module.name = "@imperium/base";
 
       roles.default.tags.base = {};
     };
-    
+
     workstation = {
-      module.input = "self" ;
+      module.input = "self";
       module.name = "@imperium/workstation";
 
       roles.default.tags.workstation = {};
     };
 
     dev = {
-      module.input = "self" ;
+      module.input = "self";
       module.name = "@imperium/dev";
 
       roles.default.tags.dev = {};
@@ -48,7 +46,7 @@
     # Admin service for managing machines
     # This service adds a root password and SSH access.
     admin = {
-      roles.default.tags.all = { };
+      roles.default.tags.all = {};
       roles.default.settings.allowedKeys = {
         # Insert the public key that you want to use for SSH access.
         # All keys will have ssh access to all machines ("tags.all" means 'all machines').
@@ -57,9 +55,9 @@
       };
     };
 
-    apetrovic-user =  {
+    apetrovic-user = {
       module.name = "users";
-      roles.default.tags.all = { };
+      roles.default.tags.all = {};
       roles.default.settings = {
         user = "apetrovic";
         prompt = true;
@@ -74,8 +72,8 @@
           "docker"
         ];
       };
-      
-      roles.default.extraModules = [ ./users/apetrovic/home.nix ];
+
+      roles.default.extraModules = [./users/apetrovic/home.nix];
     };
 
     # Docs: https://docs.clan.lol/reference/clanServices/zerotier/
@@ -87,17 +85,17 @@
       # Replace with the name (string) of your machine that you will use as zerotier-controller
       # See: https://docs.zerotier.com/controller/
       # Deploy this machine first to create the network secrets
-      roles.controller.machines."__YOUR_CONTROLLER__" = { };
+      roles.controller.machines."__YOUR_CONTROLLER__" = {};
       # Peers of the network
       # tags.all means 'all machines' will joined
-      roles.peer.tags.all = { };
+      roles.peer.tags.all = {};
     };
 
     # Docs: https://docs.clan.lol/reference/clanServices/tor/
     # Tor network provides secure, anonymous connections to your machines
     # All machines will be accessible via Tor as a fallback connection method
     tor = {
-      roles.server.tags.nixos = { };
+      roles.server.tags.nixos = {};
     };
   };
 
@@ -105,12 +103,16 @@
   # machines/jon/configuration.nix will be automatically imported.
   # See: https://docs.clan.lol/guides/more-machines/#automatic-registration
   machines = {
-     enginseer = { config, pkgs, ... }: {
-       environment.systemPackages = [ pkgs.btop ];
+    enginseer = {
+      config,
+      pkgs,
+      ...
+    }: {
+      environment.systemPackages = [pkgs.btop];
 
-            users.users.root.openssh.authorizedKeys.keys = [
-                "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOuTvHKw/dHSm0NLjCQsk/9sPyNRerLB/wWuwitVpvdg" # elided 
-            ];
-     };
+      users.users.root.openssh.authorizedKeys.keys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOuTvHKw/dHSm0NLjCQsk/9sPyNRerLB/wWuwitVpvdg" # elided
+      ];
+    };
   };
 }
