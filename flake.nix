@@ -22,7 +22,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
+
+    nvf = {
+      url = "path:/home/apetrovic/clan/nvf";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # darwin = {
     #   url = "github:nix-darwin/nix-darwin";

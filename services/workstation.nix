@@ -1,4 +1,3 @@
-
 {
   _class = "clan.service";
   manifest.name = "workstation";
@@ -9,7 +8,6 @@
   roles.default.perInstance.nixosModule = { self, config, lib, pkgs, ... }: {
     imports = [
       self.inputs.magos.nixosModules.default
-
       self.nixosModules.flatpak
       self.nixosModules.bluetooth
     ];
