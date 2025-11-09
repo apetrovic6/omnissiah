@@ -5,7 +5,6 @@
   ...
 }: {
   imports = [
-    self.inputs.magos.homeManagerModules.default
     ./firefox
   ];
 
@@ -14,20 +13,13 @@
   };
 
   home.packages = [
+    pkgs.cowsay
   ];
-
-  magos.hm.stylix = {
-    enable = true; # plain false overrides mkDefault true
-    image = ../../wallpapers/lofi/14.png; # optional
-    polarity = "dark";
-
-    targets.firefox.profileNames = ["apetrovic"];
-  };
 
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   home.username = "apetrovic";
-  home.homeDirectory = "/home/apetrovic";
+  home.homeDirectory = "/Users/apetrovic";
 
   programs.obsidian.enable = true;
 
