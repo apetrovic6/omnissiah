@@ -22,7 +22,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
+
+    nvf = {
+      url = "path:/home/apetrovic/clan/nvf";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # darwin = {
     #   url = "github:nix-darwin/nix-darwin";
@@ -36,6 +42,7 @@
   outputs =
     inputs@{
       flake-parts,
+    import-tree,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -47,6 +54,7 @@
       ];
       imports = [
         inputs.clan-core.flakeModules.default
+        (import-tree ./modules)
       ];
 
       # https://docs.clan.lol/guides/flake-parts

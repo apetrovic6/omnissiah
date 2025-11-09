@@ -1,17 +1,27 @@
+
+# {self, ...}: {
+#   flake.nixosModules.service-base = {
+#     config,
+#     lib,
+#     pkgs,
+#     ...
+#   }: 
 {
+
   _class = "clan.service";
   manifest.name = "base";
   manifest.readme = "";
 
   roles.default.description = "Some basic tools and settings that are needed everywhere";
 
-  roles.default.perInstance.nixosModule = { lib, pkgs, ... }: {
+  roles.default.perInstance.nixosModule = { self, lib, pkgs, ... }: {
+    imports = [];
 
     environment.systemPackages = with pkgs; [
       btop
       pciutils
-      neovim
       vim
+      self.inputs.nvf.packages.${pkgs.system}.default
       wget
       git
       fastfetch
@@ -47,5 +57,7 @@
   };
 
   nixpkgs.config.allowUnfree = true;
-};
+    };
+
+  #};
 }

@@ -8,9 +8,8 @@
   roles.default.perInstance.nixosModule = { self, config, lib, pkgs, ... }: {
     imports = [
       self.inputs.magos.nixosModules.default
-
-      ../modules/core/flatpaks.nix
-      ../modules/core/bluetooth.nix
+      self.nixosModules.flatpak
+      self.nixosModules.bluetooth
     ];
 
     magos.core.hyprland = {

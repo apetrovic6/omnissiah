@@ -1,4 +1,21 @@
-{ pkgs, ... }: {
+{self, ...}: {
+  flake.nixosModules.flatpak = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: 
+let 
+  inherit (lib) mkIf mkOption mkEnableOption types;
+  cfg = config.services.magos.flatpak;
+    in
+    {
+
+  options.services.magos.flatpak = {
+    enable = mkEnableOption "Enable flatpak and install flatpak apps";
+  };
+
+    config = mkIf cfg.enable {
   services = {
     flatpak = {
       enable = true;
@@ -24,6 +41,9 @@
 
       # Optional: Automatically update Flatpaks when you run nixos-rebuild swit ch
       update.onActivation = true;
+    };
+  };
+
     };
   };
 }

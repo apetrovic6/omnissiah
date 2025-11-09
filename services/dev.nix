@@ -1,3 +1,11 @@
+#
+# {self, ...}: {
+#   flake.nixosModules.service-dev = {
+#     config,
+#     lib,
+#     pkgs,
+#     ...
+#   }: 
 {
   _class = "clan.service";
   manifest.name = "dev";
@@ -23,4 +31,5 @@
       enableBashIntegration = true;
     };
 };
+  #};
 }

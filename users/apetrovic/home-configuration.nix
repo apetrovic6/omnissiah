@@ -10,6 +10,9 @@
     enable = true;
   };
 
+  home.packages = [
+  ];
+
 magos.hm.stylix = {
      enable = true;  # plain false overrides mkDefault true
      image = ../../wallpapers/lofi/14.png;  # optional
