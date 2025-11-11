@@ -1,24 +1,14 @@
 {
   pkgs,
   self,
-lib,
+  lib,
   config,
   ...
 }: {
   imports = [
     self.inputs.nix-homebrew.darwinModules.nix-homebrew
-    self.inputs.home-manager.darwinModules.home-manager
+    ../../users/apetrovic/home-darwin.nix
   ];
-  home-manager.useGlobalPkgs = true;
-  home-manager.useUserPackages = true;
-
-  home-manager.users.apetrovic = {
-
-  home.username = "apetrovic";
-  home.homeDirectory = lib.mkForce "/Users/apetrovic";
-    home.packages = [pkgs.btop];
-    home.stateVersion = "25.05";
-  };
 
   system.primaryUser = "apetrovic";
   nix-homebrew = {
@@ -45,11 +35,11 @@ lib,
     casks = [
       "ghostty"
       "bambu-studio"
-      "steinberg-download-assistant"
-      "steinberg-library-manager"
-      "ilok-license-manager"
-      "microsoft-teams"
-      "native-access"
+      # "steinberg-download-assistant"
+      # "steinberg-library-manager"
+      # "ilok-license-manager"
+      # "microsoft-teams"
+      # "native-access"
     ];
     onActivation = {
       cleanup = "zap";
@@ -69,7 +59,7 @@ lib,
   environment.systemPackages = with pkgs; [
     git
     wget
-    #self.inputs.nvf.packages.${system}.default
+    self.inputs.nvf.packages.${system}.default
     vim
     fastfetch
     yazi
