@@ -1237,8 +1237,8 @@
         "treefmt": "treefmt"
       },
       "locked": {
-        "lastModified": 1762686027,
-        "narHash": "sha256-Ck5dVFSOrbRKyrw2Bszywl95/BRO7xyW93v7HcHARvY=",
+        "lastModified": 1762708146,
+        "narHash": "sha256-cwRPSIQBeJoSfpOuaZWieAeTv8yfINi32dK1vCs47kQ=",
         "path": "/home/apetrovic/clan/nvf",
         "type": "path"
       },
