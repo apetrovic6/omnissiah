@@ -1,4 +1,3 @@
-
 {
   pkgs,
   self,
@@ -6,7 +5,7 @@
   ...
 }: {
   imports = [
-    #./firefox
+    ./firefox
   ];
 
   home.packages = [
@@ -26,15 +25,15 @@
   #   enable = true;
   # };
   #
-  # programs.eza = {
-  #   enable = true;
-  #   git = true;
-  # };
-  #
-  # programs.bat = {
-  #   enable = true;
-  # };
-  #
+  programs.eza = {
+    enable = true;
+    git = true;
+  };
+
+  programs.bat = {
+    enable = true;
+  };
+
   # programs.git = {
   #   enable = true;
   #   lfs.enable = true;
@@ -46,25 +45,33 @@
   #
   # programs.btop.enable = true;
   #
-  # programs.yazi = {
-  #   enable = true;
-  #   enableBashIntegration = true;
-  #   enableZshIntegration = true;
-  # };
-  #
-  # programs.lazygit = {
-  #   enable = true;
-  #   enableBashIntegration = true;
-  #   enableZshIntegration = true;
-  # };
-  #
-  # programs.bash = {
-  #   enable = true;
-  #   initExtra = ''
-  #     fastfetch
-  #     eval "$(starship init bash)"
-  #   '';
-  # };
+  programs.yazi = {
+    enable = true;
+    enableBashIntegration = true;
+    enableZshIntegration = true;
+  };
+
+  programs.lazygit = {
+    enable = true;
+    enableBashIntegration = true;
+    enableZshIntegration = true;
+  };
+
+  programs.zsh = {
+    enable = true;
+    initContent = ''
+      fastfetch
+      eval "$(starship init zsh)"
+      export SSH_AUTH_SOCK=/Users/apetrovic/.bitwarden-ssh-agent.sock
+    '';
+  };
+  programs.bash = {
+    enable = true;
+    initExtra = ''
+      fastfetch
+      eval "$(starship init bash)"
+    '';
+  };
 
   # This value determines the Home Manager release that your
   # configuration is compatible with. This helps avoid breakage

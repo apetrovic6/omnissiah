@@ -13,7 +13,8 @@
     enable = true;
   };
 
-  home.packages = [
+  home.packages = with pkgs; [
+    cowsay
   ];
 
   magos.hm.stylix = {
