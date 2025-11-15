@@ -1,6 +1,10 @@
 {
   inputs = {
     nixpkgs-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v0.4.3";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
 
@@ -10,6 +14,8 @@
     flake-parts.inputs.nixpkgs-lib.follows = "clan-core/nixpkgs";
 
     nix-flatpak.url = "github:gmodena/nix-flatpak?ref=latest";
+
+    impermanence.url = "github:nix-community/impermanence";
 
     import-tree.url = "github:vic/import-tree";
     treefmt-nix.url = "github:numtide/treefmt-nix";
@@ -50,6 +56,7 @@
   };
 
   outputs = inputs @ {
+    self,
     flake-parts,
     import-tree,
     ...
@@ -75,8 +82,25 @@
       perSystem = {
         pkgs,
         inputs',
+        self',
         ...
       }: {
+        checks = {
+          enginseer =
+            self.nixosConfigurations.enginseer.config.system.build.toplevel;
+        };
+        packages.ci =
+          pkgs.runCommand "ci-build" {
+            # All check paths as a space-separated env var
+            checkPaths = builtins.attrValues self'.checks;
+          } ''
+            mkdir -p "$out"
+            # Just symlink everything into $out; works for files AND dirs
+            for p in $checkPaths; do
+              ln -s "$p" "$out"/
+            done
+          '';
+
         treefmt = {
           projectRootFile = "flake.nix";
           programs.alejandra.enable = true; # Nix formatter

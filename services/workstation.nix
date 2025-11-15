@@ -16,7 +16,35 @@
       self.inputs.magos.nixosModules.default
       self.nixosModules.flatpak
       self.nixosModules.bluetooth
+      self.nixosModules.steam
     ];
+
+    nix.settings = {
+      substituters = [
+        "https://attic.manjaca.xyz/manjo"
+      ];
+      trusted-public-keys = [
+        "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
+      ];
+    };
+
+    system.autoUpgrade = {
+      enable = true;
+      dates = "weekly";
+    };
+
+    nix = {
+      gc = {
+        automatic = true;
+        dates = "daily";
+        options = "--delete-older-than 10d";
+      };
+      settings.auto-optimise-store = true;
+    };
+
+    services.imperium.steam.enable = true;
+    programs.appimage.enable = true;
+    programs.appimage.binfmt = true;
 
     magos.core.hyprland = {
       enable = true;

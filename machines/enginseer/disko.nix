@@ -5,23 +5,35 @@
 # ---
 # This file was automatically generated!
 # CHANGING this configuration requires wiping and reinstalling the machine
-{
+{lib, ...}: let
+  diskId = "/dev/disk/by-id/nvme-WD_PC_SN560_SDDPNQE-1T00-1102_23461C801092";
+in {
   boot.loader.grub.efiSupport = true;
   boot.loader.grub.efiInstallAsRemovable = true;
   boot.loader.grub.enable = false;
+
+  swapDevices = [
+    {
+      device = "/persist/swap/swapfile";
+      size = 18 * 1024; # Size in MB (18GB)
+      # or
+      # size = 16384; # Size in MB (16G);
+    }
+  ];
 
   disko.devices = {
     disk = {
       nvme0n1 = {
         type = "disk";
-        device = "/dev/disk/by-id/nvme-WD_PC_SN560_SDDPNQE-1T00-1102_23461C801092";
+        # Make sure this is correct with `lsblk`
+        device = diskId;
         content = {
           type = "gpt";
           partitions = {
             ESP = {
               label = "boot";
               name = "ESP";
-              size = "512M";
+              size = "1G";
               type = "EF00";
               content = {
                 type = "filesystem";
@@ -38,13 +50,6 @@
               content = {
                 type = "luks";
                 name = "cryptroot";
-                extraOpenArgs = [
-                  "--allow-discards"
-                  "--perf-no_read_workqueue"
-                  "--perf-no_write_workqueue"
-                ];
-                # https://0pointer.net/blog/unlocking-luks2-volumes-with-tpm2-fido2-pkcs11-security-hardware-on-systemd-248.html
-                #settings = {crypttabExtraOpts = ["fido2-device=auto" "token-timeout=10"];};
                 content = {
                   type = "btrfs";
                   extraArgs = ["-L" "nixos" "-f"];
@@ -53,10 +58,13 @@
                       mountpoint = "/";
                       mountOptions = ["subvol=root" "compress=zstd" "noatime"];
                     };
-                    "/home" = {
-                      mountpoint = "/home";
-                      mountOptions = ["subvol=home" "compress=zstd" "noatime"];
+                    "/root-blank" = {
+                      mountOptions = ["subvol=root-blank" "nodatacow" "noatime"];
                     };
+                    # "/home" = {
+                    #   mountpoint = "/home";
+                    #   mountOptions = ["subvol=home" "compress=zstd" "noatime"];
+                    # };
                     "/nix" = {
                       mountpoint = "/nix";
                       mountOptions = ["subvol=nix" "compress=zstd" "noatime"];
@@ -69,9 +77,14 @@
                       mountpoint = "/var/log";
                       mountOptions = ["subvol=log" "compress=zstd" "noatime"];
                     };
-                    "/swap" = {
-                      mountpoint = "/swap";
-                      swap.swapfile.size = "64G";
+                    "/lib" = {
+                      mountpoint = "/var/lib";
+                      mountOptions = ["subvol=lib" "compress=zstd" "noatime"];
+                    };
+                    "/persist/swap" = {
+                      mountpoint = "/persist/swap";
+                      mountOptions = ["subvol=swap" "noatime" "nodatacow" "compress=no"];
+                      swap.swapfile.size = "18G";
                     };
                   };
                 };
@@ -85,4 +98,5 @@
 
   fileSystems."/persist".neededForBoot = true;
   fileSystems."/var/log".neededForBoot = true;
+  fileSystems."/var/lib".neededForBoot = true; # };
 }
