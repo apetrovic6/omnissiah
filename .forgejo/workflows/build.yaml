@@ -22,7 +22,6 @@ jobs:
       - name: Install node
         run: |
           apk add --no-cache nodejs npm git bash openssh-client ca-certificates nix
-          nix-shell -p attic-client
 
       # - name: Enable fast caches (optional but nice)
       #   uses: https://github.com/DeterminateSystems/magic-nix-cache-action@v8
