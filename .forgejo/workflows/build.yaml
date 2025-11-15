@@ -18,11 +18,14 @@ jobs:
       image: alpine:latest
     permissions:
       contents: write # allow pushing back to the repo
+    env:
+      NIX_CONFIG: experimental-features = nix-command flakes
 
     steps:
       - name: Install node
         run: |
           apk add --no-cache nodejs npm git bash openssh-client ca-certificates nix
+          nix-shell -p attic-client
 
       # - name: Enable fast caches (optional but nice)
       #   uses: https://github.com/DeterminateSystems/magic-nix-cache-action@v8
@@ -64,8 +67,8 @@ jobs:
       - name: Login to Attic
         env:
           ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
-          ATTIC_ENDPOINT: ${{ variables.ATTIC_ENDPOINT}}
-          ATTIC_CACHE: ${{ variables.ATTIC_CACHE }}
+          ATTIC_ENDPOINT: ${{ vars.ATTIC_ENDPOINT}}
+          ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
         run: |
           attic login manjo $ATTIC_ENDPOINT "$ATTIC_TOKEN"
 
@@ -75,6 +78,6 @@ jobs:
 
       - name: Push system closure to Attic
         env:
-          ATTIC_CACHE: ${{ variables.ATTIC_CACHE }}
+          ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
         run: |
           attic push ATTIC_CACHE result
