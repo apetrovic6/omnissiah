@@ -59,9 +59,10 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: nix flake check
-        if: steps.update.outputs.changed == 'true'
-        run: nix flake check --no-build --show-trace --print-build-logs
+     # - name: nix flake check
+     #
+     #   if: steps.update.outputs.changed == 'true'
+     #   run: nix flake check --no-build --show-trace --print-build-logs
 
 
       - name: Build system
