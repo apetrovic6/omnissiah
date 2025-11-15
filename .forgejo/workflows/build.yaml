@@ -48,6 +48,12 @@ jobs:
             ${ATTIC_PUBLIC_KEY}
           EOF
 
+      - name: Login and push to Attic
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+        run: |
+          nix run nixpkgs#attic-client -- login $ATTIC_CACHE $ATTIC_ENDPOINT "$ATTIC_TOKEN"
+
       - name: Update flake.lock
         id: update
         run: |
