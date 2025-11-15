@@ -39,22 +39,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure Nix to use Attic
-        run: |
-          mkdir -p /etc/nix
-          cat > /etc/nix/nix.conf <<EOF
-          experimental-features = nix-command flakes
-          substituters = https://cache.nixos.org ${ATTIC_ENDPOINT}
-          trusted-public-keys = \
-            ${ATTIC_PUBLIC_KEY}
-          EOF
-
-          Echo "Nix Conf"
-          cat /etc/nix/nix.custom.conf
 
       - name: Login into Attic
         run: |
           nix run nixpkgs#attic-client -- login $ATTIC_CACHE $ATTIC_ENDPOINT "$ATTIC_TOKEN"
+          nix run nixpkgs#attic-client -- use $ATTIC_CACHE
+
+          echo "Nix Conf"
+          cat /etc/nix/nix.custom.conf
 
       - name: Update flake.lock
         id: update
