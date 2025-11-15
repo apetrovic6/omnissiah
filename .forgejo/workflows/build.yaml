@@ -80,4 +80,4 @@ jobs:
         env:
           ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
         run: |
-          attic push ATTIC_CACHE result
+          attic push $ATTIC_CACHE result
