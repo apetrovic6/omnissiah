@@ -71,7 +71,7 @@ jobs:
 
       - name: Login and push to Attic
         run: |
-          nix run nixpkgs#attic-client -- login manjo $ATTIC_ENDPOINT "$ATTIC_TOKEN"
+          nix run nixpkgs#attic-client -- login $ATTIC_CACHE $ATTIC_ENDPOINT "$ATTIC_TOKEN"
           nix run nixpkgs#attic-client -- push --ignore-upstream-cache-filter -j 10 $ATTIC_CACHE result
 
       - name: Commit & push lockfile
