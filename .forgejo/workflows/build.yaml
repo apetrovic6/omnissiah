@@ -71,7 +71,7 @@ jobs:
 
       - name: Build system
         run: |
-          nix build .#nixosConfigurations.enginseer.config.system.build.toplevel
+          nix build .#ci
 
       - name: Push system closure to Attic
         env:

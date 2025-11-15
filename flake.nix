@@ -56,6 +56,7 @@
   };
 
   outputs = inputs @ {
+    self,
     flake-parts,
     import-tree,
     ...
@@ -81,8 +82,25 @@
       perSystem = {
         pkgs,
         inputs',
+        self',
         ...
       }: {
+        checks = {
+          enginseer =
+            self.nixosConfigurations.enginseer.config.system.build.toplevel;
+        };
+        packages.ci =
+          pkgs.runCommand "ci-build" {
+            # All check paths as a space-separated env var
+            checkPaths = builtins.attrValues self'.checks;
+          } ''
+            mkdir -p "$out"
+            # Just symlink everything into $out; works for files AND dirs
+            for p in $checkPaths; do
+              ln -s "$p" "$out"/
+            done
+          '';
+
         treefmt = {
           projectRootFile = "flake.nix";
           programs.alejandra.enable = true; # Nix formatter

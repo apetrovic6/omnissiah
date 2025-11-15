@@ -39,7 +39,7 @@
           }
         ];
         files = [
-#          "/etc/machine-id"
+          #          "/etc/machine-id"
           {
             file = "/var/keys/secret_file";
             parentDirectory = {mode = "u=rwx,g=,o=";};
