@@ -21,7 +21,7 @@
     treefmt-nix.url = "github:numtide/treefmt-nix";
 
     magos = {
-      url = "path:/home/apetrovic/clan/magos";
+      url = "github:apetrovic/magos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -33,7 +33,7 @@
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     nvf = {
-      url = "path:/home/apetrovic/clan/nvf";
+      url = "github:apetrovic/nvf";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
