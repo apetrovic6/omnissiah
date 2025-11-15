@@ -46,7 +46,7 @@ jobs:
           nix run nixpkgs#attic-client -- use $ATTIC_CACHE
 
           echo "Nix Conf"
-          cat /etc/nix/nix.custom.conf
+          cat /etc/nix/nix.conf
 
       - name: Update flake.lock
         id: update
