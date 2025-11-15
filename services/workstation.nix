@@ -16,7 +16,26 @@
       self.inputs.magos.nixosModules.default
       self.nixosModules.flatpak
       self.nixosModules.bluetooth
+      self.nixosModules.steam
     ];
+
+    system.autoUpgrade = {
+      enable = true;
+      dates = "weekly";
+    };
+
+    nix = {
+      gc = {
+        automatic = true;
+        dates = "daily";
+        options = "--delete-older-than 10d";
+      };
+      settings.auto-optimise-store = true;
+    };
+
+    services.imperium.steam.enable = true;
+    programs.appimage.enable = true;
+    programs.appimage.binfmt = true;
 
     magos.core.hyprland = {
       enable = true;

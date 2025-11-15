@@ -1256,7 +1256,7 @@
         "fpu_exception": true,
         "cpuid_level": 35,
         "write_protect": false,
-        "tlb_size": 32531,
+        "tlb_size": 32595,
         "clflush_size": 64,
         "cache_alignment": 64,
         "address_sizes": {
@@ -2354,7 +2354,7 @@
         "resources": [
           {
             "type": "hwaddr",
-            "address": 49
+            "address": 101
           },
           {
             "type": "phwaddr",
@@ -2561,28 +2561,6 @@
     "network_interface": [
       {
         "index": 77,
-        "attached_to": 0,
-        "class_list": [
-          "network_interface"
-        ],
-        "base_class": {
-          "hex": "0107",
-          "name": "Network Interface",
-          "value": 263
-        },
-        "sub_class": {
-          "hex": "0000",
-          "name": "Loopback",
-          "value": 0
-        },
-        "model": "Loopback network interface",
-        "sysfs_id": "/class/net/lo",
-        "unix_device_names": [
-          "lo"
-        ]
-      },
-      {
-        "index": 78,
         "attached_to": 35,
         "class_list": [
           "network_interface"
@@ -2606,7 +2584,7 @@
         "resources": [
           {
             "type": "hwaddr",
-            "address": 49
+            "address": 101
           },
           {
             "type": "phwaddr",
@@ -2620,6 +2598,28 @@
         ],
         "driver_modules": [
           "iwlwifi"
+        ]
+      },
+      {
+        "index": 78,
+        "attached_to": 0,
+        "class_list": [
+          "network_interface"
+        ],
+        "base_class": {
+          "hex": "0107",
+          "name": "Network Interface",
+          "value": 263
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Loopback",
+          "value": 0
+        },
+        "model": "Loopback network interface",
+        "sysfs_id": "/class/net/lo",
+        "unix_device_names": [
+          "lo"
         ]
       },
       {

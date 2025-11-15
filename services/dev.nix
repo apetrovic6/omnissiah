@@ -24,6 +24,7 @@
       devenv
       lazydocker
       lazygit
+      steam-run
     ];
 
     programs.adb.enable = true;

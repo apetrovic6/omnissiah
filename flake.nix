@@ -1,6 +1,10 @@
 {
   inputs = {
     nixpkgs-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v0.4.3";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
 
@@ -10,6 +14,8 @@
     flake-parts.inputs.nixpkgs-lib.follows = "clan-core/nixpkgs";
 
     nix-flatpak.url = "github:gmodena/nix-flatpak?ref=latest";
+
+    impermanence.url = "github:nix-community/impermanence";
 
     import-tree.url = "github:vic/import-tree";
     treefmt-nix.url = "github:numtide/treefmt-nix";
