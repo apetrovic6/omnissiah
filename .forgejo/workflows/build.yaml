@@ -20,6 +20,10 @@ jobs:
       contents: write # allow pushing back to the repo
     env:
       NIX_CONFIG: experimental-features = nix-command flakes
+      ATTIC_PUBLIC_KEY: ${{ vars.ATTIC_PUBLIC_KEY }}
+      ATTIC_ENDPOINT: ${{ vars.ATTIC_ENDPOINT }}
+      ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
+      
     steps:
       - name: Install node
         run: |
@@ -34,10 +38,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure Nix to use Attic
+        run: |
+          mkdir -p /etc/nix
+          cat > /etc/nix/nix.conf <<EOF
+          experimental-features = nix-command flakes
+          substituters = https://cache.nixos.org ${ATTIC_ENDPOINT}
+          trusted-public-keys = \
+            ${ATTIC_PUBLIC_KEY}
+          EOF
+
       - name: Update flake.lock
         id: update
-        env:
-          NIX_CONFIG: experimental-features = nix-command flakes
         run: |
           set -eu
           nix flake update
@@ -49,9 +61,19 @@ jobs:
 
       - name: nix flake check
         if: steps.update.outputs.changed == 'true'
+        run: nix flake check --no-build --show-trace --print-build-logs
+
+
+      - name: Build system
+        run: |
+          nix build .#ci
+
+      - name: Login and push to Attic
         env:
-          NIX_CONFIG: experimental-features = nix-command flakes
-        run: nix flake check --show-trace --print-build-logs
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+        run: |
+          nix run nixpkgs#attic-client -- login manjo $ATTIC_ENDPOINT "$ATTIC_TOKEN"
+          nix run nixpkgs#attic-client -- push $ATTIC_CACHE result
 
       - name: Commit & push lockfile
         if: steps.update.outputs.changed == 'true'
@@ -61,21 +83,3 @@ jobs:
           git add flake.lock
           git commit -m "chore(flake): update inputs [skip ci]"
           git push
-
-      - name: Login to Attic
-        env:
-          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
-          ATTIC_ENDPOINT: ${{ vars.ATTIC_ENDPOINT}}
-          ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
-        run: |
-          nix run nixpkgs#attic-client -- login manjo $ATTIC_ENDPOINT "$ATTIC_TOKEN"
-
-      - name: Build system
-        run: |
-          nix build .#ci
-
-      - name: Push system closure to Attic
-        env:
-          ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
-        run: |
-          nix run nixpkgs#attic-client -- push $ATTIC_CACHE result

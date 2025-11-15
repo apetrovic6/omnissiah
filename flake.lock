@@ -1050,14 +1050,17 @@
         "walker": "walker"
       },
       "locked": {
-        "lastModified": 1763015843,
-        "narHash": "sha256-kBUwOLHdqngJAwPCtoc6oAYZN+5a00mw8aiPiTUSRNc=",
-        "path": "/home/apetrovic/clan/magos",
-        "type": "path"
+        "lastModified": 1762967150,
+        "narHash": "sha256-qDY+ZdC4WP5whlm046rtD96/bPUJlHrmV4XHjRzLWxg=",
+        "owner": "apetrovic6",
+        "repo": "magos",
+        "rev": "00e63aece8a2117f4ec13f544537773b8befe725",
+        "type": "github"
       },
       "original": {
-        "path": "/home/apetrovic/clan/magos",
-        "type": "path"
+        "owner": "apetrovic6",
+        "repo": "magos",
+        "type": "github"
       }
     },
     "mnw": {
@@ -1352,14 +1355,17 @@
         "treefmt": "treefmt"
       },
       "locked": {
-        "lastModified": 1762774804,
-        "narHash": "sha256-cwRPSIQBeJoSfpOuaZWieAeTv8yfINi32dK1vCs47kQ=",
-        "path": "/home/apetrovic/clan/nvf",
-        "type": "path"
+        "lastModified": 1762618316,
+        "narHash": "sha256-8sbd0mPeLdxVkg4JpP6oZQwzs68a79eDOwNgmo9H8q4=",
+        "owner": "apetrovic6",
+        "repo": "nvf",
+        "rev": "5276e66eed4559765515fe2f289417d61bf7ff3a",
+        "type": "github"
       },
       "original": {
-        "path": "/home/apetrovic/clan/nvf",
-        "type": "path"
+        "owner": "apetrovic6",
+        "repo": "nvf",
+        "type": "github"
       }
     },
     "nvf_2": {
