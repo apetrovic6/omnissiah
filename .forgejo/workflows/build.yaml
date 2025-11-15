@@ -18,9 +18,6 @@ jobs:
       image: alpine:latest
     permissions:
       contents: write # allow pushing back to the repo
-    env:
-      NIX_CONFIG: "experimental-features = nix-command flakes"
-
     steps:
       - name: Install node
         run: |
