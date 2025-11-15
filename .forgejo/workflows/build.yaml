@@ -23,6 +23,7 @@ jobs:
       ATTIC_PUBLIC_KEY: ${{ vars.ATTIC_PUBLIC_KEY }}
       ATTIC_ENDPOINT: ${{ vars.ATTIC_ENDPOINT }}
       ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
+      ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       
     steps:
       - name: Install node
@@ -48,9 +49,10 @@ jobs:
             ${ATTIC_PUBLIC_KEY}
           EOF
 
-      - name: Login and push to Attic
-        env:
-          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+          Echo "Nix Conf"
+          cat /etc/nix/nix.custom.conf
+
+      - name: Login into Attic
         run: |
           nix run nixpkgs#attic-client -- login $ATTIC_CACHE $ATTIC_ENDPOINT "$ATTIC_TOKEN"
 
@@ -75,8 +77,6 @@ jobs:
           nix build .#ci
 
       - name: Login and push to Attic
-        env:
-          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
         run: |
           nix run nixpkgs#attic-client -- login manjo $ATTIC_ENDPOINT "$ATTIC_TOKEN"
           nix run nixpkgs#attic-client -- push $ATTIC_CACHE result
