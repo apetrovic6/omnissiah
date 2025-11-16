@@ -1,7 +1,8 @@
-  {...}:
-{  clan.core.vars.attic-pull-token = {
+{ ... }: {
+  clan.core.vars.attic-pull-token = {
     description = "Attic pull-only token for accessing the binary cache.";
-    secret = true;  # mark as secret so clan treats it as sensitive
-    # type = "string";  # if `type` is supported; usually the default is fine
+    secret = true; # clan treats this as sensitive
+    # type = "string"; # optional if you want to be explicit
   };
 }
+
