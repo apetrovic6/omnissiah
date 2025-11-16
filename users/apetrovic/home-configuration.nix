@@ -14,7 +14,7 @@
       "https://attic.manjaca.xyz/manjo"
     ];
 
-    access-tokens = "attic.manjaca.xyz=!include /home/apetrovic/.secrets/attic-pull";
+    access-tokens= "!include /home/apetrovic/.secrets/attic-pull";
     trusted-substituters = [
       "https://attic.manjaca.xyz/manjo"
     ];
