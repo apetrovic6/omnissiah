@@ -46,7 +46,6 @@
       settings.auto-optimise-store = true;
     };
 
-    services.imperium.steam.enable = true;
     programs.appimage.enable = true;
     programs.appimage.binfmt = true;
 
