@@ -20,7 +20,11 @@
   }: {
     imports = [];
 
+    nix.settings.trusted-users = ["root " "apetrovic"];
+
     environment.systemPackages = with pkgs; [
+      attic-client
+      sbctl
       btop
       pciutils
       vim

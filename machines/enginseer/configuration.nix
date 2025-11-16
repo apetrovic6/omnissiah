@@ -10,7 +10,13 @@ in {
     self.inputs.nixos-hardware.nixosModules.asus-zephyrus-gu605my
     self.nixosModules.impermanence
     self.nixosModules.zram
+    self.inputs.lanzaboote.nixosModules.lanzaboote
   ];
+
+  boot.lanzaboote = {
+    enable = true;
+    pkiBundle = "/var/lib/sbctl";
+  };
 
   services.imperium.zram.enable = true;
 
@@ -47,7 +53,7 @@ in {
   };
 
   boot.initrd.systemd = {
-    enable = true; # this enabled systemd support in stage1 - required for the below setup
+    # enable = lib.mkDefault true; # this enabled systemd support in stage1 - required for the below setup
     services.rollback = {
       description = "Rollback BTRFS root subvolume to a pristine state";
       wantedBy = ["initrd.target"];
@@ -96,7 +102,7 @@ in {
     };
   };
   boot.loader = {
-    systemd-boot.enable = true;
+    systemd-boot.enable = false;
     efi.canTouchEfiVariables = false;
     grub.devices = [
       "/dev/disk/by-id/nvme-WD_PC_SN560_SDDPNQE-1T00-1102_23461C801092"

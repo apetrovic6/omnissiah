@@ -70,9 +70,9 @@
             ".local/share/direnv"
           ];
           files = [
-            ".screenrc"
-            ".bash_history"
-            ".gitconfig"
+            # ".screenrc"
+            # ".bash_history"
+            # ".gitconfig"
           ];
         };
       };
