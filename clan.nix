@@ -11,6 +11,7 @@
   modules."@imperium/base" = import ./services/base.nix;
   modules."@imperium/workstation" = import ./services/workstation.nix;
   modules."@imperium/dev" = import ./services/dev.nix;
+  modules."@imperium/gaming" = import ./services/gaming.nix;
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
@@ -33,6 +34,13 @@
       module.name = "@imperium/workstation";
 
       roles.default.tags.workstation = {};
+    };
+
+    gaming = {
+      module.input = "self";
+      module.name = "@imperium/gaming";
+
+      roles.default.tags.gaming = {};
     };
 
     dev = {
