@@ -1,3 +1,6 @@
+{config, lib, ...}:
+let
+  in
 {
   _class = "clan.service";
   manifest.name = "workstation";
@@ -27,9 +30,11 @@
       trusted-substituters = [
         "https://attic.manjaca.xyz/manjo"
       ];
+
       trusted-public-keys = [
         "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
       ];
+
     };
 
     system.autoUpgrade = {
@@ -63,7 +68,7 @@
 
     magos.stylix = {
       #enable = true;
-      image = ../wallpapers/lofi/3.jpg;
+      image = ../wallpapers/lofi/7.jpg;
     };
 
     boot.plymouth = {

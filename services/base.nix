@@ -21,9 +21,9 @@
     imports = [];
 
     nix.settings.trusted-users = ["root " "apetrovic"];
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+    nix.settings.experimental-features = ["nix-command" "flakes"];
     environment.systemPackages = with pkgs; [
-     attic-client
+      attic-client
       sbctl
       btop
       pciutils

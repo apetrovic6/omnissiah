@@ -49,7 +49,6 @@ in {
     fileSystems = ["/"];
   };
 
-
   boot.loader = {
     efi.canTouchEfiVariables = false;
     grub.devices = [

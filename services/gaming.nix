@@ -12,7 +12,7 @@
     ...
   }: {
     services.imperium.steam.enable = true;
-    };
+  };
 
   #};
 }
