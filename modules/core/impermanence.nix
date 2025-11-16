@@ -55,6 +55,7 @@
             "Videos"
             ".config"
             ".local/share"
+            "./secrets"
             {
               directory = ".gnupg";
               mode = "0700";
