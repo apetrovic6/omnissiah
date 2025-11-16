@@ -60,7 +60,7 @@
       };
     };
 
-    services.magos.bluetooth.enable = true;
+    services.imperium.bluetooth.enable = true;
 
     magos.stylix = {
       #enable = true;

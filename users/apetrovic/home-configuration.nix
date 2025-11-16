@@ -32,7 +32,7 @@
 
   magos.hm.stylix = {
     enable = true; # plain false overrides mkDefault true
-    image = ../../wallpapers/lofi/14.png; # optional
+    image = ../../wallpapers/lofi/17.png; # optional
     polarity = "dark";
 
     targets.firefox.profileNames = ["apetrovic"];

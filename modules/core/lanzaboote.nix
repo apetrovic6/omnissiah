@@ -18,7 +18,7 @@
         pkiBundle = "/var/lib/sbctl";
       };
 
-      boot.loader.systemd-enable = lib.mkForce false;
+      boot.loader.systemd-boot.enable = lib.mkForce false;
     };
   };
 }

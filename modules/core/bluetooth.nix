@@ -6,9 +6,9 @@
     ...
   }: let
     inherit (lib) mkIf mkOption mkEnableOption types;
-    cfg = config.services.magos.bluetooth;
+    cfg = config.services.imperium.bluetooth;
   in {
-    options.services.magos.bluetooth = {
+    options.services.imperium.bluetooth = {
       enable = mkEnableOption "Enable bluetooth and install needed programs";
     };
 
