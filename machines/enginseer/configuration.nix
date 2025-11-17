@@ -16,18 +16,18 @@ in {
     self.inputs.lanzaboote.nixosModules.lanzaboote
   ];
 
-  nix = {
-    extraOptions = ''
-      !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
-      !include ${config.clan.core.vars.generators.attic-pull-token.files.attic-substituter.path}
-    '';
+  # nix = {
+  #   extraOptions = ''
+  #     !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
+  #     netrc-file = /home/apetrovic/.config/nix/netrc
+  #   '';
 
-    settings = {
-      trusted-public-keys = [
-        "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
-      ];
-    };
-  };
+  #   settings = {
+  #     trusted-public-keys = [
+  #       "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
+  #     ];
+  #   };
+  # };
 
   services.imperium.lanzaboote.enable = true;
   services.imperium.zram.enable = true;

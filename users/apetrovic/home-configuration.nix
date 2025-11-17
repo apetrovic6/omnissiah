@@ -27,7 +27,6 @@ in {
 
   nix = {
     extraOptions = ''
-      !include ${atticToken}
       !include ${atticSubstituter}
       netrc-file = /home/apetrovic/.config/nix/netrc
     '';
