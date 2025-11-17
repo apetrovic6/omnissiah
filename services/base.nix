@@ -1,11 +1,4 @@
-# {self, ...}: {
-#   flake.nixosModules.service-base = {
-#     config,
-#     lib,
-#     pkgs,
-#     ...
-#   }:
-{
+{config, ...}: {
   _class = "clan.service";
   manifest.name = "base";
   manifest.readme = "";
@@ -18,9 +11,10 @@
     pkgs,
     ...
   }: {
-    imports = [];
+    imports = [
+    ];
 
-    nix.settings.trusted-users = ["root " "apetrovic"];
+    nix.settings.trusted-users = ["apetrovic"];
 
     environment.systemPackages = with pkgs; [
       attic-client
@@ -65,6 +59,4 @@
 
     nixpkgs.config.allowUnfree = true;
   };
-
-  #};
 }

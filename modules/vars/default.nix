@@ -17,7 +17,7 @@
         # You can also set owner/group/mode if a service user needs it
         owner = "apetrovic";
         # group = "some-service-group";
-         mode = "0400";
+        mode = "0400";
       };
 
       files.attic-substituter = {

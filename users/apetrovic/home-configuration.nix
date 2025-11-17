@@ -10,7 +10,6 @@
     ./firefox
   ];
 
-
   xdg = {
     enable = true;
   };
