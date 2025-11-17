@@ -27,13 +27,16 @@ in {
 
   nix = {
     extraOptions = ''
+      always-allow-substitutes = true
       !include ${atticSubstituter}
+      !include ${atticToken}
       netrc-file = /home/apetrovic/.config/nix/netrc
     '';
 
     settings = {
       trusted-public-keys = [
         "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
+        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
       ];
     };
   };
