@@ -55,7 +55,7 @@
             "Videos"
             ".config"
             ".local/share"
-            "./secrets"
+            "omnissiah"
             {
               directory = ".gnupg";
               mode = "0700";
