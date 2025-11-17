@@ -2,6 +2,7 @@
   pkgs,
   self,
   lib,
+  config,
   ...
 }: {
   imports = [
@@ -9,23 +10,23 @@
     ./firefox
   ];
 
-  nix = {
-    extraOptions = ''
-      !include /home/apetrovic/.secrets/attic-pull
-    '';
-    settings = {
-      substituters = [
-        "https://attic.manjaca.xyz/manjo"
-      ];
+  # nix = {
+  #   extraOptions = ''
+  #     !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
+  #   '';
+  #   settings = {
+  #     substituters = [
+  #       "https://attic.manjaca.xyz/manjo"
+  #     ];
 
-      trusted-substituters = [
-        "https://attic.manjaca.xyz/manjo"
-      ];
-      trusted-public-keys = [
-        "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
-      ];
-    };
-  };
+  #     trusted-substituters = [
+  #       "https://attic.manjaca.xyz/manjo"
+  #     ];
+  #     trusted-public-keys = [
+  #       "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
+  #     ];
+  #   };
+  # };
 
   xdg = {
     enable = true;

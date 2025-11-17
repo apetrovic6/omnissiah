@@ -1,6 +1,7 @@
 {
   self,
   lib,
+  config,
   ...
 }: let
   diskId = "/dev/disk/by-id/nvme-WD_PC_SN560_SDDPNQE-1T00-1102_23461C801092";
@@ -11,12 +12,13 @@ in {
     self.nixosModules.impermanence
     self.nixosModules.zram
     self.nixosModules.lanzaboote
+    self.nixosModules.vars
     self.inputs.lanzaboote.nixosModules.lanzaboote
   ];
 
   nix = {
     extraOptions = ''
-      !include /home/apetrovic/.secrets/attic-pull
+      !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
     '';
   };
 
