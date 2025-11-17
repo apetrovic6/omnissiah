@@ -25,14 +25,6 @@ in {
     ];
 
     nix.settings = {
-      substituters = [
-        "https://attic.manjaca.xyz/manjo"
-      ];
-
-      trusted-substituters = [
-        "https://attic.manjaca.xyz/manjo"
-      ];
-
       trusted-public-keys = [
         "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
       ];

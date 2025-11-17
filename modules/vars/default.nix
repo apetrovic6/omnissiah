@@ -9,20 +9,21 @@
     clan.core.vars.settings.secretStore = "sops";
 
     clan.core.vars.generators.attic-pull-token = {
-      # If multiple machines should share the same token, uncomment:
       share = true;
 
-      # This declares a single secret file called "token"
-      files."token" = {
+      files.token = {
         # secret = true is the default, so this is actually optional
         secret = true;
         # You can also set owner/group/mode if a service user needs it
         owner = "apetrovic";
         # group = "some-service-group";
-        # mode = "0400";
+         mode = "0400";
       };
 
-      # No script / prompts: we'll set it manually with `clan vars set`
+      files.attic-substituter = {
+        secret = true;
+        owner = "apetrovic";
+      };
     };
   };
 }

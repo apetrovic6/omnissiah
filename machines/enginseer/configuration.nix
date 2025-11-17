@@ -19,6 +19,7 @@ in {
   nix = {
     extraOptions = ''
       !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
+      !include ${config.clan.core.vars.generators.attic-pull-token.files.attic-substituter.path}
     '';
   };
 
