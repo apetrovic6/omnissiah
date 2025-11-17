@@ -3,8 +3,15 @@
   self,
   lib,
   config,
+  osConfig,
   ...
-}: {
+}: let
+  atticToken =
+    osConfig.clan.core.vars.generators.attic-pull-token.files.token.path;
+
+  atticSubstituter =
+    osConfig.clan.core.vars.generators.attic-pull-token.files.attic-substituter.path;
+in {
   imports = [
     self.inputs.magos.homeManagerModules.default
     ./firefox
@@ -17,6 +24,19 @@
   home.packages = with pkgs; [
     cowsay
   ];
+
+  nix = {
+    extraOptions = ''
+      !include ${atticToken}
+      !include ${atticSubstituter}
+    '';
+
+    settings = {
+      trusted-public-keys = [
+        "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
+      ];
+    };
+  };
 
   magos.hm.stylix = {
     enable = true; # plain false overrides mkDefault true
