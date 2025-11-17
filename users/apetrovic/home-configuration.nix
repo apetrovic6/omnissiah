@@ -9,18 +9,22 @@
     ./firefox
   ];
 
-  nix.settings = {
-    substituters = [
-      "https://attic.manjaca.xyz/manjo"
-    ];
+  nix = {
+    extraOptions = ''
+      !include /home/apetrovic/.secrets/attic-pull
+    '';
+    settings = {
+      substituters = [
+        "https://attic.manjaca.xyz/manjo"
+      ];
 
-    access-tokens= "!include /home/apetrovic/.secrets/attic-pull";
-    trusted-substituters = [
-      "https://attic.manjaca.xyz/manjo"
-    ];
-    trusted-public-keys = [
-      "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
-    ];
+      trusted-substituters = [
+        "https://attic.manjaca.xyz/manjo"
+      ];
+      trusted-public-keys = [
+        "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
+      ];
+    };
   };
 
   xdg = {

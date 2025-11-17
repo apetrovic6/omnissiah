@@ -14,8 +14,10 @@ in {
     self.inputs.lanzaboote.nixosModules.lanzaboote
   ];
 
-  nix.settings = {
-    access-tokens = "!include /home/apetrovic/.secrets/attic-pull";
+  nix = {
+    extraOptions = ''
+      !include /home/apetrovic/.secrets/attic-pull
+    '';
   };
 
   services.imperium.lanzaboote.enable = true;
