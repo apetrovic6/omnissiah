@@ -28,11 +28,11 @@ in {
   nix = {
     extraOptions = ''
       always-allow-substitutes = true
-      netrc-file = /home/apetrovic/.config/nix/netrc
     '';
 
     settings = {
-      trusted-users = ["root" "@wheel" ];
+      netrc-file = /home/apetrovic/.config/nix/netrc
+      trusted-users = ["root" "apetrovic" ];
       trusted-public-keys = [
         "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
         "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
