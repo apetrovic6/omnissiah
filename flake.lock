@@ -136,11 +136,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1763339026,
-        "narHash": "sha256-lnlxYmwzSd1cBwIk4A+EuU5mjhmXAE4YqqUGRoG7ICI=",
-        "rev": "a3672be86f0411de30da36a63bde588b74e2d5fd",
+        "lastModified": 1763394883,
+        "narHash": "sha256-WjvZ0UX4FsLqAt/wlY0CmbYEbFP8ztg8LvwYMBaa290=",
+        "rev": "03293d153d216e01265742ed4ac4c313ceb0e4df",
         "type": "tarball",
-        "url": "https://git.clan.lol/api/v1/repos/clan/clan-core/archive/a3672be86f0411de30da36a63bde588b74e2d5fd.tar.gz"
+        "url": "https://git.clan.lol/api/v1/repos/clan/clan-core/archive/03293d153d216e01265742ed4ac4c313ceb0e4df.tar.gz"
       },
       "original": {
         "type": "tarball",
@@ -583,11 +583,11 @@
     "homebrew-cask": {
       "flake": false,
       "locked": {
-        "lastModified": 1763392342,
-        "narHash": "sha256-usV40T6+wISNMpRazqTnszvblujpH30tIBU+aRNVT1o=",
+        "lastModified": 1763398689,
+        "narHash": "sha256-NiCjbWczhQarMDAvCdLhuEAoLXfEpdme48LWpW4hD0U=",
         "owner": "homebrew",
         "repo": "homebrew-cask",
-        "rev": "250c3617326a64ef33260b3597a94e7930e741c4",
+        "rev": "8cf201a2af37d426838d9072dffc4d2d88b0c3f7",
         "type": "github"
       },
       "original": {
@@ -599,11 +599,11 @@
     "homebrew-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1763392873,
-        "narHash": "sha256-2CFH2L7nTz5WGd726lDrwgt8k6RxZtTETE2J9Zc+uHI=",
+        "lastModified": 1763397407,
+        "narHash": "sha256-LVD2NNcSdN0+asOufsWxl5ZHu0VKgamFru5bPoXo72k=",
         "owner": "homebrew",
         "repo": "homebrew-core",
-        "rev": "3dca249fa6f316cd0d871e0376d44e907875f5cb",
+        "rev": "0119465f71b22601c8456963243c5ab9497724dc",
         "type": "github"
       },
       "original": {
