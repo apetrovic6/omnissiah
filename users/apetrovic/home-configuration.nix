@@ -31,7 +31,7 @@ in {
     '';
 
     settings = {
-      netrc-file = /home/apetrovic/.config/nix/netrc
+      netrc-file = /home/apetrovic/.config/nix/netrc;
       trusted-users = ["root" "apetrovic" ];
       trusted-public-keys = [
         "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
