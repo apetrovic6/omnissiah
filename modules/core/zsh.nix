@@ -1,14 +1,32 @@
 {self, ...}: {
-  flake.homeModules.zsh= {
+  flake.homeModules.zsh = {
     config,
     lib,
     pkgs,
     ...
   }: let
-    inherit (lib) mkDefault;
+    inherit (lib) mkIf mkOption mkEnableOption types;
+   cfg = config.programs.imperium.zsh;
+
   in {
-    imports = [];
+options.programs.imperium.zsh {
+   enable = mkEnableOption "Enable Zsh";
+};
+    programs.zsh = {
+      enable = true;
 
+      config = mkIf cfg.enable {
+      autosuggestion.enable = true;
+      enableCompletion = true;
+      syntaxHighlighting.enable = true;
+};      
 
+    };
+
+  environment.pathsToLink = [
+    "/share/zsh"
+  ];
+
+    
   };
 }
