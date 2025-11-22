@@ -55,7 +55,7 @@ in {
 
     magos.stylix = {
       #enable = true;
-      image = ../wallpapers/lofi/7.jpg;
+      image = ../wallpapers/lofi/17.png;
     };
 
     boot.plymouth = {

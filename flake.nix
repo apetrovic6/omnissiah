@@ -20,6 +20,10 @@
     import-tree.url = "github:vic/import-tree";
     treefmt-nix.url = "github:numtide/treefmt-nix";
 
+    omnishell = {
+      url = "path:/home/apetrovic/clan/omnishell";
+    };
+
     magos = {
       url = "github:apetrovic6/magos";
       inputs.nixpkgs.follows = "nixpkgs";

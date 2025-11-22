@@ -1,9 +1,13 @@
-{ self, ... }: {
-  flake.homeModules.zoxide = { config, lib, pkgs, ... }:
-  let
+{self, ...}: {
+  flake.homeModules.zoxide = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
     inherit (lib) mkIf mkOption mkEnableOption mkDefault types;
 
-    zshOn  = config.programs.imperium.zsh.enable  or false;
+    zshOn = config.programs.imperium.zsh.enable  or false;
     bashOn = config.programs.imperium.bash.enable or false;
     fishOn = config.programs.imperium.fish.enable or false;
 
@@ -39,7 +43,7 @@
       extraCommands = mkOption {
         type = types.listOf types.str;
         default = [];
-        example = [ "--hook" "pwd" "--no-cmd" ];
+        example = ["--hook" "pwd" "--no-cmd"];
         description = "Extra flags for zoxide init.";
       };
     };
@@ -49,12 +53,11 @@
         enable = true;
 
         enableBashIntegration = mkDefault cfg.enableBashIntegration;
-        enableZshIntegration  = mkDefault cfg.enableZshIntegration;
+        enableZshIntegration = mkDefault cfg.enableZshIntegration;
         enableFishIntegration = mkDefault cfg.enableFishIntegration;
 
-        options = [ "--cmd" cfg.command ] ++ cfg.extraCommands;
+        options = ["--cmd" cfg.command] ++ cfg.extraCommands;
       };
     };
   };
 }
-
