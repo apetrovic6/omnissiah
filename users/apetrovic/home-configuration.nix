@@ -15,6 +15,7 @@ in {
   imports = [
     self.inputs.magos.homeManagerModules.default
     self.inputs.omnishell.homeManagerModules.default
+
     ./firefox
   ];
 
@@ -22,9 +23,7 @@ in {
     enable = true;
   };
 
-  home.packages = with pkgs; [
-    cowsay
-  ];
+  home.packages = with pkgs; [ ];
 
   nix = {
     extraOptions = ''
@@ -60,12 +59,6 @@ in {
 
   programs.cava = {
     enable = true;
-  };
-
-  programs.zellij = {
-    enable = true;
-    enableBashIntegration = false;
-    enableZshIntegration = false;
   };
 
   programs.git = {

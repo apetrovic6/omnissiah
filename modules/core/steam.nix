@@ -18,7 +18,7 @@
           capSysNice = true;
         };
 
-        gameMode.enable = true;
+        gamemode.enable = true;
 
         steam = {
           enable = true;
@@ -32,7 +32,7 @@
             gamescope
             er-patcher
           ];
-          
+
           protontricks.enable = true;
         };
       };

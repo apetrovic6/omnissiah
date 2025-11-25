@@ -21,7 +21,6 @@ in {
       self.inputs.magos.nixosModules.default
       self.nixosModules.flatpak
       self.nixosModules.bluetooth
-      self.nixosModules.steam
     ];
 
     services.imperium.flatpak.enable = true;
@@ -29,15 +28,6 @@ in {
     system.autoUpgrade = {
       enable = true;
       dates = "weekly";
-    };
-
-    nix = {
-      gc = {
-        automatic = true;
-        dates = "daily";
-        options = "--delete-older-than 10d";
-      };
-      settings.auto-optimise-store = true;
     };
 
     programs.appimage.enable = true;
@@ -56,7 +46,6 @@ in {
     services.imperium.bluetooth.enable = true;
 
     magos.stylix = {
-      #enable = true;
       image = ../wallpapers/lofi/17.png;
     };
 
@@ -78,7 +67,7 @@ in {
       enable = true;
 
       settings = {
-        # background.path = config.stylix.image;
+        background.path = config.stylix.image;
         timezone = "Europe/Zagreb";
       };
 

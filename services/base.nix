@@ -31,6 +31,14 @@
       killall
     ];
 
+    nix = {
+      gc = {
+        automatic = true;
+        dates = "daily";
+        options = "--delete-older-than 10d";
+      };
+      settings.auto-optimise-store = true;
+    };
 
     time.timeZone = "Europe/Zagreb";
     i18n.defaultLocale = "en_US.UTF-8";
@@ -45,7 +53,7 @@
       LC_TELEPHONE = "hr_HR.UTF-8";
       LC_TIME = "hr_HR.UTF-8";
     };
-    
+
     fonts = {
       packages = with pkgs.nerd-fonts; [
         fira-code
@@ -54,9 +62,6 @@
         jetbrains-mono
       ];
     };
-
-    nix.gc.automatic = true;
-    nix.settings.auto-optimise-store = true;
 
     programs.dconf = {
       enable = true;
