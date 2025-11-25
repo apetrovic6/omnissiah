@@ -84,7 +84,7 @@ in {
                     "/persist/swap" = {
                       mountpoint = "/persist/swap";
                       mountOptions = ["subvol=swap" "noatime" "nodatacow" "compress=no"];
-                      swap.swapfile.size = "18G";
+                      swap.swapfile.size = "64G";
                     };
                   };
                 };
