@@ -24,6 +24,8 @@ in {
       self.nixosModules.steam
     ];
 
+    services.imperium.flatpak.enable = true;
+
     system.autoUpgrade = {
       enable = true;
       dates = "weekly";

@@ -83,49 +83,49 @@
       environment.systemPackages = with pkgs; [cifs-utils];
 
       # One Clan Vars generator per SMB host for credentials
-      clan.core.vars.generators = mapAttrs' (
-        hostName: hostCfg: let
-          genName = hostCfg.credentialsVarName;
-        in
-          nameValuePair genName {
-            share = true;
-            runtimeInputs = [pkgs.coreutils];
-            script = ''
-              set -eu
-              {
-                printf "username=%s\n" "$(cat "$prompts/username")"
-                printf "password=%s\n" "$(cat "$prompts/password")"
-                printf "domain=%s\n"   "$(cat "$prompts/domain")"
-              } > "$out/credentials"
-            '';
-            files.credentials = {
-              secret = true;
-              owner = "root";
-              group = "root";
-              mode = "0400";
-            };
-            prompts.username = {
-              description = "SMB username for ${hostName}";
-              type = "line";
-              persist = true;
-              display.label = "SMB username (${hostName})";
-            };
-            prompts.password = {
-              description = "SMB password for ${hostName}";
-              type = "hidden";
-              persist = true;
-              display.label = "SMB password (${hostName})";
-            };
-            prompts.domain = {
-              description = "SMB workgroup / domain for ${hostName}";
-              type = "line";
-              persist = true;
-              display.label = "SMB workgroup (${hostName})";
-              default = hostCfg.workgroup;
-            };
-          }
-      )
-      cfg.hosts;
+      clan.core.vars.generators =
+        mapAttrs' (
+          hostName: hostCfg: let
+            genName = hostCfg.credentialsVarName;
+          in
+            nameValuePair genName {
+              share = true;
+              runtimeInputs = [pkgs.coreutils];
+              script = ''
+                set -eu
+                {
+                  printf "username=%s\n" "$(cat "$prompts/username")"
+                  printf "password=%s\n" "$(cat "$prompts/password")"
+                  printf "domain=%s\n"   "$(cat "$prompts/domain")"
+                } > "$out/credentials"
+              '';
+              files.credentials = {
+                secret = true;
+                owner = "root";
+                group = "root";
+                mode = "0400";
+              };
+              prompts.username = {
+                description = "SMB username for ${hostName}";
+                type = "line";
+                persist = true;
+                display.label = "SMB username (${hostName})";
+              };
+              prompts.password = {
+                description = "SMB password for ${hostName}";
+                type = "hidden";
+                persist = true;
+                display.label = "SMB password (${hostName})";
+              };
+              prompts.domain = {
+                description = "SMB workgroup / domain for ${hostName}";
+                type = "line";
+                persist = true;
+                display.label = "SMB workgroup (${hostName})";
+              };
+            }
+        )
+        cfg.hosts;
 
       # One fileSystems entry per share on each host
       fileSystems = mkMerge (mapAttrsToList (

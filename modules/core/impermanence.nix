@@ -17,6 +17,8 @@
     };
 
     config = mkIf cfg.enable {
+      boot.tmp.cleanOnBoot = lib.mkDefault true;
+
       environment.persistence."/persist" = {
         enable = true; # NB: Defaults to true, not needed
         hideMounts = true;

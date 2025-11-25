@@ -6,9 +6,9 @@
     ...
   }: let
     inherit (lib) mkIf mkOption mkEnableOption types;
-    cfg = config.services.magos.flatpak;
+    cfg = config.services.imperium.flatpak;
   in {
-    options.services.magos.flatpak = {
+    options.services.imperium.flatpak = {
       enable = mkEnableOption "Enable flatpak and install flatpak apps";
     };
 

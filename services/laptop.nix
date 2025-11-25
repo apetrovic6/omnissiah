@@ -1,11 +1,3 @@
-#
-# {self, ...}: {
-#   flake.nixosModules.service-laptop = {
-#     config,
-#     lib,
-#     pkgs,
-#     ...
-#   }:
 {
   _class = "clan.service";
   manifest.name = "laptop";
@@ -37,29 +29,25 @@
 
     # Lid behavior (customize per your preference later)
     services.logind = {
-      lidSwitch = "suspend";
-      lidSwitchExternalPower = "suspend";
+      lidSwitch = "suspend-then-hibernate";
+      lidSwitchExternalPower = "suspend-then-hibernate";
       lidSwitchDocked = "ignore";
     };
 
     # Firmware updates (UEFI / TB / docks, etc.)
     services.fwupd.enable = true;
 
-    # Suspend-then-hibernate: quick sleep, deep-save after 1h
-    # ⚠️ Requires swap + resume config; see note below
     systemd.sleep.extraConfig = ''
-      SuspendState=suspend
+      # Valid kernel state for suspend-to-RAM:
+      # values must come from: freeze mem disk
+      SuspendState=mem
+
+      # How hibernate should write to /sys/power/disk
       HibernateMode=shutdown
+
+      # Suspend-then-hibernate timing logic
       HibernateDelaySec=1h
       SuspendEstimationSec=0
     '';
-    systemd.targets."sleep".wantedBy = ["suspend-then-hibernate.target"];
-    systemd.services."systemd-suspend-then-hibernate".enable = true;
-
-    # Room to grow later:
-    # powerManagement.powertop.enable = true;
-    # services.auto-cpufreq.enable = true;
   };
-
-  #};
 }

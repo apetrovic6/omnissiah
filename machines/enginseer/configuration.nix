@@ -2,6 +2,7 @@
   self,
   lib,
   config,
+  pkgs,
   ...
 }: let
   diskId = "/dev/disk/by-id/nvme-WD_PC_SN560_SDDPNQE-1T00-1102_23461C801092";
@@ -13,7 +14,7 @@ in {
     self.nixosModules.zram
     self.nixosModules.lanzaboote
     self.nixosModules.vars
-    self.inputs.lanzaboote.nixosModules.lanzaboote
+    self.nixosModules.smb
   ];
 
   # nix = {
@@ -28,9 +29,47 @@ in {
   #     ];
   #   };
   # };
+  #
+
+  services.imperium.smb.enable = true;
+
+  services.imperium.smb.hosts.manjaca = {
+    host = "192.168.1.61";
+    credentialsVarName = "manjaca-nas-credentials";
+
+    shares.games = {
+      shareName = "games";
+      mountPoint = "/mnt/nas/games";
+    };
+
+    shares."3DPrinting" = {
+      shareName = "3DPrinting";
+      mountPoint = "/mnt/nas/3dprinting";
+    };
+
+    shares.home = {
+      shareName = "home";
+      mountPoint = "/mnt/nas/home";
+    };
+
+    shares.data = {
+      mountPoint = "/mnt/nas/data";
+    };
+
+    shares.uevault = {
+      shareName = "UE_VAULT";
+      mountPoint = "/mnt/nas/ue_vault";
+    };
+
+    shares.docker = {
+      mountPoint = "/mnt/nas/ue_vault";
+    };
+  };
 
   services.imperium.lanzaboote.enable = true;
   services.imperium.zram.enable = true;
+
+  hardware.nvidia.powerManagement.enable = true;
 
   services.imperium.impermanence = {
     enable = true;
