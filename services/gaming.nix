@@ -12,6 +12,12 @@
     ...
   }: {
     services.imperium.steam.enable = true;
+
+    environment.systemPackages = with pkgs; = [
+      lutris
+      dxvk
+      heroic
+    ];
   };
 
   #};

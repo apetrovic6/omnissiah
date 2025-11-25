@@ -18,9 +18,22 @@
           capSysNice = true;
         };
 
+        gameMode.enable = true;
+
         steam = {
           enable = true;
           gamescopeSession.enable = true;
+          extraCompatPackages = with pkgs; [
+            proton-ge-bin
+          ];
+
+          extraPackages = with pkgs; [
+            SDL2
+            gamescope
+            er-patcher
+          ];
+          
+          protontricks.enable = true;
         };
       };
       environment.systemPackages = with pkgs; [mangohud];
