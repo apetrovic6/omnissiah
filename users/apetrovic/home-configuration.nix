@@ -14,6 +14,7 @@
 in {
   imports = [
     self.inputs.magos.homeManagerModules.default
+    self.inputs.omnishell.homeManagerModules.default
     ./firefox
   ];
 
@@ -61,17 +62,10 @@ in {
     enable = true;
   };
 
-  programs.cavalier = {
+  programs.zellij = {
     enable = true;
-  };
-
-  programs.eza = {
-    enable = true;
-    git = true;
-  };
-
-  programs.bat = {
-    enable = true;
+    enableBashIntegration = false;
+    enableZshIntegration = false;
   };
 
   programs.git = {
@@ -89,20 +83,6 @@ in {
     enable = true;
     enableBashIntegration = true;
     enableZshIntegration = true;
-  };
-
-  programs.lazygit = {
-    enable = true;
-    enableBashIntegration = true;
-    enableZshIntegration = true;
-  };
-
-  programs.bash = {
-    enable = true;
-    initExtra = ''
-      fastfetch
-      eval "$(starship init bash)"
-    '';
   };
 
   # This value determines the Home Manager release that your
