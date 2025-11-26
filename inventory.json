@@ -2,6 +2,9 @@
   "machines": {
     "enginseer": {
       "installedAt": 1763283539
+    },
+    "sol": {
+      "installedAt": 1764173811
     }
   }
 }
