@@ -11,8 +11,7 @@
     pkgs,
     ...
   }: {
-    imports = [
-    ];
+    imports = [];
 
     nix.settings.trusted-users = ["apetrovic"];
 
