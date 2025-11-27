@@ -1,52 +1,49 @@
-{ self, ... }:
-{
-  self.nixosModules.noosphere.audioBookshelf = {config, lib, pkgs, ...}:
-let
-  inherit (lib) mkIf mkOption mkEnableOption types mkPackageOption;
-  cfg = config.services.imperium.audiobookshelf;
-in
-  {
-    options.services.imperium.audiobookshelf = {
-      enable = mkEnableOption "Enable Audiobookshelf";
+{self, ...}: {
+  flake.nixosModules.noosphere = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
+    serviceName = "audiobookshelf";
+    inherit (self.lib) mkRevProxyVHost mkDomain;
 
-      package = mkPackageOption pkgs "audiobookshelf" {};
+    imperiumBase = import ../../rites/imperium-service.nix {
+      inherit lib pkgs;
+      name = serviceName;
+    };
 
+    inherit (lib) mkIf mkOption mkEnableOption types mkPackageOption;
+    cfg = config.services.imperium.${serviceName};
+  in {
+    imports = [
+      imperiumBase
+    ];
+
+    options.services.imperium.${serviceName} = {
       openFirewall = mkOption {
         type = types.bool;
         default = true;
         description = "Open ports in the firewall for the Audiobookshelf web interface";
       };
+    };
 
-      host = mkOption {
-        type = types.str;
-        default = "0";
-        description = "The interface Audiobookshelf binds to.";
+    config = mkIf cfg.enable {
+      services.audiobookshelf = {
+        enable = true;
+        package = cfg.package;
+        host = cfg.host;
+        port = cfg.port;
+        user = cfg.user;
+        group = cfg.group;
+        openFirewall = cfg.openFirewall;
       };
 
-      port = mkOption {
-        type = types.port;
-        description = "The TCP port Audiobookshelf will listen on.";
-        default = 8000;
+      services.caddy.virtualHosts = {
+        "${mkDomain cfg.subdomain}" = {
+          extraConfig = mkRevProxyVHost cfg.port;
+        };
       };
-
-       user = mkOption {
-        description = "User account under which Audiobookshelf runs.";
-        default = "audiobookshelf";
-        type = types.str;
-      };
-
-      group = mkOption {
-        description = "Group under which Audiobookshelf runs.";
-        default = "audiobookshelf";
-        type = types.str;
-      };
-      
-      domain = mkOption {
-        description = "Domain name under which will app be accessible";
-        default = "";
-        type = types.str;
-      };
-
     };
   };
 }

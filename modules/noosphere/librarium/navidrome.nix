@@ -7,7 +7,8 @@
   }: let
     serviceName = "navidrome";
     inherit (self.lib) mkRevProxyVHost mkDomain;
-
+    inherit (lib)  mkDefault;
+    
     imperiumBase = import ../../rites/imperium-service.nix {
       inherit lib pkgs;
       name = serviceName;
@@ -18,7 +19,6 @@
   in {
     imports = [
       imperiumBase
-      self
     ];
 
     options.services.imperium.${serviceName} = {
@@ -34,14 +34,15 @@
         enable = true;
         package = cfg.package;
         settings = {
-          host = cfg.host;
-          port = cfg.port;
-          MusicFolder = "${config.imperium.smb.hosts.manjaca.shares.data.mountpoint}/media/music";
-          DataFolder = "${config.imperium.smb.hosts.manjaca.shares.data.mountpoint}/appdata/navidrome";
+          Address= mkDefault cfg.host;
+          Port = mkDefault cfg.port;
+          MusicFolder = mkDefault "${config.services.imperium.smb.hosts.manjaca.shares.data.mountPoint}/media/music";
+          # DataFolder = "${config.services.imperium.smb.hosts.manjaca.shares.selfhosted.mountPoint}/navidrome";
+          DataFolder = mkDefault "/var/lib/navidrome";
         };
-        user = cfg.user;
-        group = cfg.group;
-        openFirewall = cfg.openFirewall;
+        user = mkDefault cfg.user;
+        group = mkDefault cfg.group;
+        openFirewall = mkDefault cfg.openFirewall;
       };
 
       services.caddy.virtualHosts = {
