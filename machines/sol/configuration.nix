@@ -8,7 +8,10 @@
 in {
   imports = [
     self.nixosModules.smb
+    # self.inputs.magos.nixosModules.default
   ];
+
+  # magos.stylix.enable = false;
 
   # nix = {
   #   extraOptions = ''
@@ -25,28 +28,22 @@ in {
   #
 
   services.imperium.smb.enable = true;
-
+  
+  
   services.imperium.smb.hosts.manjaca = {
     host = "192.168.1.61";
     credentialsVarName = "manjaca-nas-credentials";
 
-    shares.games = {
-      shareName = "games";
-      mountPoint = "/mnt/nas/games";
-    };
-
-    shares."3DPrinting" = {
-      shareName = "3DPrinting";
-      mountPoint = "/mnt/nas/3dprinting";
-    };
-
-    shares.home = {
-      shareName = "home";
-      mountPoint = "/mnt/nas/home";
-    };
-
     shares.data = {
       mountPoint = "/mnt/nas/data";
+    };
+
+    shares.docker = {
+      mountPoint = "/mnt/nas/docker";
+    };
+
+    shares.selfhosted = {
+      mountPoint = "/mnt/nas/selfhosted";
     };
   };
 
