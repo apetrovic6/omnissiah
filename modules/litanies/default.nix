@@ -1,13 +1,12 @@
-{...}:{
-flake.lib = {
-    mkHost = url: port: token: ''
-      reverse_proxy "http://${url}:${port}"
+{...}: {
+  flake.lib = {
+    mkDomain = subdomain: "${subdomain}.{$LAB_DOMAIN}";
+
+    mkRevProxyVHost = port: ''
+      reverse_proxy "http://{$LAB_IP}:${toString port}"
       tls {
-            dns cloudflare ${token}
+            dns cloudflare {$CLOUDFLARE_API_TOKEN}
       }
     '';
-  
-
-};
-
+  };
 }
