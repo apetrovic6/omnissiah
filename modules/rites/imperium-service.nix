@@ -1,59 +1,70 @@
-{ lib, pkgs, ... }:
+# modules/imperium.nix
+{
+  lib,
+  pkgs,
+  name,
+  ...
+}: let
+  inherit (lib) mkOption types mkEnableOption mkPackageOption toSentenceCase;
+in {
+  options.services.imperium.${name} = {
+    enable = mkEnableOption "Enable ${toSentenceCase name}";
 
-let
-  inherit (lib) mkOption types;
+    package = mkPackageOption pkgs name {};
 
-  imperiumServiceModule = { name, ... }: {
-    options = {
-      enable = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Whether to enable the ${name} Imperium service.";
-      };
+    host = mkOption {
+      type = types.str;
+      default = "0.0.0.0";
+      description = "Host/interface for ${toSentenceCase name} to bind to.";
+    };
 
-      package = mkOption {
-        type = types.package;
-        description = "Package providing the ${name} service.";
-      };
+    port = mkOption {
+      type = types.port;
+      default = 0;
+      description = "Port for ${toSentenceCase name} to listen on.";
+    };
 
-      host = mkOption {
-        type = types.str;
-        default = "127.0.0.1";
-        description = "Host/interface for ${name} to bind to.";
-      };
+    user = mkOption {
+      type = types.str;
+      default = name;
+      description = "User account under which ${toSentenceCase name} should run.";
+    };
 
-      port = mkOption {
-        type = types.port;
-        default = 0;
-        description = "Port for ${name} to listen on.";
-      };
+    group = mkOption {
+      type = types.str;
+      default = name;
+      description = "Group under which ${toSentenceCase name} should run.";
+    };
 
-      user = mkOption {
-        type = types.str;
-        default = "services";
-        description = "User account under which ${name} should run.";
-      };
+    subdomain = mkOption {
+      type = types.str;
+      default = name;
+      description = "Subdomain under which ${toSentenceCase name} will be exposed.";
+    };
 
-      group = mkOption {
-        type = types.str;
-        default = "services";
-        description = "Group under which ${name} should run.";
-      };
-
-      subDomain = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = ''
-          Optional subdomain for ${name}, e.g. "audiobookshelf" for
-          audiobookshelf.${config.networking.domain}.
-        '';
+    caddy = {
+      virtualHosts = mkOption {
+        # virtualHosts.<vhostName>.extraConfig = "..."
+        type = types.attrsOf (
+          types.submodule
+          ({
+            name,
+            vhostName,
+            ...
+          }: {
+            options = {
+              extraConfig = mkOption {
+                # or types.str if you prefer
+                type = types.lines;
+                default = "";
+                description = "Extra Caddy config for virtual host ${vhostName}.";
+              };
+            };
+          })
+        );
+        default = {};
+        description = "Caddy virtual hosts for ${name}.";
       };
     };
-  };
-in {
-  options.services.imperium = mkOption {
-    type = types.attrsOf (types.submodule imperiumServiceModule);
-    default = {};
-    description = "Imperium generic wrapper for self-hosted services.";
   };
 }
