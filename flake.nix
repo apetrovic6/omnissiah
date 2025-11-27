@@ -25,7 +25,8 @@
     };
 
     magos = {
-      url = "github:apetrovic6/magos";
+      #      url = "github:apetrovic6/magos";
+      url = "path:/home/apetrovic/clan/magos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -94,6 +95,7 @@
           enginseer =
             self.nixosConfigurations.enginseer.config.system.build.toplevel;
         };
+
         packages.ci =
           pkgs.runCommand "ci-build" {
             # All check paths as a space-separated env var
@@ -111,7 +113,8 @@
           programs.alejandra.enable = true; # Nix formatter
           # add more: programs.prettier.enable = true; etc.
         };
-        devShells.default = pkgs.mkShell {packages = [inputs'.clan-core.packages.clan-cli];};
+
+        devShells.default = pkgs.mkShell {packages = [inputs'.clan-core.packages.clan-cli pkgs.nil pkgs.nixd];};
       };
     };
 }
