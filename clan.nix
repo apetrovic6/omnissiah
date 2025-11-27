@@ -7,11 +7,12 @@
     ./inventory/machines.nix
   ];
 
-  modules."@imperium/laptop" = import ./services/laptop.nix;
-  modules."@imperium/base" = import ./services/base.nix;
-  modules."@imperium/workstation" = import ./services/workstation.nix;
-  modules."@imperium/dev" = import ./services/dev.nix;
-  modules."@imperium/gaming" = import ./services/gaming.nix;
+  modules."@imperium/laptop" = import ./stc/laptop.nix;
+  modules."@imperium/base" = import ./stc/base.nix;
+  modules."@imperium/server" = import ./stc/server.nix;
+  modules."@imperium/workstation" = import ./stc/workstation.nix;
+  modules."@imperium/dev" = import ./stc/dev.nix;
+  modules."@imperium/gaming" = import ./stc/gaming.nix;
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
