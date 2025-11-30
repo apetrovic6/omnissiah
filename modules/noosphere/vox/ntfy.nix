@@ -24,6 +24,7 @@
     imports = [ imperiumBase ];
 
     options.services.imperium.${serviceName} = { };
+   
 
     config = mkIf cfg.enable {
       services.ntfy-sh = {
