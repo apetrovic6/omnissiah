@@ -59,7 +59,7 @@
   environment.systemPackages = with pkgs; [
     git
     wget
-    self.inputs.nvf.packages.${system}.default
+    self.inputs.nvf.packages.${stdenv.hostPlatform.system}.default
     vim
     fastfetch
     yazi
