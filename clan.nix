@@ -30,6 +30,13 @@
       roles.default.tags.base = {};
     };
 
+    server = {
+      module.input = "self";
+      module.name = "@imperium/server";
+
+      roles.default.tags.base = {};
+    };
+
     workstation = {
       module.input = "self";
       module.name = "@imperium/workstation";
