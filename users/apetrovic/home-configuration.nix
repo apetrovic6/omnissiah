@@ -23,7 +23,7 @@ in {
     enable = true;
   };
 
-  home.packages = with pkgs; [ ];
+  home.packages = with pkgs; [];
 
   nix = {
     extraOptions = ''
@@ -40,6 +40,15 @@ in {
     };
   };
 
+  programs.bash.initExtra = ''
+    export SSH_AUTH_SOCK=/home/apetrovic/.bitwarden-ssh-agent.sock
+  '';
+
+  magos.hyprland.hm = {
+    input = {
+      kbLayouts = ["us" "hr"];
+    };
+  };
   magos.hm.stylix = {
     enable = true; # plain false overrides mkDefault true
     image = ../../wallpapers/lofi/17.png; # optional
@@ -56,10 +65,6 @@ in {
   programs.obsidian.enable = true;
 
   nixpkgs.config.allowUnfree = true;
-
-  programs.cava = {
-    enable = true;
-  };
 
   programs.git = {
     enable = true;
