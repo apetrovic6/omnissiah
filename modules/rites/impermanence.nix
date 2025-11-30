@@ -27,18 +27,11 @@
           "/var/spool"
           "/root"
           "/srv"
-          # "/var/log"
           "/var/lib/bluetooth"
           "/var/lib/nixos"
           "/var/db/sudo/lectured"
           "/var/lib/systemd/coredump"
           "/etc/NetworkManager/system-connections"
-          {
-            directory = "/var/lib/colord";
-            user = "colord";
-            group = "colord";
-            mode = "u=rwx,g=rx,o=";
-          }
         ];
         files = [
           #          "/etc/machine-id"
@@ -55,8 +48,16 @@
             "Pictures"
             "Documents"
             "Videos"
-            ".config"
+            ".config/attic"
+            ".config/Bitwarden"
+            ".config/noctalia"
+            ".config/remmina"
+            ".config/rog"
+            ".config/Vencord"
+            ".config/Vesktop"
             ".local/share"
+            ".librewolf"
+            ".mozilla"
             "omnissiah"
             {
               directory = ".gnupg";
