@@ -20,7 +20,6 @@
     };
 
     # Networking & power basics for laptops
-    networking.networkmanager.enable = true;
     services.power-profiles-daemon.enable = true;
     services.upower.enable = true;
 

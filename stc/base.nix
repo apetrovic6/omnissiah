@@ -39,6 +39,8 @@
       settings.auto-optimise-store = true;
     };
 
+    networking.networkmanager.enable = true;
+
     time.timeZone = "Europe/Zagreb";
     i18n.defaultLocale = "en_US.UTF-8";
     i18n.extraLocaleSettings = {
