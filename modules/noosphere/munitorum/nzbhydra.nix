@@ -25,6 +25,7 @@
         enable = true;
         package = cfg.package;
         openFirewall = cfg.openFirewall;
+        dataDir = "/var/lib/nzbhydra2";
       };
 
 
