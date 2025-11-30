@@ -25,6 +25,8 @@ in {
 
     services.imperium.flatpak.enable = true;
 
+    hardware.keyboard.qmk.enable = true;
+
     system.autoUpgrade = {
       enable = true;
       dates = "weekly";
@@ -84,6 +86,7 @@ in {
       file-roller
       obsidian
 
+      bluetuith
       brave
       librewolf-bin
 
@@ -93,6 +96,11 @@ in {
 
       remmina
       freerdp
+
+      plex-desktop
+      plexamp
+      bitwarden-desktop
+      teams-for-linux
     ];
 
     programs.localsend = {
