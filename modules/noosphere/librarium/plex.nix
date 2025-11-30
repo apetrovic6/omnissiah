@@ -21,15 +21,9 @@
     ];
 
     options.services.imperium.${serviceName} = {
-      openFirewall = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Open ports in the firewall for the Audiobookshelf web interface";
-      };
-
       accelerationDevices = mkOption {
-        type = types.bool;
-        default = [ "*" ];
+        type = types.listOf types.str;
+        default = ["*"];
         description = "Devices that Plex can use for transcoding etc.";
       };
     };
@@ -38,13 +32,13 @@
       services.plex = {
         enable = true;
         package = cfg.package;
-        host = cfg.host;
-        port = cfg.port;
         user = cfg.user;
         group = cfg.group;
         openFirewall = cfg.openFirewall;
         accelerationDevices = cfg.accelerationDevices;
       };
+
+      environment.persistence."/persist".directories = ["/var/lib/plex"];
 
       services.caddy.virtualHosts = {
         "${mkDomain cfg.subdomain}" = {

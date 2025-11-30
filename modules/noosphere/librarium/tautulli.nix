@@ -13,15 +13,15 @@
       name = serviceName;
     };
 
-    inherit (lib) mkIf mkOption mkEnableOption types mkPackageOption;
+    inherit (lib) mkIf mkOption types;
     cfg = config.services.imperium.${serviceName};
   in {
     imports = [
       imperiumBase
-];
+    ];
 
     options.services.imperium.${serviceName} = {
-       configFile = mkOption {
+      configFile = mkOption {
         type = types.str;
         default = "/var/lib/plexpy/config.ini";
         description = "The location of Tautulli's config file";
@@ -30,7 +30,7 @@
       dataDir = mkOption {
         type = types.str;
         default = "/var/lib/plexpy";
-        Description = "The directory where Tautulli stores its data files";
+        description = "The directory where Tautulli stores its data files";
       };
     };
 
@@ -45,10 +45,8 @@
         dataDir = cfg.dataDir;
       };
 
+      environment.persistence."/persist".directories = ["/var/lib/plexpy"];
 
-      environment.persistence."/persist".directories = ["/var/lib/plex"];
-      
-      
       services.caddy.virtualHosts = {
         "${mkDomain cfg.subdomain}" = {
           extraConfig = mkRevProxyVHost cfg.port;

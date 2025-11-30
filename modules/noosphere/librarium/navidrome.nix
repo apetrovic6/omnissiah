@@ -7,8 +7,8 @@
   }: let
     serviceName = "navidrome";
     inherit (self.lib) mkRevProxyVHost mkDomain;
-    inherit (lib)  mkDefault;
-    
+    inherit (lib) mkDefault;
+
     imperiumBase = import ../../rites/imperium-service.nix {
       inherit lib pkgs;
       name = serviceName;
@@ -22,11 +22,6 @@
     ];
 
     options.services.imperium.${serviceName} = {
-      openFirewall = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Open ports in the firewall for the Audiobookshelf web interface";
-      };
     };
 
     config = mkIf cfg.enable {
@@ -34,7 +29,7 @@
         enable = true;
         package = cfg.package;
         settings = {
-          Address= mkDefault cfg.host;
+          Address = mkDefault cfg.host;
           Port = mkDefault cfg.port;
           MusicFolder = mkDefault "${config.services.imperium.smb.hosts.manjaca.shares.data.mountPoint}/media/music";
           # DataFolder = "${config.services.imperium.smb.hosts.manjaca.shares.selfhosted.mountPoint}/navidrome";

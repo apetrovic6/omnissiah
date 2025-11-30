@@ -21,11 +21,6 @@
     ];
 
     options.services.imperium.${serviceName} = {
-      openFirewall = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Open ports in the firewall for the Audiobookshelf web interface";
-      };
     };
 
     config = mkIf cfg.enable {

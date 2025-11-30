@@ -12,7 +12,7 @@
       name = serviceName;
     };
 
-    inherit (lib) mkIf mkOption mkEnableOption types mkPackageOption toSentenceCase;
+    inherit (lib) mkIf mkOption types toSentenceCase;
     cfg = config.services.imperium.${serviceName};
     caddyVars = config.clan.core.vars.generators.caddy-env;
   in {
