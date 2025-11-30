@@ -36,6 +36,12 @@ in {
       description = "Group under which ${toSentenceCase name} should run.";
     };
 
+    openFirewall = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Open ports in the firewall for the ${toSentenceCase name} web interface";
+    };
+
     subdomain = mkOption {
       type = types.str;
       default = name;
