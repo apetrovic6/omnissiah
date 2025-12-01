@@ -1,4 +1,4 @@
-{ self, ... }: {
+{self, ...}: {
   flake.nixosModules.noosphere = {
     config,
     lib,
@@ -21,10 +21,9 @@
 
     ntfyStateDir = "/var/lib/ntfy-sh";
   in {
-    imports = [ imperiumBase ];
+    imports = [imperiumBase];
 
-    options.services.imperium.${serviceName} = { };
-   
+    options.services.imperium.${serviceName} = {};
 
     config = mkIf cfg.enable {
       services.ntfy-sh = {
@@ -39,12 +38,11 @@
           upstream-base-url = "https://ntfy.sh";
 
           # point ntfy to the writable state dir
-          cache-file           = "${ntfyStateDir}/cache.db";
+          cache-file = "${ntfyStateDir}/cache.db";
           attachment-cache-dir = "${ntfyStateDir}/attachments";
-          auth-file            = "${ntfyStateDir}/auth.db";
+          auth-file = "${ntfyStateDir}/auth.db";
         };
       };
-
 
       services.caddy.virtualHosts."${mkDomain cfg.subdomain}" = {
         extraConfig = mkRevProxyVHost cfg.port;
@@ -52,4 +50,3 @@
     };
   };
 }
-

@@ -101,6 +101,8 @@ in {
       plexamp
       bitwarden-desktop
       teams-for-linux
+
+      wiremix
     ];
 
     programs.localsend = {

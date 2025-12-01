@@ -32,6 +32,12 @@
       port = 8181;
     };
 
+    services.imperium.searx = {
+      enable = true;
+      package = pkgs.searxng;
+      port = 9012;
+    };
+
     networking.firewall.allowedTCPPorts = [80 443 2222 53];
     networking.firewall.allowedUDPPorts = [80 443 53];
     # Or disable the firewall altogether.

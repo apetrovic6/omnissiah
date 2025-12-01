@@ -1,4 +1,4 @@
-{ self, ... }: {
+{self, ...}: {
   flake.nixosModules.noosphere = {
     config,
     lib,
@@ -13,21 +13,20 @@
       name = serviceName;
     };
 
-    inherit (lib) mkIf mkOption mkEnableOption types mkPackageOption;
+    inherit (lib) mkIf;
     cfg = config.services.imperium.${serviceName};
   in {
-    imports = [ imperiumBase ];
+    imports = [imperiumBase];
 
-    options.services.imperium.${serviceName} = { };
+    options.services.imperium.${serviceName} = {};
 
     config = mkIf cfg.enable {
-      services.nzbhydra2= {
+      services.nzbhydra2 = {
         enable = true;
         package = cfg.package;
         openFirewall = cfg.openFirewall;
         dataDir = "/var/lib/nzbhydra2";
       };
-
 
       services.caddy.virtualHosts."${mkDomain cfg.subdomain}" = {
         extraConfig = mkRevProxyVHost cfg.port;

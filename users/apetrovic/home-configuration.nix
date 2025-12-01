@@ -49,8 +49,18 @@ in {
       kbLayouts = ["us" "hr"];
     };
   };
+
+  # programs.noctalia-shell = {
+  #   settings = {
+  #     bar.backgroundOpacity = 0;
+  #     location = {
+  #       name = "Zagreb";
+  #     };
+  #   };
+  # };
+
   magos.hm.stylix = {
-    enable = true; # plain false overrides mkDefault true
+    enable = true;
     image = ../../wallpapers/lofi/17.png; # optional
     polarity = "dark";
 

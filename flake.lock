@@ -1603,8 +1603,8 @@
         "treefmt-nix": "treefmt-nix_4"
       },
       "locked": {
-        "lastModified": 1764088574,
-        "narHash": "sha256-8QazmGq9Y1FxH2/fW74i8CcEqexHdjwIv1G0KeE57ro=",
+        "lastModified": 1764594184,
+        "narHash": "sha256-zuBjt5x18cBxeo6Am0At36Hn1FWx+syqAH7X1dH6mmk=",
         "path": "/home/apetrovic/clan/omnishell",
         "type": "path"
       },
