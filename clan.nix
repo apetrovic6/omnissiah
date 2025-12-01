@@ -34,7 +34,7 @@
       module.input = "self";
       module.name = "@imperium/server";
 
-      roles.default.tags.base = {};
+      roles.default.tags.server = {};
     };
 
     workstation = {
