@@ -8,7 +8,8 @@ let
       name = serviceName;
     };
 
-    inherit (lib) mkIf mkOption toSentenceCase;
+    inherit (lib) mkIf mkOption toSentenceCase types;
+    inherit (self.lib) mkRevProxyVHost mkDomain;
 
     cfg = config.services.imperium.${serviceName};
 in
