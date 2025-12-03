@@ -58,7 +58,8 @@
             ".local/share"
             ".librewolf"
             ".mozilla"
-            "omnissiah"
+            "rdp"
+            "clan"
             {
               directory = ".gnupg";
               mode = "0700";
