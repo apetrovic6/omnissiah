@@ -1,7 +1,7 @@
 {self, ...}: {
   flake.nixosModules.noosphere = {config, lib, pkgs, ...}:
 let
-  serviceName = "tecnitium-dns-server";
+  serviceName = "technitium-dns-server";
 
     imperiumBase = import ../../rites/imperium-service.nix {
       inherit lib pkgs;
@@ -30,14 +30,14 @@ in
         };
 
         dnsOverTLS = mkOption {
-          type = types.boolean;
-          defalut = false;
+          type = types.bool;
+          default = false;
           description = "Use DNS over TLS / HTTPS";
         };
      };
 
      config = mkIf cfg.enable {
-        services.tecnitium-dns-server =  {
+        services.technitium-dns-server =  {
           enable = true;
           openFirewall = cfg.openFirewall;
           firewallUDPPorts = cfg.firewallUDPPorts;

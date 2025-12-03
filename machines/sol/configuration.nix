@@ -57,6 +57,13 @@ in {
     gid = 1337;
   };
 
+  # services.xserver.videoDrivers = [ "intel" ];
+  # hardware.enableAllFirmware = true;
+  
+  # services.xserver.videoDrivers = [ "intel" ];
+  # hardware.intel-gpu-tools.enable = true;
+  # boot.kernelModules = [ "i915" ];
+  
   services.imperium.smb.hosts.manjaca = {
     host = "192.168.1.61";
     credentialsVarName = "manjaca-nas-credentials";

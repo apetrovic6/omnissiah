@@ -43,6 +43,13 @@
     # Or disable the firewall altogether.
     networking.firewall.enable = true;
 
+    services.imperium.technitium-dns-server = {
+      enable = true;
+      subdomain = "technitium";
+      openFirewall = true;
+      port = 5380;
+    };
+
     services.imperium.ntfy-sh = {
       enable = true;
       subdomain = "ntfy";

@@ -94,6 +94,8 @@
         checks = {
           enginseer =
             self.nixosConfigurations.enginseer.config.system.build.toplevel;
+
+          sol = self.nixosConfigurations.sol.config.system.build.toplevel;
         };
 
         packages.ci =
