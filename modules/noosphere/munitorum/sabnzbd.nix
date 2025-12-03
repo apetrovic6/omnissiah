@@ -9,7 +9,8 @@
   }:
 let
   serviceName = "sabnzbd";
-  inherit (self.lib) mkRevProxyVhost mkDomain;
+
+  inherit (self.lib) mkRevProxyVHost mkDomain;
   inherit (lib) mkDefault mkIf mkOption mkEableOption types;
 
   imperiumBase = import ../../rites/imperium-service.nix { inherit lib pkgs; name = serviceName;};

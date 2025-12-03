@@ -7,22 +7,20 @@
   }: let
     serviceName = "navidrome";
     inherit (self.lib) mkRevProxyVHost mkDomain;
-    inherit (lib) mkDefault;
+    inherit (lib) mkDefault mkIf mkOption mkEnableOption types mkPackageOption;
 
     imperiumBase = import ../../rites/imperium-service.nix {
       inherit lib pkgs;
       name = serviceName;
     };
 
-    inherit (lib) mkIf mkOption mkEnableOption types mkPackageOption;
     cfg = config.services.imperium.${serviceName};
   in {
     imports = [
       imperiumBase
     ];
 
-    options.services.imperium.${serviceName} = {
-    };
+    options.services.imperium.${serviceName} = { };
 
     config = mkIf cfg.enable {
       services.navidrome = {
