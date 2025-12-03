@@ -14,7 +14,7 @@
       self.nixosModules.noosphere
     ];
 
-    environment.systemPackages = [pkgs.cowsay];
+    environment.systemPackages = [ ];
 
     # TODO: Setup services so that they listen on localhost
 
@@ -42,6 +42,13 @@
     networking.firewall.allowedUDPPorts = [80 443 53];
     # Or disable the firewall altogether.
     networking.firewall.enable = true;
+
+    services.imperium.sabnzbd = {
+      enable = true;
+      port = 8080;
+      subdomain = "sab";
+      group = "media";
+    };
 
     services.imperium.technitium-dns-server = {
       enable = true;
