@@ -24,7 +24,6 @@
   in {
     imports = [imperiumBase];
 
-
     options.services.imperium.${serviceName} = {};
 
     config = mkIf cfg.enable {
@@ -56,46 +55,43 @@
         };
       };
 
+      clan.core.vars.generators."searxng-secret-key" = {
+        # set to true if you want the same key shared across machines
+        share = false;
 
-    clan.core.vars.generators."searxng-secret-key" = {
-      # set to true if you want the same key shared across machines
-      share = false;
+        runtimeInputs = [pkgs.coreutils pkgs.openssl];
 
-      runtimeInputs = [pkgs.coreutils pkgs.openssl];
+        # raw key (just the secret, no KEY= prefix)
+        files."key" = {
+          secret = true;
+          owner = cfg.user; # or "root" or the service user you want
+          group = cfg.group;
+          mode = "0400";
+        };
 
-      # raw key (just the secret, no KEY= prefix)
-      files."key" = {
-        secret = true;
-        owner = cfg.user; # or "root" or the service user you want
-        group = cfg.group;
-        mode = "0400";
+        # env-style file, e.g. SECRET_KEY=...
+        files."env" = {
+          secret = true;
+          owner = cfg.user; # or "root" or the service user you want
+          group = cfg.group;
+          mode = "0400";
+        };
+
+        # no prompts: it auto-generates on first `clan vars generate`
+        script = ''
+                  set -eu
+
+                  key="$(openssl rand -hex 32)"
+
+                  # raw key
+                  printf '%s\n' "$key" > "$out/key"
+
+                  # env file, good for EnvironmentFile=...
+                  cat > "$out/env" <<EOF
+          SEARXNG_SECRET_KEY=$key
+          EOF
+        '';
       };
-
-      # env-style file, e.g. SECRET_KEY=...
-      files."env" = {
-        secret = true;
-        owner = cfg.user; # or "root" or the service user you want
-        group = cfg.group;
-        mode = "0400";
-      };
-
-      # no prompts: it auto-generates on first `clan vars generate`
-      script = ''
-                set -eu
-
-                key="$(openssl rand -hex 32)"
-
-                # raw key
-                printf '%s\n' "$key" > "$out/key"
-
-                # env file, good for EnvironmentFile=...
-                cat > "$out/env" <<EOF
-        SEARXNG_SECRET_KEY=$key
-        EOF
-      '';
-    };
-
-      
     };
   };
 }
