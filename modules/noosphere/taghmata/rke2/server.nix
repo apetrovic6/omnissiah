@@ -26,9 +26,9 @@
       };
 
       serverAddr = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Optional RKE2 server URL for this node to join (e.g. https://first-server.lan:9345).";         
+        type = types.str;
+        default = "";
+        description = "Optional RKE2 server URL for this node to join (e.g. https://first-server.lan:9345).";
       };
 
       cni = mkOption {
@@ -78,7 +78,6 @@
             };
         '';
       };
-
 
       openFirewall = mkOption {
         type = types.bool;

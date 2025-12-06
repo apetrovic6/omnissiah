@@ -61,7 +61,8 @@ in {
 
   magos.hm.stylix = {
     enable = true;
-    image = ../../wallpapers/lofi/17.png; # optional
+    image = ../../wallpapers/everforest/3.jpg; # optional
+    # image = ../../wallpapers/everforest/1.png; # optional
     polarity = "dark";
 
     targets.firefox.profileNames = ["apetrovic"];

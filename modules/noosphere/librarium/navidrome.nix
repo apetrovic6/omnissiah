@@ -20,7 +20,7 @@
       imperiumBase
     ];
 
-    options.services.imperium.${serviceName} = { };
+    options.services.imperium.${serviceName} = {};
 
     config = mkIf cfg.enable {
       services.navidrome = {

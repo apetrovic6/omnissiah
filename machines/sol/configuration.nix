@@ -57,13 +57,29 @@ in {
     gid = 1337;
   };
 
+  services.imperium.taghmata.rke2.server = rec {
+    enable = true;
+    clusterName = "taghmata-omnissiah";
+    cni = "calico";
+    nodeLabels = [
+      "role=control-plane"
+      "cluster=${clusterName}"
+    ];
+
+    tokenFile = config.clan.core.vars.generators.taghmata-node-token.files.node-token.path;
+
+    # nodeTaints = [ "node-role.kubernetes.io/control-plane=:NoSchedule" ];
+
+    openFirewall = true;
+  };
+
   # services.xserver.videoDrivers = [ "intel" ];
   # hardware.enableAllFirmware = true;
-  
+
   # services.xserver.videoDrivers = [ "intel" ];
   # hardware.intel-gpu-tools.enable = true;
   # boot.kernelModules = [ "i915" ];
-  
+
   services.imperium.smb.hosts.manjaca = {
     host = "192.168.1.61";
     credentialsVarName = "manjaca-nas-credentials";

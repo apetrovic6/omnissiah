@@ -14,7 +14,7 @@
       self.nixosModules.noosphere
     ];
 
-    environment.systemPackages = [ ];
+    environment.systemPackages = [];
 
     # TODO: Setup services so that they listen on localhost
 

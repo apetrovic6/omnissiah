@@ -8,7 +8,7 @@
     inherit (lib) mkIf mkEnableOption mkOption types;
     cfg = config.services.imperium.taghmata.rke2.agent;
   in {
-    options.noosphere.taghmata.rke2.agent = {
+    options.services.imperium.taghmata.rke2.agent = {
       enable = mkEnableOption "Enable RKE2 (agent role) on this node";
 
       clusterName = mkOption {
@@ -40,7 +40,7 @@
 
       cni = mkOption {
         type = types.enum ["canal" "calico" "cilium" "flannel" "none"];
-        default = "canal";
+        default = "calico";
         description = ''
           CNI plugin this node expects the cluster to use.
           Must match the servers' CNI setting.
