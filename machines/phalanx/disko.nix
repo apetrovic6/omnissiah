@@ -13,7 +13,7 @@
   disko.devices = {
     disk = {
       main = {
-        name = "main-9d54c0cdaa1e41e6915edfe97cd693c9";
+        name = "main-9cec505894864c6e918fb00cf93ad872";
         device = "/dev/disk/by-id/nvme-WD_BLACK_SN770_2TB_23462Z801872";
         type = "disk";
         content = {
