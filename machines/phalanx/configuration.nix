@@ -10,7 +10,6 @@ in {
   imports = [
     self.inputs.nix-flatpak.nixosModules.nix-flatpak
     self.inputs.nixos-hardware.nixosModules.common-cpu-amd
-    self.inputs.nixos-hardware.nixosModules.common-cpu-pstate
     self.inputs.nixos-hardware.nixosModules.common-gpu-nvidia
     self.nixosModules.impermanence
     self.nixosModules.zram
@@ -32,6 +31,12 @@ in {
   #   };
   # };
   #
+
+
+  hardware.nvidia.open = true;
+  hardware.nvidia.prime.sync.enable = lib.mkForce false;
+  hardware.nvidia.prime.offload.enable = lib.mkForce false;
+  
 
   services.imperium.smb.enable = true;
 

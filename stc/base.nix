@@ -30,6 +30,9 @@
       killall
     ];
 
+    # Firmware updates (UEFI / TB / docks, etc.)
+    services.fwupd.enable = true;
+
     nix = {
       gc = {
         automatic = true;

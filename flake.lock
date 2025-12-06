@@ -1122,14 +1122,17 @@
         "walker": "walker"
       },
       "locked": {
-        "lastModified": 1764432463,
-        "narHash": "sha256-cns3MOxznX/n6MRUIrvjyD9rc7iAXtzimzvLV9YZ35I=",
-        "path": "/home/apetrovic/clan/magos",
-        "type": "path"
+        "lastModified": 1764964124,
+        "narHash": "sha256-r22NC6aCmpWTz3SVn37yfsPIL7kUpqsBcxWDlb/Fs3w=",
+        "owner": "apetrovic6",
+        "repo": "magos",
+        "rev": "fd01e966fdf5e172b87076d19d91b363534a5b57",
+        "type": "github"
       },
       "original": {
-        "path": "/home/apetrovic/clan/magos",
-        "type": "path"
+        "owner": "apetrovic6",
+        "repo": "magos",
+        "type": "github"
       }
     },
     "mnw": {

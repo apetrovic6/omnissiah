@@ -33,8 +33,6 @@
       lidSwitchDocked = "ignore";
     };
 
-    # Firmware updates (UEFI / TB / docks, etc.)
-    services.fwupd.enable = true;
 
     systemd.sleep.extraConfig = ''
       # Valid kernel state for suspend-to-RAM:
