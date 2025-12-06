@@ -23,8 +23,8 @@
     },
     "bluetooth": [
       {
-        "index": 109,
-        "attached_to": 98,
+        "index": 112,
+        "attached_to": 99,
         "class_list": [
           "usb",
           "bluetooth"
@@ -110,8 +110,8 @@
         "module_alias": "usb:v0BDAp8771d0200dcE0dsc01dp01icE0isc01ip01in00"
       },
       {
-        "index": 121,
-        "attached_to": 98,
+        "index": 127,
+        "attached_to": 99,
         "class_list": [
           "usb",
           "bluetooth"
@@ -2170,7 +2170,7 @@
           "[13]",
           "[14]"
         ],
-        "bogo": 6800,
+        "bogo": 6799,
         "cache": 512,
         "units": 32,
         "physical_id": 0,
@@ -2192,7 +2192,7 @@
     "disk": [
       {
         "index": 90,
-        "attached_to": 53,
+        "attached_to": 81,
         "class_list": [
           "disk",
           "block_device",
@@ -2218,38 +2218,38 @@
           "value": 0
         },
         "vendor": {
-          "hex": "15b7",
-          "value": 5559
+          "hex": "1cc1",
+          "value": 7361
         },
         "sub_vendor": {
-          "hex": "15b7",
-          "value": 5559
+          "hex": "1cc1",
+          "value": 7361
         },
         "device": {
-          "hex": "5017",
-          "name": "WD_BLACK SN770 2TB",
-          "value": 20503
+          "hex": "8201",
+          "name": "ADATA SX8200PNP",
+          "value": 33281
         },
         "sub_device": {
-          "hex": "5017",
-          "value": 20503
+          "hex": "8201",
+          "value": 33281
         },
-        "serial": "23462Z801872",
-        "model": "WD_BLACK SN770 2TB",
+        "serial": "2L162LCNC4J2",
+        "model": "ADATA SX8200PNP",
         "sysfs_id": "/class/block/nvme0n1",
         "sysfs_bus_id": "nvme0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.1/0000:01:00.0/nvme/nvme0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.2/0000:02:00.0/0000:03:01.0/0000:04:00.0/nvme/nvme0",
         "unix_device_names": [
-          "/dev/disk/by-id/nvme-WD_BLACK_SN770_2TB_23462Z801872",
-          "/dev/disk/by-id/nvme-WD_BLACK_SN770_2TB_23462Z801872_1",
-          "/dev/disk/by-id/nvme-eui.e8238fa6bf530001001b448b4cca48ab",
-          "/dev/disk/by-path/pci-0000:01:00.0-nvme-1",
+          "/dev/disk/by-id/nvme-ADATA_SX8200PNP_2L162LCNC4J2",
+          "/dev/disk/by-id/nvme-ADATA_SX8200PNP_2L162LCNC4J2_1",
+          "/dev/disk/by-id/nvme-eui.0000000000000000707c180000002162",
+          "/dev/disk/by-path/pci-0000:04:00.0-nvme-1",
           "/dev/nvme0n1"
         ],
         "resources": [
           {
             "type": "disk_geo",
-            "cylinders": 1907729,
+            "cylinders": 1953514,
             "heads": 64,
             "sectors": 32,
             "size": "0x0",
@@ -2258,7 +2258,7 @@
           {
             "type": "size",
             "unit": "sectors",
-            "value_1": 3907029168,
+            "value_1": 4000797360,
             "value_2": 512
           }
         ],
@@ -2376,7 +2376,7 @@
           "value": 133
         },
         "slot": {
-          "bus": 0,
+          "bus": 2,
           "number": 0
         },
         "base_class": {
@@ -2391,24 +2391,24 @@
         },
         "device": {
           "hex": "0000",
-          "name": "CT2000BX500SSD1",
+          "name": "ST2000DM008-2FR1",
           "value": 0
         },
         "revision": {
           "hex": "0000",
-          "name": "061",
+          "name": "0001",
           "value": 0
         },
-        "serial": "2407E8986CC9",
-        "model": "CT2000BX500SSD1",
+        "serial": "WFL3XC6P",
+        "model": "ST2000DM008-2FR1",
         "sysfs_id": "/class/block/sdb",
-        "sysfs_bus_id": "0:0:0:0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.2/0000:02:00.0/0000:03:09.0/0000:09:00.0/ata1/host0/target0:0:0/0:0:0:0",
+        "sysfs_bus_id": "2:0:0:0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.2/0000:02:00.0/0000:03:09.0/0000:09:00.0/ata3/host2/target2:0:0/2:0:0:0",
         "unix_device_names": [
-          "/dev/disk/by-id/ata-CT2000BX500SSD1_2407E8986CC9",
-          "/dev/disk/by-id/wwn-0x500a0751e8986cc9",
-          "/dev/disk/by-path/pci-0000:09:00.0-ata-1",
-          "/dev/disk/by-path/pci-0000:09:00.0-ata-1.0",
+          "/dev/disk/by-id/ata-ST2000DM008-2FR102_WFL3XC6P",
+          "/dev/disk/by-id/wwn-0x5000c500cfc5e287",
+          "/dev/disk/by-path/pci-0000:09:00.0-ata-3",
+          "/dev/disk/by-path/pci-0000:09:00.0-ata-3.0",
           "/dev/sdb"
         ],
         "resources": [
@@ -2521,7 +2521,7 @@
       },
       {
         "index": 94,
-        "attached_to": 81,
+        "attached_to": 53,
         "class_list": [
           "disk",
           "block_device",
@@ -2547,38 +2547,38 @@
           "value": 0
         },
         "vendor": {
-          "hex": "1cc1",
-          "value": 7361
+          "hex": "15b7",
+          "value": 5559
         },
         "sub_vendor": {
-          "hex": "1cc1",
-          "value": 7361
+          "hex": "15b7",
+          "value": 5559
         },
         "device": {
-          "hex": "8201",
-          "name": "ADATA SX8200PNP",
-          "value": 33281
+          "hex": "5017",
+          "name": "WD_BLACK SN770 2TB",
+          "value": 20503
         },
         "sub_device": {
-          "hex": "8201",
-          "value": 33281
+          "hex": "5017",
+          "value": 20503
         },
-        "serial": "2L162LCNC4J2",
-        "model": "ADATA SX8200PNP",
+        "serial": "23462Z801872",
+        "model": "WD_BLACK SN770 2TB",
         "sysfs_id": "/class/block/nvme1n1",
         "sysfs_bus_id": "nvme1",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.2/0000:02:00.0/0000:03:01.0/0000:04:00.0/nvme/nvme1",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.1/0000:01:00.0/nvme/nvme1",
         "unix_device_names": [
-          "/dev/disk/by-id/nvme-ADATA_SX8200PNP_2L162LCNC4J2",
-          "/dev/disk/by-id/nvme-ADATA_SX8200PNP_2L162LCNC4J2_1",
-          "/dev/disk/by-id/nvme-eui.0000000000000000707c180000002162",
-          "/dev/disk/by-path/pci-0000:04:00.0-nvme-1",
+          "/dev/disk/by-id/nvme-WD_BLACK_SN770_2TB_23462Z801872",
+          "/dev/disk/by-id/nvme-WD_BLACK_SN770_2TB_23462Z801872_1",
+          "/dev/disk/by-id/nvme-eui.e8238fa6bf530001001b448b4cca48ab",
+          "/dev/disk/by-path/pci-0000:01:00.0-nvme-1",
           "/dev/nvme1n1"
         ],
         "resources": [
           {
             "type": "disk_geo",
-            "cylinders": 1953514,
+            "cylinders": 1907729,
             "heads": 64,
             "sectors": 32,
             "size": "0x0",
@@ -2587,7 +2587,7 @@
           {
             "type": "size",
             "unit": "sectors",
-            "value_1": 4000797360,
+            "value_1": 3907029168,
             "value_2": 512
           }
         ],
@@ -2614,7 +2614,7 @@
           "value": 133
         },
         "slot": {
-          "bus": 2,
+          "bus": 0,
           "number": 0
         },
         "base_class": {
@@ -2629,24 +2629,24 @@
         },
         "device": {
           "hex": "0000",
-          "name": "ST2000DM008-2FR1",
+          "name": "CT2000BX500SSD1",
           "value": 0
         },
         "revision": {
           "hex": "0000",
-          "name": "0001",
+          "name": "061",
           "value": 0
         },
-        "serial": "WFL3XC6P",
-        "model": "ST2000DM008-2FR1",
+        "serial": "2407E8986CC9",
+        "model": "CT2000BX500SSD1",
         "sysfs_id": "/class/block/sda",
-        "sysfs_bus_id": "2:0:0:0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.2/0000:02:00.0/0000:03:09.0/0000:09:00.0/ata3/host2/target2:0:0/2:0:0:0",
+        "sysfs_bus_id": "0:0:0:0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.2/0000:02:00.0/0000:03:09.0/0000:09:00.0/ata1/host0/target0:0:0/0:0:0:0",
         "unix_device_names": [
-          "/dev/disk/by-id/ata-ST2000DM008-2FR102_WFL3XC6P",
-          "/dev/disk/by-id/wwn-0x5000c500cfc5e287",
-          "/dev/disk/by-path/pci-0000:09:00.0-ata-3",
-          "/dev/disk/by-path/pci-0000:09:00.0-ata-3.0",
+          "/dev/disk/by-id/ata-CT2000BX500SSD1_2407E8986CC9",
+          "/dev/disk/by-id/wwn-0x500a0751e8986cc9",
+          "/dev/disk/by-path/pci-0000:09:00.0-ata-1",
+          "/dev/disk/by-path/pci-0000:09:00.0-ata-1.0",
           "/dev/sda"
         ],
         "resources": [
@@ -2845,8 +2845,8 @@
     ],
     "hub": [
       {
-        "index": 96,
-        "attached_to": 102,
+        "index": 97,
+        "attached_to": 105,
         "class_list": [
           "usb",
           "hub"
@@ -2921,8 +2921,8 @@
         "module_alias": "usb:v2109p0813d9015dc09dsc00dp03ic09isc00ip00in00"
       },
       {
-        "index": 98,
-        "attached_to": 118,
+        "index": 99,
+        "attached_to": 124,
         "class_list": [
           "usb",
           "hub"
@@ -3007,7 +3007,7 @@
         "module_alias": "usb:v05E3p0610d0656dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 99,
+        "index": 100,
         "attached_to": 40,
         "class_list": [
           "usb",
@@ -3084,8 +3084,8 @@
         "module_alias": "usb:v1D6Bp0003d0617dc09dsc00dp03ic09isc00ip00in00"
       },
       {
-        "index": 102,
-        "attached_to": 106,
+        "index": 105,
+        "attached_to": 109,
         "class_list": [
           "usb",
           "hub"
@@ -3160,7 +3160,7 @@
         "module_alias": "usb:v2109p0813d9015dc09dsc00dp03ic09isc00ip00in00"
       },
       {
-        "index": 103,
+        "index": 106,
         "attached_to": 70,
         "class_list": [
           "usb",
@@ -3247,8 +3247,8 @@
         "module_alias": "usb:v1D6Bp0002d0617dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 106,
-        "attached_to": 99,
+        "index": 109,
+        "attached_to": 100,
         "class_list": [
           "usb",
           "hub"
@@ -3323,7 +3323,7 @@
         "module_alias": "usb:v05E3p0626d0656dc09dsc00dp03ic09isc00ip00in00"
       },
       {
-        "index": 111,
+        "index": 115,
         "attached_to": 70,
         "class_list": [
           "usb",
@@ -3400,8 +3400,8 @@
         "module_alias": "usb:v1D6Bp0003d0617dc09dsc00dp03ic09isc00ip00in00"
       },
       {
-        "index": 113,
-        "attached_to": 114,
+        "index": 118,
+        "attached_to": 120,
         "class_list": [
           "usb",
           "hub"
@@ -3486,8 +3486,8 @@
         "module_alias": "usb:v2109p2813d9014dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 114,
-        "attached_to": 98,
+        "index": 120,
+        "attached_to": 99,
         "class_list": [
           "usb",
           "hub"
@@ -3572,7 +3572,7 @@
         "module_alias": "usb:v2109p2813d9014dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 115,
+        "index": 121,
         "attached_to": 74,
         "class_list": [
           "usb",
@@ -3659,7 +3659,7 @@
         "module_alias": "usb:v1D6Bp0002d0617dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 118,
+        "index": 124,
         "attached_to": 40,
         "class_list": [
           "usb",
@@ -3746,7 +3746,7 @@
         "module_alias": "usb:v1D6Bp0002d0617dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 123,
+        "index": 129,
         "attached_to": 74,
         "class_list": [
           "usb",
@@ -3823,8 +3823,8 @@
         "module_alias": "usb:v1D6Bp0003d0617dc09dsc00dp03ic09isc00ip00in00"
       },
       {
-        "index": 124,
-        "attached_to": 115,
+        "index": 130,
+        "attached_to": 121,
         "class_list": [
           "usb",
           "hub"
@@ -3910,8 +3910,8 @@
     ],
     "keyboard": [
       {
-        "index": 107,
-        "attached_to": 114,
+        "index": 110,
+        "attached_to": 120,
         "class_list": [
           "keyboard",
           "usb"
@@ -4010,8 +4010,8 @@
         "module_alias": "usb:v1532p00A8d0100dc00dsc00dp00ic03isc01ip01in01"
       },
       {
-        "index": 117,
-        "attached_to": 114,
+        "index": 123,
+        "attached_to": 120,
         "class_list": [
           "keyboard",
           "usb"
@@ -4136,6 +4136,121 @@
             "range": 137438953472
           }
         ]
+      }
+    ],
+    "modem": [
+      {
+        "index": 96,
+        "attached_to": 99,
+        "class_list": [
+          "modem",
+          "usb"
+        ],
+        "bus_type": {
+          "hex": "0086",
+          "name": "USB",
+          "value": 134
+        },
+        "slot": {
+          "bus": 0,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0102",
+          "name": "Modem",
+          "value": 258
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Modem",
+          "value": 0
+        },
+        "vendor": {
+          "hex": "303a",
+          "name": "Svalboard",
+          "value": 12346
+        },
+        "device": {
+          "hex": "4044",
+          "name": "lightly",
+          "value": 16452
+        },
+        "revision": {
+          "hex": "0000",
+          "name": "0.02",
+          "value": 0
+        },
+        "serial": "vial:f64c2b3c",
+        "model": "Svalboard lightly",
+        "sysfs_id": "/devices/pci0000:00/0000:00:08.1/0000:0e:00.3/usb5/5-1/5-1.3/5-1.3:1.4",
+        "sysfs_bus_id": "5-1.3:1.4",
+        "unix_device_names": [
+          "/dev/serial/by-id/usb-Svalboard_lightly_vial:f64c2b3c-if04",
+          "/dev/serial/by-path/pci-0000:0e:00.3-usb-0:1.3:1.4",
+          "/dev/serial/by-path/pci-0000:0e:00.3-usbv2-0:1.3:1.4",
+          "/dev/ttyACM0"
+        ],
+        "resources": [
+          {
+            "type": "baud",
+            "speed": 12000000,
+            "bits": 0,
+            "stop_bits": 0,
+            "parity": 0,
+            "handshake": 0
+          }
+        ],
+        "detail": {
+          "device_class": {
+            "hex": "00ef",
+            "name": "miscellaneous",
+            "value": 239
+          },
+          "device_subclass": {
+            "hex": "0002",
+            "name": "comm",
+            "value": 2
+          },
+          "device_protocol": 1,
+          "interface_class": {
+            "hex": "0002",
+            "name": "comm",
+            "value": 2
+          },
+          "interface_subclass": {
+            "hex": "0002",
+            "name": "comm",
+            "value": 2
+          },
+          "interface_protocol": 1,
+          "interface_number": 4,
+          "interface_alternate_setting": 0,
+          "interface_association": {
+            "function_class": {
+              "hex": "0002",
+              "name": "comm",
+              "value": 2
+            },
+            "function_subclass": {
+              "hex": "0002",
+              "name": "comm",
+              "value": 2
+            },
+            "function_protocol": 1,
+            "interface_count": 2,
+            "first_interface": 4
+          }
+        },
+        "hotplug": "usb",
+        "driver": "cdc_acm",
+        "driver_module": "cdc_acm",
+        "drivers": [
+          "cdc_acm"
+        ],
+        "driver_modules": [
+          "cdc_acm"
+        ],
+        "module_alias": "usb:v303Ap4044d0002dcEFdsc02dp01ic02isc02ip01in04"
       }
     ],
     "monitor": [
@@ -4358,8 +4473,117 @@
     ],
     "mouse": [
       {
-        "index": 120,
-        "attached_to": 114,
+        "index": 101,
+        "attached_to": 99,
+        "class_list": [
+          "mouse",
+          "usb"
+        ],
+        "bus_type": {
+          "hex": "0086",
+          "name": "USB",
+          "value": 134
+        },
+        "slot": {
+          "bus": 0,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0105",
+          "name": "Mouse",
+          "value": 261
+        },
+        "sub_class": {
+          "hex": "0003",
+          "name": "USB Mouse",
+          "value": 3
+        },
+        "vendor": {
+          "hex": "303a",
+          "name": "Svalboard",
+          "value": 12346
+        },
+        "device": {
+          "hex": "4044",
+          "name": "lightly",
+          "value": 16452
+        },
+        "revision": {
+          "hex": "0000",
+          "name": "0.02",
+          "value": 0
+        },
+        "serial": "vial:f64c2b3c",
+        "compat_vendor": "Unknown",
+        "compat_device": "Generic USB Mouse",
+        "model": "Svalboard lightly",
+        "sysfs_id": "/devices/pci0000:00/0000:00:08.1/0000:0e:00.3/usb5/5-1/5-1.3/5-1.3:1.2",
+        "sysfs_bus_id": "5-1.3:1.2",
+        "unix_device_names": [
+          "/dev/input/mice"
+        ],
+        "unix_device_name2": "/dev/input/mouse2",
+        "resources": [
+          {
+            "type": "baud",
+            "speed": 12000000,
+            "bits": 0,
+            "stop_bits": 0,
+            "parity": 0,
+            "handshake": 0
+          }
+        ],
+        "detail": {
+          "device_class": {
+            "hex": "00ef",
+            "name": "miscellaneous",
+            "value": 239
+          },
+          "device_subclass": {
+            "hex": "0002",
+            "name": "comm",
+            "value": 2
+          },
+          "device_protocol": 1,
+          "interface_class": {
+            "hex": "0003",
+            "name": "hid",
+            "value": 3
+          },
+          "interface_subclass": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "interface_protocol": 0,
+          "interface_number": 2,
+          "interface_alternate_setting": 0
+        },
+        "hotplug": "usb",
+        "driver": "usbhid",
+        "driver_module": "usbhid",
+        "drivers": [
+          "usbhid"
+        ],
+        "driver_modules": [
+          "usbhid"
+        ],
+        "driver_info": {
+          "type": "mouse",
+          "db_entry_0": [
+            "explorerps/2",
+            "exps2"
+          ],
+          "xf86": "explorerps/2",
+          "gpm": "exps2",
+          "buttons": -1,
+          "wheels": -1
+        },
+        "module_alias": "usb:v303Ap4044d0002dcEFdsc02dp01ic03isc00ip00in02"
+      },
+      {
+        "index": 126,
+        "attached_to": 120,
         "class_list": [
           "mouse",
           "usb"
@@ -4697,7 +4921,7 @@
         "resources": [
           {
             "type": "hwaddr",
-            "address": 51
+            "address": 48
           },
           {
             "type": "phwaddr",
@@ -4807,48 +5031,7 @@
     ],
     "network_interface": [
       {
-        "index": 125,
-        "attached_to": 75,
-        "class_list": [
-          "network_interface"
-        ],
-        "base_class": {
-          "hex": "0107",
-          "name": "Network Interface",
-          "value": 263
-        },
-        "sub_class": {
-          "hex": "000a",
-          "name": "WLAN",
-          "value": 10
-        },
-        "model": "WLAN network interface",
-        "sysfs_id": "/class/net/wlan0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.2/0000:02:00.0/0000:03:03.0/0000:05:00.0",
-        "unix_device_names": [
-          "wlan0"
-        ],
-        "resources": [
-          {
-            "type": "hwaddr",
-            "address": 51
-          },
-          {
-            "type": "phwaddr",
-            "address": 54
-          }
-        ],
-        "driver": "iwlwifi",
-        "driver_module": "iwlwifi",
-        "drivers": [
-          "iwlwifi"
-        ],
-        "driver_modules": [
-          "iwlwifi"
-        ]
-      },
-      {
-        "index": 126,
+        "index": 131,
         "attached_to": 56,
         "class_list": [
           "network_interface"
@@ -4889,7 +5072,48 @@
         ]
       },
       {
-        "index": 127,
+        "index": 132,
+        "attached_to": 75,
+        "class_list": [
+          "network_interface"
+        ],
+        "base_class": {
+          "hex": "0107",
+          "name": "Network Interface",
+          "value": 263
+        },
+        "sub_class": {
+          "hex": "000a",
+          "name": "WLAN",
+          "value": 10
+        },
+        "model": "WLAN network interface",
+        "sysfs_id": "/class/net/wlan0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.2/0000:02:00.0/0000:03:03.0/0000:05:00.0",
+        "unix_device_names": [
+          "wlan0"
+        ],
+        "resources": [
+          {
+            "type": "hwaddr",
+            "address": 48
+          },
+          {
+            "type": "phwaddr",
+            "address": 54
+          }
+        ],
+        "driver": "iwlwifi",
+        "driver_module": "iwlwifi",
+        "drivers": [
+          "iwlwifi"
+        ],
+        "driver_modules": [
+          "iwlwifi"
+        ]
+      },
+      {
+        "index": 133,
         "attached_to": 67,
         "class_list": [
           "network_interface"
@@ -4930,7 +5154,7 @@
         ]
       },
       {
-        "index": 128,
+        "index": 134,
         "attached_to": 0,
         "class_list": [
           "network_interface"
@@ -5489,8 +5713,8 @@
         "module_alias": "pci:v000010DEd00001AEFsv00001462sd00003896bc04sc03i00"
       },
       {
-        "index": 97,
-        "attached_to": 114,
+        "index": 98,
+        "attached_to": 120,
         "class_list": [
           "sound",
           "usb"
@@ -5580,8 +5804,8 @@
         "module_alias": "usb:v046Dp0ABAd0100dc00dsc00dp00ic01isc02ip00in02"
       },
       {
-        "index": 100,
-        "attached_to": 114,
+        "index": 102,
+        "attached_to": 120,
         "class_list": [
           "sound",
           "usb"
@@ -5671,8 +5895,8 @@
         "module_alias": "usb:v046Dp0ABAd0100dc00dsc00dp00ic01isc01ip00in00"
       },
       {
-        "index": 108,
-        "attached_to": 98,
+        "index": 111,
+        "attached_to": 99,
         "class_list": [
           "sound",
           "usb"
@@ -5778,8 +6002,8 @@
         "module_alias": "usb:v23E5pA015d0504dcEFdsc02dp01ic01isc02ip20in01"
       },
       {
-        "index": 112,
-        "attached_to": 114,
+        "index": 117,
+        "attached_to": 120,
         "class_list": [
           "sound",
           "usb"
@@ -5869,8 +6093,8 @@
         "module_alias": "usb:v046Dp0ABAd0100dc00dsc00dp00ic01isc02ip00in01"
       },
       {
-        "index": 119,
-        "attached_to": 98,
+        "index": 125,
+        "attached_to": 99,
         "class_list": [
           "sound",
           "usb"
@@ -5976,8 +6200,8 @@
         "module_alias": "usb:v23E5pA015d0504dcEFdsc02dp01ic01isc02ip20in02"
       },
       {
-        "index": 122,
-        "attached_to": 98,
+        "index": 128,
+        "attached_to": 99,
         "class_list": [
           "sound",
           "usb"
@@ -6416,8 +6640,8 @@
     ],
     "usb": [
       {
-        "index": 101,
-        "attached_to": 103,
+        "index": 103,
+        "attached_to": 106,
         "class_list": [
           "usb",
           "unknown"
@@ -6509,7 +6733,105 @@
       },
       {
         "index": 104,
-        "attached_to": 103,
+        "attached_to": 99,
+        "class_list": [
+          "usb",
+          "unknown"
+        ],
+        "bus_type": {
+          "hex": "0086",
+          "name": "USB",
+          "value": 134
+        },
+        "slot": {
+          "bus": 0,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "vendor": {
+          "hex": "303a",
+          "name": "Svalboard",
+          "value": 12346
+        },
+        "device": {
+          "hex": "4044",
+          "name": "lightly",
+          "value": 16452
+        },
+        "revision": {
+          "hex": "0000",
+          "name": "0.02",
+          "value": 0
+        },
+        "serial": "vial:f64c2b3c",
+        "model": "Svalboard lightly",
+        "sysfs_id": "/devices/pci0000:00/0000:00:08.1/0000:0e:00.3/usb5/5-1/5-1.3/5-1.3:1.0",
+        "sysfs_bus_id": "5-1.3:1.0",
+        "unix_device_names": [
+          "/dev/input/by-id/usb-Svalboard_lightly_vial:f64c2b3c-event-kbd",
+          "/dev/input/by-path/pci-0000:0e:00.3-usb-0:1.3:1.0-event-kbd",
+          "/dev/input/by-path/pci-0000:0e:00.3-usbv2-0:1.3:1.0-event-kbd",
+          "/dev/input/event7"
+        ],
+        "resources": [
+          {
+            "type": "baud",
+            "speed": 12000000,
+            "bits": 0,
+            "stop_bits": 0,
+            "parity": 0,
+            "handshake": 0
+          }
+        ],
+        "detail": {
+          "device_class": {
+            "hex": "00ef",
+            "name": "miscellaneous",
+            "value": 239
+          },
+          "device_subclass": {
+            "hex": "0002",
+            "name": "comm",
+            "value": 2
+          },
+          "device_protocol": 1,
+          "interface_class": {
+            "hex": "0003",
+            "name": "hid",
+            "value": 3
+          },
+          "interface_subclass": {
+            "hex": "0001",
+            "name": "audio",
+            "value": 1
+          },
+          "interface_protocol": 1,
+          "interface_number": 0,
+          "interface_alternate_setting": 0
+        },
+        "hotplug": "usb",
+        "driver": "usbhid",
+        "driver_module": "usbhid",
+        "drivers": [
+          "usbhid"
+        ],
+        "driver_modules": [
+          "usbhid"
+        ],
+        "module_alias": "usb:v303Ap4044d0002dcEFdsc02dp01ic03isc01ip01in00"
+      },
+      {
+        "index": 107,
+        "attached_to": 106,
         "class_list": [
           "usb",
           "unknown"
@@ -6592,8 +6914,8 @@
         "module_alias": "usb:v0B05p18F3d0100dc00dsc00dp00icFFiscFFipFFin00"
       },
       {
-        "index": 105,
-        "attached_to": 98,
+        "index": 108,
+        "attached_to": 99,
         "class_list": [
           "usb",
           "unknown"
@@ -6684,8 +7006,115 @@
         "module_alias": "usb:v23E5pA015d0504dcEFdsc02dp01ic03isc00ip00in03"
       },
       {
-        "index": 110,
-        "attached_to": 114,
+        "index": 113,
+        "attached_to": 99,
+        "class_list": [
+          "usb",
+          "unknown"
+        ],
+        "bus_type": {
+          "hex": "0086",
+          "name": "USB",
+          "value": 134
+        },
+        "slot": {
+          "bus": 0,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "vendor": {
+          "hex": "303a",
+          "name": "Svalboard",
+          "value": 12346
+        },
+        "device": {
+          "hex": "4044",
+          "name": "lightly",
+          "value": 16452
+        },
+        "revision": {
+          "hex": "0000",
+          "name": "0.02",
+          "value": 0
+        },
+        "serial": "vial:f64c2b3c",
+        "model": "Svalboard lightly",
+        "sysfs_id": "/devices/pci0000:00/0000:00:08.1/0000:0e:00.3/usb5/5-1/5-1.3/5-1.3:1.5",
+        "sysfs_bus_id": "5-1.3:1.5",
+        "resources": [
+          {
+            "type": "baud",
+            "speed": 12000000,
+            "bits": 0,
+            "stop_bits": 0,
+            "parity": 0,
+            "handshake": 0
+          }
+        ],
+        "detail": {
+          "device_class": {
+            "hex": "00ef",
+            "name": "miscellaneous",
+            "value": 239
+          },
+          "device_subclass": {
+            "hex": "0002",
+            "name": "comm",
+            "value": 2
+          },
+          "device_protocol": 1,
+          "interface_class": {
+            "hex": "000a",
+            "name": "data",
+            "value": 10
+          },
+          "interface_subclass": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "interface_protocol": 0,
+          "interface_number": 5,
+          "interface_alternate_setting": 0,
+          "interface_association": {
+            "function_class": {
+              "hex": "0002",
+              "name": "comm",
+              "value": 2
+            },
+            "function_subclass": {
+              "hex": "0002",
+              "name": "comm",
+              "value": 2
+            },
+            "function_protocol": 1,
+            "interface_count": 2,
+            "first_interface": 4
+          }
+        },
+        "hotplug": "usb",
+        "driver": "cdc_acm",
+        "driver_module": "cdc_acm",
+        "drivers": [
+          "cdc_acm"
+        ],
+        "driver_modules": [
+          "cdc_acm"
+        ],
+        "module_alias": "usb:v303Ap4044d0002dcEFdsc02dp01ic0Aisc00ip00in05"
+      },
+      {
+        "index": 114,
+        "attached_to": 120,
         "class_list": [
           "usb",
           "unknown"
@@ -6776,6 +7205,190 @@
           "usbhid"
         ],
         "module_alias": "usb:v046Dp0ABAd0100dc00dsc00dp00ic03isc00ip00in03"
+      },
+      {
+        "index": 116,
+        "attached_to": 99,
+        "class_list": [
+          "usb",
+          "unknown"
+        ],
+        "bus_type": {
+          "hex": "0086",
+          "name": "USB",
+          "value": 134
+        },
+        "slot": {
+          "bus": 0,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "vendor": {
+          "hex": "303a",
+          "name": "Svalboard",
+          "value": 12346
+        },
+        "device": {
+          "hex": "4044",
+          "name": "lightly",
+          "value": 16452
+        },
+        "revision": {
+          "hex": "0000",
+          "name": "0.02",
+          "value": 0
+        },
+        "serial": "vial:f64c2b3c",
+        "model": "Svalboard lightly",
+        "sysfs_id": "/devices/pci0000:00/0000:00:08.1/0000:0e:00.3/usb5/5-1/5-1.3/5-1.3:1.3",
+        "sysfs_bus_id": "5-1.3:1.3",
+        "resources": [
+          {
+            "type": "baud",
+            "speed": 12000000,
+            "bits": 0,
+            "stop_bits": 0,
+            "parity": 0,
+            "handshake": 0
+          }
+        ],
+        "detail": {
+          "device_class": {
+            "hex": "00ef",
+            "name": "miscellaneous",
+            "value": 239
+          },
+          "device_subclass": {
+            "hex": "0002",
+            "name": "comm",
+            "value": 2
+          },
+          "device_protocol": 1,
+          "interface_class": {
+            "hex": "0003",
+            "name": "hid",
+            "value": 3
+          },
+          "interface_subclass": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "interface_protocol": 0,
+          "interface_number": 3,
+          "interface_alternate_setting": 0
+        },
+        "hotplug": "usb",
+        "driver": "usbhid",
+        "driver_module": "usbhid",
+        "drivers": [
+          "usbhid"
+        ],
+        "driver_modules": [
+          "usbhid"
+        ],
+        "module_alias": "usb:v303Ap4044d0002dcEFdsc02dp01ic03isc00ip00in03"
+      },
+      {
+        "index": 119,
+        "attached_to": 99,
+        "class_list": [
+          "usb",
+          "unknown"
+        ],
+        "bus_type": {
+          "hex": "0086",
+          "name": "USB",
+          "value": 134
+        },
+        "slot": {
+          "bus": 0,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Unclassified device",
+          "value": 0
+        },
+        "vendor": {
+          "hex": "303a",
+          "name": "Svalboard",
+          "value": 12346
+        },
+        "device": {
+          "hex": "4044",
+          "name": "lightly",
+          "value": 16452
+        },
+        "revision": {
+          "hex": "0000",
+          "name": "0.02",
+          "value": 0
+        },
+        "serial": "vial:f64c2b3c",
+        "model": "Svalboard lightly",
+        "sysfs_id": "/devices/pci0000:00/0000:00:08.1/0000:0e:00.3/usb5/5-1/5-1.3/5-1.3:1.1",
+        "sysfs_bus_id": "5-1.3:1.1",
+        "resources": [
+          {
+            "type": "baud",
+            "speed": 12000000,
+            "bits": 0,
+            "stop_bits": 0,
+            "parity": 0,
+            "handshake": 0
+          }
+        ],
+        "detail": {
+          "device_class": {
+            "hex": "00ef",
+            "name": "miscellaneous",
+            "value": 239
+          },
+          "device_subclass": {
+            "hex": "0002",
+            "name": "comm",
+            "value": 2
+          },
+          "device_protocol": 1,
+          "interface_class": {
+            "hex": "0003",
+            "name": "hid",
+            "value": 3
+          },
+          "interface_subclass": {
+            "hex": "0000",
+            "name": "per_interface",
+            "value": 0
+          },
+          "interface_protocol": 0,
+          "interface_number": 1,
+          "interface_alternate_setting": 0
+        },
+        "hotplug": "usb",
+        "driver": "usbhid",
+        "driver_module": "usbhid",
+        "drivers": [
+          "usbhid"
+        ],
+        "driver_modules": [
+          "usbhid"
+        ],
+        "module_alias": "usb:v303Ap4044d0002dcEFdsc02dp01ic03isc00ip00in01"
       }
     ],
     "usb_controller": [
