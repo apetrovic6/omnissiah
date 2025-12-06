@@ -19,11 +19,11 @@ in {
   }: {
     imports = [
       self.inputs.magos.nixosModules.default
-      self.nixosModules.flatpak
+      # self.nixosModules.flatpak
       self.nixosModules.bluetooth
     ];
 
-    services.imperium.flatpak.enable = true;
+    # services.imperium.flatpak.enable = false;
 
     hardware.keyboard.qmk.enable = true;
 

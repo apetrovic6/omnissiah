@@ -33,7 +33,6 @@
       lidSwitchDocked = "ignore";
     };
 
-
     systemd.sleep.extraConfig = ''
       # Valid kernel state for suspend-to-RAM:
       # values must come from: freeze mem disk

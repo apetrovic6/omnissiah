@@ -9,6 +9,7 @@
 in {
   imports = [
     self.inputs.nix-flatpak.nixosModules.nix-flatpak
+    # self.inputs.magos.nixosModules
     self.inputs.nixos-hardware.nixosModules.common-cpu-amd
     self.inputs.nixos-hardware.nixosModules.common-gpu-nvidia
     self.nixosModules.impermanence
@@ -32,11 +33,11 @@ in {
   # };
   #
 
+  # magos.hyprland.monitor = ",3840x2160@120,1";
 
   hardware.nvidia.open = true;
   hardware.nvidia.prime.sync.enable = lib.mkForce false;
   hardware.nvidia.prime.offload.enable = lib.mkForce false;
-  
 
   services.imperium.smb.enable = true;
 
