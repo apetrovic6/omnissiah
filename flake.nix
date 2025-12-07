@@ -25,7 +25,7 @@
     };
 
     magos = {
-           url = "github:apetrovic6/magos";
+      url = "github:apetrovic6/magos";
       # url = "path:/home/apetrovic/clan/magos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -96,6 +96,7 @@
             self.nixosConfigurations.enginseer.config.system.build.toplevel;
 
           sol = self.nixosConfigurations.sol.config.system.build.toplevel;
+          phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
         };
 
         packages.ci =
