@@ -59,6 +59,7 @@
             ".librewolf"
             ".mozilla"
             "rdp"
+            ".config/sops/age"
             "clan"
             {
               directory = ".gnupg";
