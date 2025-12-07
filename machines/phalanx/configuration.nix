@@ -33,7 +33,7 @@ in {
   # };
   #
 
-  # magos.hyprland.monitor = ",3840x2160@120,1";
+  magos.core.hyprland.monitor = ",3840x2160@120, auto, 1";
 
   hardware.nvidia.open = true;
   hardware.nvidia.prime.sync.enable = lib.mkForce false;
@@ -74,7 +74,9 @@ in {
     };
   };
 
-  services.imperium.lanzaboote.enable = false;
+  # boot.loader.systemd-boot.enable = lib.mkForce true;
+
+  services.imperium.lanzaboote.enable = true;
   services.imperium.zram.enable = true;
 
   hardware.nvidia.powerManagement.enable = true;
@@ -113,7 +115,7 @@ in {
   boot.loader = {
     efi.canTouchEfiVariables = false;
     grub.devices = [
-      diskId
+      "/dev/disk/by-id/nvme-WD_BLACK_SN770_2TB_23462Z801872"
     ];
   };
 }

@@ -17,7 +17,15 @@
         enable = true;
         powerOnBoot = true;
         settings = {
-          General.ControllerMode = "le";
+          General = {
+            Enable = "Source,Sink,Media,Socket";
+            ControllerMode = "bredr";
+            Experimental = true;
+            FastConnectable = true;
+          };
+          Policy = {
+            AutoEnable = true;
+          };
         };
       };
 
