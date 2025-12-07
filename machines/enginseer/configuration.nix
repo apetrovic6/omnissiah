@@ -31,6 +31,7 @@ in {
   # };
   #
 
+  magos.core.hyprland.monitor = ",2560x1600@240, auto, 1";
   services.imperium.smb.enable = true;
 
   services.imperium.smb.hosts.manjaca = {
