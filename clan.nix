@@ -13,6 +13,7 @@
   modules."@imperium/workstation" = import ./stc/workstation.nix;
   modules."@imperium/dev" = import ./stc/dev.nix;
   modules."@imperium/gaming" = import ./stc/gaming.nix;
+  modules."@imperium/k8s-server" = import ./stc/k8s-server.nix;
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
@@ -51,6 +52,13 @@
       roles.default.tags.gaming = {};
     };
 
+    k8s-server = {
+      module.input = "self";
+      module.name = "@imperium/k8s-server";
+
+      roles.default.tags.k8s-server = {};
+    };
+
     dev = {
       module.input = "self";
       module.name = "@imperium/dev";
@@ -83,6 +91,8 @@
           "networkmanager" # Allows to manage network connections.
           "video" # Allows to access video devices.
           "input" # Allows to access input devices.
+          "qemu"
+          "libvirtd"
           "kvm"
           "adb"
           "docker"

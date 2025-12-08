@@ -34,7 +34,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nix-virt = {
+    nixvirt = {
       url = "https://flakehub.com/f/AshleyYakeley/NixVirt/*.tar.gz";
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -100,6 +100,7 @@
             self.nixosConfigurations.enginseer.config.system.build.toplevel;
 
           sol = self.nixosConfigurations.sol.config.system.build.toplevel;
+          terra = self.nixosConfigurations.terra.config.system.build.toplevel;
           phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
         };
 

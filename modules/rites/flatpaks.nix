@@ -24,7 +24,7 @@
             "com.bambulab.BambuStudio"
             "com.thincast.client"
             "org.remmina.Remmina"
-
+            "net.waterfox.waterfox"
             #"com.github.tchx84.Flatseal" #Manage flatpak permissions - should always have this
             #"com.rtosta.zapzap"              # WhatsApp client
             #"io.github.flattool.Warehouse"   # Manage flatpaks, clean data, remove flatpaks and deps

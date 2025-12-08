@@ -17,7 +17,12 @@
     sol = {
       tags = ["base" "server"];
       # deploy.targetHost = "root@192.168.1.81";
-      deploy.targetHost = "root@192.168.122.170";
+      deploy.targetHost = "root@192.168.71.146";
+    };
+
+    terra = {
+      tags = ["base" "k8s-server"];
+      deploy.targetHost = "root@192.168.71.62";
     };
   };
 }

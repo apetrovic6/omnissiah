@@ -1,4 +1,4 @@
-{self, ...}: {
+{ ...}: {
   _class = "clan.service";
   manifest.name = "k8s-server";
   manifest.readme = "";
@@ -9,6 +9,7 @@
     config,
     lib,
     pkgs,
+    self,
     ...
   }: {
     imports = [
@@ -18,6 +19,7 @@
     services.imperium.taghmata.rke2.server = rec {
       enable = true;
       clusterName = "taghmata-omnissiah";
+      serverAddr = "https://192.168.71.146:9345";
       cni = "calico";
       nodeLabels = [
         "role=control-plane"
