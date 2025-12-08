@@ -95,7 +95,6 @@ in {
 
       vesktop
 
-      # remmina
       freerdp
 
       plex-desktop
@@ -104,6 +103,10 @@ in {
       teams-for-linux
 
       wiremix
+
+      virt-manager
+      qemu
+      kubectl
     ];
 
     programs.localsend = {
