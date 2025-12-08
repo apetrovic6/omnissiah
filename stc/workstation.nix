@@ -18,12 +18,13 @@ in {
     ...
   }: {
     imports = [
+      self.nixosModules.flatpak
       self.inputs.magos.nixosModules.default
       # self.nixosModules.flatpak
       self.nixosModules.bluetooth
     ];
 
-    # services.imperium.flatpak.enable = false;
+    services.imperium.flatpak.enable = true;
 
     hardware.keyboard.qmk.enable = true;
 
@@ -94,7 +95,7 @@ in {
 
       vesktop
 
-      remmina
+      # remmina
       freerdp
 
       plex-desktop

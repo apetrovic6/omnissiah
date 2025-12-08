@@ -23,6 +23,7 @@
           packages = [
             "com.bambulab.BambuStudio"
             "com.thincast.client"
+            "org.remmina.Remmina"
 
             #"com.github.tchx84.Flatseal" #Manage flatpak permissions - should always have this
             #"com.rtosta.zapzap"              # WhatsApp client
