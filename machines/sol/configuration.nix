@@ -66,6 +66,10 @@ in {
       "cluster=${clusterName}"
     ];
 
+    extraFlags = [
+      "--ingress-controller=traefik"
+    ];
+
     tokenFile = config.clan.core.vars.generators.taghmata-node-token.files.node-token.path;
 
     # nodeTaints = [ "node-role.kubernetes.io/control-plane=:NoSchedule" ];

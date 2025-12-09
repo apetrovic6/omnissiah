@@ -75,7 +75,7 @@ in {
             {
               definition = nixvirt.lib.volume.writeXML {
                 # volume name inside the pool
-                name = "servitor-nixos-01";
+                name = "sol";
                 target = {
                   format = {type = "qcow2";};
                 };
@@ -126,7 +126,7 @@ in {
             nixvirt.lib.domain.writeXML
             (nixvirt.lib.domain.templates.linux {
               # Libvirt domain name
-              name = "servitor-nixos-01";
+              name = "sol";
 
               # Pick your own UUID: `uuidgen`
               uuid = "cc7439ed-36af-4696-a6f2-1f0c4474d87e";

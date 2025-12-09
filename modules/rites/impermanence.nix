@@ -57,7 +57,6 @@
             ".config/Vesktop"
             ".config/BraveSoftware"
             ".config/teams-for-linux"
-            ".config/remmina"
             ".config/obsidian"
             ".local/share"
             ".librewolf"

@@ -27,7 +27,7 @@
 
     luna = {
       tags = ["base" "k8s-server"];
-      # deploy.targetHost = "root@192.168.71.62";
+      deploy.targetHost = "root@192.168.71.45";
     };
   };
 }

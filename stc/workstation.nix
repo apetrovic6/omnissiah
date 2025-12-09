@@ -100,7 +100,6 @@ in {
       plex-desktop
       plexamp
       bitwarden-desktop
-      teams-for-linux
 
       wiremix
 
