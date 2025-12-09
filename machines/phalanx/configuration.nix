@@ -101,6 +101,21 @@ in {
                 };
               };
             }
+
+            {
+              definition = nixvirt.lib.volume.writeXML {
+                # volume name inside the pool
+                name = "luna";
+                target = {
+                  format = {type = "qcow2";};
+                };
+                # raw 40 GiB disk (good enough to start; tweak as you like)
+                capacity = {
+                  count = 65;
+                  unit = "GiB";
+                };
+              };
+            }
           ];
         }
       ];
@@ -163,6 +178,43 @@ in {
               storage_vol = {
                 pool = "data-vault";
                 volume = "terra";
+              };
+
+              # Boot from a NixOS ISO to install:
+              # Put the ISO here (or adjust the path)
+              # install_vol =
+              #   /var/lib/libvirt/iso/nixos-minimal-25.11.iso;
+
+              virtio_video = false;
+              # Attach to the default libvirt bridge
+              bridge_name = "virbr0";
+            });
+
+          # Have NixVirt ensure the domain is running
+          # (set to false if you don't want it autostarting)
+          active = true;
+        }
+
+        {
+          definition =
+            nixvirt.lib.domain.writeXML
+            (nixvirt.lib.domain.templates.linux {
+              # Libvirt domain name
+              name = "luna";
+
+              # Pick your own UUID: `uuidgen`
+              uuid = "1ea32446-1f3b-4bdb-b254-256582da5511";
+
+              # VM RAM
+              memory = {
+                count = 16;
+                unit = "GiB";
+              };
+
+              # Attach the disk volume we just defined
+              storage_vol = {
+                pool = "data-vault";
+                volume = "luna";
               };
 
               # Boot from a NixOS ISO to install:
