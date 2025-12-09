@@ -56,6 +56,8 @@
             ".config/Vencord"
             ".config/Vesktop"
             ".config/BraveSoftware"
+            ".config/teams-for-linux"
+            ".config/remmina"
             ".local/share"
             ".librewolf"
             ".mozilla"
