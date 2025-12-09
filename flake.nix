@@ -39,6 +39,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    nixidy = {
+      url = "github:arnarg/nixidy";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     nvf = {
@@ -68,6 +73,7 @@
     self,
     flake-parts,
     import-tree,
+    nixidy,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
@@ -122,7 +128,14 @@
           # add more: programs.prettier.enable = true; etc.
         };
 
-        devShells.default = pkgs.mkShell {packages = [inputs'.clan-core.packages.clan-cli pkgs.nil pkgs.nixd];};
+        devShells.default = pkgs.mkShell {
+          packages = with pkgs; [
+            inputs'.clan-core.packages.clan-cli
+            inputs'.nixidy.packages.default
+            nil
+            nixd
+          ];
+        };
       };
     };
 }
