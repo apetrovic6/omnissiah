@@ -122,6 +122,8 @@
             done
           '';
 
+        packages.nixidy = nixidy.packages.default;
+
         treefmt = {
           projectRootFile = "flake.nix";
           programs.alejandra.enable = true; # Nix formatter
