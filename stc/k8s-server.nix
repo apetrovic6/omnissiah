@@ -1,4 +1,4 @@
-{ ...}: {
+{...}: {
   _class = "clan.service";
   manifest.name = "k8s-server";
   manifest.readme = "";
