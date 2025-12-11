@@ -76,7 +76,7 @@
     nixidy,
     ...
   }:
-    flake-parts.lib.mkFlake {inherit inputs;} {
+    flake-parts.lib.mkFlake {inherit inputs;} rec {
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -89,6 +89,20 @@
         inputs.treefmt-nix.flakeModule
         (import-tree ./modules)
       ];
+
+      flake.nixidyEnvs = inputs.nixpkgs.lib.genAttrs systems (system: let
+        pkgsForSystem = import inputs.nixpkgs {inherit system;};
+      in
+        inputs.nixidy.lib.mkEnvs {
+          pkgs = pkgsForSystem;
+
+          envs = {
+            dev.modules = [./taghmata/env/dev.nix];
+
+            # prod.modules =
+            #   [ ./modules/noosphere/taghmata/nixidy/env/prod.nix ];
+          };
+        });
 
       # https://docs.clan.lol/guides/flake-parts
       clan = {
@@ -104,7 +118,6 @@
         checks = {
           enginseer =
             self.nixosConfigurations.enginseer.config.system.build.toplevel;
-
           sol = self.nixosConfigurations.sol.config.system.build.toplevel;
           terra = self.nixosConfigurations.terra.config.system.build.toplevel;
           phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
@@ -122,7 +135,7 @@
             done
           '';
 
-        packages.nixidy = nixidy.packages.default;
+        packages.nixidy = inputs'.nixidy.packages.default;
 
         treefmt = {
           projectRootFile = "flake.nix";
