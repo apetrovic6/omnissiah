@@ -49,7 +49,7 @@ in {
     services.imperium.bluetooth.enable = true;
 
     magos.stylix = {
-      image = ../wallpapers/lofi/17.png;
+      image = ../wallpapers/everforest/3.jpg;
     };
 
     boot.plymouth = {
