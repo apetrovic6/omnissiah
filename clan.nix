@@ -1,7 +1,7 @@
 {
   # Ensure this is unique among all clans you want to use.
   meta.name = "omnissiah";
-  meta.tld = "omnissiah";
+  meta.domain = "omnissiah";
 
   imports = [
     ./inventory/machines.nix

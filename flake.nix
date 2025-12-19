@@ -22,6 +22,7 @@
 
     omnishell = {
       url = "github:apetrovic6/omnishell";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     magos = {
@@ -63,6 +64,7 @@
       url = "github:homebrew/homebrew-core";
       flake = false;
     };
+
     homebrew-cask = {
       url = "github:homebrew/homebrew-cask";
       flake = false;
@@ -120,6 +122,7 @@
             self.nixosConfigurations.enginseer.config.system.build.toplevel;
           sol = self.nixosConfigurations.sol.config.system.build.toplevel;
           terra = self.nixosConfigurations.terra.config.system.build.toplevel;
+          luna = self.nixosConfigurations.luna.config.system.build.toplevel;
           phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
         };
 
