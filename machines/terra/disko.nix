@@ -1,19 +1,20 @@
 # ---
 # schema = "single-disk"
 # [placeholders]
-# mainDisk = "/dev/disk/by-path/pci-0000:04:00.0"
+# mainDisk = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198870D" 
 # ---
 # This file was automatically generated!
 # CHANGING this configuration requires wiping and reinstalling the machine
 {
+
   boot.loader.grub.efiSupport = true;
   boot.loader.grub.efiInstallAsRemovable = true;
   boot.loader.grub.enable = true;
   disko.devices = {
     disk = {
       main = {
-        name = "main-d6ae6ba5ce12404aa4b2966a0b286be5";
-        device = "/dev/disk/by-path/pci-0000:04:00.0";
+        name = "main-4f01a3074d3c4fd99dc55004f7a69ab4";
+        device = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198870D";
         type = "disk";
         content = {
           type = "gpt";
@@ -30,7 +31,7 @@
                 type = "filesystem";
                 format = "vfat";
                 mountpoint = "/boot";
-                mountOptions = ["umask=0077"];
+                mountOptions = [ "umask=0077" ];
               };
             };
             root = {
