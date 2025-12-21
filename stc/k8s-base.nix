@@ -1,9 +1,9 @@
 {...}: {
   _class = "clan.service";
-  manifest.name = "k8s-server";
+  manifest.name = "k8s-base";
   manifest.readme = "";
 
-  roles.default.description = "Rke2 Server";
+  roles.default.description = "Rke2 Base config";
 
   roles.default.perInstance.nixosModule = {
     config,
@@ -13,7 +13,6 @@
     ...
   }: {
     imports = [
-      self.nixosModules.noosphere
     ];
 
     services.rke2 = {
@@ -25,6 +24,7 @@
           repo = "https://argoproj.github.io/argo-helm";
           version = "9.1.9";
           hash = "sha256-7HpAvR4N6mtkVSG9EDTGY4acVIBrhYkGUNicXBe83SQ=";
+          createNamespace = true;
           targetNamespace = "argocd";
         };
       };

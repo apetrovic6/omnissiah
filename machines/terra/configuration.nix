@@ -16,20 +16,6 @@ in {
     # self.inputs.magos.nixosModules.default
   ];
 
-    services.rke2 = {
-      autoDeployCharts = {
-        argo-cd = {
-          enable = true;
-
-          name = "argo-cd";
-          repo = "https://argoproj.github.io/argo-helm";
-          hash = "sha256-7HpAvR4N6mtkVSG9EDTGY4acVIBrhYkGUNicXBe83SQ=";
-          version = "9.1.9";
-          targetNamespace = "argocd";
-        };
-      };
-    };
-
   magos.stylix = {
     enable = true;
     image = ../../wallpapers/lofi/17.png;

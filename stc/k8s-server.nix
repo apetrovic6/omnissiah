@@ -5,13 +5,7 @@
 
   roles.default.description = "Rke2 Server";
 
-  roles.default.perInstance.nixosModule = {
-    config,
-    lib,
-    pkgs,
-    self,
-    ...
-  }: {
+  roles.default.perInstance.nixosModule = {self, ...}: {
     imports = [
       self.nixosModules.noosphere
     ];

@@ -21,12 +21,12 @@
     };
 
     terra = {
-      tags = ["base"];
+      tags = ["base" "k8s-base"];
       deploy.targetHost = "root@192.168.1.48";
     };
 
     luna = {
-      tags = ["base" "k8s-server"];
+      tags = ["base" "k8s-base" "k8s-server"];
       deploy.targetHost = "root@192.168.1.59";
     };
   };
