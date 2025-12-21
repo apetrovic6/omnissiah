@@ -691,7 +691,7 @@
         "fpu_exception": true,
         "cpuid_level": 32,
         "write_protect": false,
-        "tlb_size": 32767,
+        "tlb_size": 32757,
         "clflush_size": 64,
         "cache_alignment": 64,
         "address_sizes": {
@@ -1665,7 +1665,7 @@
         "resources": [
           {
             "type": "hwaddr",
-            "address": 101
+            "address": 55
           },
           {
             "type": "phwaddr",
@@ -1858,6 +1858,28 @@
     "network_interface": [
       {
         "index": 40,
+        "attached_to": 0,
+        "class_list": [
+          "network_interface"
+        ],
+        "base_class": {
+          "hex": "0107",
+          "name": "Network Interface",
+          "value": 263
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Loopback",
+          "value": 0
+        },
+        "model": "Loopback network interface",
+        "sysfs_id": "/class/net/lo",
+        "unix_device_names": [
+          "lo"
+        ]
+      },
+      {
+        "index": 41,
         "attached_to": 13,
         "class_list": [
           "network_interface"
@@ -1877,47 +1899,6 @@
         "sysfs_device_link": "/devices/pci0000:00/0000:00:1c.3/0000:02:00.0",
         "unix_device_names": [
           "enp2s0"
-        ],
-        "resources": [
-          {
-            "type": "hwaddr",
-            "address": 55
-          },
-          {
-            "type": "phwaddr",
-            "address": 55
-          }
-        ],
-        "driver": "igc",
-        "driver_module": "igc",
-        "drivers": [
-          "igc"
-        ],
-        "driver_modules": [
-          "igc"
-        ]
-      },
-      {
-        "index": 41,
-        "attached_to": 16,
-        "class_list": [
-          "network_interface"
-        ],
-        "base_class": {
-          "hex": "0107",
-          "name": "Network Interface",
-          "value": 263
-        },
-        "sub_class": {
-          "hex": "0001",
-          "name": "Ethernet",
-          "value": 1
-        },
-        "model": "Ethernet network interface",
-        "sysfs_id": "/class/net/enp1s0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:1c.0/0000:01:00.0",
-        "unix_device_names": [
-          "enp1s0"
         ],
         "resources": [
           {
@@ -1963,7 +1944,7 @@
         "resources": [
           {
             "type": "hwaddr",
-            "address": 101
+            "address": 55
           },
           {
             "type": "phwaddr",
@@ -1981,7 +1962,7 @@
       },
       {
         "index": 43,
-        "attached_to": 0,
+        "attached_to": 16,
         "class_list": [
           "network_interface"
         ],
@@ -1991,14 +1972,33 @@
           "value": 263
         },
         "sub_class": {
-          "hex": "0000",
-          "name": "Loopback",
-          "value": 0
+          "hex": "0001",
+          "name": "Ethernet",
+          "value": 1
         },
-        "model": "Loopback network interface",
-        "sysfs_id": "/class/net/lo",
+        "model": "Ethernet network interface",
+        "sysfs_id": "/class/net/enp1s0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:1c.0/0000:01:00.0",
         "unix_device_names": [
-          "lo"
+          "enp1s0"
+        ],
+        "resources": [
+          {
+            "type": "hwaddr",
+            "address": 55
+          },
+          {
+            "type": "phwaddr",
+            "address": 55
+          }
+        ],
+        "driver": "igc",
+        "driver_module": "igc",
+        "drivers": [
+          "igc"
+        ],
+        "driver_modules": [
+          "igc"
         ]
       }
     ],
@@ -3115,7 +3115,7 @@
           206158430255,
           210453397552,
           304942678065,
-          210453397575
+          365072220231
         ]
       }
     ],
