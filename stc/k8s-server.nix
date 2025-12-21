@@ -19,7 +19,7 @@
     services.imperium.taghmata.rke2.server = rec {
       enable = true;
       clusterName = "taghmata-omnissiah";
-      serverAddr = "https://192.168.71.146:9345";
+      serverAddr = "https://192.168.1.48:9345";
       cni = "calico";
       nodeLabels = [
         "role=control-plane"

@@ -5,6 +5,10 @@
 # ---
 # This file was automatically generated!
 # CHANGING this configuration requires wiping and reinstalling the machine
+{...}:
+let
+  diskId = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198870D";
+in
 {
 
   boot.loader.grub.efiSupport = true;
@@ -14,7 +18,7 @@
     disk = {
       main = {
         name = "main-4f01a3074d3c4fd99dc55004f7a69ab4";
-        device = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198870D";
+        device = diskId;
         type = "disk";
         content = {
           type = "gpt";

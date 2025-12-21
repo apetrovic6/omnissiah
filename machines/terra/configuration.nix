@@ -4,12 +4,16 @@
   config,
   pkgs,
   ...
-}: let
-in {
+}: 
+let
+  diskId = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198870D";
+in
+{
   imports = [
     self.nixosModules.smb
     self.nixosModules.impermanence
     self.inputs.magos.nixosModules.stylix
+    self.nixosModules.noosphere
     # self.inputs.impermanence.nixosModules.impermanence
     # self.inputs.magos.nixosModules.default
   ];
@@ -64,6 +68,10 @@ in {
     nodeLabels = [
       "role=control-plane"
       "cluster=${clusterName}"
+    ];
+
+    extraFlags = [
+      "--ingress-controller=traefik"
     ];
 
     tokenFile = config.clan.core.vars.generators.taghmata-node-token.files.node-token.path;

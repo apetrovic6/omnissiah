@@ -54,7 +54,7 @@
             ".config/remmina"
             ".config/rog"
             ".config/Vencord"
-            ".config/Vesktop"
+            ".config/vesktop"
             ".config/BraveSoftware"
             ".config/teams-for-linux"
             ".config/obsidian"
