@@ -4,11 +4,9 @@
   config,
   pkgs,
   ...
-}: 
-let
+}: let
   diskId = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198870D";
-in
-{
+in {
   imports = [
     self.nixosModules.smb
     self.nixosModules.impermanence
@@ -17,6 +15,20 @@ in
     # self.inputs.impermanence.nixosModules.impermanence
     # self.inputs.magos.nixosModules.default
   ];
+
+    services.rke2 = {
+      autoDeployCharts = {
+        argo-cd = {
+          enable = true;
+
+          name = "argo-cd";
+          repo = "https://argoproj.github.io/argo-helm";
+          hash = "sha256-7HpAvR4N6mtkVSG9EDTGY4acVIBrhYkGUNicXBe83SQ=";
+          version = "9.1.9";
+          targetNamespace = "argocd";
+        };
+      };
+    };
 
   magos.stylix = {
     enable = true;

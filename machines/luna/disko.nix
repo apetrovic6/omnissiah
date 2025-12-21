@@ -1,15 +1,13 @@
 # ---
 # schema = "single-disk"
 # [placeholders]
-# mainDisk = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198F3BE" 
+# mainDisk = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198F3BE"
 # ---
 # This file was automatically generated!
 # CHANGING this configuration requires wiping and reinstalling the machine
 let
   diskId = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198F3BE";
-in
-{
-
+in {
   boot.loader.grub.efiSupport = true;
   boot.loader.grub.efiInstallAsRemovable = true;
   boot.loader.grub.enable = true;
@@ -34,7 +32,7 @@ in
                 type = "filesystem";
                 format = "vfat";
                 mountpoint = "/boot";
-                mountOptions = [ "umask=0077" ];
+                mountOptions = ["umask=0077"];
               };
             };
             root = {
