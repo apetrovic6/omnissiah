@@ -14,6 +14,7 @@
   modules."@imperium/dev" = import ./stc/dev.nix;
   modules."@imperium/gaming" = import ./stc/gaming.nix;
   modules."@imperium/k8s-server" = import ./stc/k8s-server.nix;
+  modules."@imperium/k8s-base" = import ./stc/k8s-base.nix;
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
@@ -57,6 +58,13 @@
       module.name = "@imperium/k8s-server";
 
       roles.default.tags.k8s-server = {};
+    };
+
+    k8s-base = {
+      module.input = "self";
+      module.name = "@imperium/k8s-base";
+
+      roles.default.tags.k8s-base = {};
     };
 
     dev = {
