@@ -59,25 +59,25 @@ in {
     gid = 1337;
   };
 
-  services.imperium.taghmata.rke2.server = rec {
-    enable = true;
-    clusterName = "taghmata-omnissiah";
-    cni = "calico";
-    nodeLabels = [
-      "role=control-plane"
-      "cluster=${clusterName}"
-    ];
+  # services.imperium.taghmata.rke2.server = rec {
+  #   enable = true;
+  #   clusterName = "taghmata-omnissiah";
+  #   cni = "calico";
+  #   nodeLabels = [
+  #     "role=control-plane"
+  #     "cluster=${clusterName}"
+  #   ];
 
-    extraFlags = [
-      "--ingress-controller=traefik"
-    ];
+  #   extraFlags = [
+  #     "--ingress-controller=traefik"
+  #   ];
 
-    tokenFile = config.clan.core.vars.generators.taghmata-node-token.files.node-token.path;
+  #   tokenFile = config.clan.core.vars.generators.taghmata-node-token.files.node-token.path;
 
-    # nodeTaints = [ "node-role.kubernetes.io/control-plane=:NoSchedule" ];
+  #   # nodeTaints = [ "node-role.kubernetes.io/control-plane=:NoSchedule" ];
 
-    openFirewall = true;
-  };
+  #   openFirewall = true;
+  # };
 
   # services.xserver.videoDrivers = [ "intel" ];
   # hardware.enableAllFirmware = true;

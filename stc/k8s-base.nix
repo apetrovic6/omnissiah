@@ -19,7 +19,6 @@
       autoDeployCharts = {
         argo-cd = {
           enable = true;
-
           name = "argo-cd";
           repo = "https://argoproj.github.io/argo-helm";
           version = "9.1.9";

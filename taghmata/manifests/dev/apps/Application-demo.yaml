@@ -10,6 +10,6 @@ spec:
   project: default
   source:
     path: ./taghmata/manifests/dev/demo
-    repoURL: https://forge.manjaca.xyz/manjo/omnissiah.git
+    repoURL: https://github.com/apetrovic6/omnissiah.git
     targetRevision: master
   syncPolicy: {}
