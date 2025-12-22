@@ -4,9 +4,8 @@
   config,
   pkgs,
   ...
-}: let
-  diskId = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198870D";
-in {
+}: 
+{
   imports = [
     self.nixosModules.smb
     self.nixosModules.impermanence
@@ -58,26 +57,6 @@ in {
   users.groups.media = {
     gid = 1337;
   };
-
-  # services.imperium.taghmata.rke2.server = rec {
-  #   enable = true;
-  #   clusterName = "taghmata-omnissiah";
-  #   cni = "calico";
-  #   nodeLabels = [
-  #     "role=control-plane"
-  #     "cluster=${clusterName}"
-  #   ];
-
-  #   extraFlags = [
-  #     "--ingress-controller=traefik"
-  #   ];
-
-  #   tokenFile = config.clan.core.vars.generators.taghmata-node-token.files.node-token.path;
-
-  #   # nodeTaints = [ "node-role.kubernetes.io/control-plane=:NoSchedule" ];
-
-  #   openFirewall = true;
-  # };
 
   # services.xserver.videoDrivers = [ "intel" ];
   # hardware.enableAllFirmware = true;

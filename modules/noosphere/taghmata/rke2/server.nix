@@ -123,11 +123,15 @@
           2380 # etcd peer
           2381 # etcd metrics
           10250 # kubelet metrics
+          5473
+          9098
+          9099
         ];
 
         # Canal/flannel VXLAN (only needed for those CNIs)
         allowedUDPPorts = [
           8472
+          4789
         ];
       };
     };

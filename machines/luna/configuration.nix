@@ -4,8 +4,8 @@
   config,
   pkgs,
   ...
-}: let
-in {
+}: 
+{
   imports = [
     self.nixosModules.smb
     self.nixosModules.impermanence

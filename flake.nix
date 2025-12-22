@@ -105,9 +105,7 @@
 
           envs = {
             dev.modules = [./taghmata/env/dev.nix];
-
-            # prod.modules =
-            #   [ ./modules/noosphere/taghmata/nixidy/env/prod.nix ];
+            prod.modules = [./taghmata/env/prod.nix];
           };
         });
 
