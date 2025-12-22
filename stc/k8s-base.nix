@@ -15,7 +15,29 @@
     imports = [
     ];
 
+    networking.firewall.interfaces.tailscale0.allowedTCPPorts = [80 443 9000];
+
     services.rke2 = {
+      manifests.rke2-traefik-config = {
+        enable = true;
+        target = "rke2-traefik-config.yaml";
+        content = {
+          apiVersion = "helm.cattle.io/v1";
+          kind = "HelmChartConfig";
+          metadata = {
+            name = "rke2-traefik";
+            namespace = "kube-system";
+          };
+
+          spec = {
+            valuesContent = {
+              hub.apimanagement.admission.listenAddr = "0.0.0.0";
+              providers.kubernetesGateway.enabled = true;
+            };
+          };
+        };
+      };
+
       autoDeployCharts = {
         argo-cd = {
           enable = true;

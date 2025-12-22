@@ -80,6 +80,7 @@
 
     services.tailscale = {
       enable = true;
+      openFirewall = true;
     };
 
     nixpkgs.config.allowUnfree = true;

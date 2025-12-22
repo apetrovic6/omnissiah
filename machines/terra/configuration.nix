@@ -4,8 +4,7 @@
   config,
   pkgs,
   ...
-}: 
-{
+}: {
   imports = [
     self.nixosModules.smb
     self.nixosModules.impermanence

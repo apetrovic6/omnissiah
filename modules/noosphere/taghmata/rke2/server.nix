@@ -126,12 +126,14 @@
           5473
           9098
           9099
+          7946
         ];
 
         # Canal/flannel VXLAN (only needed for those CNIs)
         allowedUDPPorts = [
           8472
           4789
+          7946
         ];
       };
     };

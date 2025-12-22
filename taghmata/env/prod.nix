@@ -1,4 +1,4 @@
-{
+{charts, ...}: {
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
 
   # Set the target branch the rendered manifests for _this_
@@ -10,5 +10,12 @@
   # manifests to when running `nixidy switch .#dev`.
   nixidy.target.rootPath = "./taghmata/manifests/prod";
 
-  # applications.demo = {};
+  applications.metallb = {
+    namespace = "metallb";
+    createNamespace = true;
+
+    helm.relesease.metallb = {
+      chart = charts.metallb.metallb;
+    };
+  };
 }

@@ -81,6 +81,7 @@
     flake-parts,
     import-tree,
     nixidy,
+    nixhelm,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} rec {
@@ -104,8 +105,14 @@
           pkgs = pkgsForSystem;
 
           envs = {
-            dev.modules = [./taghmata/env/dev.nix];
-            prod.modules = [./taghmata/env/prod.nix];
+            dev = {
+              charts = nixhelm.chartsDerivations.${system};
+              modules = [./taghmata/env/dev.nix];
+            };
+            prod = {
+              charts = nixhelm.chartsDerivations.${system};
+              modules = [./taghmata/env/prod.nix];
+            };
           };
         });
 
