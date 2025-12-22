@@ -18,4 +18,24 @@
       chart = charts.metallb.metallb;
     };
   };
+
+  resources.ipAddressPools.metallb-lan = {
+    apiVersion = "metallb.io/v1beta1";
+    kind = "IPAddressPool";
+    metadata = {
+      name = "lan-pool";
+      namespace = "metallb-system";
+    };
+    spec = {addresses = ["192.168.1.240-192.168.1.250"];};
+  };
+
+  resources.l2Advertisements.metallb-lan = {
+    apiVersion = "metallb.io/v1beta1";
+    kind = "L2Advertisement";
+    metadata = {
+      name = "lan-adv";
+      namespace = "metallb-system";
+    };
+    spec = {ipAddressPools = ["lan-pool"];};
+  };
 }
