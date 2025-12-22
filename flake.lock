@@ -1394,13 +1394,13 @@
       "locked": {
         "lastModified": 1766194436,
         "narHash": "sha256-SEyBMyZ6KlB3la6Sl5Muh7bGWyTQhXlBKqlnCmKmeM0=",
-        "owner": "farcaller",
+        "owner": "nix-community",
         "repo": "nixhelm",
         "rev": "ed74b9e2b457b42cdfd11cbf1b1332dd807d511e",
         "type": "github"
       },
       "original": {
-        "owner": "farcaller",
+        "owner": "nix-community",
         "repo": "nixhelm",
         "type": "github"
       }

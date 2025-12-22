@@ -46,7 +46,7 @@
     };
 
     nixhelm = {
-      url = "github:farcaller/nixhelm";
+      url = "github:nix-community/nixhelm";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -103,16 +103,10 @@
       in
         inputs.nixidy.lib.mkEnvs {
           pkgs = pkgsForSystem;
-
+          charts = nixhelm.chartsDerivations.${system};
           envs = {
-            dev = {
-              charts = nixhelm.chartsDerivations.${system};
-              modules = [./taghmata/env/dev.nix];
-            };
-            prod = {
-              charts = nixhelm.chartsDerivations.${system};
-              modules = [./taghmata/env/prod.nix];
-            };
+            dev.modules = [./taghmata/env/dev.nix];
+            prod.modules = [./taghmata/env/prod.nix];
           };
         });
 

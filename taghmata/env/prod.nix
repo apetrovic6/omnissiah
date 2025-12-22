@@ -11,10 +11,10 @@
   nixidy.target.rootPath = "./taghmata/manifests/prod";
 
   applications.metallb = {
-    namespace = "metallb";
+    namespace = "metallb-system";
     createNamespace = true;
 
-    helm.relesease.metallb = {
+    helm.releases.metallb = {
       chart = charts.metallb.metallb;
     };
   };
