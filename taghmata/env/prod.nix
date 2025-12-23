@@ -37,7 +37,7 @@
           argocd.argoproj.io/sync-wave: "1"
       spec:
         addresses:
-          - 100.74.147.10-100.74.147.20
+          - 192.168.1.240-192.168.1.250
       ''
       /* yaml */ ''
       apiVersion: metallb.io/v1beta1

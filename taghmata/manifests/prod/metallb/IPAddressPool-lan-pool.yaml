@@ -7,4 +7,4 @@ metadata:
   namespace: metallb-system
 spec:
   addresses:
-    - 100.74.147.10-100.74.147.20
+    - 192.168.1.240-192.168.1.250
