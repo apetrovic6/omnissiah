@@ -10,6 +10,14 @@
   # manifests to when running `nixidy switch .#dev`.
   nixidy.target.rootPath = "./taghmata/manifests/prod";
 
+  applications.ingress-traefik = {
+    yamls = [
+    /* yaml */ ''
+
+    ''
+    ];
+  };
+
   applications.metallb = {
     namespace = "metallb-system";
     createNamespace = true;
@@ -29,7 +37,7 @@
           argocd.argoproj.io/sync-wave: "1"
       spec:
         addresses:
-          - 192.168.1.240-192.168.1.250
+          - 100.74.147.10-100.74.147.20
       ''
       /* yaml */ ''
       apiVersion: metallb.io/v1beta1
