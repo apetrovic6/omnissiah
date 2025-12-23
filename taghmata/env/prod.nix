@@ -17,25 +17,32 @@
     helm.releases.metallb = {
       chart = charts.metallb.metallb;
     };
-  };
 
-  resources.ipAddressPools.metallb-lan = {
-    apiVersion = "metallb.io/v1beta1";
-    kind = "IPAddressPool";
-    metadata = {
-      name = "lan-pool";
-      namespace = "metallb-system";
-    };
-    spec = {addresses = ["192.168.1.240-192.168.1.250"];};
-  };
-
-  resources.l2Advertisements.metallb-lan = {
-    apiVersion = "metallb.io/v1beta1";
-    kind = "L2Advertisement";
-    metadata = {
-      name = "lan-adv";
-      namespace = "metallb-system";
-    };
-    spec = {ipAddressPools = ["lan-pool"];};
+  yamls = [
+     /* yaml */''
+      apiVersion: metallb.io/v1beta1
+      kind: IPAddressPool
+      metadata:
+        name: lan-pool
+        namespace: metallb-system
+        annotations:
+          argocd.argoproj.io/sync-wave: "1"
+      spec:
+        addresses:
+          - 192.168.1.240-192.168.1.250
+      ''
+      /* yaml */ ''
+      apiVersion: metallb.io/v1beta1
+      kind: L2Advertisement
+      metadata:
+        name: lan-adv
+        namespace: metallb-system
+        annotations:
+          argocd.argoproj.io/sync-wave: "1"
+      spec:
+        ipAddressPools:
+          - lan-pool
+      ''
+    ];    
   };
 }
