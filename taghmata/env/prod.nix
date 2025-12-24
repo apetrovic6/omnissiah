@@ -10,6 +10,8 @@
   # manifests to when running `nixidy switch .#dev`.
   nixidy.target.rootPath = "./taghmata/manifests/prod";
 
+  nixidy.defaults.syncPolicy.autoSync.enable = true;
+
   # applications.ingress-traefik = {
   #   yamls = [
   #   /* yaml */ ''
