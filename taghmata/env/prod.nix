@@ -10,7 +10,11 @@
   # manifests to when running `nixidy switch .#dev`.
   nixidy.target.rootPath = "./taghmata/manifests/prod";
 
-  nixidy.defaults.syncPolicy.autoSync.enable = true;
+  nixidy.defaults.syncPolicy.autoSync = {
+    enable = true;
+    prune = true;
+    selfHeal = true;
+  };
 
   applications.ingress-traefik-load-balancer-config = {
     namespace = "kube-system";
