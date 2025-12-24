@@ -154,6 +154,7 @@
           packages = with pkgs; [
             inputs'.clan-core.packages.clan-cli
             inputs'.nixidy.packages.default
+            argocd
             nil
             nixd
           ];
