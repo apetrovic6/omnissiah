@@ -25,6 +25,7 @@
       chart = charts.jetstack.cert-manager;
       values = {
         global.leaderElection.namespace = "cert-manager";
+        crds.enabled = true;
       };
     };
   };
