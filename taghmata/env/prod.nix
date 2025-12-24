@@ -12,13 +12,26 @@
 
   nixidy.defaults.syncPolicy.autoSync.enable = true;
 
-  # applications.ingress-traefik = {
-  #   yamls = [
-  #   /* yaml */ ''
+  applications.ingress-traefik = {
+    namespace = "kube-system";
+    yamls = [
+      ''
+        apiVersion: helm.cattle.io/v1
+        kind: HelmChartConfig
+        metadata:
+          name: rke2-traefik
+          namespace: kube-system
+        spec:
+          valuesContent: |-
+            service:
+              type: LoadBalancer
 
-  #   ''
-  #   ];
-  # };
+            providers:
+              kubernetesGateway:
+                enabled: true
+      ''
+    ];
+  };
 
   applications.metallb = {
     namespace = "metallb-system";
@@ -28,31 +41,37 @@
       chart = charts.metallb.metallb;
     };
 
-  yamls = [
-     /* yaml */''
-      apiVersion: metallb.io/v1beta1
-      kind: IPAddressPool
-      metadata:
-        name: lan-pool
-        namespace: metallb-system
-        annotations:
-          argocd.argoproj.io/sync-wave: "1"
-      spec:
-        addresses:
-          - 192.168.1.240-192.168.1.250
+    yamls = [
+      /*
+      yaml
+      */
       ''
-      /* yaml */ ''
-      apiVersion: metallb.io/v1beta1
-      kind: L2Advertisement
-      metadata:
-        name: lan-adv
-        namespace: metallb-system
-        annotations:
-          argocd.argoproj.io/sync-wave: "1"
-      spec:
-        ipAddressPools:
-          - lan-pool
+        apiVersion: metallb.io/v1beta1
+        kind: IPAddressPool
+        metadata:
+          name: lan-pool
+          namespace: metallb-system
+          annotations:
+            argocd.argoproj.io/sync-wave: "1"
+        spec:
+          addresses:
+            - 192.168.1.240-192.168.1.250
       ''
-    ];    
+      /*
+      yaml
+      */
+      ''
+        apiVersion: metallb.io/v1beta1
+        kind: L2Advertisement
+        metadata:
+          name: lan-adv
+          namespace: metallb-system
+          annotations:
+            argocd.argoproj.io/sync-wave: "1"
+        spec:
+          ipAddressPools:
+            - lan-pool
+      ''
+    ];
   };
 }

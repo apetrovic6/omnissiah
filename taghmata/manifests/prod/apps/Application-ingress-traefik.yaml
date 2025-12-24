@@ -1,15 +1,15 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: metallb
+  name: ingress-traefik
   namespace: argocd
 spec:
   destination:
-    namespace: metallb-system
+    namespace: kube-system
     server: https://kubernetes.default.svc
   project: default
   source:
-    path: ./taghmata/manifests/prod/metallb
+    path: ./taghmata/manifests/prod/ingress-traefik
     repoURL: https://github.com/apetrovic6/omnissiah.git
     targetRevision: master
   syncPolicy:
