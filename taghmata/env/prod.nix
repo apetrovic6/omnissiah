@@ -23,6 +23,9 @@
 
     helm.releases.cert-manager = {
       chart = charts.jetstack.cert-manager;
+      values = {
+        global.leaderElection.namespace = "cert-manager";
+      };
     };
   };
 

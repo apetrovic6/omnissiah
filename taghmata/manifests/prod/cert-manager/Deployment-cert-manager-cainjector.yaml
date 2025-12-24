@@ -36,7 +36,7 @@ spec:
       containers:
         - args:
             - --v=2
-            - --leader-election-namespace=kube-system
+            - --leader-election-namespace=cert-manager
           env:
             - name: POD_NAMESPACE
               valueFrom:
