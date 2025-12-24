@@ -18,6 +18,7 @@
     networking.firewall.interfaces.tailscale0.allowedTCPPorts = [80 443 9000];
 
     services.rke2 = {
+      package = pkgs.rke2_1_34;
       autoDeployCharts = {
         argo-cd = {
           enable = true;
