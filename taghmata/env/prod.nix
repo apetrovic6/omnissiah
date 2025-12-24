@@ -12,8 +12,9 @@
 
   nixidy.defaults.syncPolicy.autoSync.enable = true;
 
-  applications.ingress-traefik = {
+  applications.ingress-traefik-load-balancer-config = {
     namespace = "kube-system";
+    output.path = "./traefik";
     yamls = [
       ''
         apiVersion: helm.cattle.io/v1
@@ -34,6 +35,7 @@
   };
 
   applications.metallb = {
+    output.path = "./metallb";
     namespace = "metallb-system";
     createNamespace = true;
 

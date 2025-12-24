@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ingress-traefik
+  name: ingress-traefik-load-balancer-config
   namespace: argocd
 spec:
   destination:
@@ -9,7 +9,7 @@ spec:
     server: https://kubernetes.default.svc
   project: default
   source:
-    path: ./taghmata/manifests/prod/ingress-traefik
+    path: ./taghmata/manifests/prod/traefik
     repoURL: https://github.com/apetrovic6/omnissiah.git
     targetRevision: master
   syncPolicy:
