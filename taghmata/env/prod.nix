@@ -16,6 +16,26 @@
     selfHeal = true;
   };
 
+  applications.cert-manager = {
+    output.path = "./cert-manager";
+    namespace = "cert-manager";
+    createNamespace = true;
+
+    helm.releases.cert-manager = {
+      chart = charts.jetstack.cert-manager;
+    };
+  };
+
+  applications.sops-secrets = {
+    output.path = "./sops-secrets-operator";
+    namespace = "sops";
+    createNamespace = true;
+
+    helm.releases.sops-secrets-operator = {
+      chart = charts.isindir.sops-secrets-operator;
+    };
+  };
+
   applications.ingress-traefik-load-balancer-config = {
     namespace = "kube-system";
     output.path = "./traefik";
