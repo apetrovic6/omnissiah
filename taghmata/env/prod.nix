@@ -10,13 +10,13 @@
   # manifests to when running `nixidy switch .#dev`.
   nixidy.target.rootPath = "./taghmata/manifests/prod";
 
-  applications.ingress-traefik = {
-    yamls = [
-    /* yaml */ ''
+  # applications.ingress-traefik = {
+  #   yamls = [
+  #   /* yaml */ ''
 
-    ''
-    ];
-  };
+  #   ''
+  #   ];
+  # };
 
   applications.metallb = {
     namespace = "metallb-system";
