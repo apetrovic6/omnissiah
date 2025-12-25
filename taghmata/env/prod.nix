@@ -94,26 +94,6 @@
 
       ''
 
-      ''
-        apiVersion: gateway.networking.k8s.io/v1
-        kind: HTTPRoute
-        metadata:
-          name: argocd-ip
-          namespace: argocd
-        spec:
-          parentRefs:
-            - name: edge
-              namespace: kube-system
-              sectionName: web
-          rules:
-            - matches:
-                - path:
-                    type: PathPrefix
-                    value: /
-              backendRefs:
-                - name: argo-cd-argocd-server
-                  port: 80
-      ''
     ];
   };
 
