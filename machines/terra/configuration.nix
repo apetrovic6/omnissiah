@@ -14,6 +14,9 @@
     # self.inputs.magos.nixosModules.default
   ];
 
+  # Sets the private key secret for sops secrets operator in the cluster
+  noosphere.taghmata.sopsAgeKey.enable = true;
+
   magos.stylix = {
     enable = true;
     image = ../../wallpapers/lofi/17.png;
