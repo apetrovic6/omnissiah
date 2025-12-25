@@ -87,7 +87,7 @@
           listeners:
             - name: web
               protocol: HTTP
-              port: 80   # OR 8000 depending on your Traefik entrypoints
+              port: 8000   # OR 8000 depending on your Traefik entrypoints
               allowedRoutes:
                 namespaces:
                   from: All
