@@ -9,5 +9,8 @@ spec:
       type: LoadBalancer
 
     providers:
+      kubernetesIngress: false
       kubernetesGateway:
         enabled: true
+      gateway:
+        namespacePolicy: All

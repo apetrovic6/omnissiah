@@ -16,6 +16,8 @@
     selfHeal = true;
   };
 
+  # applications.tailscale-operator = {};
+
   applications.cert-manager = {
     output.path = "./cert-manager";
     namespace = "cert-manager";
@@ -56,8 +58,11 @@
               type: LoadBalancer
 
             providers:
+              kubernetesIngress: false
               kubernetesGateway:
                 enabled: true
+              gateway:
+                namespacePolicy: All
       ''
     ];
   };
