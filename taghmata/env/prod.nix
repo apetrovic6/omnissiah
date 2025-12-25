@@ -16,8 +16,6 @@
     selfHeal = true;
   };
 
-  # applications.tailscale-operator = {};
-
   applications.cert-manager = {
     output.path = "./cert-manager";
     namespace = "cert-manager";
@@ -74,7 +72,7 @@
           name: letsencrypt-cloudflare
         spec:
           acme:
-            email: cloudflare.fervor993@simplelogin.com
+            email: cloudflare-cert-manager.paging338@simplelogin.com
             server: https://acme-v02.api.letsencrypt.org/directory
             privateKeySecretRef:
               name: letsencrypt-cloudflare-account-key
@@ -109,7 +107,6 @@
   applications.ingress-traefik-load-balancer-config = {
     namespace = "kube-system";
     output.path = "./traefik";
-
     yamls = [
       ''
         apiVersion: helm.cattle.io/v1
@@ -123,11 +120,8 @@
               type: LoadBalancer
 
             providers:
-              kubernetesIngress: false
               kubernetesGateway:
                 enabled: true
-              gateway:
-                namespacePolicy: All
       ''
 
       ''
