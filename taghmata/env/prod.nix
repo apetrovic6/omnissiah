@@ -45,6 +45,7 @@
   applications.ingress-traefik-load-balancer-config = {
     namespace = "kube-system";
     output.path = "./traefik";
+
     yamls = [
       ''
         apiVersion: helm.cattle.io/v1
@@ -63,6 +64,55 @@
                 enabled: true
               gateway:
                 namespacePolicy: All
+      ''
+
+      ''
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: GatewayClass
+        metadata:
+          name: traefik
+        spec:
+          controllerName: traefik.io/gateway-controller
+
+      ''
+
+      ''
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: Gateway
+        metadata:
+          name: edge
+          namespace: kube-system
+        spec:
+          gatewayClassName: traefik
+          listeners:
+            - name: web
+              protocol: HTTP
+              port: 80   # OR 8000 depending on your Traefik entrypoints
+              allowedRoutes:
+                namespaces:
+                  from: All
+
+      ''
+
+      ''
+        apiVersion: gateway.networking.k8s.io/v1
+        kind: HTTPRoute
+        metadata:
+          name: argocd-ip
+          namespace: argocd
+        spec:
+          parentRefs:
+            - name: edge
+              namespace: kube-system
+              sectionName: web
+          rules:
+            - matches:
+                - path:
+                    type: PathPrefix
+                    value: /
+              backendRefs:
+                - name: argo-cd-argocd-server
+                  port: 80
       ''
     ];
   };
