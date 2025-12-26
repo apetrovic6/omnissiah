@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/version: v1.10.1
     helm.sh/chart: longhorn-1.10.1
   name: longhorn-ui
-  namespace: longhorn
+  namespace: longhorn-system
 spec:
   replicas: 2
   selector:

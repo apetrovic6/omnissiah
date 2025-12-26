@@ -31,6 +31,12 @@
     inherit namespace;
     createNamespace = true;
 
+    resources.serviceAccounts.longhorn-service-account = {
+      metadata = {
+        inherit namespace;
+      };
+    };
+
     helm.releases.longhorn= {
       chart = charts.longhorn.longhorn;
     };

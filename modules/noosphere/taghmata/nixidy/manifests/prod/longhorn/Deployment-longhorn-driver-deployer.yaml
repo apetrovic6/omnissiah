@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/version: v1.10.1
     helm.sh/chart: longhorn-1.10.1
   name: longhorn-driver-deployer
-  namespace: longhorn
+  namespace: longhorn-system
 spec:
   replicas: 1
   selector:
