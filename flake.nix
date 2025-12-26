@@ -105,8 +105,8 @@
           pkgs = pkgsForSystem;
           charts = nixhelm.chartsDerivations.${system};
           envs = {
-            dev.modules = [./taghmata/env/dev.nix];
-            prod.modules = [./taghmata/env/prod.nix];
+            # dev.modules = [./taghmata/env/dev.nix];
+            prod.modules = [./modules/noosphere/taghmata/nixidy/env/prod.nix];
           };
         });
 
@@ -119,6 +119,7 @@
         pkgs,
         inputs',
         self',
+        system,
         ...
       }: {
         checks = {
@@ -129,6 +130,10 @@
           luna = self.nixosConfigurations.luna.config.system.build.toplevel;
           phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
         };
+
+    legacyPackages = { nixidyEnvs.${system} = inputs.nixidy.lib.mkEnvs { inherit pkgs; charts = inputs.nixhelm.chartsDerivations.${system}; envs = {
+
+       prod.modules = [./modules/noosphere/taghmata/nixidy/env/prod.nix]; }; }; };
 
         packages.ci =
           pkgs.runCommand "ci-build" {

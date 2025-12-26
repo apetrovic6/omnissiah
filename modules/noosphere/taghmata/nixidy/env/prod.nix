@@ -1,8 +1,5 @@
-{self,...}:
+{charts,...}:
 {
-  flake.nixosModules.taghmata = { charts, ...} : {
-
-
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
 
   # Set the target branch the rendered manifests for _this_
@@ -12,7 +9,7 @@
 
   # Set the target sub-directory to copy the generated
   # manifests to when running `nixidy switch .#dev`.
-  nixidy.target.rootPath = "./taghmata/manifests/prod";
+  nixidy.target.rootPath = " ./modules/noosphere/taghmata/nixidy/manifests/prod";
 
   nixidy.defaults.syncPolicy.autoSync = {
     enable = true;
@@ -214,7 +211,5 @@
             - lan-pool
       ''
     ];
-  };
-
   };
 }
