@@ -39,6 +39,12 @@
 
     helm.releases.longhorn= {
       chart = charts.longhorn.longhorn;
+      includeCRDs = true;
+      values = {
+        longhorn = {
+          preUpgradeChecker.jobEnabled = false;
+        };
+      };
     };
     
   };  
