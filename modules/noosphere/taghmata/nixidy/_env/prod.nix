@@ -161,7 +161,7 @@
           secretName: longhorn-tls
           issuerRef:
             kind: ClusterIssuer
-            name: letnencrypt-cloudflare
+            name: letsencrypt-cloudflare
           dnsNames:
             - longhorn.noosphere.uk
       ''
