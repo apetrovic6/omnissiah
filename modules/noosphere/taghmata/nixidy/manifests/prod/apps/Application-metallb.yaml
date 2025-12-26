@@ -1,15 +1,15 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cert-manager
+  name: metallb
   namespace: argocd
 spec:
   destination:
-    namespace: cert-manager
+    namespace: metallb-system
     server: https://kubernetes.default.svc
   project: default
   source:
-    path: ./ ./modules/noosphere/taghmata/nixidy/manifests/prod/cert-manager
+    path: ./modules/noosphere/taghmata/nixidy/manifests/prod/metallb
     repoURL: https://github.com/apetrovic6/omnissiah.git
     targetRevision: master
   syncPolicy:

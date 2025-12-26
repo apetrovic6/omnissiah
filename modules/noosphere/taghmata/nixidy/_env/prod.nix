@@ -8,7 +8,7 @@
 
   # Set the target sub-directory to copy the generated
   # manifests to when running `nixidy switch .#dev`.
-  nixidy.target.rootPath = " ./modules/noosphere/taghmata/nixidy/manifests/prod";
+  nixidy.target.rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod/";
 
   nixidy.defaults.syncPolicy.autoSync = {
     enable = true;
