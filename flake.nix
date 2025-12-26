@@ -131,12 +131,16 @@
           phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
         };
 
-    legacyPackages = { nixidyEnvs.${system} = inputs.nixidy.lib.mkEnvs { inherit pkgs;
+        legacyPackages = {
+          nixidyEnvs.${system} = inputs.nixidy.lib.mkEnvs {
+            inherit pkgs;
 
-              charts = inputs.nixhelm.chartsDerivations.${system};
-       envs = {
-
-       prod.modules = [./modules/noosphere/taghmata/nixidy/env/prod.nix]; }; }; };
+            charts = inputs.nixhelm.chartsDerivations.${system};
+            envs = {
+              prod.modules = [./modules/noosphere/taghmata/nixidy/env/prod.nix];
+            };
+          };
+        };
 
         packages.ci =
           pkgs.runCommand "ci-build" {
