@@ -11,7 +11,7 @@
   nixidy.target.rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod/";
 
   nixidy.applicationImports = [
-    ../generated/cert-manager-crds.nix
+    ../_generated/cert-manager-crds.nix
   ];
   
   nixidy.defaults.syncPolicy.autoSync = {
@@ -25,6 +25,23 @@
     namespace = "cert-manager";
     createNamespace = true;
 
+    resources.certificate= {
+      apiVersion = "cert-manager.io/v1";
+      kind = "Certificate";
+      metadata = {
+        name = "argocd-tls";
+        namespace = "argocd";
+      };
+      spec = {
+        secretName = "argocd-tls";
+        issuerRef = {
+          kind = "ClusterIssuer";
+          name = "letsencrypt-cloudflare";
+          dnsNames = [ "argocd.noosphere.uk"];
+        };
+              };
+    };
+    
     yamls = [
       ''
         apiVersion: isindir.github.com/v1alpha3
