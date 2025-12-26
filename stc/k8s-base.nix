@@ -20,8 +20,8 @@
       BindPaths = "/run/current-system/sw/bin:/bin";
     };
 
-    environment.systemPackages = with pkgs; [nfs-utils openiscsi];
-    boot.kernelModules = ["iscsi_tcp"];
+    environment.systemPackages = with pkgs; [nfs-utils openiscsi cryptsetup];
+    boot.kernelModules = ["iscsi_tcp" "dm_crypt"];
 
     services.openiscsi = {
       enable = true;
