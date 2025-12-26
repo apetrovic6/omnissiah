@@ -15,6 +15,19 @@
     imports = [
     ];
 
+    systemd.services.iscsid.serviceConfig = {
+      PrivateMounts = "yes";
+      BindPaths = "/run/current-system/sw/bin:/bin";
+    };
+
+    environment.systemPackages = with pkgs; [nfs-utils openiscsi];
+    boot.kernelModules = ["iscsi_tcp"];
+
+    services.openiscsi = {
+      enable = true;
+      name = "iqn.2005-10.org.open-iscsi:${config.networking.hostName}";
+    };
+
     networking.firewall.interfaces.tailscale0.allowedTCPPorts = [80 443 9000];
 
     services.rke2 = {
