@@ -26,7 +26,7 @@
   };
 
   applications.longhorn = let
-   namespace = "longhorn";
+   namespace = "longhorn-system";
   in {
     inherit namespace;
     createNamespace = true;
