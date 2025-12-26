@@ -120,6 +120,7 @@
         inputs',
         self',
         system,
+        config,
         ...
       }: {
         checks = {
@@ -136,6 +137,7 @@
             inherit pkgs;
 
             charts = inputs.nixhelm.chartsDerivations.${system};
+
             envs = {
               prod.modules = [modules/noosphere/taghmata/nixidy/_env/prod.nix];
             };
@@ -156,17 +158,26 @@
 
         packages.nixidy = inputs'.nixidy.packages.default;
 
-        # packages.certManager = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-        #   name = "cert-manager";
+        packages.certManager = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "cert-manager";
 
-        #    chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
-        #    crds = ["Certificate" "ClusterIssuer"];
-        # };
+          chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
+          crds = ["Certificate" "ClusterIssuer"];
+        };
 
         packages.metallb = inputs.nixidy.packages.${system}.generators.fromChartCRD {
           name = "metallb";
-
           chart = nixhelm.chartsDerivations.${system}.metallb.metallb;
+        };
+
+        packages.sops-secrets-operator = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "sops-secrets-operator";
+          chart = nixhelm.chartsDerivations.${system}.isindir.sops-secrets-operator;
+        };
+
+        packages.longhorn = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "longhorn";
+          chart = nixhelm.chartsDerivations.${system}.longhorn.longhorn;
         };
 
         apps = {
@@ -177,8 +188,18 @@
             program =
               (pkgs.writeShellScript "generate-modules" ''
                 set -eo pipefail
-                echo "generate metallb"
+
+                echo "generate cert manager crds"
+                cat ${self'.packages.certManager} > ${path}/cert-manager-crd.nix
+
+                echo "generate longhorn crds"
+                cat ${self'.packages.longhorn} > ${path}/longhorn-crd.nix
+
+                echo "generate metallb crds"
                 cat ${self'.packages.metallb} > ${path}/metallb-crd.nix
+
+                echo "generate sops-secrets-operator crds"
+                cat ${self'.packages.sops-secrets-operator} > ${path}/sops-secrets-operator-crd.nix
               '').outPath;
           };
         };
