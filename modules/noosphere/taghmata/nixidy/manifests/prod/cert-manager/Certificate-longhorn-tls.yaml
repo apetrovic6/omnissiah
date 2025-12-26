@@ -8,5 +8,5 @@ spec:
     - longhorn.noosphere.uk
   issuerRef:
     kind: ClusterIssuer
-    name: letnencrypt-cloudflare
+    name: letsencrypt-cloudflare
   secretName: longhorn-tls
