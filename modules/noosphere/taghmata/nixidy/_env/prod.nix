@@ -10,6 +10,10 @@
   # manifests to when running `nixidy switch .#dev`.
   nixidy.target.rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod/";
 
+  nixidy.applicationImports = [
+    ../generated/cert-manager-crds.nix
+  ];
+  
   nixidy.defaults.syncPolicy.autoSync = {
     enable = true;
     prune = true;

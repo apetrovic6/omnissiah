@@ -156,6 +156,11 @@
 
         packages.nixidy = inputs'.nixidy.packages.default;
 
+        packages.certManager = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "cert-manager";
+          chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
+        };
+
         treefmt = {
           projectRootFile = "flake.nix";
           programs.alejandra.enable = true; # Nix formatter
