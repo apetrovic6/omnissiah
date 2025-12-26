@@ -1,13 +1,8 @@
 {...}: {
-  flake.nixosModules.noosphere = {
-    config,
-    lib,
-    pkgs,
-    ...
-  }: let
+  flake.nixosModules.noosphere = {pkgs, ...}: let
     clusterAgeRecipient = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
   in {
-    clan.core.vars.generators.cloudflare-api-token-secret = {
+    clan.core.vars.generators.cloudflare-api-token-sopssecret = {
       # If you want the same token shared across machines:
       share = true;
 
@@ -47,7 +42,7 @@
               sed 's/^/          /' < "$prompts/cloudflareToken" >> "$tmp"
 
               # Encrypt for the cluster recipient (operator will decrypt in-cluster)
-              sops --encrypt --age "${clusterAgeRecipient}" "$tmp" > "$out/cloudflare-api-token.enc.yaml"
+              sops --encrypt --age "${clusterAgeRecipient}" "$tmp" > "$out/cloudflare-api-token.sopssecret.yaml"
       '';
     };
   };
