@@ -13,7 +13,7 @@
   nixidy.applicationImports = [
     ../_generated/cert-manager-crds.nix
   ];
-  
+
   nixidy.defaults.syncPolicy.autoSync = {
     enable = true;
     prune = true;
@@ -25,7 +25,7 @@
     namespace = "cert-manager";
     createNamespace = true;
 
-    resources.certificate= {
+    resources.certificates = {
       apiVersion = "cert-manager.io/v1";
       kind = "Certificate";
       metadata = {
@@ -37,11 +37,11 @@
         issuerRef = {
           kind = "ClusterIssuer";
           name = "letsencrypt-cloudflare";
-          dnsNames = [ "argocd.noosphere.uk"];
+          dnsNames = ["argocd.noosphere.uk"];
         };
-              };
+      };
     };
-    
+
     yamls = [
       ''
         apiVersion: isindir.github.com/v1alpha3
