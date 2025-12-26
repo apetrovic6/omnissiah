@@ -156,9 +156,31 @@
 
         packages.nixidy = inputs'.nixidy.packages.default;
 
-        packages.certManager = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "cert-manager";
-          chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
+        # packages.certManager = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+        #   name = "cert-manager";
+
+        #    chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
+        #    crds = ["Certificate" "ClusterIssuer"];
+        # };
+
+        packages.metallb = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "metallb";
+
+          chart = nixhelm.chartsDerivations.${system}.metallb.metallb;
+        };
+
+        apps = {
+          gen-crd = let
+            path = "modules/noosphere/taghmata/nixidy/_generated";
+          in {
+            type = "app";
+            program =
+              (pkgs.writeShellScript "generate-modules" ''
+                set -eo pipefail
+                echo "generate metallb"
+                cat ${self'.packages.metallb} > ${path}/metallb-crd.nix
+              '').outPath;
+          };
         };
 
         treefmt = {

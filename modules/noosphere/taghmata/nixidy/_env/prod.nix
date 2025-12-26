@@ -11,7 +11,7 @@
   nixidy.target.rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod/";
 
   nixidy.applicationImports = [
-    ../_generated/cert-manager-crds.nix
+    ../_generated/metallb-crd.nix
   ];
 
   nixidy.defaults.syncPolicy.autoSync = {
@@ -25,22 +25,24 @@
     namespace = "cert-manager";
     createNamespace = true;
 
-    resources.certificates = {
-      apiVersion = "cert-manager.io/v1";
-      kind = "Certificate";
-      metadata = {
-        name = "argocd-tls";
-        namespace = "argocd";
-      };
-      spec = {
-        secretName = "argocd-tls";
-        issuerRef = {
-          kind = "ClusterIssuer";
-          name = "letsencrypt-cloudflare";
-          dnsNames = ["argocd.noosphere.uk"];
-        };
-      };
-    };
+    #     resources.certificates.argocdTls = {
+    # metadata = {
+    #       name = "argocd-tls";
+    #       namespace = "argocd";
+    #     };
+
+    #     spec = {
+    #       secretName = "argocd-tls";
+
+    #       issuerRef = {
+    #         kind = "ClusterIssuer";
+    #         name = "letsencrypt-cloudflare";
+    #       };
+
+    #       # dnsNames is on spec (not under issuerRef)
+    #       dnsNames = [ "argocd.noosphere.uk" ];
+    #     };
+    #   };
 
     yamls = [
       ''
@@ -108,6 +110,7 @@
 
     helm.releases.cert-manager = {
       chart = charts.jetstack.cert-manager;
+      includeCRDs = true;
       values = {
         global.leaderElection.namespace = "cert-manager";
         crds.enabled = true;
@@ -190,46 +193,45 @@
     ];
   };
 
-  applications.metallb = {
-    output.path = "./metallb";
+  applications.metallb = let
     namespace = "metallb-system";
+  in {
+    output.path = "./metallb";
+    inherit namespace;
+
     createNamespace = true;
 
     helm.releases.metallb = {
       chart = charts.metallb.metallb;
     };
 
-    yamls = [
-      /*
-      yaml
-      */
-      ''
-        apiVersion: metallb.io/v1beta1
-        kind: IPAddressPool
-        metadata:
-          name: lan-pool
-          namespace: metallb-system
-          annotations:
-            argocd.argoproj.io/sync-wave: "1"
-        spec:
-          addresses:
-            - 192.168.1.240-192.168.1.250
-      ''
-      /*
-      yaml
-      */
-      ''
-        apiVersion: metallb.io/v1beta1
-        kind: L2Advertisement
-        metadata:
-          name: lan-adv
-          namespace: metallb-system
-          annotations:
-            argocd.argoproj.io/sync-wave: "1"
-        spec:
-          ipAddressPools:
-            - lan-pool
-      ''
-    ];
+    resources = {
+      ipAddressPools.lan-pool = {
+        metadata = {
+          inherit namespace;
+          annotations = {
+            "argocd.argoproj.io/sync-wave" = "1";
+          };
+        };
+        spec = {
+          addresses = [
+            "192.168.1.240-192.168.1.250"
+          ];
+        };
+      };
+
+      l2Advertisements.lan-adv = {
+        metadata = {
+          inherit namespace;
+          annotations = {
+            "argocd.argoproj.io/sync-wave" = "1";
+          };
+        };
+
+        spec = {
+          ipAddressPools = ["lan-pool"];
+        };
+      };
+    };
   };
 }
