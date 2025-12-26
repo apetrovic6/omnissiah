@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb
+  namespace: argocd
+spec:
+  destination:
+    namespace: metallb-system
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: ./ ./modules/noosphere/taghmata/nixidy/manifests/prod/metallb
+    repoURL: https://github.com/apetrovic6/omnissiah.git
+    targetRevision: master
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

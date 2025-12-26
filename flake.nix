@@ -137,7 +137,7 @@
 
             charts = inputs.nixhelm.chartsDerivations.${system};
             envs = {
-              prod.modules = [./modules/noosphere/taghmata/nixidy/env/prod.nix];
+              prod.modules = [./modules/noosphere/taghmata/nixidy/_env/prod.nix];
             };
           };
         };
