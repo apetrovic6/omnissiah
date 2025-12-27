@@ -46,6 +46,14 @@ in {
       };
     };
 
+    networking.firewall.allowedTCPPorts = [
+      53317 # LocalSend
+    ];
+
+    networking.firewall.allowedUDPPorts = [
+      53317 # LocalSend
+    ];
+
     services.imperium.bluetooth.enable = true;
 
     magos.stylix = {
