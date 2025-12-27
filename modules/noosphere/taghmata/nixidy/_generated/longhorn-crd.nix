@@ -4037,7 +4037,7 @@ in
 
     }
     // {
-      "backingImages" = mkOption {
+      "longhornBackingImages" = mkOption {
         description = "BackingImage is where Longhorn stores backing image object.";
         type = (
           types.attrsOf (
@@ -4048,7 +4048,7 @@ in
         );
         default = { };
       };
-      "backingImageDataSources" = mkOption {
+      "longhornBackingImageDataSources" = mkOption {
         description = "BackingImageDataSource is where Longhorn stores backing image data source object.";
         type = (
           types.attrsOf (
@@ -4060,7 +4060,7 @@ in
         );
         default = { };
       };
-      "backingImageManagers" = mkOption {
+      "longhornBackingImageManagers" = mkOption {
         description = "BackingImageManager is where Longhorn stores backing image manager object.";
         type = (
           types.attrsOf (
@@ -4072,7 +4072,7 @@ in
         );
         default = { };
       };
-      "backups" = mkOption {
+      "longhornBackups" = mkOption {
         description = "Backup is where Longhorn stores backup object.";
         type = (
           types.attrsOf (
@@ -4081,7 +4081,7 @@ in
         );
         default = { };
       };
-      "backupBackingImages" = mkOption {
+      "longhornBackupBackingImages" = mkOption {
         description = "BackupBackingImage is where Longhorn stores backing image backup object.";
         type = (
           types.attrsOf (
@@ -4093,7 +4093,7 @@ in
         );
         default = { };
       };
-      "backupTargets" = mkOption {
+      "longhornBackupTargets" = mkOption {
         description = "BackupTarget is where Longhorn stores backup target object.";
         type = (
           types.attrsOf (
@@ -4104,7 +4104,7 @@ in
         );
         default = { };
       };
-      "backupVolumes" = mkOption {
+      "longhornBackupVolumes" = mkOption {
         description = "BackupVolume is where Longhorn stores backup volume object.";
         type = (
           types.attrsOf (
@@ -4115,7 +4115,7 @@ in
         );
         default = { };
       };
-      "engines" = mkOption {
+      "longhornEngines" = mkOption {
         description = "Engine is where Longhorn stores engine object.";
         type = (
           types.attrsOf (
@@ -4124,7 +4124,7 @@ in
         );
         default = { };
       };
-      "engineImages" = mkOption {
+      "longhornEngineImages" = mkOption {
         description = "EngineImage is where Longhorn stores engine image object.";
         type = (
           types.attrsOf (
@@ -4134,7 +4134,7 @@ in
         );
         default = { };
       };
-      "instanceManagers" = mkOption {
+      "longhornInstanceManagers" = mkOption {
         description = "InstanceManager is where Longhorn stores instance manager object.";
         type = (
           types.attrsOf (
@@ -4145,7 +4145,7 @@ in
         );
         default = { };
       };
-      "nodes" = mkOption {
+      "longhornNodes" = mkOption {
         description = "Node is where Longhorn stores Longhorn node object.";
         type = (
           types.attrsOf (
@@ -4154,7 +4154,7 @@ in
         );
         default = { };
       };
-      "orphans" = mkOption {
+      "longhornOrphans" = mkOption {
         description = "Orphan is where Longhorn stores orphan object.";
         type = (
           types.attrsOf (
@@ -4163,7 +4163,7 @@ in
         );
         default = { };
       };
-      "recurringJobs" = mkOption {
+      "longhornRecurringJobs" = mkOption {
         description = "RecurringJob is where Longhorn stores recurring job object.";
         type = (
           types.attrsOf (
@@ -4174,7 +4174,7 @@ in
         );
         default = { };
       };
-      "replicas" = mkOption {
+      "longhornReplicas" = mkOption {
         description = "Replica is where Longhorn stores replica object.";
         type = (
           types.attrsOf (
@@ -4183,7 +4183,7 @@ in
         );
         default = { };
       };
-      "settings" = mkOption {
+      "longhornSettings" = mkOption {
         description = "Setting is where Longhorn stores setting object.";
         type = (
           types.attrsOf (
@@ -4192,7 +4192,7 @@ in
         );
         default = { };
       };
-      "shareManagers" = mkOption {
+      "longhornShareManagers" = mkOption {
         description = "ShareManager is where Longhorn stores share manager object.";
         type = (
           types.attrsOf (
@@ -4203,7 +4203,7 @@ in
         );
         default = { };
       };
-      "snapshots" = mkOption {
+      "longhornSnapshots" = mkOption {
         description = "Snapshot is the Schema for the snapshots API";
         type = (
           types.attrsOf (
@@ -4212,7 +4212,7 @@ in
         );
         default = { };
       };
-      "supportBundles" = mkOption {
+      "longhornSupportBundles" = mkOption {
         description = "SupportBundle is where Longhorn stores support bundle object";
         type = (
           types.attrsOf (
@@ -4223,7 +4223,7 @@ in
         );
         default = { };
       };
-      "systemBackups" = mkOption {
+      "longhornSystemBackups" = mkOption {
         description = "SystemBackup is where Longhorn stores system backup object";
         type = (
           types.attrsOf (
@@ -4234,7 +4234,7 @@ in
         );
         default = { };
       };
-      "systemRestores" = mkOption {
+      "longhornSystemRestores" = mkOption {
         description = "SystemRestore is where Longhorn stores system restore object";
         type = (
           types.attrsOf (
@@ -4245,7 +4245,7 @@ in
         );
         default = { };
       };
-      "volumes" = mkOption {
+      "longhornVolumes" = mkOption {
         description = "Volume is where Longhorn stores volume object.";
         type = (
           types.attrsOf (
@@ -4254,7 +4254,7 @@ in
         );
         default = { };
       };
-      "volumeAttachments" = mkOption {
+      "longhornVolumeAttachments" = mkOption {
         description = "VolumeAttachment stores attachment information of a Longhorn volume";
         type = (
           types.attrsOf (
@@ -4280,188 +4280,206 @@ in
         group = "longhorn.io";
         version = "v1beta2";
         kind = "BackingImage";
-        attrName = "backingImages";
+        attrName = "longhornBackingImages";
       }
       {
         name = "backingimagedatasources";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "BackingImageDataSource";
-        attrName = "backingImageDataSources";
+        attrName = "longhornBackingImageDataSources";
       }
       {
         name = "backingimagemanagers";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "BackingImageManager";
-        attrName = "backingImageManagers";
+        attrName = "longhornBackingImageManagers";
       }
       {
         name = "backups";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Backup";
-        attrName = "backups";
+        attrName = "longhornBackups";
       }
       {
         name = "backupbackingimages";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "BackupBackingImage";
-        attrName = "backupBackingImages";
+        attrName = "longhornBackupBackingImages";
       }
       {
         name = "backuptargets";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "BackupTarget";
-        attrName = "backupTargets";
+        attrName = "longhornBackupTargets";
       }
       {
         name = "backupvolumes";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "BackupVolume";
-        attrName = "backupVolumes";
+        attrName = "longhornBackupVolumes";
       }
       {
         name = "engines";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Engine";
-        attrName = "engines";
+        attrName = "longhornEngines";
       }
       {
         name = "engineimages";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "EngineImage";
-        attrName = "engineImages";
+        attrName = "longhornEngineImages";
       }
       {
         name = "instancemanagers";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "InstanceManager";
-        attrName = "instanceManagers";
+        attrName = "longhornInstanceManagers";
       }
       {
         name = "nodes";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Node";
-        attrName = "nodes";
+        attrName = "longhornNodes";
       }
       {
         name = "orphans";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Orphan";
-        attrName = "orphans";
+        attrName = "longhornOrphans";
       }
       {
         name = "recurringjobs";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "RecurringJob";
-        attrName = "recurringJobs";
+        attrName = "longhornRecurringJobs";
       }
       {
         name = "replicas";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Replica";
-        attrName = "replicas";
+        attrName = "longhornReplicas";
       }
       {
         name = "settings";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Setting";
-        attrName = "settings";
+        attrName = "longhornSettings";
       }
       {
         name = "sharemanagers";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "ShareManager";
-        attrName = "shareManagers";
+        attrName = "longhornShareManagers";
       }
       {
         name = "snapshots";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Snapshot";
-        attrName = "snapshots";
+        attrName = "longhornSnapshots";
       }
       {
         name = "supportbundles";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "SupportBundle";
-        attrName = "supportBundles";
+        attrName = "longhornSupportBundles";
       }
       {
         name = "systembackups";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "SystemBackup";
-        attrName = "systemBackups";
+        attrName = "longhornSystemBackups";
       }
       {
         name = "systemrestores";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "SystemRestore";
-        attrName = "systemRestores";
+        attrName = "longhornSystemRestores";
       }
       {
         name = "volumes";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Volume";
-        attrName = "volumes";
+        attrName = "longhornVolumes";
       }
       {
         name = "volumeattachments";
         group = "longhorn.io";
         version = "v1beta2";
         kind = "VolumeAttachment";
-        attrName = "volumeAttachments";
+        attrName = "longhornVolumeAttachments";
       }
     ];
 
     resources = {
-      "longhorn.io"."v1beta2"."BackingImage" = mkAliasDefinitions options.resources."backingImages";
+      "longhorn.io"."v1beta2"."BackingImage" =
+        mkAliasDefinitions
+          options.resources."longhornBackingImages";
       "longhorn.io"."v1beta2"."BackingImageDataSource" =
         mkAliasDefinitions
-          options.resources."backingImageDataSources";
+          options.resources."longhornBackingImageDataSources";
       "longhorn.io"."v1beta2"."BackingImageManager" =
         mkAliasDefinitions
-          options.resources."backingImageManagers";
-      "longhorn.io"."v1beta2"."Backup" = mkAliasDefinitions options.resources."backups";
+          options.resources."longhornBackingImageManagers";
+      "longhorn.io"."v1beta2"."Backup" = mkAliasDefinitions options.resources."longhornBackups";
       "longhorn.io"."v1beta2"."BackupBackingImage" =
         mkAliasDefinitions
-          options.resources."backupBackingImages";
-      "longhorn.io"."v1beta2"."BackupTarget" = mkAliasDefinitions options.resources."backupTargets";
-      "longhorn.io"."v1beta2"."BackupVolume" = mkAliasDefinitions options.resources."backupVolumes";
-      "longhorn.io"."v1beta2"."Engine" = mkAliasDefinitions options.resources."engines";
-      "longhorn.io"."v1beta2"."EngineImage" = mkAliasDefinitions options.resources."engineImages";
-      "longhorn.io"."v1beta2"."InstanceManager" = mkAliasDefinitions options.resources."instanceManagers";
-      "longhorn.io"."v1beta2"."Node" = mkAliasDefinitions options.resources."nodes";
-      "longhorn.io"."v1beta2"."Orphan" = mkAliasDefinitions options.resources."orphans";
-      "longhorn.io"."v1beta2"."RecurringJob" = mkAliasDefinitions options.resources."recurringJobs";
-      "longhorn.io"."v1beta2"."Replica" = mkAliasDefinitions options.resources."replicas";
-      "longhorn.io"."v1beta2"."Setting" = mkAliasDefinitions options.resources."settings";
-      "longhorn.io"."v1beta2"."ShareManager" = mkAliasDefinitions options.resources."shareManagers";
-      "longhorn.io"."v1beta2"."Snapshot" = mkAliasDefinitions options.resources."snapshots";
-      "longhorn.io"."v1beta2"."SupportBundle" = mkAliasDefinitions options.resources."supportBundles";
-      "longhorn.io"."v1beta2"."SystemBackup" = mkAliasDefinitions options.resources."systemBackups";
-      "longhorn.io"."v1beta2"."SystemRestore" = mkAliasDefinitions options.resources."systemRestores";
-      "longhorn.io"."v1beta2"."Volume" = mkAliasDefinitions options.resources."volumes";
+          options.resources."longhornBackupBackingImages";
+      "longhorn.io"."v1beta2"."BackupTarget" =
+        mkAliasDefinitions
+          options.resources."longhornBackupTargets";
+      "longhorn.io"."v1beta2"."BackupVolume" =
+        mkAliasDefinitions
+          options.resources."longhornBackupVolumes";
+      "longhorn.io"."v1beta2"."Engine" = mkAliasDefinitions options.resources."longhornEngines";
+      "longhorn.io"."v1beta2"."EngineImage" = mkAliasDefinitions options.resources."longhornEngineImages";
+      "longhorn.io"."v1beta2"."InstanceManager" =
+        mkAliasDefinitions
+          options.resources."longhornInstanceManagers";
+      "longhorn.io"."v1beta2"."Node" = mkAliasDefinitions options.resources."longhornNodes";
+      "longhorn.io"."v1beta2"."Orphan" = mkAliasDefinitions options.resources."longhornOrphans";
+      "longhorn.io"."v1beta2"."RecurringJob" =
+        mkAliasDefinitions
+          options.resources."longhornRecurringJobs";
+      "longhorn.io"."v1beta2"."Replica" = mkAliasDefinitions options.resources."longhornReplicas";
+      "longhorn.io"."v1beta2"."Setting" = mkAliasDefinitions options.resources."longhornSettings";
+      "longhorn.io"."v1beta2"."ShareManager" =
+        mkAliasDefinitions
+          options.resources."longhornShareManagers";
+      "longhorn.io"."v1beta2"."Snapshot" = mkAliasDefinitions options.resources."longhornSnapshots";
+      "longhorn.io"."v1beta2"."SupportBundle" =
+        mkAliasDefinitions
+          options.resources."longhornSupportBundles";
+      "longhorn.io"."v1beta2"."SystemBackup" =
+        mkAliasDefinitions
+          options.resources."longhornSystemBackups";
+      "longhorn.io"."v1beta2"."SystemRestore" =
+        mkAliasDefinitions
+          options.resources."longhornSystemRestores";
+      "longhorn.io"."v1beta2"."Volume" = mkAliasDefinitions options.resources."longhornVolumes";
       "longhorn.io"."v1beta2"."VolumeAttachment" =
         mkAliasDefinitions
-          options.resources."volumeAttachments";
+          options.resources."longhornVolumeAttachments";
 
     };
 
