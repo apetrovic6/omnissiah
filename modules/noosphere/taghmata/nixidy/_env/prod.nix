@@ -11,10 +11,11 @@
   nixidy.target.rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod/";
 
   nixidy.applicationImports = [
+    ../_generated/cert-manager-crd.nix
     ../_generated/metallb-crd.nix
     ../_generated/sops-secrets-operator-crd.nix
     ../_generated/cloudnativepg-crd.nix
-    # ../_generated/longhorn-crd.nix
+    ../_generated/longhorn-crd.nix
   ];
 
   nixidy.defaults.syncPolicy.autoSync = {
@@ -31,7 +32,6 @@
 
       helm.releases.cloudnative-pg= {
         chart = charts.cloudnative-pg.cloudnative-pg;
-        
       };
   };
 
@@ -50,6 +50,19 @@
         };
       };
     };
+
+    resources.storageClasses.longhorn-cnpg-strict-local = {
+      provisioner = "driver.longhorn.io";
+      allowVolumeExpansion = true;
+      reclaimPolicy = "Delete";
+      parameters = {
+        numberOfReplicas = "1";
+        dataLocality = "strict-local";
+        staleReplicaTimeout = "2880"; # 48h
+        fsType = "ext4";
+      };
+    };
+    
   };
 
   applications.cert-manager = let
