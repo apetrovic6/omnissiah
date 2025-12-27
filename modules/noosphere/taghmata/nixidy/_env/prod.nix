@@ -39,56 +39,8 @@
   in {
     inherit namespace;
     createNamespace = true;
-
-#     resources.ingresses.zitadel-ip-root = {
-#       metadata = {
-#         inherit namespace;
-#         annotations = {
-#             "traefik.ingress.kubernetes.io/router.entrypoints "= "websecure";
-#         };
-#       };
-#       spec = {
-#         ingressClassName = "traefik";
-#         tls = [
-#           {
-#             secretName = "zitadel-tls";
-#             hosts = [ "zitadel.noosphere.uk" ];
-#           }
-#         ];
-#         rules = [
-#            {
-#             host = "zitadel.noosphere.uk";
-#             http.paths = [
-#               {
-#                 path = "/";
-#                 pathType = "Prefix";
-#                 backend.service = {
-#                   name = "zitad"
-# ;                };
-#               }
-#             ];
-#            } 
-#         ];
-#       };
-#     };
-    
+  
     yamls = [
-
-      # ''
-      #   apiVersion: cert-manager.io/v1
-      #   kind: Certificate
-      #   metadata:
-      #     name: zitadel-tls
-      #     namespace: zitadel
-      #   spec:
-      #     secretName: zitadel-tls
-      #     issuerRef:
-      #       kind: ClusterIssuer
-      #       name: letsencrypt-cloudflare
-      #     dnsNames:
-      #       - zitadel.noosphere.uk
-      # ''
-
       ''
         apiVersion: isindir.github.com/v1alpha3
         kind: SopsSecret
