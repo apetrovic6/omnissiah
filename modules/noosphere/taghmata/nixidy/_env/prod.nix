@@ -26,13 +26,13 @@
 
   applications.cloudnativepg = let
     namespace = "cnpg-system";
-    in {
-      inherit namespace;
-      createNamespace = true;
+  in {
+    inherit namespace;
+    createNamespace = true;
 
-      helm.releases.cloudnative-pg= {
-        chart = charts.cloudnative-pg.cloudnative-pg;
-      };
+    helm.releases.cloudnative-pg = {
+      chart = charts.cloudnative-pg.cloudnative-pg;
+    };
   };
 
   applications.longhorn = let
@@ -62,7 +62,6 @@
         fsType = "ext4";
       };
     };
-    
   };
 
   applications.cert-manager = let

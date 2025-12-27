@@ -180,7 +180,6 @@
           chart = nixhelm.chartsDerivations.${system}.longhorn.longhorn;
         };
 
-
         packages.cloudnativepg = inputs.nixidy.packages.${system}.generators.fromChartCRD {
           name = "cloudnative-pg";
           chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.cloudnative-pg;
