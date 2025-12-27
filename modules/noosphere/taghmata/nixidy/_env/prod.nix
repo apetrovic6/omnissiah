@@ -176,7 +176,7 @@
           };
         };
 
-        initJob.command = "zitadel";
+        # initJob.command = "zitadel";
       };
     };
 
