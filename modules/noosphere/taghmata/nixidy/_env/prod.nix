@@ -186,7 +186,7 @@
       };
 
       spec = {
-        # imageName = "ghcr.io/cloudnative-pg/postgresql:18.1-system-trixie";
+        imageName = "ghcr.io/cloudnative-pg/postgresql:17.7-minimal-trixie";
 
         # bootstrap.initdb = {
         #   database = "app";
