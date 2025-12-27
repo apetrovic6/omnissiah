@@ -73,46 +73,21 @@
 #     };
     
     yamls = [
+
       # ''
-      #   apiVersion: networking.k8s.io/v1
-      #   kind: Ingress
+      #   apiVersion: cert-manager.io/v1
+      #   kind: Certificate
       #   metadata:
-      #     name: zitadel-ip-root
+      #     name: zitadel-tls
       #     namespace: zitadel
-      #     annotations:
-      #       traefik.ingress.kubernetes.io/router.entrypoints: websecure
       #   spec:
-      #     ingressClassName: traefik
-      #     tls:
-      #       - secretName: zitadel-tls
-      #         hosts:
-      #           - zitadel.noosphere.uk
-      #     rules:
-      #       - host: zitadel.noosphere.uk
-      #         http:
-      #           paths:
-      #             - path: /
-      #               pathType: Prefix
-      #               backend:
-      #                 service:
-      #                   name: zitadel-service
-      #                   port:
-      #                     number: 80
+      #     secretName: zitadel-tls
+      #     issuerRef:
+      #       kind: ClusterIssuer
+      #       name: letsencrypt-cloudflare
+      #     dnsNames:
+      #       - zitadel.noosphere.uk
       # ''
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: zitadel-tls
-          namespace: zitadel
-        spec:
-          secretName: zitadel-tls
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - zitadel.noosphere.uk
-      ''
 
       ''
         apiVersion: isindir.github.com/v1alpha3
