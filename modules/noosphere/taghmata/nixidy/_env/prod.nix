@@ -118,6 +118,7 @@
 
     helm.releases.zitadel = {
       chart = charts.zitadel.zitadel;
+      includeCRDs = true;
 
       values = {
         env = [
@@ -180,7 +181,7 @@
 
         metrics = {
           enabled = true;
-          serviceMonitor.enabled = true;
+          # serviceMonitor.enabled = true;
         };
 
         initJob.command = "";
