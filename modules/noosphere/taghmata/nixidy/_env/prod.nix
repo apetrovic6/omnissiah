@@ -5,6 +5,7 @@
     ./apps/longhorn
     ./apps/cloudnative-pg
     ./apps/metallb
+    ./apps/sops-secrets-operator
   ];
 
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
@@ -24,6 +25,7 @@
     ../_generated/sops-secrets-operator-crd.nix
     ../_generated/cloudnativepg-crd.nix
     ../_generated/longhorn-crd.nix
+    ../_generated/traefik-crd.nix
   ];
 
   nixidy.defaults.syncPolicy.autoSync = {

@@ -185,6 +185,11 @@
           chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.cloudnative-pg;
         };
 
+        packages.traefik = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "traefik";
+          chart = nixhelm.chartsDerivations.${system}.traefik.traefik;
+        };
+
         # packages.zitadel= inputs.nixidy.packages.${system}.generators.fromChartCRD {
         #   name = "zitadel";
         #   chart = nixhelm.chartsDerivations.${system}.zitadel.zitadel;
@@ -224,6 +229,8 @@
                 echo "generate sops-secrets-operator crds"
                 cat ${self'.packages.sops-secrets-operator} > ${path}/sops-secrets-operator-crd.nix
 
+                echo "generate traefik crds"
+                cat ${self'.packages.traefik} > ${path}/traefik-crd.nix
 
               '').outPath;
           };
