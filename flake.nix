@@ -162,7 +162,6 @@
           name = "cert-manager";
 
           chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
-          crds = ["Certificate" "ClusterIssuer"];
         };
 
         packages.metallb = inputs.nixidy.packages.${system}.generators.fromChartCRD {
@@ -177,6 +176,7 @@
 
         packages.longhorn = inputs.nixidy.packages.${system}.generators.fromChartCRD {
           name = "longhorn";
+          namePrefix = "longhorn";
           chart = nixhelm.chartsDerivations.${system}.longhorn.longhorn;
         };
 
