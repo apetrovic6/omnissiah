@@ -4,6 +4,7 @@ metadata:
   name: pg-zitadel
   namespace: zitadel
 spec:
+  enableSuperuserAccess: true
   instances: 2
   monitoring:
     enablePodMonitor: true

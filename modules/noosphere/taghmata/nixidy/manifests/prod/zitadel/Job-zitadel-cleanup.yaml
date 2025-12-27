@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    helm.sh/hook: post-delete
+    helm.sh/hook-delete-policy: hook-succeeded
+    helm.sh/hook-weight: "-1"
+  labels:
+    app.kubernetes.io/component: cleanup
+    app.kubernetes.io/instance: zitadel
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: zitadel
+    app.kubernetes.io/version: ""
+    helm.sh/chart: zitadel-9.13.0
+  name: zitadel-cleanup
+  namespace: zitadel
+spec:
+  activeDeadlineSeconds: 60
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: cleanup
+        app.kubernetes.io/instance: zitadel
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: zitadel
+        app.kubernetes.io/version: ""
+        helm.sh/chart: zitadel-9.13.0
+    spec:
+      containers:
+        - command:
+            - sh
+            - -c
+            - |
+              echo "Cleaning up secrets created by zitadel-setup..."
+              kubectl --namespace=zitadel delete secret \
+                --selector='app.kubernetes.io/managed-by=Zitadel,app.kubernetes.io/instance=zitadel' \
+                --ignore-not-found=true
+              echo "Cleanup completed"
+          image: alpine/k8s:1.34.3
+          imagePullPolicy: IfNotPresent
+          name: zitadel-cleanup
+          resources: {}
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+      enableServiceLinks: false
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccountName: zitadel

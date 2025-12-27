@@ -1,0 +1,21 @@
+apiVersion: v1
+data:
+  .env: |-
+    ZITADEL_SERVICE_USER_TOKEN_FILE="/login-client/pat"
+    ZITADEL_API_URL="http://zitadel:8080"
+    CUSTOM_REQUEST_HEADERS="Host:zitadel.noosphere.uk"
+kind: ConfigMap
+metadata:
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "0"
+  labels:
+    app.kubernetes.io/component: login
+    app.kubernetes.io/instance: zitadel
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: zitadel-login
+    app.kubernetes.io/version: ""
+    helm.sh/chart: zitadel-9.13.0
+  name: zitadel-login-config-dotenv
+  namespace: zitadel

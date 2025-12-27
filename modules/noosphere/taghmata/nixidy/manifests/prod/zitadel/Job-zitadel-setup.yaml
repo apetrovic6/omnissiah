@@ -1,0 +1,209 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "2"
+  labels:
+    app.kubernetes.io/component: setup
+    app.kubernetes.io/instance: zitadel
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: zitadel
+    app.kubernetes.io/version: ""
+    helm.sh/chart: zitadel-9.13.0
+  name: zitadel-setup
+  namespace: zitadel
+spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: setup
+        app.kubernetes.io/instance: zitadel
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: zitadel
+        app.kubernetes.io/version: ""
+        helm.sh/chart: zitadel-9.13.0
+    spec:
+      containers:
+        - args:
+            - setup
+            - --masterkeyFromEnv
+            - --config
+            - /config/zitadel-config-yaml
+            - --steps
+            - /config/zitadel-config-yaml
+            - --init-projections=true
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: ZITADEL_MASTERKEY
+              valueFrom:
+                secretKeyRef:
+                  key: masterkey
+                  name: master-key-secret
+            - name: ZITADEL_FIRSTINSTANCE_MACHINEKEYPATH
+              value: /machinekey/sa.json
+            - name: ZITADEL_FIRSTINSTANCE_PATPATH
+              value: /machinekey/pat
+            - name: ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH
+              value: /login-client/pat
+            - name: ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-zitadel-superuser
+            - name: ZITADEL_DATABASE_POSTGRES_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-zitadel-app
+          image: ghcr.io/zitadel/zitadel:v4.2.0
+          imagePullPolicy: IfNotPresent
+          name: zitadel-setup
+          resources: {}
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /config
+              name: zitadel-config-yaml
+              readOnly: true
+            - mountPath: /machinekey
+              name: machinekey
+            - mountPath: /login-client
+              name: login-client
+        - command:
+            - sh
+            - -c
+            - |
+              until [ ! -z $(kubectl --namespace=zitadel get pod ${POD_NAME} --output=jsonpath="{.status.containerStatuses[?(@.name=='zitadel-setup')].state.terminated}") ]; do
+                echo 'waiting for zitadel-setup container to terminate';
+                sleep 5;
+              done &&
+              echo 'zitadel-setup container terminated' &&
+              if [ -f /machinekey/sa.json ]; then
+                kubectl --namespace=zitadel create secret generic iam-admin \
+                  --from-file=iam-admin.json=/machinekey/sa.json \
+                  --dry-run=client --output=yaml | \
+                kubectl label --local --filename=- \
+                  app.kubernetes.io/managed-by=Zitadel \
+                  app.kubernetes.io/name=zitadel \
+                  app.kubernetes.io/instance=zitadel \
+                  --output=yaml | \
+                kubectl apply --filename=-;
+              fi;
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          image: alpine/k8s:1.34.3
+          name: zitadel-machinekey
+          resources: {}
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /machinekey
+              name: machinekey
+              readOnly: true
+        - command:
+            - sh
+            - -c
+            - |
+              until [ ! -z $(kubectl --namespace=zitadel get pod ${POD_NAME} --output=jsonpath="{.status.containerStatuses[?(@.name=='zitadel-setup')].state.terminated}") ]; do
+                echo 'waiting for zitadel-setup container to terminate';
+                sleep 5;
+              done &&
+              echo 'zitadel-setup container terminated' &&
+              if [ -f /machinekey/pat ]; then
+                kubectl --namespace=zitadel create secret generic iam-admin-pat \
+                  --from-file=pat=/machinekey/pat \
+                  --dry-run=client --output=yaml | \
+                kubectl label --local --filename=- \
+                  app.kubernetes.io/managed-by=Zitadel \
+                  app.kubernetes.io/name=zitadel \
+                  app.kubernetes.io/instance=zitadel \
+                  --output=yaml | \
+                kubectl apply --filename=-;
+              fi;
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          image: alpine/k8s:1.34.3
+          name: zitadel-machine-pat
+          resources: {}
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /machinekey
+              name: machinekey
+              readOnly: true
+        - command:
+            - sh
+            - -c
+            - |
+              until [ ! -z $(kubectl --namespace=zitadel get pod ${POD_NAME} --output=jsonpath="{.status.containerStatuses[?(@.name=='zitadel-setup')].state.terminated}") ]; do
+                echo 'waiting for zitadel-setup container to terminate';
+                sleep 5;
+              done &&
+              echo 'zitadel-setup container terminated' &&
+              if [ -f /login-client/pat ]; then
+                kubectl --namespace=zitadel create secret generic login-client \
+                  --from-file=pat=/login-client/pat \
+                  --dry-run=client --output=yaml | \
+                kubectl label --local --filename=- \
+                  app.kubernetes.io/managed-by=Zitadel \
+                  app.kubernetes.io/name=zitadel \
+                  app.kubernetes.io/instance=zitadel \
+                  --output=yaml | \
+                kubectl apply --filename=-;
+              fi;
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          image: alpine/k8s:1.34.3
+          name: zitadel-login-client-pat
+          resources: {}
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /login-client
+              name: login-client
+              readOnly: true
+      enableServiceLinks: false
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccountName: zitadel
+      volumes:
+        - configMap:
+            defaultMode: 288
+            name: zitadel-config-yaml
+          name: zitadel-config-yaml
+        - emptyDir: {}
+          name: machinekey
+        - emptyDir: {}
+          name: login-client

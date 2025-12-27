@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: start
+    app.kubernetes.io/instance: zitadel
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: zitadel
+    app.kubernetes.io/version: ""
+    helm.sh/chart: zitadel-9.13.0
+  name: zitadel
+  namespace: zitadel
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: start
+      app.kubernetes.io/instance: zitadel
+      app.kubernetes.io/name: zitadel
+  template:
+    metadata:
+      annotations:
+        checksum/configmap: 9060ec5a06f16d1ef6bde310961b8a4c2e2c54f08d66124992ecf2efec7ec3d1
+        checksum/secret-db-ssl-ca-crt: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+        checksum/secret-zitadel-secrets: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      labels:
+        app.kubernetes.io/component: start
+        app.kubernetes.io/instance: zitadel
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: zitadel
+        app.kubernetes.io/version: ""
+        helm.sh/chart: zitadel-9.13.0
+    spec:
+      containers:
+        - args:
+            - start
+            - --config
+            - /config/zitadel-config-yaml
+            - --masterkeyFromEnv
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: ZITADEL_MASTERKEY
+              valueFrom:
+                secretKeyRef:
+                  key: masterkey
+                  name: master-key-secret
+            - name: ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-zitadel-superuser
+            - name: ZITADEL_DATABASE_POSTGRES_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-zitadel-app
+          image: ghcr.io/zitadel/zitadel:v4.2.0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              httpHeaders:
+                - name: Host
+                  value: zitadel.noosphere.uk
+              path: /debug/healthz
+              port: http2-server
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 5
+          name: zitadel
+          ports:
+            - containerPort: 8080
+              name: http2-server
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              httpHeaders:
+                - name: Host
+                  value: zitadel.noosphere.uk
+              path: /debug/ready
+              port: http2-server
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 5
+          resources: {}
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              httpHeaders:
+                - name: Host
+                  value: zitadel.noosphere.uk
+              path: /debug/ready
+              port: http2-server
+              scheme: HTTP
+            periodSeconds: 1
+          volumeMounts:
+            - mountPath: /config
+              name: zitadel-config-yaml
+              readOnly: true
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - wait4x
+            - tcp
+            - pg-zitadel-rw:5432
+            - --timeout
+            - 5m
+            - --interval
+            - 5s
+          image: wait4x/wait4x:3.6
+          name: wait-for-postgres
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccountName: zitadel
+      volumes:
+        - configMap:
+            name: zitadel-config-yaml
+          name: zitadel-config-yaml

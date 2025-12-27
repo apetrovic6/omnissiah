@@ -45,18 +45,157 @@
     inherit namespace;
     createNamespace = true;
 
-    # helm.releases.zitadel = {
-    #   chart = charts.zitadel.zitadel;
+    yamls = [
+      ''
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: zitadel-ip-root
+          namespace: zitadel
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        spec:
+          ingressClassName: traefik
+          tls:
+            - secretName: zitadel-tls
+              hosts:
+                - zitadel.noosphere.uk
+          rules:
+            - host: zitadel.noosphere.uk
+              http:
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                      service:
+                        name: zitadel-service
+                        port:
+                          number: 80
+      ''
+      ''
+        apiVersion: cert-manager.io/v1
+        kind: Certificate
+        metadata:
+          name: zitadel-tls
+          namespace: zitadel
+        spec:
+          secretName: zitadel-tls
+          issuerRef:
+            kind: ClusterIssuer
+            name: letsencrypt-cloudflare
+          dnsNames:
+            - zitadel.noosphere.uk
+      ''
 
-    #   values = {
+      ''
+        apiVersion: isindir.github.com/v1alpha3
+        kind: SopsSecret
+        metadata:
+            name: master-key-secret
+            namespace: zitadel
+        spec:
+            secretTemplates:
+                - name: ENC[AES256_GCM,data:vrbCJZ9xvHt9D8Z/PxJ1pcg=,iv:AqmkyXiQJL2Kz7fYx2FPyLV43lWPcUeQeskRzLn5OWQ=,tag:ikorZ/CsNrcONSEjfR671A==,type:str]
+                  type: ENC[AES256_GCM,data:pnxVdDbJ,iv:KUkr+tr1gl+qdIdcgBTfPYm9ehagVTgPc3BxlI61OSA=,tag:9g+8qN5iG1cyd8KSecOmlQ==,type:str]
+                  stringData:
+                    masterKey: ENC[AES256_GCM,data:JuGxxDeWr5qJ99Lq5VZ5jN+coDz6kl3+aINBZ053MuU=,iv:wm0TqX6EVBLkts2kyfjvN+jg/Hvfk+RW3TcdO2+rOq4=,tag:jssDkeOfB6b0MPTleKvAhA==,type:str]
+        sops:
+            age:
+                - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+                  enc: |
+                    -----BEGIN AGE ENCRYPTED FILE-----
+                    YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBBbUo4eGxzZWtqQzdxL2w4
+                    S3E2cUdORWp2Y2JVQUFYeDc5QW04ZjhsSENBCmpqWHRNTkc0RE5ZYUgwT2hjYi9O
+                    Wm5KdkVZUFZ1eUJpYUVyWjkzcjhMUXcKLS0tIHhYZXhSRGtyVktCS0RCY1RHdXhs
+                    cG5rcGZnclBSbEdoSHJSTEE3eVk2MU0KsTzx5u6g1sa5zoU6jtdLWoXlezVzD9Jj
+                    AosingXS6v4e/NxEHmC4UUlIa0mJ18qpGt7Wjbxm4bVWaNamBybcnA==
+                    -----END AGE ENCRYPTED FILE-----
+            lastmodified: "2025-12-27T15:19:59Z"
+            mac: ENC[AES256_GCM,data:FFqaz32HeXSLYjK0zoSNFG8hk+QEXmp47r66rUj+izlxdcKkzWXGqQVRuFOAnw7YfnwNoKG3cBRuDAIAnxRRX0IQ0VCj6uSoacyUY0Ox64Lyv0+w2TcKn62nr35hbfBifUPsdEhAyUGxHaZ2030V5AF54xamCOYxX0360T0E5OU=,iv:94GtW00pplg+tONruRl4M2XrkACw/8qrx/3+CF+9zWo=,tag:z71ac7US1JQWDVy3czHzPg==,type:str]
+            encrypted_suffix: Templates
+            version: 3.11.0
+      ''
+    ];
 
-    #   };
-    # };
+    helm.releases.zitadel = {
+      chart = charts.zitadel.zitadel;
+
+      values = {
+        env = [
+          {
+            name = "ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD";
+            valueFrom.secretKeyRef = {
+              name = "pg-zitadel-superuser";
+              key = "password";
+            };
+          }
+          {
+            name = "ZITADEL_DATABASE_POSTGRES_USER_PASSWORD";
+            valueFrom.secretKeyRef = {
+              name = "pg-zitadel-app";
+              key = "password";
+            };
+          }
+        ];
+
+        zitadel = {
+          masterkeySecretName = "master-key-secret";
+          configmapConfig = {
+            ExternalDomain = "zitadel.noosphere.uk";
+            ExternalSecure = true;
+            TLS.enabled = false;
+            Database.Postgres = {
+              Host = "pg-zitadel-rw";
+              Port = "5432";
+              Database = "app";
+              MaxOpenConns = 20;
+              MaxIdleConns = 10;
+              MaxConnLifetime = "30m";
+              MaxConnIdleTime = "5m";
+              User = {
+                Username = "app";
+                SSL.Mode = "disable";
+              };
+              Admin = {
+                Username = "postgres";
+                SSL.Mode = "disable";
+              };
+            };
+          };
+        };
+
+        ingress = {
+          enabled = true;
+          className = "traefik";
+        };
+
+        login = {
+          enabled = true;
+          ingress = {
+            enabled = true;
+            className = "traefik";
+          };
+        };
+
+        initJob.command = "zitadel";
+      };
+    };
 
     resources.clusters.pg-zitadel = {
-      metadata.namespace = namespace;
+      metadata = {
+        inherit namespace;
+      };
+
       spec = {
         # imageName = "ghcr.io/cloudnative-pg/postgresql:18.1-system-trixie";
+
+        # bootstrap.initdb = {
+        #   database = "app";
+        #   owner = "app";
+        #   secret.name = "";
+        # };
+
+        enableSuperuserAccess = true;
         primaryUpdateStrategy = "unsupervised";
         instances = 2;
         storage = {

@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: login
+    app.kubernetes.io/instance: zitadel
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: zitadel-login
+    app.kubernetes.io/version: ""
+    helm.sh/chart: zitadel-9.13.0
+  name: zitadel-login
+  namespace: zitadel
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: login
+      app.kubernetes.io/instance: zitadel
+      app.kubernetes.io/name: zitadel-login
+  template:
+    metadata:
+      annotations:
+        checksum/configmap: a86ff4f59bd3633736a9fd2ae4d040aa888988a2185d618cd6fcdd279d8518ff
+      labels:
+        app.kubernetes.io/component: login
+        app.kubernetes.io/instance: zitadel
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: zitadel-login
+        app.kubernetes.io/version: ""
+        helm.sh/chart: zitadel-9.13.0
+    spec:
+      containers:
+        - env:
+            - name: NEXT_PUBLIC_BASE_PATH
+              value: /ui/v2/login
+          image: ghcr.io/zitadel/zitadel-login:v4.2.0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /ui/v2/login/healthy
+              port: http-server
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 5
+          name: zitadel-login
+          ports:
+            - containerPort: 3000
+              name: http-server
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /ui/v2/login/security
+              port: http-server
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 5
+          resources: {}
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /.env-file/
+              name: login-config-dotenv
+              readOnly: true
+            - mountPath: /login-client
+              name: login-client
+              readOnly: true
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - wait4x
+            - http
+            - http://zitadel:8080/debug/ready
+            - --insecure-skip-tls-verify
+            - --h2c
+            - --no-redirect
+            - --expect-status-code
+            - "200"
+            - --timeout
+            - 5m
+            - --interval
+            - 5s
+          image: wait4x/wait4x:3.6
+          name: wait-for-zitadel
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccountName: zitadel-login
+      volumes:
+        - configMap:
+            name: zitadel-login-config-dotenv
+          name: login-config-dotenv
+        - name: login-client
+          secret:
+            defaultMode: 444
+            secretName: login-client

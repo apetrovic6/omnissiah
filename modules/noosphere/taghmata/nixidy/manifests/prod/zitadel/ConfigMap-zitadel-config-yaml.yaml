@@ -1,0 +1,67 @@
+apiVersion: v1
+data:
+  zitadel-config-yaml: |-
+    Database:
+      Postgres:
+        Admin:
+          SSL:
+            Mode: disable
+          Username: postgres
+        Database: app
+        Host: pg-zitadel-rw
+        MaxConnIdleTime: 5m
+        MaxConnLifetime: 30m
+        MaxIdleConns: 10
+        MaxOpenConns: 20
+        Port: "5432"
+        User:
+          SSL:
+            Mode: disable
+          Username: app
+    ExternalDomain: zitadel.noosphere.uk
+    ExternalSecure: true
+    FirstInstance:
+      LoginClientPatPath: null
+      MachineKeyPath: null
+      Org:
+        LoginClient:
+          Machine:
+            Name: Automatically Initialized IAM Login Client
+            Username: login-client
+          Pat:
+            ExpirationDate: "2029-01-01T00:00:00Z"
+        Machine:
+          Machine:
+            Name: Automatically Initialized IAM Admin
+            Username: iam-admin
+          MachineKey:
+            ExpirationDate: "2029-01-01T00:00:00Z"
+            Type: 1
+          Pat:
+            ExpirationDate: "2029-01-01T00:00:00Z"
+        Skip: null
+      PatPath: null
+      Skip: false
+    Machine:
+      Identification:
+        Hostname:
+          Enabled: true
+        Webhook:
+          Enabled: false
+    TLS:
+      Enabled: false
+      enabled: false
+kind: ConfigMap
+metadata:
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "0"
+  labels:
+    app.kubernetes.io/instance: zitadel
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: zitadel
+    app.kubernetes.io/version: ""
+    helm.sh/chart: zitadel-9.13.0
+  name: zitadel-config-yaml
+  namespace: zitadel
