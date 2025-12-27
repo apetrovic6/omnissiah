@@ -1,4 +1,8 @@
-{charts, ...}: {
+{
+  lib,
+  charts,
+  ...
+}: {
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
 
   # Set the target branch the rendered manifests for _this_
@@ -34,6 +38,63 @@
       chart = charts.cloudnative-pg.cloudnative-pg;
     };
   };
+
+  applications.zitadel = let
+    namespace = "zitadel";
+  in {
+    inherit namespace;
+    createNamespace = true;
+
+    # helm.releases.zitadel = {
+    #   chart = charts.zitadel.zitadel;
+
+    #   values = {
+
+    #   };
+    # };
+
+    resources.clusters.pg-zitadel = {
+      metadata.namespace = namespace;
+      spec = {
+        # imageName = "ghcr.io/cloudnative-pg/postgresql:18.1-system-trixie";
+        primaryUpdateStrategy = "unsupervised";
+        instances = 2;
+        storage = {
+          storageClass = "longhorn-cnpg-strict-local";
+          size = "10Gi";
+        };
+
+        walStorage = {
+          storageClass = "longhorn-cnpg-strict-local";
+          size = "10Gi";
+        };
+
+        postgresql.parameters = {
+          shared_buffers = "1GB";
+          max_connections = "200";
+          log_statement = "ddl";
+        };
+
+        monitoring.enablePodMonitor = true;
+      };
+    };
+  };
+
+  # applications.seerr = {
+  #   namespace = "yarr";
+  #   createNamespace = true;
+
+  #   helm.releases.seerr = {
+  #     chart = lib.helm.downloadHelmChart {
+  #       repo = "oci://ghcr.io/fallenbagel/jellyseerr";
+  #       chart = "jellyseer-chart";
+  #       version = "v2.7.3";
+  #       chartHash = "";
+  #     };
+
+  #     # values = {};
+  #   };
+  # };
 
   applications.longhorn = let
     namespace = "longhorn-system";

@@ -120,7 +120,7 @@
         inputs',
         self',
         system,
-        config,
+        lib,
         ...
       }: {
         checks = {
@@ -185,6 +185,21 @@
           chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.cloudnative-pg;
         };
 
+        # packages.zitadel= inputs.nixidy.packages.${system}.generators.fromChartCRD {
+        #   name = "zitadel";
+        #   chart = nixhelm.chartsDerivations.${system}.zitadel.zitadel;
+        # };
+
+        # packages.seerr = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+        #   name = "seerr";
+        #   chartAttrs = {
+        #     repo = "oci://ghcr.io/fallenbagel/jellyseerr/jellyseerr-chart";
+        #     chart = "seerr-chart";
+        #     version = "3.0.0";
+        #     chartHash = lib.fakeHash;
+        #   };
+        # };
+
         apps = {
           gen-crd = let
             path = "modules/noosphere/taghmata/nixidy/_generated";
@@ -208,6 +223,8 @@
 
                 echo "generate sops-secrets-operator crds"
                 cat ${self'.packages.sops-secrets-operator} > ${path}/sops-secrets-operator-crd.nix
+
+
               '').outPath;
           };
         };

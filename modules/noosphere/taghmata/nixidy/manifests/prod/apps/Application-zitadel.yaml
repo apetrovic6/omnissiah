@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zitadel
+  namespace: argocd
+spec:
+  destination:
+    namespace: zitadel
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: ./modules/noosphere/taghmata/nixidy/manifests/prod/zitadel
+    repoURL: https://github.com/apetrovic6/omnissiah.git
+    targetRevision: master
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
