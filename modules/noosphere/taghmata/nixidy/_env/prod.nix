@@ -13,6 +13,7 @@
   nixidy.applicationImports = [
     ../_generated/metallb-crd.nix
     ../_generated/sops-secrets-operator-crd.nix
+    # ../_generated/longhorn-crd.nix
   ];
 
   nixidy.defaults.syncPolicy.autoSync = {
@@ -29,14 +30,15 @@
 
     helm.releases.longhorn = {
       chart = charts.longhorn.longhorn;
-      includeCRDs = true;
       values = {
         longhorn = {
           preUpgradeChecker.jobEnabled = false;
+          persistance.defaultClassReplicaCount = 2;
         };
       };
     };
   };
+
   applications.cert-manager = let
     namespace = "cert-manager";
   in {
