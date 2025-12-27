@@ -14,7 +14,7 @@ spec:
   insecureSkipTLSVerify: true
   service:
     name: metrics-server
-    namespace: kube-system
+    namespace: metrics-server
     port: 443
   version: v1beta1
   versionPriority: 100

@@ -1,10 +1,6 @@
-{
-  lib,
-  charts,
-  ...
-}: {
+{charts, ...}: {
+  imports = [./apps/metrics-server];
 
-    imports = [./apps/metrics-server];
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
 
   # Set the target branch the rendered manifests for _this_
