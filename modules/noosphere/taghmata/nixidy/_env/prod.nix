@@ -160,9 +160,11 @@
                 SSL.Mode = "disable";
               };
             };
+            dbSslCaCrtSecret = "pg-zitadel-ca";
           };
         };
 
+        replicaCount = 3;
         ingress = {
           enabled = true;
           className = "traefik";
@@ -174,6 +176,11 @@
             enabled = true;
             className = "traefik";
           };
+        };
+
+        metrics = {
+          enabled = true;
+          serviceMonitor.enabled = true;
         };
 
         initJob.command = "";

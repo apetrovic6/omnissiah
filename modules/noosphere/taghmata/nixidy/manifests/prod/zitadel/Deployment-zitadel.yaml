@@ -11,7 +11,7 @@ metadata:
   name: zitadel
   namespace: zitadel
 spec:
-  replicas: 1
+  replicas: 3
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -21,9 +21,12 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: 9060ec5a06f16d1ef6bde310961b8a4c2e2c54f08d66124992ecf2efec7ec3d1
+        checksum/configmap: 359343c8f086c13cafbaf6c4191281c916e994478f3aa19f5a8aea425ca0ab7c
         checksum/secret-db-ssl-ca-crt: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
         checksum/secret-zitadel-secrets: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        prometheus.io/path: /debug/metrics
+        prometheus.io/port: "8080"
+        prometheus.io/scrape: "true"
       labels:
         app.kubernetes.io/component: start
         app.kubernetes.io/instance: zitadel

@@ -51,6 +51,7 @@ data:
     TLS:
       Enabled: false
       enabled: false
+    dbSslCaCrtSecret: pg-zitadel-ca
 kind: ConfigMap
 metadata:
   annotations:
