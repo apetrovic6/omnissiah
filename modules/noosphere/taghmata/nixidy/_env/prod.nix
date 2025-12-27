@@ -1,5 +1,9 @@
 {charts, ...}: {
-  imports = [./apps/metrics-server];
+  imports = [
+    ./apps/metrics-server
+    ./apps/cloudnative-pg
+    ./apps/longhorn
+  ];
 
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
 
