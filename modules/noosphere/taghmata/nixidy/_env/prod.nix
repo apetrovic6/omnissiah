@@ -3,6 +3,8 @@
   charts,
   ...
 }: {
+
+    imports = [./apps/metrics-server];
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
 
   # Set the target branch the rendered manifests for _this_
@@ -181,7 +183,7 @@
 
         metrics = {
           enabled = true;
-          # serviceMonitor.enabled = true;
+          serviceMonitor.enabled = true;
         };
 
         initJob.command = "";
