@@ -1,5 +1,4 @@
 {charts, ...}: {
-
   applications.sops-secrets = {
     output.path = "./sops-secrets-operator";
     namespace = "sops";
@@ -25,5 +24,4 @@
       };
     };
   };
-
 }
