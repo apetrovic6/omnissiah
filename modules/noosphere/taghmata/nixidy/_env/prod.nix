@@ -98,7 +98,7 @@
                 - name: ENC[AES256_GCM,data:vrbCJZ9xvHt9D8Z/PxJ1pcg=,iv:AqmkyXiQJL2Kz7fYx2FPyLV43lWPcUeQeskRzLn5OWQ=,tag:ikorZ/CsNrcONSEjfR671A==,type:str]
                   type: ENC[AES256_GCM,data:pnxVdDbJ,iv:KUkr+tr1gl+qdIdcgBTfPYm9ehagVTgPc3BxlI61OSA=,tag:9g+8qN5iG1cyd8KSecOmlQ==,type:str]
                   stringData:
-                    masterKey: ENC[AES256_GCM,data:JuGxxDeWr5qJ99Lq5VZ5jN+coDz6kl3+aINBZ053MuU=,iv:wm0TqX6EVBLkts2kyfjvN+jg/Hvfk+RW3TcdO2+rOq4=,tag:jssDkeOfB6b0MPTleKvAhA==,type:str]
+                    masterkey: ENC[AES256_GCM,data:JuGxxDeWr5qJ99Lq5VZ5jN+coDz6kl3+aINBZ053MuU=,iv:wm0TqX6EVBLkts2kyfjvN+jg/Hvfk+RW3TcdO2+rOq4=,tag:jssDkeOfB6b0MPTleKvAhA==,type:str]
         sops:
             age:
                 - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
