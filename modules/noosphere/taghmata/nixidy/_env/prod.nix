@@ -26,17 +26,6 @@
     selfHeal = true;
   };
 
-  applications.cloudnativepg = let
-    namespace = "cnpg-system";
-  in {
-    inherit namespace;
-    createNamespace = true;
-
-    helm.releases.cloudnative-pg = {
-      chart = charts.cloudnative-pg.cloudnative-pg;
-    };
-  };
-
   applications.zitadel = let
     namespace = "zitadel";
   in {
@@ -179,7 +168,6 @@
 
         metrics = {
           enabled = true;
-          serviceMonitor.enabled = true;
         };
 
         initJob.command = "";
