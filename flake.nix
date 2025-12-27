@@ -180,6 +180,12 @@
           chart = nixhelm.chartsDerivations.${system}.longhorn.longhorn;
         };
 
+
+        packages.cloudnativepg = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "cloudnative-pg";
+          chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.cloudnative-pg;
+        };
+
         apps = {
           gen-crd = let
             path = "modules/noosphere/taghmata/nixidy/_generated";
@@ -197,6 +203,9 @@
 
                 echo "generate metallb crds"
                 cat ${self'.packages.metallb} > ${path}/metallb-crd.nix
+
+                echo "generate cloudnative pg crds"
+                cat ${self'.packages.cloudnativepg} > ${path}/cloudnativepg-crd.nix
 
                 echo "generate sops-secrets-operator crds"
                 cat ${self'.packages.sops-secrets-operator} > ${path}/sops-secrets-operator-crd.nix

@@ -13,6 +13,7 @@
   nixidy.applicationImports = [
     ../_generated/metallb-crd.nix
     ../_generated/sops-secrets-operator-crd.nix
+    ../_generated/cloudnativepg-crd.nix
     # ../_generated/longhorn-crd.nix
   ];
 
@@ -20,6 +21,18 @@
     enable = true;
     prune = true;
     selfHeal = true;
+  };
+
+  applications.cloudnativepg = let
+    namespace = "cnpg-system";
+    in {
+      inherit namespace;
+      createNamespace = true;
+
+      helm.releases.cloudnative-pg= {
+        chart = charts.cloudnative-pg.cloudnative-pg;
+        
+      };
   };
 
   applications.longhorn = let
