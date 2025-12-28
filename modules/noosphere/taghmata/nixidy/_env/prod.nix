@@ -44,6 +44,20 @@
 
     yamls = [
       ''
+        apiVersion: cert-manager.io/v1
+        kind: Certificate
+        metadata:
+          name: zitadel-tls
+          namespace: zitadel
+        spec:
+          secretName: zitadel-tls
+          issuerRef:
+            kind: ClusterIssuer
+            name: letsencrypt-cloudflare
+          dnsNames:
+            - zitadel.noosphere.uk
+      ''
+      ''
         apiVersion: isindir.github.com/v1alpha3
         kind: SopsSecret
         metadata:
