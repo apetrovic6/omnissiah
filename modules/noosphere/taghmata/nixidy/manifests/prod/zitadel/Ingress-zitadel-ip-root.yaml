@@ -13,9 +13,9 @@ spec:
         paths:
           - backend:
               service:
-                name: zitadel-service
+                name: zitadel
                 port:
-                  number: 80
+                  number: 8080
             path: /
             pathType: Prefix
   tls:

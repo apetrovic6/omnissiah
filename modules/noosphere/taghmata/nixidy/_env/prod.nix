@@ -65,9 +65,9 @@
                     pathType: Prefix
                     backend:
                       service:
-                        name: zitadel-service
+                        name: zitadel
                         port:
-                          number: 80
+                          number: 8080
       ''
       ''
         apiVersion: cert-manager.io/v1
