@@ -21,7 +21,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: b8f1916a6235ed10ae4d79f0fdcbb381d55323f737de293612605dd5f6d9a7a3
+        checksum/configmap: ee2d1c0fa160c93b20af1e4a7183156d70284eacef521e7807c54e00874b08e6
         checksum/secret-db-ssl-ca-crt: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
         checksum/secret-zitadel-secrets: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
         prometheus.io/path: /debug/metrics

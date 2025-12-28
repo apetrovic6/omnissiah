@@ -112,7 +112,7 @@
           configmapConfig = {
             ExternalDomain = "zitadel.noosphere.uk";
             ExternalSecure = true;
-            ExternalPort = 80;
+            ExternalPort = 443;
             TLS.enabled = false;
             Database.Postgres = {
               Host = "pg-zitadel-rw";
@@ -137,7 +137,7 @@
 
         replicaCount = 3;
         ingress = {
-          enabled = true;
+          enabled = false;
           className = "traefik";
         };
 
