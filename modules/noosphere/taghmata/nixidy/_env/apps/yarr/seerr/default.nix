@@ -46,7 +46,7 @@
       spec = {
         type = "ClusterIP";
         selector = {
-          name = "seerr";
+          app = "seerr";
         };
         ports = [
           {

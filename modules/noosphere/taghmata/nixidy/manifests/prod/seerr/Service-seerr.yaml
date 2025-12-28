@@ -9,5 +9,5 @@ spec:
       protocol: TCP
       targetPort: 5055
   selector:
-    name: seerr
+    app: seerr
   type: ClusterIP
