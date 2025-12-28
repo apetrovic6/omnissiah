@@ -33,12 +33,21 @@
     ../_generated/traefik-crd.nix
     ../_generated/alloy-operator-crd.nix
     ../_generated/kube-prometheus-stack-crd.nix
+    ../_generated/prometheus-crd.nix
   ];
 
   nixidy.defaults.syncPolicy.autoSync = {
     enable = true;
     prune = true;
     selfHeal = true;
+  };
+
+  applications.prometheus = {
+    namespace = "observability";
+    helm.releases.prometheus = {
+      chart = charts.prometheus-community.prometheus;
+      values = {};
+    };
   };
 
   # applications.seerr = {

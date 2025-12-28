@@ -200,6 +200,11 @@
           chart = nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
         };
 
+        packages.prometheus = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "prometheus";
+          chart = nixhelm.chartsDerivations.${system}.prometheus-community.prometheus;
+        };
+
         # packages.zitadel= inputs.nixidy.packages.${system}.generators.fromChartCRD {
         #   name = "zitadel";
         #   chart = nixhelm.chartsDerivations.${system}.zitadel.zitadel;
@@ -247,6 +252,9 @@
 
                 echo "generate kube prometheus stack crds"
                 cat ${self'.packages.kube-prometheus-stack} > ${path}/kube-prometheus-stack-crd.nix
+
+                echo "generate kube prometheus crds"
+                cat ${self'.packages.prometheus} > ${path}/prometheus-crd.nix
               '').outPath;
           };
         };
