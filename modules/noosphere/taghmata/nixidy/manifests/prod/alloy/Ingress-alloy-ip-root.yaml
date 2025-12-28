@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: alloy-ip-root
+  namespace: alloy
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: alloy.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: default-alloy
+                port:
+                  number: 12345
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - alloy.noosphere.uk
+      secretName: alloy-tls
