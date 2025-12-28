@@ -8,6 +8,7 @@
     ./apps/sops-secrets-operator
     ./apps/alloy
     ./apps/cert-manager
+    ./apps/zitadel
   ];
 
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
