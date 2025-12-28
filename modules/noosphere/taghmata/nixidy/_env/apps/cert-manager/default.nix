@@ -1,5 +1,4 @@
-{charts, ...}:{
-
+{charts, ...}: {
   applications.cert-manager = let
     namespace = "cert-manager";
   in {
@@ -157,4 +156,5 @@
         crds.enabled = true;
       };
     };
-  };}
+  };
+}

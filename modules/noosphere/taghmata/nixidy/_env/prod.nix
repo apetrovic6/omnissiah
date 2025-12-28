@@ -7,6 +7,7 @@
     ./apps/metallb
     ./apps/sops-secrets-operator
     ./apps/alloy
+    ./apps/cert-manager
   ];
 
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
@@ -41,34 +42,44 @@
   in {
     inherit namespace;
     createNamespace = true;
+    resources.ingresses.zitadel-ip-root = {
+      metadata = {
+        namespace = "zitadel";
+
+        annotations = {
+          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+        };
+      };
+
+      spec = {
+        ingressClassName = "traefik";
+
+        tls = [
+          {
+            secretName = "zitadel-tls";
+            hosts = ["zitadel.noosphere.uk"];
+          }
+        ];
+
+        rules = [
+          {
+            host = "zitadel.noosphere.uk";
+            http.paths = [
+              {
+                path = "/";
+                pathType = "Prefix";
+                backend.service = {
+                  name = "zitadel";
+                  port.number = 8080;
+                };
+              }
+            ];
+          }
+        ];
+      };
+    };
 
     yamls = [
-      ''
-        apiVersion: networking.k8s.io/v1
-        kind: Ingress
-        metadata:
-          name: zitadel-ip-root
-          namespace: zitadel
-          annotations:
-            traefik.ingress.kubernetes.io/router.entrypoints: websecure
-        spec:
-          ingressClassName: traefik
-          tls:
-            - secretName: zitadel-tls
-              hosts:
-                - zitadel.noosphere.uk
-          rules:
-            - host: zitadel.noosphere.uk
-              http:
-                paths:
-                  - path: /
-                    pathType: Prefix
-                    backend:
-                      service:
-                        name: zitadel
-                        port:
-                          number: 8080
-      ''
       ''
         apiVersion: cert-manager.io/v1
         kind: Certificate
@@ -236,8 +247,6 @@
   #     # values = {};
   #   };
   # };
-
-
 
   applications.ingress-traefik-load-balancer-config = {
     namespace = "kube-system";
