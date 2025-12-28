@@ -216,6 +216,9 @@ in {
     };
 
     resources.databases.db-seerr = {
+      metadata = {
+        inherit namespace;
+      };
       spec = {
         name = "db-serr";
         owner = "seerr";
