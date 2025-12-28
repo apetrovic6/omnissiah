@@ -112,6 +112,7 @@
           configmapConfig = {
             ExternalDomain = "zitadel.noosphere.uk";
             ExternalSecure = true;
+            ExternalPort = 80;
             TLS.enabled = false;
             Database.Postgres = {
               Host = "pg-zitadel-rw";

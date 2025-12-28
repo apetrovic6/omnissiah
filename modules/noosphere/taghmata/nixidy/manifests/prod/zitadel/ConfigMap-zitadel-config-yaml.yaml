@@ -19,6 +19,7 @@ data:
             Mode: disable
           Username: app
     ExternalDomain: zitadel.noosphere.uk
+    ExternalPort: 80
     ExternalSecure: true
     FirstInstance:
       LoginClientPatPath: null
