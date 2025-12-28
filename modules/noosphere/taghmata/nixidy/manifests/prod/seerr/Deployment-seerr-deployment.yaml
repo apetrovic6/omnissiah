@@ -16,7 +16,33 @@ spec:
         app: seerr
     spec:
       containers:
-        - image: fallenbagel/jellyseerr:2.7.3
+        - env:
+            - name: DB_TYPE
+              value: postgres
+            - name: DB_HOST
+              value: pg-yarr-rw
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: pg-yarr-seerr
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-yarr-seerr
+            - name: DB_NAME
+              value: seerr
+          image: fallenbagel/jellyseerr:2.7.3
           name: jellyserr
           ports:
             - containerPort: 5055
+          volumeMounts:
+            - mountPath: /app/config
+              name: seer-vol
+      volumes:
+        - name: seerr-vol
+          persistentVolumeClaim:
+            claimName: seerr-pvc

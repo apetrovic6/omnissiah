@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: seerr-ip-root
+  namespace: yarr
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: seerr.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: seerr
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - seerr.noosphere.uk
+      secretName: seerr-tls

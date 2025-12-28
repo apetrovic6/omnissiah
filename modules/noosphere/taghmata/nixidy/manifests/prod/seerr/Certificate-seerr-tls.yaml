@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: seerr-tls
+  namespace: yarr
+spec:
+  dnsNames:
+    - seerr.noosphere.uk
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-cloudflare
+  secretName: seerr-tls
