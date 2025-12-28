@@ -20,11 +20,10 @@ spec:
       honorLabels: true
       honorTimestamps: true
       metricRelabelings:
-        - action: drop
-          regex: (csi_operations|storage_operation_duration)_seconds_bucket;(0.25|2.5|15|25|120|600)(\.0)?
+        - action: replace
           sourceLabels:
-            - __name__
-            - le
+            - node
+          targetLabel: instance
       port: https-metrics
       relabelings:
         - action: replace

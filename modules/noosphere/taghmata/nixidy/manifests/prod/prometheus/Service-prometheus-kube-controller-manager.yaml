@@ -20,6 +20,4 @@ spec:
       port: 10257
       protocol: TCP
       targetPort: 10257
-  selector:
-    component: kube-controller-manager
   type: ClusterIP

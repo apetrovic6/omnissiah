@@ -20,6 +20,4 @@ spec:
       port: 10259
       protocol: TCP
       targetPort: 10259
-  selector:
-    component: kube-scheduler
   type: ClusterIP

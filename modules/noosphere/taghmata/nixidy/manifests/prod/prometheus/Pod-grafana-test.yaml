@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/name: grafana
     app.kubernetes.io/version: 12.3.0
     helm.sh/chart: grafana-10.4.0
-  name: kube-prometheus-stack-grafana-test
+  name: grafana-test
   namespace: observability
 spec:
   containers:
@@ -25,8 +25,8 @@ spec:
           name: tests
           readOnly: true
   restartPolicy: Never
-  serviceAccountName: kube-prometheus-stack-grafana-test
+  serviceAccountName: grafana-test
   volumes:
     - configMap:
-        name: kube-prometheus-stack-grafana-test
+        name: grafana-test
       name: tests

@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: grafana
     app.kubernetes.io/version: 12.3.0
     helm.sh/chart: grafana-10.4.0
-  name: kube-prometheus-stack-grafana
+  name: grafana
   namespace: observability
 spec:
   replicas: 1
@@ -22,7 +22,6 @@ spec:
       annotations:
         checksum/config: 0e9cbd0ea8e24e32f7dfca5bab17a2ba05652642f0a09a4882833ae88e4cc4a3
         checksum/sc-dashboard-provider-config: e70bf6a851099d385178a76de9757bb0bef8299da6d8443602590e44f05fdf24
-        checksum/secret: 6a12b3c833256310ce8378292614809089dbc3c20720938963dbbd4b35a3ac82
         kubectl.kubernetes.io/default-container: grafana
       labels:
         app.kubernetes.io/instance: kube-prometheus-stack
@@ -49,12 +48,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: admin-user
-                  name: kube-prometheus-stack-grafana
+                  name: grafana-admin-secret
             - name: REQ_PASSWORD
               valueFrom:
                 secretKeyRef:
                   key: admin-password
-                  name: kube-prometheus-stack-grafana
+                  name: grafana-admin-secret
             - name: REQ_URL
               value: http://localhost:3000/api/admin/provisioning/dashboards/reload
             - name: REQ_METHOD
@@ -89,12 +88,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: admin-user
-                  name: kube-prometheus-stack-grafana
+                  name: grafana-admin-secret
             - name: REQ_PASSWORD
               valueFrom:
                 secretKeyRef:
                   key: admin-password
-                  name: kube-prometheus-stack-grafana
+                  name: grafana-admin-secret
             - name: REQ_URL
               value: http://localhost:3000/api/admin/provisioning/datasources/reload
             - name: REQ_METHOD
@@ -123,12 +122,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: admin-user
-                  name: kube-prometheus-stack-grafana
+                  name: grafana-admin-secret
             - name: GF_SECURITY_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
                   key: admin-password
-                  name: kube-prometheus-stack-grafana
+                  name: grafana-admin-secret
             - name: GF_PATHS_DATA
               value: /var/lib/grafana/
             - name: GF_PATHS_LOGS
@@ -190,18 +189,18 @@ spec:
         runAsGroup: 472
         runAsNonRoot: true
         runAsUser: 472
-      serviceAccountName: kube-prometheus-stack-grafana
+      serviceAccountName: grafana
       shareProcessNamespace: false
       volumes:
         - configMap:
-            name: kube-prometheus-stack-grafana
+            name: grafana
           name: config
         - emptyDir: {}
           name: storage
         - emptyDir: {}
           name: sc-dashboard-volume
         - configMap:
-            name: kube-prometheus-stack-grafana-config-dashboards
+            name: grafana-config-dashboards
           name: sc-dashboard-provider
         - emptyDir: {}
           name: sc-datasources-volume

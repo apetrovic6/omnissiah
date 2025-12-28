@@ -1,23 +1,23 @@
 apiVersion: v1
-kind: Service
+kind: Endpoints
 metadata:
   labels:
-    app: kube-prometheus-stack-kube-etcd
+    app: kube-prometheus-stack-kube-scheduler
     app.kubernetes.io/instance: kube-prometheus-stack
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/part-of: kube-prometheus-stack
     app.kubernetes.io/version: 80.8.0
     chart: kube-prometheus-stack-80.8.0
     heritage: Helm
-    jobLabel: kube-etcd
+    k8s-app: kube-scheduler
     release: kube-prometheus-stack
-  name: prometheus-kube-etcd
+  name: prometheus-kube-scheduler
   namespace: kube-system
-spec:
-  clusterIP: None
-  ports:
-    - name: http-metrics
-      port: 2381
-      protocol: TCP
-      targetPort: 2381
-  type: ClusterIP
+subsets:
+  - addresses:
+      - ip: 192.168.1.48
+      - ip: 192.168.1.59
+    ports:
+      - name: http-metrics
+        port: 10259
+        protocol: TCP

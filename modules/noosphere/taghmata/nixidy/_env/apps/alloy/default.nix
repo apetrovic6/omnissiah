@@ -65,7 +65,6 @@
       };
     };
 
-
     resources.alloys.default = {
       metadata = {
         namespace = "observability";

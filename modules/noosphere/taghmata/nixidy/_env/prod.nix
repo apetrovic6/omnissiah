@@ -6,7 +6,7 @@
     ./apps/cloudnative-pg
     ./apps/metallb
     ./apps/sops-secrets-operator
-    ./apps/alloy
+    # ./apps/alloy
     ./apps/cert-manager
     ./apps/zitadel
     ./apps/prometheus-stack

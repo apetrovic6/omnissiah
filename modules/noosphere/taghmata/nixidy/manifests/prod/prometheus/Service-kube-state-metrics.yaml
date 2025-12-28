@@ -1,5 +1,5 @@
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+apiVersion: v1
+kind: Service
 metadata:
   labels:
     app.kubernetes.io/component: metrics
@@ -10,14 +10,15 @@ metadata:
     app.kubernetes.io/version: 2.17.0
     helm.sh/chart: kube-state-metrics-7.0.0
     release: kube-prometheus-stack
-  name: kube-prometheus-stack-kube-state-metrics
+  name: kube-state-metrics
   namespace: observability
 spec:
-  endpoints:
-    - honorLabels: true
-      port: http
-  jobLabel: app.kubernetes.io/name
+  ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: http
   selector:
-    matchLabels:
-      app.kubernetes.io/instance: kube-prometheus-stack
-      app.kubernetes.io/name: kube-state-metrics
+    app.kubernetes.io/instance: kube-prometheus-stack
+    app.kubernetes.io/name: kube-state-metrics
+  type: ClusterIP
