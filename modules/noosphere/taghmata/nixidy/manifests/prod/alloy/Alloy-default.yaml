@@ -4,10 +4,6 @@ metadata:
   name: default
   namespace: observability
 spec:
-  alloy:
-    clustering:
-      enabled: true
-      name: omnissiah
   configMap:
     content: |
       discovery.kubernetes "operator_pods" {
@@ -35,13 +31,3 @@ spec:
       #     url = "http://prometheus-server.prometheus.svc:9090/api/v1/write"
       #   }
       # }
-  controller:
-    replicas: 3
-    type: daemonset
-  ingress:
-    enabled: true
-    hosts:
-      - alloy.noosphere.uk
-    ingressClassName: traefik
-    tls:
-      - alloy-tls
