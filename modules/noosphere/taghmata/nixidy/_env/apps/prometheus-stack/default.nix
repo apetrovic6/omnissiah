@@ -1,17 +1,23 @@
 {charts, ...}: {
+  applications.prometheus-crds = {
+    namespace = "observability";
+    helm.releases.prometheus-operator-crds = {
+      chart = charts.prometheus-community.prometheus-operator-crds;
+    };
+  };
+   
   applications.prometheus = {
     namespace = "observability";
     createNamespace = true;
 
-    helm.releases.kube-prometheus-stack =
-let
-          endpoints = [ "192.168.1.48" "192.168.1.59" ];
-in
-     {
+    helm.releases.kube-prometheus-stack = let
+      endpoints = ["192.168.1.48" "192.168.1.59"];
+    in {
       chart = charts.prometheus-community.kube-prometheus-stack;
-      includeCRDs = true;
+      includeCRDs = false;
 
       values = {
+        crds.enabled = true;
         fullnameOverride = "prometheus";
 
         alertManager = {
@@ -41,7 +47,7 @@ in
             metricRelabelings = [
               {
                 action = "replace";
-                sourceLabels = [ "node" ];
+                sourceLabels = ["node"];
                 targetLabel = "instance";
               }
             ];
@@ -54,7 +60,7 @@ in
         };
 
         coredDns.enabled = true;
-        
+
         kubeEtcd = {
           enabled = true;
           inherit endpoints;
