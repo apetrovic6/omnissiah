@@ -1,5 +1,4 @@
 {charts, ...}: {
-
   applications.zitadel = let
     namespace = "zitadel";
   in {
@@ -193,4 +192,5 @@
         monitoring.enablePodMonitor = true;
       };
     };
-  };}
+  };
+}

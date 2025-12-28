@@ -1,5 +1,4 @@
-{charts,...}: {
-
+{charts, ...}: {
   applications.prometheus = {
     namespace = "observability";
     createNamespace = true;
@@ -11,10 +10,9 @@
         # ingress = {
         #   enabled = true;
         #   ingressClassName = "traefik";
-        #   hosts = 
+        #   hosts =
         # };
       };
     };
   };
-
 }

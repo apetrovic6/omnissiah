@@ -195,7 +195,7 @@
           chart = nixhelm.chartsDerivations.${system}.grafana.alloy-operator;
         };
 
-        packages.kube-prometheus-stack= inputs.nixidy.packages.${system}.generators.fromChartCRD {
+        packages.kube-prometheus-stack = inputs.nixidy.packages.${system}.generators.fromChartCRD {
           name = "kube-prometheus-stack";
           chart = nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
         };

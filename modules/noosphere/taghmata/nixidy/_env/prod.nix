@@ -9,6 +9,7 @@
     ./apps/alloy
     ./apps/cert-manager
     ./apps/zitadel
+    ./apps/prometheus-stack
   ];
 
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
@@ -30,6 +31,8 @@
     ../_generated/cloudnativepg-crd.nix
     ../_generated/longhorn-crd.nix
     ../_generated/traefik-crd.nix
+    ../_generated/alloy-operator-crd.nix
+    ../_generated/kube-prometheus-stack-crd.nix
   ];
 
   nixidy.defaults.syncPolicy.autoSync = {
@@ -37,8 +40,6 @@
     prune = true;
     selfHeal = true;
   };
-
-
 
   # applications.seerr = {
   #   namespace = "yarr";
