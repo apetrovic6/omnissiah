@@ -41,7 +41,7 @@ spec:
             - containerPort: 5055
           volumeMounts:
             - mountPath: /app/config
-              name: seer-vol
+              name: seerr-vol
       volumes:
         - name: seerr-vol
           persistentVolumeClaim:

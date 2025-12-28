@@ -61,7 +61,7 @@ in {
               image = "fallenbagel/jellyseerr:2.7.3";
               volumeMounts = [
                 {
-                  name = "seer-vol";
+                  name = "seerr-vol";
                   mountPath = "/app/config";
                 }
               ];
