@@ -42,13 +42,13 @@
     selfHeal = true;
   };
 
-  applications.prometheus = {
-    namespace = "observability";
-    helm.releases.prometheus = {
-      chart = charts.prometheus-community.prometheus;
-      values = {};
-    };
-  };
+  # applications.prometheus = {
+  #   namespace = "observability";
+  #   helm.releases.prometheus = {
+  #     chart = charts.prometheus-community.prometheus;
+  #     values = {};
+  #   };
+  # };
 
   # applications.seerr = {
   #   namespace = "yarr";
