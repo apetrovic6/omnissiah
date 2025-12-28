@@ -1,5 +1,11 @@
 {...}: {
   applications.seerr = {
+    resources.namespaces.yarr = {
+      metadata = {
+        name = "yarr";
+        labels.name = "yarr";
+      };
+    };
     resources.deployments.seerr = {
       metadata = {
         name = "seerr-deployment";

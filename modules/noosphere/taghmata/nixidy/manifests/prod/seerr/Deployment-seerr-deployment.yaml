@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: seerr
+  name: seerr-deployment
+  namespace: yarr
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: seerr
+  template:
+    metadata:
+      labels:
+        app: seerr
+    spec:
+      containers:
+        - image: fallenbagel/jellyseerr:2.7.3
+          name: jellyserr
+          ports:
+            - containerPort: 5055

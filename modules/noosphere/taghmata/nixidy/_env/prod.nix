@@ -10,6 +10,7 @@
     ./apps/cert-manager
     ./apps/zitadel
     ./apps/prometheus-stack
+    ./apps/yarr/seerr
   ];
 
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
