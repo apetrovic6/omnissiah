@@ -93,11 +93,11 @@
               forward_to = [prometheus.remote_write.local_prom.receiver]
             }
 
-            # prometheus.remote_write "local_prom" {
-            #   endpoint {
-            #     url = "http://prometheus-server.prometheus.svc:9090/api/v1/write"
-            #   }
-            # }
+             prometheus.remote_write "local_prom" {
+               endpoint {
+                 url = "http://prometheus-prometheus.observability.svc:9090/api/v1/write"
+               }
+             }
           '';
         };
 
