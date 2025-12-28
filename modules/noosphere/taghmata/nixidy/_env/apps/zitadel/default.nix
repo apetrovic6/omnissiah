@@ -144,7 +144,7 @@
         login = {
           enabled = true;
           ingress = {
-            enabled = true;
+            enabled = false;
             className = "traefik";
           };
         };
