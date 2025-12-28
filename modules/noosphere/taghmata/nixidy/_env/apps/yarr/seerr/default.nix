@@ -41,13 +41,20 @@
 
     resources.services.seerr = {
       metadata = {
-        name = "seerr-service";
         namespace = "yarr";
       };
       spec = {
+        type = "ClusterIP";
         selector = {
           name = "seerr";
         };
+        ports = [
+          {
+            protocol = "TCP";
+            port = 80;
+            targetPort = 5055;
+          }
+        ];
       };
     };
   };

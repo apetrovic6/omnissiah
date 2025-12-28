@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: seerr
+  namespace: yarr
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 5055
+  selector:
+    name: seerr
+  type: ClusterIP
