@@ -5,8 +5,8 @@
       chart = charts.prometheus-community.prometheus-operator-crds;
     };
   };
-   
-  applications.prometheus = {
+
+  applications.prometheus-grafana = {
     namespace = "observability";
     createNamespace = true;
 
@@ -123,6 +123,58 @@
             encrypted_suffix: Templates
             version: 3.11.0
       ''
+
+      ''
+        apiVersion: cert-manager.io/v1
+        kind: Certificate
+        metadata:
+          name: grafana-tls
+          namespace: observability
+        spec:
+          secretName: grafana-tls
+          issuerRef:
+            kind: ClusterIssuer
+            name: letsencrypt-cloudflare
+          dnsNames:
+            - grafana.noosphere.uk
+      ''
     ];
+
+    resources.ingresses.grafana-ip-root = {
+      metadata = {
+        namespace = "observability";
+
+        annotations = {
+          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+        };
+      };
+
+      spec = {
+        ingressClassName = "traefik";
+
+        tls = [
+          {
+            secretName = "grafana-tls";
+            hosts = ["grafana.noosphere.uk"];
+          }
+        ];
+
+        rules = [
+          {
+            host = "grafana.noosphere.uk";
+            http.paths = [
+              {
+                path = "/";
+                pathType = "Prefix";
+                backend.service = {
+                  name = "grafana";
+                  port.number = 80;
+                };
+              }
+            ];
+          }
+        ];
+      };
+    };
   };
 }

@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: grafana-ip-root
+  namespace: observability
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: grafana.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - grafana.noosphere.uk
+      secretName: grafana-tls

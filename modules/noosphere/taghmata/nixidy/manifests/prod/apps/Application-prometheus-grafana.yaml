@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: prometheus
+  name: prometheus-grafana
   namespace: argocd
 spec:
   destination:
@@ -9,7 +9,7 @@ spec:
     server: https://kubernetes.default.svc
   project: default
   source:
-    path: ./modules/noosphere/taghmata/nixidy/manifests/prod/prometheus
+    path: ./modules/noosphere/taghmata/nixidy/manifests/prod/prometheus-grafana
     repoURL: https://github.com/apetrovic6/omnissiah.git
     targetRevision: master
   syncPolicy:
