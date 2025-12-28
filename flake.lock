@@ -1392,15 +1392,15 @@
         "poetry2nix": "poetry2nix"
       },
       "locked": {
-        "lastModified": 1766194436,
-        "narHash": "sha256-SEyBMyZ6KlB3la6Sl5Muh7bGWyTQhXlBKqlnCmKmeM0=",
-        "owner": "nix-community",
+        "lastModified": 1766917885,
+        "narHash": "sha256-WMODfyQHmbjDUkwJkBUk4dY3jv5MJL3MvMLzwglJsus=",
+        "owner": "apetrovic6",
         "repo": "nixhelm",
-        "rev": "ed74b9e2b457b42cdfd11cbf1b1332dd807d511e",
+        "rev": "508cb55493de585a49902c0d549bf7dc29d8e363",
         "type": "github"
       },
       "original": {
-        "owner": "nix-community",
+        "owner": "apetrovic6",
         "repo": "nixhelm",
         "type": "github"
       }

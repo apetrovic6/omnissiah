@@ -5,155 +5,158 @@
   config,
   ...
 }:
-with lib; let
+
+with lib;
+
+let
   hasAttrNotNull = attr: set: hasAttr attr set && set.${attr} != null;
 
-  attrsToList = values:
-    if values != null
-    then
+  attrsToList =
+    values:
+    if values != null then
       sort (
         a: b:
-          if (hasAttrNotNull "_priority" a && hasAttrNotNull "_priority" b)
-          then a._priority < b._priority
-          else false
+        if (hasAttrNotNull "_priority" a && hasAttrNotNull "_priority" b) then
+          a._priority < b._priority
+        else
+          false
       ) (mapAttrsToList (n: v: v) values)
-    else values;
+    else
+      values;
 
-  getDefaults = resource: group: version: kind:
+  getDefaults =
+    resource: group: version: kind:
     catAttrs "default" (
       filter (
         default:
-          (default.resource == null || default.resource == resource)
-          && (default.group == null || default.group == group)
-          && (default.version == null || default.version == version)
-          && (default.kind == null || default.kind == kind)
-      )
-      config.defaults
+        (default.resource == null || default.resource == resource)
+        && (default.group == null || default.group == group)
+        && (default.version == null || default.version == version)
+        && (default.kind == null || default.kind == kind)
+      ) config.defaults
     );
 
-  types =
-    lib.types
-    // rec {
-      str = mkOptionType {
-        name = "str";
-        description = "string";
-        check = isString;
-        merge = mergeEqualOption;
-      };
-
-      # Either value of type `finalType` or `coercedType`, the latter is
-      # converted to `finalType` using `coerceFunc`.
-      coercedTo = coercedType: coerceFunc: finalType:
-        mkOptionType rec {
-          inherit (finalType) getSubOptions getSubModules;
-
-          name = "coercedTo";
-          description = "${finalType.description} or ${coercedType.description}";
-          check = x: finalType.check x || coercedType.check x;
-          merge = loc: defs: let
-            coerceVal = val:
-              if finalType.check val
-              then val
-              else let
-                coerced = coerceFunc val;
-              in
-                assert finalType.check coerced; coerced;
-          in
-            finalType.merge loc (map (def: def // {value = coerceVal def.value;}) defs);
-          substSubModules = m: coercedTo coercedType coerceFunc (finalType.substSubModules m);
-          typeMerge = t1: t2: null;
-          functor =
-            (defaultFunctor name)
-            // {
-              wrapped = finalType;
-            };
-        };
+  types = lib.types // rec {
+    str = mkOptionType {
+      name = "str";
+      description = "string";
+      check = isString;
+      merge = mergeEqualOption;
     };
+
+    # Either value of type `finalType` or `coercedType`, the latter is
+    # converted to `finalType` using `coerceFunc`.
+    coercedTo =
+      coercedType: coerceFunc: finalType:
+      mkOptionType rec {
+        inherit (finalType) getSubOptions getSubModules;
+
+        name = "coercedTo";
+        description = "${finalType.description} or ${coercedType.description}";
+        check = x: finalType.check x || coercedType.check x;
+        merge =
+          loc: defs:
+          let
+            coerceVal =
+              val:
+              if finalType.check val then
+                val
+              else
+                let
+                  coerced = coerceFunc val;
+                in
+                assert finalType.check coerced;
+                coerced;
+
+          in
+          finalType.merge loc (map (def: def // { value = coerceVal def.value; }) defs);
+        substSubModules = m: coercedTo coercedType coerceFunc (finalType.substSubModules m);
+        typeMerge = t1: t2: null;
+        functor = (defaultFunctor name) // {
+          wrapped = finalType;
+        };
+      };
+  };
 
   mkOptionDefault = mkOverride 1001;
 
-  mergeValuesByKey = attrMergeKey: listMergeKeys: values:
+  mergeValuesByKey =
+    attrMergeKey: listMergeKeys: values:
     listToAttrs (
       imap0 (
         i: value:
-          nameValuePair (
-            if hasAttr attrMergeKey value
-            then
-              if isAttrs value.${attrMergeKey}
-              then toString value.${attrMergeKey}.content
-              else (toString value.${attrMergeKey})
+        nameValuePair (
+          if hasAttr attrMergeKey value then
+            if isAttrs value.${attrMergeKey} then
+              toString value.${attrMergeKey}.content
             else
-              # generate merge key for list elements if it's not present
-              "__kubenix_list_merge_key_"
-              + (concatStringsSep "" (
-                map (
-                  key:
-                    if isAttrs value.${key}
-                    then toString value.${key}.content
-                    else (toString value.${key})
-                )
-                listMergeKeys
-              ))
-          ) (value // {_priority = i;})
-      )
-      values
+              (toString value.${attrMergeKey})
+          else
+            # generate merge key for list elements if it's not present
+            "__kubenix_list_merge_key_"
+            + (concatStringsSep "" (
+              map (
+                key: if isAttrs value.${key} then toString value.${key}.content else (toString value.${key})
+              ) listMergeKeys
+            ))
+        ) (value // { _priority = i; })
+      ) values
     );
 
-  submoduleOf = ref:
+  submoduleOf =
+    ref:
     types.submodule (
-      {name, ...}: {
-        options = definitions."${ref}".options or {};
-        config = definitions."${ref}".config or {};
+      { name, ... }:
+      {
+        options = definitions."${ref}".options or { };
+        config = definitions."${ref}".config or { };
       }
     );
 
-  globalSubmoduleOf = ref:
+  globalSubmoduleOf =
+    ref:
     types.submodule (
-      {name, ...}: {
-        options = config.definitions."${ref}".options or {};
-        config = config.definitions."${ref}".config or {};
+      { name, ... }:
+      {
+        options = config.definitions."${ref}".options or { };
+        config = config.definitions."${ref}".config or { };
       }
     );
 
-  submoduleWithMergeOf = ref: mergeKey:
+  submoduleWithMergeOf =
+    ref: mergeKey:
     types.submodule (
-      {name, ...}: let
-        convertName = name:
-          if definitions."${ref}".options.${mergeKey}.type == types.int
-          then toInt name
-          else name;
-      in {
-        options =
-          definitions."${ref}".options
-          // {
-            # position in original array
-            _priority = mkOption {
-              type = types.nullOr types.int;
-              default = null;
-              internal = true;
-            };
+      { name, ... }:
+      let
+        convertName =
+          name: if definitions."${ref}".options.${mergeKey}.type == types.int then toInt name else name;
+      in
+      {
+        options = definitions."${ref}".options // {
+          # position in original array
+          _priority = mkOption {
+            type = types.nullOr types.int;
+            default = null;
+            internal = true;
           };
-        config =
-          definitions."${ref}".config
-          // {
-            ${mergeKey} = mkOverride 1002 (
-              # use name as mergeKey only if it is not coming from mergeValuesByKey
-              if (!hasPrefix "__kubenix_list_merge_key_" name)
-              then convertName name
-              else null
-            );
-          };
+        };
+        config = definitions."${ref}".config // {
+          ${mergeKey} = mkOverride 1002 (
+            # use name as mergeKey only if it is not coming from mergeValuesByKey
+            if (!hasPrefix "__kubenix_list_merge_key_" name) then convertName name else null
+          );
+        };
       }
     );
 
-  submoduleForDefinition = ref: resource: kind: group: version: let
-    apiVersion =
-      if group == "core"
-      then version
-      else "${group}/${version}";
-  in
+  submoduleForDefinition =
+    ref: resource: kind: group: version:
+    let
+      apiVersion = if group == "core" then version else "${group}/${version}";
+    in
     types.submodule (
-      {name, ...}: {
+      { name, ... }:
+      {
         inherit (definitions."${ref}") options;
 
         imports = getDefaults resource group version kind;
@@ -170,32 +173,35 @@ with lib; let
       }
     );
 
-  coerceAttrsOfSubmodulesToListByKey = ref: attrMergeKey: listMergeKeys: (types.coercedTo (types.listOf (submoduleOf ref)) (mergeValuesByKey attrMergeKey listMergeKeys) (
-    types.attrsOf (submoduleWithMergeOf ref attrMergeKey)
-  ));
+  coerceAttrsOfSubmodulesToListByKey =
+    ref: attrMergeKey: listMergeKeys:
+    (types.coercedTo (types.listOf (submoduleOf ref)) (mergeValuesByKey attrMergeKey listMergeKeys) (
+      types.attrsOf (submoduleWithMergeOf ref attrMergeKey)
+    ));
 
   definitions = {
     "collectors.grafana.com.v1alpha1.Alloy" = {
+
       options = {
         "apiVersion" = mkOption {
           description = "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = types.nullOr types.str;
+          type = (types.nullOr types.str);
         };
         "kind" = mkOption {
           description = "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = types.nullOr types.str;
+          type = (types.nullOr types.str);
         };
         "metadata" = mkOption {
           description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
         };
         "spec" = mkOption {
           description = "Spec defines the desired state of Alloy";
-          type = types.nullOr types.attrs;
+          type = (types.nullOr types.attrs);
         };
         "status" = mkOption {
           description = "Status defines the observed state of Alloy";
-          type = types.nullOr types.attrs;
+          type = (types.nullOr types.attrs);
         };
       };
 
@@ -206,38 +212,42 @@ with lib; let
         "spec" = mkOverride 1002 null;
         "status" = mkOverride 1002 null;
       };
+
     };
+
   };
-in {
+in
+{
   # all resource versions
   options = {
-    resources =
-      {
-        "collectors.grafana.com"."v1alpha1"."Alloy" = mkOption {
-          description = "Alloy is the Schema for the alloys API";
-          type = (
-            types.attrsOf (
-              submoduleForDefinition "collectors.grafana.com.v1alpha1.Alloy" "alloys" "Alloy"
+    resources = {
+      "collectors.grafana.com"."v1alpha1"."Alloy" = mkOption {
+        description = "Alloy is the Schema for the alloys API";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "collectors.grafana.com.v1alpha1.Alloy" "alloys" "Alloy"
               "collectors.grafana.com"
               "v1alpha1"
-            )
-          );
-          default = {};
-        };
-      }
-      // {
-        "alloys" = mkOption {
-          description = "Alloy is the Schema for the alloys API";
-          type = (
-            types.attrsOf (
-              submoduleForDefinition "collectors.grafana.com.v1alpha1.Alloy" "alloys" "Alloy"
-              "collectors.grafana.com"
-              "v1alpha1"
-            )
-          );
-          default = {};
-        };
+          )
+        );
+        default = { };
       };
+
+    }
+    // {
+      "alloys" = mkOption {
+        description = "Alloy is the Schema for the alloys API";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "collectors.grafana.com.v1alpha1.Alloy" "alloys" "Alloy"
+              "collectors.grafana.com"
+              "v1alpha1"
+          )
+        );
+        default = { };
+      };
+
+    };
   };
 
   config = {
@@ -257,6 +267,7 @@ in {
 
     resources = {
       "collectors.grafana.com"."v1alpha1"."Alloy" = mkAliasDefinitions options.resources."alloys";
+
     };
 
     # make all namespaced resources default to the

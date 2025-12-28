@@ -46,7 +46,7 @@
     };
 
     nixhelm = {
-      url = "github:nix-community/nixhelm";
+      url = "github:apetrovic6/nixhelm";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -190,6 +190,16 @@
           chart = nixhelm.chartsDerivations.${system}.traefik.traefik;
         };
 
+        packages.alloy-operator = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "alloy-operator";
+          chart = nixhelm.chartsDerivations.${system}.grafana.alloy-operator;
+        };
+
+        packages.kube-prometheus-stack= inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "kube-prometheus-stack";
+          chart = nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
+        };
+
         # packages.zitadel= inputs.nixidy.packages.${system}.generators.fromChartCRD {
         #   name = "zitadel";
         #   chart = nixhelm.chartsDerivations.${system}.zitadel.zitadel;
@@ -232,6 +242,11 @@
                 echo "generate traefik crds"
                 cat ${self'.packages.traefik} > ${path}/traefik-crd.nix
 
+                echo "generate alloy operator crds"
+                cat ${self'.packages.alloy-operator} > ${path}/alloy-operator-crd.nix
+
+                echo "generate kube prometheus stack crds"
+                cat ${self'.packages.kube-prometheus-stack} > ${path}/kube-prometheus-stack-crd.nix
               '').outPath;
           };
         };
