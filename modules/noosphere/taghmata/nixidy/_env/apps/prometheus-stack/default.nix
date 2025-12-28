@@ -8,7 +8,7 @@
       includeCRDs= true;
 
       values = {
-
+        fullnameOverride = "prometheus";
         # ingress = {
         #   enabled = true;
         #   ingressClassName = "traefik";
