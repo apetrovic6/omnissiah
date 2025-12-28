@@ -176,12 +176,12 @@
         instances = 2;
         storage = {
           storageClass = "longhorn-cnpg-strict-local";
-          size = "10Gi";
+          size = "2Gi";
         };
 
         walStorage = {
           storageClass = "longhorn-cnpg-strict-local";
-          size = "10Gi";
+          size = "2Gi";
         };
 
         postgresql.parameters = {
