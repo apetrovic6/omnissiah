@@ -44,6 +44,32 @@
 
     yamls = [
       ''
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: zitadel-ip-root
+          namespace: zitadel
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        spec:
+          ingressClassName: traefik
+          tls:
+            - secretName: zitadel-tls
+              hosts:
+                - zitadel.noosphere.uk
+          rules:
+            - host: zitadel.noosphere.uk
+              http:
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                      service:
+                        name: zitadel-service
+                        port:
+                          number: 80
+      ''
+      ''
         apiVersion: cert-manager.io/v1
         kind: Certificate
         metadata:
