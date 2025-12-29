@@ -47,8 +47,8 @@
               cm.oidc.config = ''
                 name: Zitadel
                 issuer: https://zitadel.noosphere.uk
-                clientID: $zitadel-secret:oidc.zitadel.clientId
-                clientSecret: $zitadel-secret:oidc.zitadel.clientSecret
+                clientID: $zitadel-argocd-secret:oidc.zitadel.clientId
+                clientSecret: $zitadel-argocd-secret:oidc.zitadel.clientSecret
                 requestedScopes:
                   - openid
                   - profile

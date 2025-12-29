@@ -29,26 +29,24 @@
        clientSecret="$(tr -d '\r\n' < "$prompts/client-secret")"
 
 
-        sops encrypt \
-          --age "${ageKey}" \
-          --encrypted-suffix "Templates" \
-          --input-type yaml --output-type yaml \
-          /dev/stdin > "$out/${fileName}" <<EOF
-        apiVersion: isindir.github.com/v1alpha3
-        kind: SopsSecret
-        metadata:
-          name: ${fileName}
-          namespace: yarr
-        spec:
-          secretTemplates:
-            - name: ${fileName}
-              labels:
-                cnpg.io/reload: "true"
-              type: Opaque
-              stringData:
-                oidc.zitadel.clientId: "$clientId"
-                oidc.zitadel.clientSecret: "$clientSecret"
-        EOF
+sops encrypt \
+  --age "${ageKey}" \
+  --encrypted-suffix "Templates" \
+  --input-type yaml --output-type yaml \
+  /dev/stdin > "$out/${fileName}" <<EOF
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+  name: ${fileName}
+  namespace: argocd
+spec:
+  secretTemplates:
+    - name: ${fileName}
+      type: Opaque
+      stringData:
+        "oidc.zitadel.clientId": "$clientId"
+        "oidc.zitadel.clientSecret": "$clientSecret"
+EOF
       '';
     };
   };
