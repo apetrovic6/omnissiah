@@ -27,12 +27,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: username
-                  name: pg-yarr-app
+                  name: pg-yarr-seerr
             - name: DB_PASS
               valueFrom:
                 secretKeyRef:
                   key: password
-                  name: pg-yarr-app
+                  name: pg-yarr-seerr
             - name: DB_NAME
               value: seerr
           image: fallenbagel/jellyseerr:2.7.3

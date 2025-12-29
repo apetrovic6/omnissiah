@@ -85,7 +85,7 @@ in {
                 {
                   name = "DB_USER";
                   valueFrom.secretKeyRef = {
-                    name = "pg-yarr-app";
+                    name = "pg-yarr-seerr";
                     key = "username";
                   };
                 }
@@ -93,7 +93,7 @@ in {
                 {
                   name = "DB_PASS";
                   valueFrom.secretKeyRef = {
-                    name = "pg-yarr-app";
+                    name = "pg-yarr-seerr";
                     key = "password";
                   };
                 }
