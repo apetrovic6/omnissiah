@@ -41,6 +41,31 @@
           hash = "sha256-7HpAvR4N6mtkVSG9EDTGY4acVIBrhYkGUNicXBe83SQ=";
           createNamespace = true;
           targetNamespace = "argocd";
+
+          values = {
+            configs = {
+              cm.oidc.config = ''
+                name: Zitadel
+                issuer: https://zitadel.noosphere.uk
+                clientID: $zitadel-secret:oidc.zitadel.clientId
+                clientSecret: $zitadel-secret:oidc.zitadel.clientSecret
+                requestedScopes:
+                  - openid
+                  - profile
+                  - email
+                  - groups
+                logoutURL: https://zitadel.noosphere.uk/oidc/v1/end_session
+              '';
+              rbac = {
+                policy.default = "";
+                scopes = "[groups]";
+                policy.csv = ''
+                  g, argocd_administrators, role:admin
+                  g, argocd_users, role:readonly
+                '';
+              };
+            };
+          };
         };
       };
     };

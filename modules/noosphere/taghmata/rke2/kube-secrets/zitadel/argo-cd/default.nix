@@ -1,52 +1,53 @@
 {...}: let
   ageKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
-in {
+  fileName = "zitadel-argocd-secret";
+ in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
-    clan.core.vars.generators."pg-seerr-sopssecret" = {
+    clan.core.vars.generators.${fileName}= {
       share = true;
 
-      prompts.pg-seerr-username = {
-        description = "DB Username";
+      prompts.client-id= {
+        description = "Client ID";
         type = "line";
         persist = false;
       };
 
-      prompts.pg-seerr-password = {
-        description = "DB Password";
+      prompts.client-secret= {
+        description = "Client Secret";
         type = "hidden";
         persist = false;
       };
 
-      files."pg-seerr-sopssecret".secret = false;
+      files.${fileName}.secret = false;
 
       runtimeInputs = [pkgs.coreutils pkgs.sops];
 
       script = ''
-                set -euo pipefail
+       set -euo pipefail
 
-                username="$(tr -d '\r\n' < "$prompts/pg-seerr-username")"
-                password="$(tr -d '\r\n' < "$prompts/pg-seerr-password")"
+       clientId="$(tr -d '\r\n' < "$prompts/client-id")"
+       clientSecret="$(tr -d '\r\n' < "$prompts/client-secret")"
 
 
         sops encrypt \
           --age "${ageKey}" \
           --encrypted-suffix "Templates" \
           --input-type yaml --output-type yaml \
-          /dev/stdin > "$out/pg-seerr-sopssecret" <<EOF
+          /dev/stdin > "$out/${fileName}" <<EOF
         apiVersion: isindir.github.com/v1alpha3
         kind: SopsSecret
         metadata:
-          name: pg-seerr-password
+          name: ${fileName}
           namespace: yarr
         spec:
           secretTemplates:
-            - name: pg-seerr-password
+            - name: ${fileName}
               labels:
                 cnpg.io/reload: "true"
               type: Opaque
               stringData:
-                username: "$username"
-                password: "$password"
+                oidc.zitadel.clientId: "$clientId"
+                oidc.zitadel.clientSecret: "$clientSecret"
         EOF
       '';
     };
