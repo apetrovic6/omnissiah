@@ -90,6 +90,9 @@
       includeCRDs = true;
 
       values = {
+        annotations = {
+          "argocd.argoproj.io/sync-wave" = "10";
+        };
         env = [
           {
             name = "ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD";
@@ -160,6 +163,9 @@
     resources.clusters.pg-zitadel = {
       metadata = {
         inherit namespace;
+        annotations = {
+          "argocd.argoproj.io/sync-wave" = "0";
+        };
       };
 
       spec = {

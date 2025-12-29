@@ -1,18 +1,18 @@
 {...}: let
   ageKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
   fileName = "zitadel-argocd-secret";
- in {
+in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
-    clan.core.vars.generators.${fileName}= {
+    clan.core.vars.generators.${fileName} = {
       share = true;
 
-      prompts.client-id= {
+      prompts.client-id = {
         description = "Client ID";
         type = "line";
         persist = false;
       };
 
-      prompts.client-secret= {
+      prompts.client-secret = {
         description = "Client Secret";
         type = "hidden";
         persist = false;
@@ -23,30 +23,32 @@
       runtimeInputs = [pkgs.coreutils pkgs.sops];
 
       script = ''
-       set -euo pipefail
+               set -euo pipefail
 
-       clientId="$(tr -d '\r\n' < "$prompts/client-id")"
-       clientSecret="$(tr -d '\r\n' < "$prompts/client-secret")"
+               clientId="$(tr -d '\r\n' < "$prompts/client-id")"
+               clientSecret="$(tr -d '\r\n' < "$prompts/client-secret")"
 
 
-sops encrypt \
-  --age "${ageKey}" \
-  --encrypted-suffix "Templates" \
-  --input-type yaml --output-type yaml \
-  /dev/stdin > "$out/${fileName}" <<EOF
-apiVersion: isindir.github.com/v1alpha3
-kind: SopsSecret
-metadata:
-  name: ${fileName}
-  namespace: argocd
-spec:
-  secretTemplates:
-    - name: ${fileName}
-      type: Opaque
-      stringData:
-        "oidc.zitadel.clientId": "$clientId"
-        "oidc.zitadel.clientSecret": "$clientSecret"
-EOF
+        sops encrypt \
+          --age "${ageKey}" \
+          --encrypted-suffix "Templates" \
+          --input-type yaml --output-type yaml \
+          /dev/stdin > "$out/${fileName}" <<EOF
+        apiVersion: isindir.github.com/v1alpha3
+        kind: SopsSecret
+        metadata:
+          name: ${fileName}
+          namespace: argocd
+        spec:
+          secretTemplates:
+            - name: ${fileName}
+              labels:
+                app.kubernetes.io/part-of: argocd
+              type: Opaque
+              stringData:
+                "oidc.zitadel.clientId": "$clientId"
+                "oidc.zitadel.clientSecret": "$clientSecret"
+        EOF
       '';
     };
   };
