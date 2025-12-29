@@ -5,23 +5,25 @@ metadata:
     namespace: argocd
 spec:
     secretTemplates:
-        - name: ENC[AES256_GCM,data:cKosmREvHT7+IWN9b1uRcc/SSUl/,iv:3h5xUkEZIW4G3M0Rl+v/BFHh/8bjTqSjg2+OP6gQaVw=,tag:QSbECxDPQ653eqPP94mK2A==,type:str]
-          type: ENC[AES256_GCM,data:6AG25IQz,iv:JpZkrpNvzFmIq760ovdy5wDdr+3C54k0EqPoLsykxgA=,tag:LuTxa3N8qzJlA4VXXx153Q==,type:str]
+        - name: ENC[AES256_GCM,data:b1+Cafa5NSyG6jUaxorpRsjSd8KW,iv:ocvyELrNFGHNkU80DQrwulW5MqXHX6KJBa8dYxLJv78=,tag:Q6gqts/Bhg439ZO28Ejh/A==,type:str]
+          labels:
+            app.kubernetes.io/part-of: ENC[AES256_GCM,data:NnvqQ0jq,iv:moIkBxWXaGLUwi2SU2K82G77P6kPRsXGTyNBmejQsgE=,tag:kHXo4Y+MQy6YjEpM+l9jpw==,type:str]
+          type: ENC[AES256_GCM,data:16ogNbE6,iv:AbZbWVecrvHv+5NfjETAT+KZ5vRXLoeciKWbGmcgT2c=,tag:siA/uGBRRK03pPOYdXRwYQ==,type:str]
           stringData:
-            oidc.zitadel.clientId: ENC[AES256_GCM,data:gr2H2n/i6x1kAUgHXH/T7BA/,iv:OLX5rdHK5uuqV6ZCpVJI2Lk+grV+xh/L++R/ndDB9iA=,tag:6DT4xsi1h+87eukxUTlaEg==,type:str]
-            oidc.zitadel.clientSecret: ENC[AES256_GCM,data:6TiV0hB24uZhiu+JM4Fb6II2iB9RGNy6obosXwFknMdLjiJKmC84OCVjK+U33mXEoueDhIqk2htrORIBvP78Ew==,iv:ahIx6Dbf1pz6kDbbJXXnmcwBIa7OVwnXb29VVZeJw3U=,tag:RIsoZTYcMHNXVbqAMhhzzw==,type:str]
+            oidc.zitadel.clientId: ENC[AES256_GCM,data:oJMPDxUtoCW6S86Yu1SM3fn7,iv:b2iOwfGC7dcqoEXbzmHXMYcnSsyaNBCPvw+B1xKNSgc=,tag:Ti10wU6FcZtseLIKFtRr/w==,type:str]
+            oidc.zitadel.clientSecret: ENC[AES256_GCM,data:TCebp5QAwdEprAeKlnB0+TWAYGWHRJLypEGczlFmiGmOtqcltJuIyyd+9iWfWJnIDaq/33FSt4FZ6jZSSLxcXA==,iv:KnRl567OIUzRWGhC/3NMpdmms9WfuMFzibCWeldaLhU=,tag:/sP/EDGtbACZMyrRShg/GQ==,type:str]
 sops:
     age:
         - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBUS1ozc2RPTUxVeEtLT0lF
-            c0p0MXpmS2VtNHVHNXp5M1o5QTlKMlowZW53CnpqcWVLZ256U2t4SFBzVm9aM0RV
-            a0dZc1FpU0tpTXRYdXRPRDFwcFNodkEKLS0tIFZuM3daRnpwdWVEanZkdDdxN1di
-            eXRlbFU3Mlk1NStqMEt5SWhjSU9yRkkKCre6JP77pf6E6ivbuULW1457Vda1TYSP
-            6hGM2x8OD6DNMsz4VKmwG5ib2leOGMUyftpINWWUUxu9g7QLkLYYJw==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBXUk5ZcDlkVFlaMVJvUmkx
+            NnorUHFLSjJjZ2JUUnF6a25jSmEvNDNGN2pvCk55bHBxQVRDdjlaT3FRcDZmUTBk
+            S3cxalcrcnRRN3VOaVc2QWlYazM4WjQKLS0tIG1xUElhQ3BEVitla1BRbWJETERE
+            OVlIN0l0TCs3cjFJUVVlQkRwdXhXcEUKMxA7y4qyAhR/qT409oVN8G7D0hFtqgQ0
+            pkxwsNG6ATk0WrpATM5sXzBoPIwhICU3uI2UxNLR0MGE0jXBV2PKtQ==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2025-12-29T15:56:26Z"
-    mac: ENC[AES256_GCM,data:lW756RS37ISDoXdtrg1lc2iZ4qY7ZnpX9LgbmBnB3SDYdhJZceX8ZSyjcwJ5mYF5xLPdNVVuaFqS83GWQTqD0K1FroBQMyWx2W9vohVJS94tmpG2s67xT1xwTzbFvKfqB8411nEGwlOHgbfb5knsvHJPL6T/zTjlxLGNLc5wc0s=,iv:bhJxpy2r+rlArJqxc5OmJ4+cxBpdu8GFDhizFglYiNk=,tag:Yx3iCrH7VVW0/rWOA8qTAg==,type:str]
+    lastmodified: "2025-12-29T17:07:52Z"
+    mac: ENC[AES256_GCM,data:4RPfCezcV5yJvd8esU4Xjg03c08TyPcPQ4bj674cZtVAG/e3LAw8bC3+EGeN54kkZ6vrOk8GCpjHKysDJoWKfltvfgNYtZiQzowEKQ6xswDOy6LGktko8mBetJc8dX9mIfIXKuaFmT5cLkVG8SU3iDpnfVG1MU5Jz+u1bQJMLZ8=,iv:h2GD6du1uiymJcitC5+uv72kWbSn31F31baPQugXJhk=,tag:ZL8xJqAolkRbl6kXkMIx5w==,type:str]
     encrypted_suffix: Templates
     version: 3.11.0
