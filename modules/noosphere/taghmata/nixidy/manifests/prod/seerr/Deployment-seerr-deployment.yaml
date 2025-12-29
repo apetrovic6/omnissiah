@@ -27,7 +27,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: username
-                  name: pg-seeerr-password
+                  name: pg-seerr-password
             - name: DB_PASS
               valueFrom:
                 secretKeyRef:

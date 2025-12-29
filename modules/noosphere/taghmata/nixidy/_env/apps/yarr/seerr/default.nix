@@ -85,7 +85,7 @@ in {
                 {
                   name = "DB_USER";
                   valueFrom.secretKeyRef = {
-                    name = "pg-seeerr-password";
+                    name = "pg-seerr-password";
                     key = "username";
                   };
                 }
