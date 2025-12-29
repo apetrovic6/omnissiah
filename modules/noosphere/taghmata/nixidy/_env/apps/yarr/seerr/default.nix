@@ -234,7 +234,7 @@ in {
         inherit namespace;
       };
       spec = {
-        name = "db-serr";
+        name = "seerr";
         owner = "seerr";
         cluster.name = "pg-yarr";
       };

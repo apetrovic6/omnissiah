@@ -6,5 +6,5 @@ metadata:
 spec:
   cluster:
     name: pg-yarr
-  name: db-serr
+  name: seerr
   owner: seerr
