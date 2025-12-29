@@ -42,34 +42,46 @@
           createNamespace = true;
           targetNamespace = "argocd";
 
-          values = {
+          values = let
+            domain = "noosphere.uk";
+          in {
             configs = {
-              cm.oidc.config = ''
-                name: Zitadel
-                issuer: https://zitadel.noosphere.uk
-                clientID: $zitadel-argocd-secret:oidc.zitadel.clientId
-                clientSecret: $zitadel-argocd-secret:oidc.zitadel.clientSecret
-                requestedScopes:
-                  - openid
-                  - profile
-                  - email
-                  - groups
-                logoutURL: https://zitadel.noosphere.uk/oidc/v1/end_session
-              '';
+              cm = {
+                "oidc.config" = ''
+                  name: Zitadel
+                  issuer: https://zitadel.${domain}
+                  clientID: $zitadel-argocd-secret:oidc.zitadel.clientId
+                  clientSecret: $zitadel-argocd-secret:oidc.zitadel.clientSecret
+                  requestedScopes:
+                    - openid
+                    - profile
+                    - email
+                    - groups
+                  logoutURL: https://zitadel.${domain}/oidc/v1/end_session
+                '';
+              };
+
+              params = {
+                "server.insecure" = true;
+              };
+
               rbac = {
-                policy.default = "";
+                "policy.default" = "";
                 scopes = "[groups]";
-                policy.csv = ''
+                "policy.csv" = ''
                   g, argocd_administrators, role:admin
                   g, argocd_users, role:readonly
                 '';
               };
             };
           };
+
+          extraDeploy = [
+            ../vars/shared/zitadel-argocd-secret/zitadel-argocd-secret/value
+          ];
         };
       };
     };
-
     services.imperium.taghmata.rke2.server = rec {
       enable = true;
       clusterName = "taghmata-omnissiah";

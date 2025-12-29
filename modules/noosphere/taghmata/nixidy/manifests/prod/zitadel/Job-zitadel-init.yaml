@@ -62,6 +62,20 @@ spec:
               name: zitadel-config-yaml
               readOnly: true
       enableServiceLinks: false
+      initContainers:
+        - args:
+            - |
+              # CNPG service is typically <clusterName>-rw in the same namespace
+              until pg_isready -h pg-zitadel-rw -p 5432; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+              echo "postgres is ready"
+          command:
+            - sh
+            - -ceu
+          image: postgres:16-alpine
+          name: wait-for-postgres
       restartPolicy: Never
       securityContext:
         fsGroup: 1000
