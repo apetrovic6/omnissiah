@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: zitadel-argocd-secret
+    namespace: argocd
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:cKosmREvHT7+IWN9b1uRcc/SSUl/,iv:3h5xUkEZIW4G3M0Rl+v/BFHh/8bjTqSjg2+OP6gQaVw=,tag:QSbECxDPQ653eqPP94mK2A==,type:str]
+          type: ENC[AES256_GCM,data:6AG25IQz,iv:JpZkrpNvzFmIq760ovdy5wDdr+3C54k0EqPoLsykxgA=,tag:LuTxa3N8qzJlA4VXXx153Q==,type:str]
+          stringData:
+            oidc.zitadel.clientId: ENC[AES256_GCM,data:gr2H2n/i6x1kAUgHXH/T7BA/,iv:OLX5rdHK5uuqV6ZCpVJI2Lk+grV+xh/L++R/ndDB9iA=,tag:6DT4xsi1h+87eukxUTlaEg==,type:str]
+            oidc.zitadel.clientSecret: ENC[AES256_GCM,data:6TiV0hB24uZhiu+JM4Fb6II2iB9RGNy6obosXwFknMdLjiJKmC84OCVjK+U33mXEoueDhIqk2htrORIBvP78Ew==,iv:ahIx6Dbf1pz6kDbbJXXnmcwBIa7OVwnXb29VVZeJw3U=,tag:RIsoZTYcMHNXVbqAMhhzzw==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBUS1ozc2RPTUxVeEtLT0lF
+            c0p0MXpmS2VtNHVHNXp5M1o5QTlKMlowZW53CnpqcWVLZ256U2t4SFBzVm9aM0RV
+            a0dZc1FpU0tpTXRYdXRPRDFwcFNodkEKLS0tIFZuM3daRnpwdWVEanZkdDdxN1di
+            eXRlbFU3Mlk1NStqMEt5SWhjSU9yRkkKCre6JP77pf6E6ivbuULW1457Vda1TYSP
+            6hGM2x8OD6DNMsz4VKmwG5ib2leOGMUyftpINWWUUxu9g7QLkLYYJw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2025-12-29T15:56:26Z"
+    mac: ENC[AES256_GCM,data:lW756RS37ISDoXdtrg1lc2iZ4qY7ZnpX9LgbmBnB3SDYdhJZceX8ZSyjcwJ5mYF5xLPdNVVuaFqS83GWQTqD0K1FroBQMyWx2W9vohVJS94tmpG2s67xT1xwTzbFvKfqB8411nEGwlOHgbfb5knsvHJPL6T/zTjlxLGNLc5wc0s=,iv:bhJxpy2r+rlArJqxc5OmJ4+cxBpdu8GFDhizFglYiNk=,tag:Yx3iCrH7VVW0/rWOA8qTAg==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
