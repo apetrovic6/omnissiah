@@ -85,7 +85,7 @@ in {
                 {
                   name = "DB_USER";
                   valueFrom.secretKeyRef = {
-                    name = "pg-yarr-seerr";
+                    name = "pg-yarr-app";
                     key = "username";
                   };
                 }
@@ -93,7 +93,7 @@ in {
                 {
                   name = "DB_PASS";
                   valueFrom.secretKeyRef = {
-                    name = "pg-yarr-seerr";
+                    name = "pg-yarr-app";
                     key = "password";
                   };
                 }
@@ -209,6 +209,19 @@ in {
           shared_buffers = "1GB";
           max_connections = "200";
           log_statement = "ddl";
+        };
+
+        managed = {
+          roles = [
+            {
+              name = "seerr";
+              ensure = "present";
+              comment = "Seerr User";
+              login = true;
+              superuser = false;
+              passwordSecret.name = "pg-seerr-password";
+            }
+          ];
         };
 
         monitoring.enablePodMonitor = true;
