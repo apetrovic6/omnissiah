@@ -7,6 +7,7 @@ data:
           SSL:
             Mode: disable
           Username: postgres
+        AwaitInitialConn: 10m
         Database: app
         Host: pg-zitadel-rw
         MaxConnIdleTime: 5m

@@ -139,6 +139,7 @@ initContainers = [
               Host = "pg-zitadel-rw";
               Port = "5432";
               Database = "app";
+AwaitInitialConn = "10m";
               MaxOpenConns = 20;
               MaxIdleConns = 10;
               MaxConnLifetime = "30m";
