@@ -2,7 +2,7 @@
   ageKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
-    clan.core.vars.generators."pg-seerr-sopssecret.yaml" = {
+    clan.core.vars.generators."pg-seerr-sopssecret" = {
       share = true;
 
       # files.pg-seerr-username = {
@@ -21,7 +21,7 @@ in {
         persist = false;
       };
 
-      files."pg-seerr-sopssecret.yaml".secret= false;
+      files."pg-seerr-sopssecret".secret= false;
 
       runtimeInputs = [pkgs.coreutils pkgs.sops];
 
@@ -36,7 +36,7 @@ in {
           --age "${ageKey}" \
           --encrypted-suffix "Templates" \
           --input-type yaml --output-type yaml \
-          /dev/stdin > "$out/pg-seerr-sopssecret.yaml" <<EOF
+          /dev/stdin > "$out/pg-seerr-sopssecret" <<EOF
         apiVersion: isindir.github.com/v1alpha3
         kind: SopsSecret
         metadata:
@@ -45,10 +45,8 @@ in {
         spec:
           secretTemplates:
             - name: pg-seerr-password
-              metadata:
-                name: pg-seerr-password
-                labels:
-                  cnpg.io/reload: "true"
+              labels:
+                cnpg.io/reload: "true"
               type: Opaque
               stringData:
                 username: "$username"

@@ -171,6 +171,7 @@ in {
     };
 
     yamls = [
+      (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
       ''
         apiVersion: cert-manager.io/v1
         kind: Certificate
