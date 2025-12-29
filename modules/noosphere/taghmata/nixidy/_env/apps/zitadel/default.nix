@@ -175,7 +175,7 @@ AwaitInitialConn = "10m";
           enabled = true;
         };
 
-        initJob.command = "";
+        initJob.command = "zitadel";
       };
     };
 
