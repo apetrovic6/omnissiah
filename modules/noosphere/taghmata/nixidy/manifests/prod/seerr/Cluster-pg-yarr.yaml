@@ -5,6 +5,15 @@ metadata:
   namespace: yarr
 spec:
   instances: 2
+  managed:
+    roles:
+      - comment: Seerr User
+        ensure: present
+        login: true
+        name: seerr
+        passwordSecret:
+          name: pg-seerr-password
+        superuser: false
   monitoring:
     enablePodMonitor: true
   postgresql:
