@@ -6,7 +6,7 @@ metadata:
   name: seerr-deployment
   namespace: yarr
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
       app: seerr
