@@ -1,7 +1,10 @@
 {charts, ...}: let
-  namespace = "nfs-provisioner-system";
+  namespace = "csi-nfs";
 in {
   helm.releases.csi-driver-nfs = {
+    inherit namespace;
+    createNamespace = true;
+    
     chart = charts.kubernetes-csi.csi-driver-nfs;
 
     values = {
