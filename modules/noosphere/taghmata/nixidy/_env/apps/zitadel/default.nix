@@ -159,8 +159,8 @@
 
         serviceAccount = {
           annotations = {
-            "argocd.argoproj.io/sync-wave" = "1";
-            "argocd.argoproj.io/hook" = "Sync";
+            "argocd.argoproj.io/sync-wave" = "-5";
+            "argocd.argoproj.io/hook" = "PreSync";
           };
         };
 
