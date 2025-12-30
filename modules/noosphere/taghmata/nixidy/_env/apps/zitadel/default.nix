@@ -63,8 +63,8 @@
             name: master-key-secret
             namespace: zitadel
             annotations:
-              argocd.argoproj.io/sync-wave: -10;
-              argocd.argoproj.io/hook: PreSync;
+              argocd.argoproj.io/sync-wave: "-10"
+              argocd.argoproj.io/hook: "PreSync"
         spec:
             secretTemplates:
                 - name: ENC[AES256_GCM,data:ZpiqL8WCeGT+Dy2w+npIHe0=,iv:tBg1LeEfJQJ8l3BTSSdMa9q8hw0T4afRZaEB7gZSvZ0=,tag:VkihmWYHAjQJSkufOJXyeg==,type:str]
