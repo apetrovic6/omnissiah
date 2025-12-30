@@ -159,24 +159,24 @@
 
         serviceAccount = {
           annotations = {
-            "argocd.argoproj.io/sync-wave" = "-9";
-            "argocd.argoproj.io/hook" = "PreSync";
+            "argocd.argoproj.io/sync-wave" = "1";
+            "argocd.argoproj.io/hook" = "Sync";
           };
         };
 
         initJob = {
           enabled = true;
           annotations = {
-            "argocd.argoproj.io/sync-wave" = "-8";
-            "argocd.argoproj.io/hook" = "PreSync";
+            "argocd.argoproj.io/sync-wave" = "2";
+            "argocd.argoproj.io/hook" = "Sync";
           };
           command = ""; # Means initialize Zitadel instance (without skip anything)
         };
 
         setupJob = {
           annotations = {
-            "argocd.argoproj.io/sync-wave" = "-7";
-            "argocd.argoproj.io/hook" = "Presync";
+            "argocd.argoproj.io/sync-wave" = "3";
+            "argocd.argoproj.io/hook" = "Sync";
           };
         };
       };
