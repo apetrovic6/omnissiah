@@ -36,7 +36,7 @@
   # };
   #
 
-  services.imperium.smb.enable = true;
+  services.imperium.smb.enable = false;
 
   services.imperium.impermanence = {
     enable = false; # TODO: Setup impermanence

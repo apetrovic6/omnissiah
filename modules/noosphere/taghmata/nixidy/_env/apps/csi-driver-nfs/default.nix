@@ -23,8 +23,9 @@ in {
       };
 
       mountOptions = [
+        "proto=tcp"
         "noresvport"
-        "nfsvers=4.1"
+        "nfsvers=4"
       ];
     };
   };
