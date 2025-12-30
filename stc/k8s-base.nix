@@ -20,7 +20,17 @@
       BindPaths = "/run/current-system/sw/bin:/bin";
     };
 
-    environment.systemPackages = with pkgs; [nfs-utils openiscsi cryptsetup];
+ # Make mount helpers visible in FHS-ish locations Longhorn expects via nsenter
+  systemd.tmpfiles.rules = [
+    "L+ /bin/mount - - - - ${pkgs.util-linux}/bin/mount"
+    "L+ /usr/bin/mount - - - - ${pkgs.util-linux}/bin/mount"
+
+    # NFS helper name can vary by distro; these two paths cover common expectations
+    "L+ /sbin/mount.nfs - - - - ${pkgs.nfs-utils}/bin/mount.nfs"
+    "L+ /usr/sbin/mount.nfs - - - - ${pkgs.nfs-utils}/bin/mount.nfs"
+  ];
+
+    environment.systemPackages = with pkgs; [nfs-utils util-linux openiscsi cryptsetup];
     boot.kernelModules = ["iscsi_tcp" "dm_crypt"];
 
     services.openiscsi = {
