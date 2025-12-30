@@ -99,7 +99,7 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 100Mi
+            storage: 5Gi
         storageClassName: synology-nfs
     - metadata:
         name: data
@@ -108,5 +108,5 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 10Gi
+            storage: 15Gi
         storageClassName: synology-nfs
