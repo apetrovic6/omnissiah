@@ -18,7 +18,7 @@ in {
         };
       };
       spec = {
-        accessModes = ["ReadWriteOnce"];
+        accessModes = ["ReadWriteMany"];
         storageClassName = "longhorn";
         resources.requests.storage = "2Gi";
       };
@@ -42,12 +42,12 @@ in {
         };
         template = {
           metadata.labels.app = "seerr";
-          spec.volumes = [
-            {
-              name = "config";
-              persistentVolumeClaim.claimName = "seerr-pvc";
-            }
-          ];
+          # spec.volumes = [
+          #   {
+          #     name = "config";
+          #     persistentVolumeClaim.claimName = "seerr-pvc";
+          #   }
+          # ];
           spec.containers = [
             {
               name = "jellyserr";
