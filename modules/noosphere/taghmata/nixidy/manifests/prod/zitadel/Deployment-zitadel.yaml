@@ -1,8 +1,6 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations:
-    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/component: start
     app.kubernetes.io/instance: zitadel
