@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: garage-rpc-secret
+    namespace: argocd
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:Q+Ai4GwRmTu5dPfzh3QGK6I=,iv:RQJwLsFSH5k3m8pDdeyCEET6W3bCmSz6iW6IKl9tcnI=,tag:sXdPswMYIrySO/PoDmGngQ==,type:str]
+          type: ENC[AES256_GCM,data:+LJkIRZg,iv:A7ogFSgzY3ZWXnj0pYTpDVCmnuCdtgdledydAwMQENM=,tag:gQKROAZfRGa4JGKFdOqJVA==,type:str]
+          stringData:
+            rpcSecret: ENC[AES256_GCM,data:D1hUxmdiO/nQ5ZrbUB4Ualinj9aOjrdnL6t52b9da22eCMbSSNNVk26PKHmzWG3DARfoQIoqp2EJSEVh5b4BJw==,iv:VkYv5kRKQjX+DO4okDZwlrnVPVvaViDfDU0MDtgMCC0=,tag:qzTJdV6gV5WXz8kV6z92pA==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB3VTIvcjdNYitxeldtU3Bx
+            K3o0NEJmZGpVUUlPaUdKNGVOZGRlZWFLR1cwCk92QWVtTnNCT2hQalRPVDN4YzVP
+            NDdLTUJUMWc4ODFsbHRSYjVBWU9ZNnMKLS0tIEdyN0lqOHV0MnRUckZ4aUlrb1Ir
+            T3g4T1N4eVZOUE81MVVQNE80dTd3TjgKy6nAQz1rfSDyWurU2N0xg7BK5utBBYIW
+            AB4X8TlWjdZRV/JJsqqi6calhux1dOwMK4WNsFsYoSLLUr5+2bmw3w==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2025-12-30T16:45:46Z"
+    mac: ENC[AES256_GCM,data:RiPzUQqjGvKhGQx6dDqzSWNfgmsw7KISxZstfZLf0VZ2KXXMdq5ZcMw7jo1aRf6I6R6vkQvQgMsH6LNDpNCSScZCdt9BABQDju9in0t7BlbPwoOmUX4pWC5cvwcg/1N9dpjaPatJnHIJbdLHsdxc6/BYPQLLs355vEkQ5sP3dWw=,iv:jnKkoyjqXIjhakpREePn8v13D6u/q/WAKYEf0ZQ1thk=,tag:mNeQqOfjvgspWO8Rb5RHQw==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
