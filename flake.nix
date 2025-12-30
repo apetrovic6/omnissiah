@@ -205,6 +205,11 @@
           chart = nixhelm.chartsDerivations.${system}.prometheus-community.prometheus;
         };
 
+        packages.csi-driver-nfs = inputs.nixidy.packages.${system}.generators.fromChartCRD {
+          name = "csi-driver-nfs";
+          chart = nixhelm.chartsDerivations.${system}.kubernetes-csi.csi-driver-nfs;
+        };
+
         # packages.zitadel= inputs.nixidy.packages.${system}.generators.fromChartCRD {
         #   name = "zitadel";
         #   chart = nixhelm.chartsDerivations.${system}.zitadel.zitadel;
@@ -253,8 +258,11 @@
                 echo "generate kube prometheus stack crds"
                 cat ${self'.packages.kube-prometheus-stack} > ${path}/kube-prometheus-stack-crd.nix
 
-                echo "generate kube prometheus crds"
+                echo "generate prometheus crds"
                 cat ${self'.packages.prometheus} > ${path}/prometheus-crd.nix
+
+                echo "generate csi driver nfs crds"
+                cat ${self'.packages.csi-driver-nfs} > ${path}/csi-driver-nfs-crd.nix
               '').outPath;
           };
         };
