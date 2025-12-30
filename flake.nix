@@ -289,6 +289,7 @@
             argocd
             nil
             nixd
+            garage_2
           ];
         };
       };

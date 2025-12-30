@@ -1,0 +1,15 @@
+allowVolumeExpansion: true
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: synology-nfs
+mountOptions:
+  - hard
+  - nfsvers=4.1
+parameters:
+  server: 192.168.1.61
+  share: /volume1/selhosted
+  subDir: ${pvc.metadata.namespace}/${pvc.metadata.name}/${pv.metadata.name}
+provisioner: nfs.csi.k8s.io
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
