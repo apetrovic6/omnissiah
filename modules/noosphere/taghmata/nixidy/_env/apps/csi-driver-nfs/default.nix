@@ -2,11 +2,10 @@
   namespace = "csi-nfs";
 in {
   applications.csi-driver-nfs = {
-      inherit namespace;
-      createNamespace = true;
+    inherit namespace;
+    createNamespace = true;
 
     helm.releases.csi-driver-nfs = {
-
       chart = charts.kubernetes-csi.csi-driver-nfs;
 
       values = {
@@ -20,6 +19,7 @@ in {
             parameters = {
               server = "192.168.1.61";
               share = "/volume1/selhosted";
+              # subDir = "";
             };
             reclaimPolicy = "retain";
 

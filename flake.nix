@@ -6,6 +6,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    garage = {
+      url = "git+https://git.deuxfleurs.fr/Deuxfleurs/garage";
+      flake = false;
+    };
+
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
 
     nixpkgs.follows = "nixpkgs-unstable";
@@ -46,6 +51,7 @@
     };
 
     nixhelm = {
+      # url = "path:/home/apetrovic/clan/nixhelm";
       url = "github:apetrovic6/nixhelm";
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -80,7 +86,6 @@
     self,
     flake-parts,
     import-tree,
-    nixidy,
     nixhelm,
     ...
   }:
@@ -98,17 +103,17 @@
         (import-tree ./modules)
       ];
 
-      flake.nixidyEnvs = inputs.nixpkgs.lib.genAttrs systems (system: let
-        pkgsForSystem = import inputs.nixpkgs {inherit system;};
-      in
-        inputs.nixidy.lib.mkEnvs {
-          pkgs = pkgsForSystem;
-          charts = nixhelm.chartsDerivations.${system};
-          envs = {
-            # dev.modules = [./taghmata/env/dev.nix];
-            prod.modules = [./modules/noosphere/taghmata/nixidy/_env/prod.nix];
-          };
-        });
+      # flake.nixidyEnvs = inputs.nixpkgs.lib.genAttrs systems (system: let
+      #   pkgsForSystem = import inputs.nixpkgs {inherit system;};
+      # in
+      #   inputs.nixidy.lib.mkEnvs {
+      #     pkgs = pkgsForSystem;
+      #     charts = nixhelm.chartsDerivations.${system} ;
+      #     envs = {
+      #       # dev.modules = [./taghmata/env/dev.nix];
+      #       prod.modules = [./modules/noosphere/taghmata/nixidy/_env/prod.nix];
+      #     };
+      #   });
 
       # https://docs.clan.lol/guides/flake-parts
       clan = {
@@ -120,7 +125,6 @@
         inputs',
         self',
         system,
-        lib,
         ...
       }: {
         checks = {
@@ -136,7 +140,12 @@
           nixidyEnvs.${system} = inputs.nixidy.lib.mkEnvs {
             inherit pkgs;
 
-            charts = inputs.nixhelm.chartsDerivations.${system};
+            charts =
+              inputs.nixhelm.chartsDerivations.${system} // {
+                deuxfleurs = {
+                  garage = "${inputs.garage}/script/helm/garage";
+                };
+              };
 
             envs = {
               prod.modules = [modules/noosphere/taghmata/nixidy/_env/prod.nix];

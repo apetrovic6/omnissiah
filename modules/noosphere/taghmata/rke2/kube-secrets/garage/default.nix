@@ -30,7 +30,7 @@ in {
             - name: ${fileName}
               type: Opaque
               stringData:
-                rpc_secret: "$clientId"
+                rpcSecret: "$secret"
         EOF
       '';
     };

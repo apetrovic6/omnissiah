@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/instance: garage
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: garage
+    app.kubernetes.io/version: v2.1.0
+    helm.sh/chart: garage-0.9.1
+  name: garage
+  namespace: garage
+spec:
+  podManagementPolicy: OrderedReady
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: garage
+      app.kubernetes.io/name: garage
+  serviceName: garage-headless
+  template:
+    metadata:
+      annotations:
+        checksum/config: b325e7947222bd2749010db60835c39d7bb6a0114ff649db2b01cb8a21d58481
+      labels:
+        app.kubernetes.io/instance: garage
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: garage
+        app.kubernetes.io/version: v2.1.0
+        helm.sh/chart: garage-0.9.1
+    spec:
+      containers:
+        - image: dxflrs/amd64_garage:v2.1.0
+          imagePullPolicy: IfNotPresent
+          name: garage
+          ports:
+            - containerPort: 3900
+              name: s3-api
+            - containerPort: 3902
+              name: web-api
+            - containerPort: 3903
+              name: admin
+          resources: {}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /mnt/meta
+              name: meta
+            - mountPath: /mnt/data
+              name: data
+            - mountPath: /etc/garage.toml
+              name: etc
+              subPath: garage.toml
+      initContainers:
+        - command:
+            - sh
+            - -c
+            - sed "s/__RPC_SECRET_REPLACE__/$RPC_SECRET/" /mnt/garage.toml > /mnt/etc/garage.toml
+          env:
+            - name: RPC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: rpcSecret
+                  name: garage-rpc-secret
+          image: busybox:stable
+          imagePullPolicy: IfNotPresent
+          name: garage-init
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /mnt/garage.toml
+              name: configmap
+              subPath: garage.toml
+            - mountPath: /mnt/etc
+              name: etc
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccountName: garage
+      volumes:
+        - configMap:
+            name: garage-config
+          name: configmap
+        - emptyDir: {}
+          name: etc
+  volumeClaimTemplates:
+    - metadata:
+        name: meta
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 100Mi
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 100Mi
