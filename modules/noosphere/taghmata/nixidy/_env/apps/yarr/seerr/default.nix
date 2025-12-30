@@ -9,21 +9,14 @@ in {
       };
     };
 
-    # resources.storageClasses.seerr-vol = {
-    #   provisioner = "driver.longhorn.io";
-    #   allowVolumeExpansion = true;
-    #   parameters = {
-    #     numberOfReplicas = 3;
-    #     staleReplicaTimeout = 2880;
-    #     fsType = "ext4";
-    #   };
-    # };
-
     resources.persistentVolumeClaims.seerr-pvc = {
       metadata = {
         inherit namespace;
+        annotations = {
+          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
+          "argocd.argoproj.io/sync-wave" = "0";
+        };
       };
-
       spec = {
         accessModes = ["ReadWriteOnce"];
         storageClassName = "longhorn";
