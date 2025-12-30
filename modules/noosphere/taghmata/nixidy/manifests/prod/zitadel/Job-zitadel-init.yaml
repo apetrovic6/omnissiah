@@ -31,7 +31,6 @@ spec:
       containers:
         - args:
             - init
-            - zitadel
             - --config
             - /config/zitadel-config-yaml
           env:

@@ -175,7 +175,7 @@
           annotations = {
             "argocd.argoproj.io/sync-wave" = "10";
           };
-          command = "zitadel";
+          command = ""; # Means initialize Zitadel instance (without skip anything)
         };
       };
     };
