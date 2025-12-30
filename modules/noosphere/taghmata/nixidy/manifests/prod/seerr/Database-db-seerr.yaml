@@ -1,6 +1,8 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
+  annotations:
+    argocd.proj.io/sync-options: Prune=false
   name: db-seerr
   namespace: yarr
 spec:

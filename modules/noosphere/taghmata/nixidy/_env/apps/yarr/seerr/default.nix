@@ -184,6 +184,9 @@ in {
     resources.clusters.pg-yarr = {
       metadata = {
         inherit namespace;
+        annotations = {
+          "argocd.proj.io/sync-options" = "Prune=confirm,Delete=confirm";
+        };
       };
 
       spec = {
@@ -225,6 +228,9 @@ in {
     resources.databases.db-seerr = {
       metadata = {
         inherit namespace;
+        annotations = {
+          "argocd.proj.io/sync-options" = "Prune=false";
+        };
       };
       spec = {
         name = "seerr";
