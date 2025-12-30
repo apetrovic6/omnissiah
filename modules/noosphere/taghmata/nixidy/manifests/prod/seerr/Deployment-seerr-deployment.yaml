@@ -39,3 +39,10 @@ spec:
           name: jellyserr
           ports:
             - containerPort: 5055
+          volumeMounts:
+            - mountPath: /app/config
+              name: config
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: seerr-pvc

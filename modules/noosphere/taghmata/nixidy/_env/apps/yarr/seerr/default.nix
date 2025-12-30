@@ -42,22 +42,22 @@ in {
         };
         template = {
           metadata.labels.app = "seerr";
-          # spec.volumes = [
-          #   {
-          #     name = "config";
-          #     persistentVolumeClaim.claimName = "seerr-pvc";
-          #   }
-          # ];
+          spec.volumes = [
+            {
+              name = "config";
+              persistentVolumeClaim.claimName = "seerr-pvc";
+            }
+          ];
           spec.containers = [
             {
               name = "jellyserr";
               image = "fallenbagel/jellyseerr:2.7.3";
-              # volumeMounts = [
-              #   {
-              #     name = "config";
-              #     mountPath = "/app/config";
-              #   }
-              # ];
+              volumeMounts = [
+                {
+                  name = "config";
+                  mountPath = "/app/config";
+                }
+              ];
 
               env = [
                 {
