@@ -141,7 +141,8 @@
             inherit pkgs;
 
             charts =
-              inputs.nixhelm.chartsDerivations.${system} // {
+              inputs.nixhelm.chartsDerivations.${system}
+              // {
                 deuxfleurs = {
                   garage = "${inputs.garage}/script/helm/garage";
                 };

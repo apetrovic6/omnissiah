@@ -10,14 +10,13 @@ in {
     inherit namespace;
     createNamespace = true;
 
-      yamls = [
-        (builtins.readFile ../../../../../../../vars/shared/garage-rpc-secret/garage-rpc-secret/value)
-      ];
+    yamls = [
+      (builtins.readFile ../../../../../../../vars/shared/garage-rpc-secret/garage-rpc-secret/value)
+    ];
 
     helm.releases.garage = {
       chart = charts.deuxfleurs.garage;
 
-      
       values = {
         replicationFactor = 2;
         existingRpcSecret = "garage-rpc-secret";
@@ -31,11 +30,16 @@ in {
           };
         };
         persistence = {
-          storageClass = "nfs-csi";
+          meta = {
+            storageClass = "synology-nfs";
+          };
+          data = {
+            storageClass = "synology-nfs";
+          };
         };
         # ingress = {
         #   s3 = {
-            
+
         #   };
         # };
       };
