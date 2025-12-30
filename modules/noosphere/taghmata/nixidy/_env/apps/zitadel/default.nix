@@ -184,7 +184,8 @@
       metadata = {
         inherit namespace;
         annotations = {
-          "argocd.argoproj.io/sync-wave" = "0";
+          "argocd.argoproj.io/sync-wave" = "-10";
+          "argocd.argoproj.io/hook" = "PreSync";
         };
       };
 
