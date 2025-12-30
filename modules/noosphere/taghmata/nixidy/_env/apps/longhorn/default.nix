@@ -8,11 +8,11 @@
     helm.releases.longhorn = {
       chart = charts.longhorn.longhorn;
       values = {
-          longhorn.preUpgradeChecker.jobEnabled = false;
-          persistence = {
-            defaultClassReplicaCount = 2;
-            reclaimPolicy = "Retain";
-          };
+        longhorn.preUpgradeChecker.jobEnabled = false;
+        persistence = {
+          defaultClassReplicaCount = 2;
+          reclaimPolicy = "Retain";
+        };
       };
     };
 

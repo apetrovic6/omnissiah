@@ -51,7 +51,7 @@ in {
           metadata.labels.app = "seerr";
           spec.volumes = [
             {
-              name = "seerr-vol";
+              name = "config";
               persistentVolumeClaim.claimName = "seerr-pvc";
             }
           ];
@@ -61,7 +61,7 @@ in {
               image = "fallenbagel/jellyseerr:2.7.3";
               volumeMounts = [
                 {
-                  name = "seerr-vol";
+                  name = "config";
                   mountPath = "/app/config";
                 }
               ];
