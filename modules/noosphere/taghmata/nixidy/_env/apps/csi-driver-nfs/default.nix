@@ -23,7 +23,7 @@ in {
       };
 
       mountOptions = [
-        "hard"
+        "noresvport"
         "nfsvers=4.1"
       ];
     };
