@@ -52,12 +52,12 @@ in {
             {
               name = "jellyserr";
               image = "fallenbagel/jellyseerr:2.7.3";
-              volumeMounts = [
-                {
-                  name = "config";
-                  mountPath = "/app/config";
-                }
-              ];
+              # volumeMounts = [
+              #   {
+              #     name = "config";
+              #     mountPath = "/app/config";
+              #   }
+              # ];
 
               env = [
                 {
