@@ -16,7 +16,7 @@ in {
 
       parameters = {
         server = "192.168.1.61";
-        share = "/volume1/selhosted";
+        share = "/volume1/selhosted/";
         subDir = "\${pvc.metadata.namespace}/\${pvc.metadata.name}/\${pv.metadata.name}";
         # onDelete = "delete"; # delete|retain|archive
         # mountPermissions = "0";
