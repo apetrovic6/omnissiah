@@ -19,7 +19,7 @@
     resources.storageClasses.longhorn-cnpg-strict-local = {
       provisioner = "driver.longhorn.io";
       allowVolumeExpansion = true;
-      reclaimPolicy = "Delete";
+      reclaimPolicy = "Retain";
       parameters = {
         numberOfReplicas = "1";
         dataLocality = "strict-local";
