@@ -90,7 +90,6 @@
       includeCRDs = true;
 
       values = {
-        
         annotations = {
           "argocd.argoproj.io/sync-wave" = "10";
         };
@@ -112,24 +111,24 @@
         ];
 
         zitadel = {
-
-initContainers = [
-          {
-            name = "wait-for-postgres";
-            image = "postgres:16-alpine";
-            command = ["sh" "-ceu"];
-            args = [
-              ''
-                # CNPG service is typically <clusterName>-rw in the same namespace
-                until pg_isready -h pg-zitadel-rw -p 5432; do
-                  echo "waiting for postgres..."
-                  sleep 2
-                done
-                echo "postgres is ready"
-              ''
-            ];
-          }
-        ];          masterkeySecretName = "master-key-secret";
+          # initContainers = [
+          #   {
+          #     name = "wait-for-postgres";
+          #     image = "postgres:16-alpine";
+          #     command = ["sh" "-ceu"];
+          #     args = [
+          #       ''
+          #         # CNPG service is typically <clusterName>-rw in the same namespace
+          #         until pg_isready -h pg-zitadel-rw -p 5432; do
+          #           echo "waiting for postgres..."
+          #           sleep 2
+          #         done
+          #         echo "postgres is ready"
+          #       ''
+          #     ];
+          #   }
+          # ];
+          masterkeySecretName = "master-key-secret";
           configmapConfig = {
             ExternalDomain = "zitadel.noosphere.uk";
             ExternalSecure = true;
