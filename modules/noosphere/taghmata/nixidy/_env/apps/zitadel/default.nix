@@ -168,7 +168,7 @@
           enabled = true;
           annotations = {
             "argocd.argoproj.io/sync-wave" = "10";
-            "argocd.argoproj.io/hook" = "PostSync";
+            # "argocd.argoproj.io/hook" = "PostSync";
           };
           command = ""; # Means initialize Zitadel instance (without skip anything)
         };
@@ -176,7 +176,7 @@
         setupJob = {
           annotations = {
             "argocd.argoproj.io/sync-wave" = "11";
-            "argocd.argoproj.io/hook" = "PostSync";
+            # "argocd.argoproj.io/hook" = "PostSync";
           };
         };
       };
