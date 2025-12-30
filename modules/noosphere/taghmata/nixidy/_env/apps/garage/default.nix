@@ -12,6 +12,24 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-rpc-secret/garage-rpc-secret/value)
+      # ''
+
+      #   apiVersion: cert-manager.io/v1
+      #   kind: Certificate
+      #   metadata:
+      #     name: garage-tls
+      #     namespace: garage
+      #   spec:
+      #     secretName: garage-tls
+      #     issuerRef:
+      #       kind: ClusterIssuer
+      #       name: letsencrypt-cloudflare
+      #     dnsNames:
+      #       - s3.${domain}
+      #       - web.${domain}
+      #       - "*.s3.${domain}"
+      #       - "*.web.${domain}"
+      # ''
     ];
 
     helm.releases.garage = {
@@ -23,10 +41,10 @@ in {
         s3 = {
           api = {
             region = "imperium";
-            rootDomain = ".s3.${domain}";
+            rootDomain = "s3.${domain}";
           };
           web = {
-            rootDomain = ".web.${domain}";
+            rootDomain = "web.${domain}";
           };
         };
         persistence = {
@@ -35,13 +53,81 @@ in {
           };
           data = {
             storageClass = "synology-nfs";
+            size = "10Gi";
           };
         };
-        # ingress = {
-        #   s3 = {
+        ingress = {
+          s3 = {
+            api = {
+              enabled = true;
+              className = "traefik";
+              annotations = {
+                "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+              };
+              hosts = [
+                {
+                  host = "s3.garage.${domain}";
+                  paths = [
+                    {
+                      path = "/";
+                      pathType = "Prefix";
+                    }
+                  ];
+                }
 
-        #   };
-        # };
+                {
+                  host = "*.s3.garage.${domain}";
+                  paths = [
+                    {
+                      path = "/";
+                      pathType = "Prefix";
+                    }
+                  ];
+                }
+              ];
+              tls = [
+                {
+                  secretName = "garage-tls";
+                  hosts = ["s3.garage.${domain}" "*.s3.garage.${domain}"];
+                }
+              ];
+            };
+          };
+          web = {
+            enabled = true;
+            className = "traefik";
+            annotations = {
+              "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+            };
+            hosts = [
+              {
+                host = "web.garage.${domain}";
+                paths = [
+                  {
+                    path = "/";
+                    pathType = "Prefix";
+                  }
+                ];
+              }
+
+              {
+                host = "*.web.garage.${domain}";
+                paths = [
+                  {
+                    path = "/";
+                    pathType = "Prefix";
+                  }
+                ];
+              }
+            ];
+            tls = [
+              {
+                secretName = "garage-tls";
+                hosts = ["web.garage.${domain}" "*.web.garage.${domain}"];
+              }
+            ];
+          };
+        };
       };
     };
   };
