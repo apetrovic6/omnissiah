@@ -185,7 +185,7 @@ in {
       metadata = {
         inherit namespace;
         annotations = {
-          "argocd.proj.io/sync-options" = "Prune=confirm,Delete=confirm";
+          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
         };
       };
 
