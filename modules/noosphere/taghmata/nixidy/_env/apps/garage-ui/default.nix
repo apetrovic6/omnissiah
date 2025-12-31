@@ -8,7 +8,7 @@ in
       inherit namespace;
 
       yamls = [
-        (builtins.readFile ../../../../../../../vars/shared/garage-admin-token/garage-admin-token/value)
+        (builtins.readFile ../../../../../../../vars/shared/garage-ui-admin-token/garage-ui-admin-token/value)
       ];
 
       helm.releases.garage-ui = {

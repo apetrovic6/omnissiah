@@ -55,7 +55,7 @@ data:
       max_age: 3600
     existingSecret:
       key: admin-token
-      name: garage-admin-token
+      name: garage-ui-admin-token
     garage:
       admin_endpoint: http://garage:39002
       endpoint: http://garage:3900
