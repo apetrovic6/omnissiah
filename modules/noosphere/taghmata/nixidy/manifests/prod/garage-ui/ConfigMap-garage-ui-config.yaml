@@ -50,7 +50,7 @@ data:
       - DELETE
       - OPTIONS
       allowed_origins:
-      - '*'
+      - https://ui.garage.noosphere.uk
       enabled: true
       max_age: 3600
     existingSecret:
@@ -63,6 +63,20 @@ data:
         key: admin-token
         name: ""
       region: garage
+    ingress:
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+      className: traefik
+      enabled: true
+      hosts:
+      - host: ui.garage.noosphere.uk
+        paths:
+        - path: /
+          pathType: Prefix
+        tls:
+        - hosts:
+          - ui.garage.noosphere.uk
+          secretName: garage-ui-tls
     logging:
       format: json
       level: info
@@ -77,6 +91,12 @@ data:
       read_buffer_size: 4096
       root_url: https://garage-ui.example.com
       write_buffer_size: 4096
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      labels:
+        prometheus: kube-prometheus
+      path: /api/v1/monitoring/metrics
 kind: ConfigMap
 metadata:
   labels:
