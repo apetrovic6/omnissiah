@@ -85,7 +85,8 @@ in {
       script = ''
                set -euo pipefail
 
-               secret="$(openssl genpkey -algorithm ED25519)"
+              secret="$(openssl genpkey -algorithm ED25519)"
+              secret_b64="$(printf '%s' "$secret" | base64 -w0)"
 
         sops encrypt \
           --age "${ageKey}" \
@@ -102,7 +103,7 @@ in {
             - name: ${fileNameGarageUiJwtSecret}
               type: Opaque
               stringData:
-                jwt-key.pem: "$secret"
+                jwt-key.pem: "$secret_b64"
         EOF
       '';
     };
