@@ -16,7 +16,6 @@ in {
           garage = {
             endpoint = "http://garage:3900";
             admin_endpoint = "http://garage-admin:3903";
-            admin_token = "";
             region = "garage";
           };
 
