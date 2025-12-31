@@ -86,7 +86,7 @@ in {
                set -euo pipefail
 
               secret="$(openssl genpkey -algorithm ED25519)"
-              secret_b64="$(printf '%s' "$secret" | base64 -w0)"
+              secret_b64="$(printf '%s' "$secret" | base64 -w0 | base64 -d)"
 
         sops encrypt \
           --age "${ageKey}" \
