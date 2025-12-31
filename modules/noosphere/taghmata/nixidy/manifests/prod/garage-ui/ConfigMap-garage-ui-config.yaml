@@ -63,20 +63,6 @@ data:
         key: admin-token
         name: ""
       region: garage
-    ingress:
-      annotations:
-        cert-manager.io/cluster-issuer: letsencrypt-cloudflare
-      className: traefik
-      enabled: true
-      hosts:
-      - host: ui.garage.noosphere.uk
-        paths:
-        - path: /
-          pathType: Prefix
-        tls:
-        - hosts:
-          - ui.garage.noosphere.uk
-          secretName: garage-ui-tls
     logging:
       format: json
       level: info

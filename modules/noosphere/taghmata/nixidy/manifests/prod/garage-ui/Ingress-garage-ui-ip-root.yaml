@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: garage-ui-ip-root
+  namespace: garage
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ui.garage.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: garage-ui
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - ui.garage.noosphere.uk
+      secretName: garage-ui-tls
