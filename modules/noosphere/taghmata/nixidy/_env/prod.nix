@@ -13,6 +13,7 @@
     ./apps/yarr/seerr
     ./apps/csi-driver-nfs
     ./apps/garage
+    ./apps/garage-ui
   ];
 
   nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
