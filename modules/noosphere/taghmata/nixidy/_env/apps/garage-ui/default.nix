@@ -18,7 +18,7 @@ in
             config = {
               garage = {
                 endpoint = "http://garage:3900";
-                admin_endpoint = "http://garage:39002";
+                admin_endpoint = "http://garage:3902";
                 admin_token = "";
                 region = "imperium";
               };
