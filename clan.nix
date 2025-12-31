@@ -89,7 +89,7 @@
 
     apetrovic-user = {
       module.name = "users";
-      roles.default.tags.all = {};
+      roles.default.tags.workstation = {};
       roles.default.settings = {
         user = "apetrovic";
         prompt = true;
