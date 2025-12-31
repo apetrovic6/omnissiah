@@ -50,11 +50,11 @@ in {
         persistence = {
           meta = {
             storageClass = "synology-nfs";
-            size = "5Gi";
+            size = "20Gi";
           };
           data = {
             storageClass = "synology-nfs";
-            size = "15Gi";
+            size = "300Gi";
           };
         };
         ingress = {
