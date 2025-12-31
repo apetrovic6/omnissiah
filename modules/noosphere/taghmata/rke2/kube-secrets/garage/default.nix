@@ -83,10 +83,12 @@ in {
       runtimeInputs = [pkgs.coreutils pkgs.sops pkgs.openssl];
 
       script = ''
-               set -euo pipefail
+        set -euo pipefail
 
-              secret="$(openssl genpkey -algorithm ED25519)"
-              secret_b64="$(printf '%s' "$secret" | base64 -w0 | base64 -d)"
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+
+        openssl genpkey -algorithm ED25519 -out "$tmp/jwt-key.pem"
 
         sops encrypt \
           --age "${ageKey}" \
@@ -103,7 +105,7 @@ in {
             - name: ${fileNameGarageUiJwtSecret}
               type: Opaque
               stringData:
-                jwt-key.pem: "$secret_b64"
+                jwt-key.pem: "$(cat $tmp/jwt-key.pem)"
         EOF
       '';
     };
