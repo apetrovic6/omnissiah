@@ -62,7 +62,7 @@ data:
       existingSecret:
         key: admin-token
         name: ""
-      region: imperium
+      region: garage
     logging:
       format: json
       level: info

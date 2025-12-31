@@ -62,7 +62,7 @@ in {
         existingRpcSecret = "garage-rpc-secret";
         s3 = {
           api = {
-            region = "imperium";
+            region = "garage";
             rootDomain = "s3.${domain}";
           };
           web = {
