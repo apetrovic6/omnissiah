@@ -24,7 +24,7 @@ in
               };
 
               existingSecret = {
-                name = "garage-admin-token";
+                name = "garage-ui-admin-token";
                 key = "admin-token";
               };
               
