@@ -82,7 +82,7 @@ in {
           cors = {
             enabled = true;
             allowed_origins = ["https://ui.garage.${domain}"];
-          };
+            };
 
           serviceMonitor = {
             enabled = true;
@@ -92,7 +92,10 @@ in {
           };
 
           auth = {
-            jwt_private_key_secret.name = "garage-ui-jwt-token-secret";
+            jwt_private_key_secret = {
+              name = "garage-ui-jwt-token-secret";
+              key = "jwt-key.pem";
+              };
           };
         };
       };
