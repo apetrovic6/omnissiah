@@ -72,5 +72,6 @@ in {
                 admin-token: "$secret"
         EOF
       '';
-    };  };
+    };
+  };
 }

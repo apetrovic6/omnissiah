@@ -3,7 +3,7 @@
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators."pg-seerr-sopssecret" = {
-     share = true;
+      share = true;
 
       prompts.pg-seerr-username = {
         description = "DB Username";

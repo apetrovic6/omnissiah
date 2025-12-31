@@ -4,7 +4,7 @@
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${fileName} = {
-     share = true;
+      share = true;
 
       prompts.access-key-id = {
         description = "Enter Access Key ID: ";
@@ -12,13 +12,13 @@ in {
         persist = false;
       };
 
-      prompts.access-key-secret= {
+      prompts.access-key-secret = {
         description = "Enter Access Key Secret: ";
         type = "hidden";
         persist = false;
       };
 
-      prompts.endpoint= {
+      prompts.endpoint = {
         description = "Enter s3 endpoint: ";
         type = "line";
         persist = false;
