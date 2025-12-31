@@ -51,7 +51,7 @@ in {
             - name: s3-backup-secret
               type: Opaque
               stringData:
-                AWS_ACCESS_KEY_ID: "$acess_key"
+                AWS_ACCESS_KEY_ID: "$access_key"
                 AWS_SECRET_ACCESS_KEY: "$secret_key"
                 AWS_ENDPOINTS: "$endpoint"
         EOF

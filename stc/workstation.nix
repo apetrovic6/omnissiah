@@ -97,7 +97,7 @@ in {
 
       bluetuith
       brave
-      librewolf-bin
+      librewolf
 
       vlc
 
