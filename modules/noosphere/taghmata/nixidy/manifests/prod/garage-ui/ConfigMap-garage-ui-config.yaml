@@ -57,7 +57,7 @@ data:
       key: admin-token
       name: garage-ui-admin-token
     garage:
-      admin_endpoint: http://garage:3902
+      admin_endpoint: http://garage-admin:3903
       endpoint: http://garage:3900
       existingSecret:
         key: admin-token

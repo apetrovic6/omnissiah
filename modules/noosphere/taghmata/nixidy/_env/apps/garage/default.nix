@@ -10,6 +10,28 @@ in {
     inherit namespace;
     createNamespace = true;
 
+      resources.services.garage-admin = {
+        metadata = {
+          inherit namespace;
+        };
+
+        spec = {
+          type = "ClusterIP";
+          selector = {
+            "app.kubernetes.io/name" = "garage";
+            "app.kubernetes.io/instance" = "garage";
+          };
+
+          ports = [
+            {
+              name = "admin";
+              port = 3903;
+              targetPort = 3903;
+            }
+          ];
+        };
+      };
+
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-rpc-secret/garage-rpc-secret/value)
       # ''
