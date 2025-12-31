@@ -1,0 +1,28 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: s3-backup-secret
+    namespace: longhorn-system
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:Dn1aV7RPLjbA+5yecigMpw==,iv:IwiPMVRlTpzJLGl77D0hRhFNoxTgizEjVnk7ZGURlFQ=,tag:ju9m8CxqQB/whwVbZYwV2g==,type:str]
+          type: ENC[AES256_GCM,data:KVnpMN7A,iv:NbdvFznp0b2lPmKE9jBk6IMq/3H41zg9NL3M6mXaZ1s=,tag:1eVXG/4zQ1TB8gGvTRl7jA==,type:str]
+          stringData:
+            AWS_ACCESS_KEY_ID: ENC[AES256_GCM,data:OXXQk57pc2Fqwtjl49Ev3swN5wBpg+j4cb8=,iv:QyG/HMUiAt4CFQ2L7TAfDhIetShMDPzV8AbIQoyXCEY=,tag:xUOW4YG6NzVhjJlOIvxtGg==,type:str]
+            AWS_SECRET_ACCESS_KEY: ENC[AES256_GCM,data:nFk1uhKGiIIw4FD7AqKdvAQNfZJUWWzEDFZ9c7ADTQeWdR5JrE1f8l5Gm3ihZUudX9AH5+49yvor6TRtY2UYRA==,iv:JaGmxjKF6SkwTgXHwbbMW7t1UedVVg0NHXaABQ+RIqA=,tag:KPISxyivd3Fcu2kTh0nnWg==,type:str]
+            AWS_ENDPOINTS: ENC[AES256_GCM,data:kyOxfu62QPrIotpqa0XRAK02vE6CFSrTbkFch+N7,iv:jOk3pNeL9fO6rVNxEyVgfpL/CUMlXCf1aIG/rS7Qk+s=,tag:nHO5vGslwyJBTQYRsjxktQ==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB0RmUySldYcWZMdDlHQTkx
+            NUhEV3VaZGJ6aE5lNXZNUHc0R0RxZGE4TTNjCmlNYys4anJJNm9ZQk5yYjdYakpI
+            TnYvSlV4MDZyMFEvcGFoN0VOWnNkbHcKLS0tIDFKeVlhVXIxVHg1eTJZYjh5Y2V2
+            cGlWYWt3TmVIeGtpazJiLzBSQnkwNTgKu2GJpEH76BC7/aXjb2KjYUo68Nwy4NuT
+            FFdrd7+MXEfYmgZr5cLzLjHxY7wy8C61J/j+QheAVFCKLxoxoHv9cA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2025-12-31T11:45:40Z"
+    mac: ENC[AES256_GCM,data:jxuLdOjXZUVL2i4msFdyxpMx0UaoY0CYlWsh8KIUa6Sex1S2qiXWrawU9aVAAzb91skzm0KDLhSUwdwsl0GGfX0JHtblWvg9X4exJgebKP/IPxBG9xAHnYgZm649N+g/SxsQfb6SvB2EUor4dhNcemgeEiExCJmKysQ8OrcEyQk=,iv:L6PmBUd/CwGsEcimadQxspgVIn2DDu14o6r1HYJU+Ug=,tag:pbDux9Smd7IoNq6fYakpOw==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
