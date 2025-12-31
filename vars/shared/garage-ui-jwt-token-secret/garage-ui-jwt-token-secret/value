@@ -5,22 +5,22 @@ metadata:
     namespace: garage
 spec:
     secretTemplates:
-        - name: ENC[AES256_GCM,data:IHaX/CdR9WkJj7+8JnDjT0fRO8sTuHft5cY=,iv:qGh8I52qzmiYcagOdjMwxC/DWprBpnqEH2764SzguCU=,tag:swLlOSGln0y6Uq4eTzZfJQ==,type:str]
-          type: ENC[AES256_GCM,data:FVrdsJlH,iv:yjLvBGH38VlGYeu8DUzL8CUKd+4O8uvhYHTwYh9jhwY=,tag:1OASInO+qhKCh+3CKcgXRQ==,type:str]
+        - name: ENC[AES256_GCM,data:TaWSAhpZACCtsMrS77FLtjSdjK6fQuy6aI4=,iv:3hja3sd07l2kC0+IlI9KmH8Vg0y3WYJknBX0rgjBfPU=,tag:ribS67D8V8aC850Z21aPQA==,type:str]
+          type: ENC[AES256_GCM,data:01YITiEa,iv:h4GKel7SddGz2DOo2wrS9Y3pB8Ms/04lEknJAMOzPgI=,tag:ADSIgJvEnBEvbJPveyZpmA==,type:str]
           stringData:
-            jwt-key.pem: ENC[AES256_GCM,data:Qud2ACt2LZ4QQPft7MPCNIr6+GD+HyE5g3r/ff22LPRBjvREcSnNts498GhIWOyWkaVToi5VTPGTkY9b7MYE9ZCJeWvziYn7e0hjKNfvhFbDJtvFONeG94yuP39SW24x2A9DTIzDbXNCe6t1EEavJx8MSVu9yg==,iv:jw0KAR7akYJJ7oT7tl4I8jXdbK+VCxOJF4sKWYj1DIo=,tag:KBL7OCBNmm+o/An+Tus8iA==,type:str]
+            jwt-key.pem: ""
 sops:
     age:
         - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBFNmMwUzBKZ2Q1ajZMNi96
-            UHlJdytLcXFlUGp0dmNvQTUzKzVleXBTWTBRCkVROEtoczJrVGlvNUFNaS9jTExh
-            VmF5YTlidUJYb0NRbEg3K0lrNlhrZmsKLS0tIGRqRnVCR0xtc2NMNGZsLzBHQnhs
-            MFdUYTluTHBhWGpzNkI3ZjhFY1hGTGsKotIF1/AqvnisUH7QwNMLmAtzWLEqOCos
-            GZTFT5Ouz5IHu7nNREp08qaUXEk1C+FaWIcNRs7jAzB0cX7V5X6X/Q==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBpRUJBcHNuNzlBZGs3NnRD
+            cEtoZXhOKytqa21PbXkvdFhmTGk1Z2FvOUZ3Cnl4SWlOYmNidEwxTGxUOC84RFI2
+            NkVERUhFYUtpT01XbTI5dGxvU0NLSFUKLS0tIGhYN1JmRnE0WUR4U0JnVU5hbmt5
+            MC9Qa0FYYnRDdVNqamJZamdROHRpMm8Ks/uMF4RQ1uJ7+2keMVm+nXAj5b6bbiqr
+            TgjHJsxSf9AmFCiin2vlmZ+cYEOw7Bv11SUczXrpmt2rNVOjUWZ1lg==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2025-12-31T17:45:05Z"
-    mac: ENC[AES256_GCM,data:tPuAAZbC2julq4jK3J3yKl5IIHG4tsNuATZ9r2RIo40e8MxoFeKf5JVS+Css1VjI315ITpY5X1Fsu5FzWDtobCZQJ5YlF54yaPQGkHcBgMGC5ElcsAORbvdGx83NbR+0I6Y0KCszUIzO0tJuGd0lNw/zbF9dAVfOy+9Ikgg3LWQ=,iv:rqKS8c19lLZyHgHjEaoevJfNhBBKf67q8SEkWOslWmY=,tag:FfcYul5ZMyaWyhgeFI5OEw==,type:str]
+    lastmodified: "2025-12-31T18:26:09Z"
+    mac: ENC[AES256_GCM,data:ijTqFeKXTkt7rsbRZhdn6c9zGzfIc+AHk9OraFAacyZnlpfRAP7ZM2H/GodXDD01Ce635D24LZjh83uio/H+NNE1Ziro63vEez6ujeaTnNFXUYY/gyN4Q5YpzSOP0Ej/5QviaDnA+1wv5iFZ0J9xqBvn3AGYEigd2IToIFVKpfw=,iv:z6kTjppK0h+4f4h3UACZhkRKTxsevbke7qCWarJGu4c=,tag:0YyL58JIjkbKLfKssDOZqw==,type:str]
     encrypted_suffix: Templates
     version: 3.11.0
