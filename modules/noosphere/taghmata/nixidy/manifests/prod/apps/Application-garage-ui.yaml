@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: garage-ui
+  namespace: argocd
+spec:
+  destination:
+    namespace: garage
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: ./modules/noosphere/taghmata/nixidy/manifests/prod/garage-ui
+    repoURL: https://github.com/apetrovic6/omnissiah.git
+    targetRevision: master
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
