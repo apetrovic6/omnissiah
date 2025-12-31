@@ -291,6 +291,7 @@
             nil
             nixd
             garage_2
+            k9s
           ];
         };
       };
