@@ -34,7 +34,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: jwt-key.pem
-                  name: garage-ui-jwt-key
+                  name: garage-ui-jwt-token-secret
           image: noooste/garage-ui:v0.1.2
           imagePullPolicy: IfNotPresent
           livenessProbe:

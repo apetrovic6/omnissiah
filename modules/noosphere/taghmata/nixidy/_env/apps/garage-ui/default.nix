@@ -7,6 +7,7 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-ui-admin-token/garage-ui-admin-token/value)
+      (builtins.readFile ../../../../../../../vars/shared/garage-ui-jwt-token-secret/garage-ui-jwt-token-secret/value)
 
       ''
 
@@ -88,6 +89,10 @@ in {
             interval = "30s";
             path = "/api/v1/monitoring/metrics";
             labels = {prometheus = "kube-prometheus";};
+          };
+
+          auth = {
+            jwt_private_key_secret.name = "garage-ui-jwt-token-secret";
           };
         };
       };
