@@ -1,7 +1,12 @@
-{charts, ...}: {
-  applications.zitadel = let
-    namespace = "zitadel";
-  in {
+{
+  config,
+  charts,
+  ...
+}: let
+  namespace = "zitadel";
+  domain = config.noosphere.domain;
+in {
+  applications.zitadel = {
     inherit namespace;
     createNamespace = true;
     resources.ingresses.zitadel-ip-root = {
@@ -19,13 +24,13 @@
         tls = [
           {
             secretName = "zitadel-tls";
-            hosts = ["zitadel.noosphere.uk"];
+            hosts = ["zitadel.${domain}"];
           }
         ];
 
         rules = [
           {
-            host = "zitadel.noosphere.uk";
+            host = "zitadel.${domain}";
             http.paths = [
               {
                 path = "/";
@@ -54,7 +59,7 @@
             kind: ClusterIssuer
             name: letsencrypt-cloudflare
           dnsNames:
-            - zitadel.noosphere.uk
+            - zitadel.${domain}
       ''
       ''
         apiVersion: isindir.github.com/v1alpha3
@@ -113,7 +118,7 @@
         zitadel = {
           masterkeySecretName = "master-key-secret";
           configmapConfig = {
-            ExternalDomain = "zitadel.noosphere.uk";
+            ExternalDomain = "zitadel.${domain}";
             ExternalSecure = true;
             ExternalPort = 443;
             TLS.enabled = false;

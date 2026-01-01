@@ -1,4 +1,10 @@
-{charts, ...}: {
+{
+  charts,
+  config,
+  ...
+}: let
+  domain = config.noosphere.domain;
+in {
   imports = [
     ./apps/metrics-server
     ./apps/cloudnative-pg
@@ -16,17 +22,17 @@
     ./apps/garage-ui
   ];
 
-  nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
+  # nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
   # nixidy.chartsDir = ./charts;
 
   # Set the target branch the rendered manifests for _this_
   # environment should be pushed to in the repository defined
   # above.
-  nixidy.target.branch = "master";
+  # nixidy.target.branch = "master";
 
   # Set the target sub-directory to copy the generated
   # manifests to when running `nixidy switch .#dev`.
-  nixidy.target.rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod/";
+  # nixidy.target.rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod/";
 
   nixidy.applicationImports = [
     ../_generated/cert-manager-crd.nix
@@ -104,9 +110,9 @@
           tls:
             - secretName: argocd-tls
               hosts:
-                - argocd.noosphere.uk
+                - argocd.${domain}
           rules:
-            - host: argocd.noosphere.uk
+            - host: argocd.${domain}
               http:
                 paths:
                   - path: /
@@ -131,9 +137,9 @@
           tls:
             - secretName: longhorn-tls
               hosts:
-                - longhorn.noosphere.uk
+                - longhorn.${domain}
           rules:
-            - host: longhorn.noosphere.uk
+            - host: longhorn.${domain}
               http:
                 paths:
                   - path: /

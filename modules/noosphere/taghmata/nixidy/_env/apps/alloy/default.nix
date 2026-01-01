@@ -1,6 +1,13 @@
-{charts, ...}: {
+{
+  config,
+  charts,
+  ...
+}: let
+  namespace = "alloy";
+  domain = config.noosphere.domain;
+in {
   applications.alloy = {
-    namespace = "alloy";
+    inherit namespace;
     createNamespace = true;
     helm.releases.alloy = {
       chart = charts.grafana.alloy-operator;
@@ -24,13 +31,13 @@
             kind: ClusterIssuer
             name: letsencrypt-cloudflare
           dnsNames:
-            - alloy.noosphere.uk
+            - alloy.${domain}
       ''
     ];
 
     resources.ingresses.alloy-ip-root = {
       metadata = {
-        namespace = "alloy";
+        inherit namespace;
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
@@ -43,13 +50,13 @@
         tls = [
           {
             secretName = "alloy-tls";
-            hosts = ["alloy.noosphere.uk"];
+            hosts = ["alloy.${domain}"];
           }
         ];
 
         rules = [
           {
-            host = "alloy.noosphere.uk";
+            host = "alloy.${domain}";
             http.paths = [
               {
                 path = "/";
@@ -119,7 +126,7 @@
         # ingress = {
         #   enabled = true;
         #   ingressClassName = "traefik";
-        #   hosts = ["alloy.noosphere.uk"];
+        #   hosts = ["alloy.${domain}"];
         #   tls = ["alloy-tls"];
         # };
       };

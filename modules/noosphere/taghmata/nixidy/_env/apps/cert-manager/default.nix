@@ -1,7 +1,12 @@
-{charts, ...}: {
-  applications.cert-manager = let
-    namespace = "cert-manager";
-  in {
+{
+  config,
+  charts,
+  ...
+}: let
+  namespace = "cert-manager";
+  domain = config.noosphere.domain;
+in {
+  applications.cert-manager = {
     output.path = "./cert-manager";
     inherit namespace;
     createNamespace = true;
@@ -21,7 +26,7 @@
     #       };
 
     #       # dnsNames is on spec (not under issuerRef)
-    #       dnsNames = [ "argocd.noosphere.uk" ];
+    #       dnsNames = [ "argocd.${domain}" ];
     #     };
     #   };
 
@@ -110,7 +115,7 @@
             kind: ClusterIssuer
             name: letsencrypt-cloudflare
           dnsNames:
-            - argocd.noosphere.uk
+            - argocd.${domain}
       ''
 
       ''
@@ -125,7 +130,7 @@
             kind: ClusterIssuer
             name: letsencrypt-cloudflare
           dnsNames:
-            - longhorn.noosphere.uk
+            - longhorn.${domain}
       ''
 
       ''

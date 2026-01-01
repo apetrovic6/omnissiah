@@ -1,5 +1,5 @@
-{...}: let
-  ageKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
+{config, ...}: let
+  ageKey = config.noosphere.agePublicKey;
   fileNameRpc = "garage-rpc-secret";
   fileNameAdmin = "garage-ui-admin-token";
   fileNameGarageUiJwtSecret = "garage-ui-jwt-token-secret";
@@ -82,34 +82,34 @@ in {
 
       runtimeInputs = [pkgs.coreutils pkgs.sops pkgs.openssl];
 
- script = ''
-    set -euo pipefail
+      script = ''
+            set -euo pipefail
 
-    tmp="$(mktemp -d)"
-    trap 'rm -rf "$tmp"' EXIT
+            tmp="$(mktemp -d)"
+            trap 'rm -rf "$tmp"' EXIT
 
-    # Preserve PEM formatting by writing to a file
-    openssl genpkey -algorithm ED25519 -out "$tmp/jwt-key.pem"
+            # Preserve PEM formatting by writing to a file
+            openssl genpkey -algorithm ED25519 -out "$tmp/jwt-key.pem"
 
-    sops encrypt \
-      --age "${ageKey}" \
-      --encrypted-suffix "Templates" \
-      --input-type yaml --output-type yaml \
-      /dev/stdin > "$out/${fileNameGarageUiJwtSecret}" <<EOF
-apiVersion: isindir.github.com/v1alpha3
-kind: SopsSecret
-metadata:
-  name: ${fileNameGarageUiJwtSecret}
-  namespace: garage
-spec:
-  secretTemplates:
-    - name: ${fileNameGarageUiJwtSecret}
-      type: Opaque
-      stringData:
-        jwt-key.pem: |-
-$(sed 's/^/          /' "$tmp/jwt-key.pem")
-EOF
-  '';
+            sops encrypt \
+              --age "${ageKey}" \
+              --encrypted-suffix "Templates" \
+              --input-type yaml --output-type yaml \
+              /dev/stdin > "$out/${fileNameGarageUiJwtSecret}" <<EOF
+        apiVersion: isindir.github.com/v1alpha3
+        kind: SopsSecret
+        metadata:
+          name: ${fileNameGarageUiJwtSecret}
+          namespace: garage
+        spec:
+          secretTemplates:
+            - name: ${fileNameGarageUiJwtSecret}
+              type: Opaque
+              stringData:
+                jwt-key.pem: |-
+        $(sed 's/^/          /' "$tmp/jwt-key.pem")
+        EOF
+      '';
     };
   };
 }

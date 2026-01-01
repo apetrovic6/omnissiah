@@ -1,5 +1,5 @@
-{...}: let
-  ageKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
+{config, ...}: let
+  ageKey = config.noosphere.agePublicKey;
   fileName = "s3-longhorn-backup";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {

@@ -1,6 +1,10 @@
-{charts, ...}: let
+{
+  charts,
+  config,
+  ...
+}: let
   namespace = "garage";
-  domain = "noosphere.uk";
+  domain = config.noosphere.domain;
 in {
   applications.garage-ui = {
     inherit namespace;
@@ -82,7 +86,7 @@ in {
           cors = {
             enabled = true;
             allowed_origins = ["https://ui.garage.${domain}"];
-            };
+          };
 
           serviceMonitor = {
             enabled = true;
@@ -95,7 +99,7 @@ in {
             jwt_private_key_secret = {
               name = "garage-ui-jwt-token-secret";
               key = "jwt-key.pem";
-              };
+            };
           };
         };
       };

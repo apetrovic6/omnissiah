@@ -1,5 +1,6 @@
-{...}: let
+{config, ...}: let
   namespace = "yarr";
+  domain = config.noosphere.domain;
 in {
   applications.seerr = {
     resources.namespaces.yarr = {
@@ -141,13 +142,13 @@ in {
         tls = [
           {
             secretName = "seerr-tls";
-            hosts = ["seerr.noosphere.uk"];
+            hosts = ["seerr.${domain}"];
           }
         ];
 
         rules = [
           {
-            host = "seerr.noosphere.uk";
+            host = "seerr.${domain}";
             http.paths = [
               {
                 path = "/";
@@ -177,7 +178,7 @@ in {
             kind: ClusterIssuer
             name: letsencrypt-cloudflare
           dnsNames:
-            - seerr.noosphere.uk
+            - seerr.${domain}
       ''
     ];
 

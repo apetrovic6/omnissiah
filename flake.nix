@@ -103,17 +103,7 @@
         (import-tree ./modules)
       ];
 
-      # flake.nixidyEnvs = inputs.nixpkgs.lib.genAttrs systems (system: let
-      #   pkgsForSystem = import inputs.nixpkgs {inherit system;};
-      # in
-      #   inputs.nixidy.lib.mkEnvs {
-      #     pkgs = pkgsForSystem;
-      #     charts = nixhelm.chartsDerivations.${system} ;
-      #     envs = {
-      #       # dev.modules = [./taghmata/env/dev.nix];
-      #       prod.modules = [./modules/noosphere/taghmata/nixidy/_env/prod.nix];
-      #     };
-      #   });
+      noosphere.agePublicKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
 
       # https://docs.clan.lol/guides/flake-parts
       clan = {
@@ -136,21 +126,20 @@
           phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
         };
 
-        legacyPackages = {
-          nixidyEnvs.${system} = inputs.nixidy.lib.mkEnvs {
-            inherit pkgs;
+        noosphere = {
+          domain = "noosphere.uk";
+          nixidy = {
+            repository = "https://github.com/apetrovic6/omnissiah.git";
+            branch = "master";
+            rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod";
+          };
 
-            charts =
-              inputs.nixhelm.chartsDerivations.${system}
-              // {
-                deuxfleurs = {
-                  garage = "${inputs.garage}/script/helm/garage";
-                };
-              };
-
-            envs = {
-              prod.modules = [modules/noosphere/taghmata/nixidy/_env/prod.nix];
-            };
+          envs.dev.enable = false;
+          envs.prod = {
+            enable = true;
+            branch = "master";
+            rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod";
+            extraModules = [modules/noosphere/taghmata/nixidy/_env/prod.nix];
           };
         };
 
@@ -165,8 +154,6 @@
               ln -s "$p" "$out"/
             done
           '';
-
-        packages.nixidy = inputs'.nixidy.packages.default;
 
         packages.certManager = inputs.nixidy.packages.${system}.generators.fromChartCRD {
           name = "cert-manager";

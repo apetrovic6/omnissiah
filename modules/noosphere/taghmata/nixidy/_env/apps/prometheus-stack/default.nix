@@ -1,13 +1,21 @@
-{charts, ...}: {
+{
+  config,
+  charts,
+  ...
+}: let
+  namespace = "observability";
+  domain = config.noosphere.domain;
+in {
   applications.prometheus-crds = {
-    namespace = "observability";
+    inherit namespace;
+
     helm.releases.prometheus-operator-crds = {
       chart = charts.prometheus-community.prometheus-operator-crds;
     };
   };
 
   applications.prometheus-grafana = {
-    namespace = "observability";
+    inherit namespace;
     createNamespace = true;
 
     helm.releases.kube-prometheus-stack = let
@@ -136,7 +144,7 @@
             kind: ClusterIssuer
             name: letsencrypt-cloudflare
           dnsNames:
-            - grafana.noosphere.uk
+            - grafana.${domain}
       ''
     ];
 
@@ -155,13 +163,13 @@
         tls = [
           {
             secretName = "grafana-tls";
-            hosts = ["grafana.noosphere.uk"];
+            hosts = ["grafana.${domain}"];
           }
         ];
 
         rules = [
           {
-            host = "grafana.noosphere.uk";
+            host = "grafana.${domain}";
             http.paths = [
               {
                 path = "/";

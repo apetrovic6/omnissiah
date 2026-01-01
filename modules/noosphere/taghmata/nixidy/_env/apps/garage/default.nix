@@ -1,10 +1,10 @@
 {
   charts,
-  lib,
+  config,
   ...
 }: let
   namespace = "garage";
-  domain = "noosphere.uk";
+  domain = config.noosphere.domain;
 in {
   applications.garage = {
     inherit namespace;
@@ -34,6 +34,7 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-rpc-secret/garage-rpc-secret/value)
+
       # ''
 
       #   apiVersion: cert-manager.io/v1
@@ -58,8 +59,11 @@ in {
       chart = charts.deuxfleurs.garage;
 
       values = {
-        replicationFactor = 2;
-        existingRpcSecret = "garage-rpc-secret";
+        garage = {
+          replicationFactor = 3;
+          existingRpcSecret = "garage-rpc-secret";
+        };
+
         s3 = {
           api = {
             region = "garage";
