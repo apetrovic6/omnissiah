@@ -35,8 +35,8 @@ spec:
                   name: pg-seerr-password
             - name: DB_NAME
               value: seerr
-          image: fallenbagel/jellyseerr:2.7.3
-          name: jellyserr
+          image: seerr/seerr:preview-music-support
+          name: seerr
           ports:
             - containerPort: 5055
           volumeMounts:
