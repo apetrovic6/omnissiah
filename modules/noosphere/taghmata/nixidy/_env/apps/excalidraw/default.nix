@@ -8,7 +8,7 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    resources.deployment.excalidraw = {
+    resources.deployments.excalidraw = {
       metadata.labels = labels;
 
       spec = {
@@ -37,7 +37,7 @@ in {
     resources.services.excalidraw = {
       spec = {
         selector = {
-          inherit labels;
+          app = labels.app;
         };
 
         ports = [
