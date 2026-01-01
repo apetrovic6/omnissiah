@@ -20,6 +20,7 @@ in {
     ./apps/csi-driver-nfs
     ./apps/garage
     ./apps/garage-ui
+    ./apps/excalidraw
   ];
 
   # nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
