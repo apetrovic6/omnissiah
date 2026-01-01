@@ -51,8 +51,8 @@ in {
           ];
           spec.containers = [
             {
-              name = "jellyserr";
-              image = "fallenbagel/jellyseerr:2.7.3";
+              name = "seerr";
+              image = "seerr/seerr:preview-music-support";
               volumeMounts = [
                 {
                   name = "config";
