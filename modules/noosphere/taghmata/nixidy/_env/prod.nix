@@ -21,6 +21,7 @@ in {
     ./apps/garage
     ./apps/garage-ui
     ./apps/excalidraw
+    ./apps/karakeep
   ];
 
   # nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
