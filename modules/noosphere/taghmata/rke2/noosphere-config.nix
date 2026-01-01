@@ -127,7 +127,7 @@ in {
           charts =
             self.inputs.nixhelm.chartsDerivations.${system}
             // {
-              deuxfleurs.garage = "${self.inputs.garage}/script/helm/garage";            
+              deuxfleurs.garage = "${self.inputs.garage}/script/helm/garage";
             };
 
           envs = lib.mapAttrs mkEnv enabledEnvs;
