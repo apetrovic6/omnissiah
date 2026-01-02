@@ -13,8 +13,7 @@ in {
       script = ''
                set -euo pipefail
 
-               secretA="$(openssl rand -hex 32)"
-               secretB="$(openssl rand -hex 32)"
+               secret="$(openssl rand -hex 32)"
 
         sops encrypt \
           --age "${ageKey}" \
@@ -31,8 +30,8 @@ in {
             - name: ${bytestashJwtSecret}
               type: Opaque
               stringData:
-                jwt-key: "$secretA"
-                expirity-key: "$secretB"
+                jwt-key: "$secret"
+                expiry: "24h"
         EOF
       '';
     };
