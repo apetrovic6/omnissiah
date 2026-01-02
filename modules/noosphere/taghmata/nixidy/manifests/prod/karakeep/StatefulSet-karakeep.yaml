@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/component: karakeep
+    app.kubernetes.io/instance: karakeep
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: karakeep
+    app.kubernetes.io/version: 0.27.0
+    helm.sh/chart: karakeep-0.27.0
+  name: karakeep
+  namespace: karakeep
+spec:
+  podManagementPolicy: OrderedReady
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: karakeep
+      app.kubernetes.io/instance: karakeep
+      app.kubernetes.io/name: karakeep
+  serviceName: karakeep
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: karakeep
+        app.kubernetes.io/instance: karakeep
+        app.kubernetes.io/name: karakeep
+    spec:
+      automountServiceAccountToken: true
+      containers:
+        - env:
+            - name: BROWSER_WEB_URL
+              value: http://karakeep-chrome:9222
+            - name: DATA_DIR
+              value: /data
+            - name: MEILI_ADDR
+              value: http://karakeep-meilisearch:7700
+            - name: NEXTAUTH_URL
+              value: http://karakeep.noosphere.uk
+          envFrom:
+            - secretRef:
+                name: karakeep-secret
+            - secretRef:
+                name: karakeep-meilisearch-secret
+          image: ghcr.io/karakeep-app/karakeep:0.27.0
+          livenessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            tcpSocket:
+              port: 3000
+            timeoutSeconds: 1
+          name: karakeep
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            tcpSocket:
+              port: 3000
+            timeoutSeconds: 1
+          volumeMounts:
+            - mountPath: /data
+              name: data
+      dnsPolicy: ClusterFirst
+      enableServiceLinks: false
+      hostIPC: false
+      hostNetwork: false
+      hostPID: false
+      serviceAccountName: default
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
+        storageClassName: longhorn

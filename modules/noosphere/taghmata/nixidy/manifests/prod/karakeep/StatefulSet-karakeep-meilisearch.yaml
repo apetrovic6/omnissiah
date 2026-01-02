@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/component: search-engine
+    app.kubernetes.io/instance: karakeep
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: meilisearch
+    app.kubernetes.io/part-of: meilisearch
+    app.kubernetes.io/version: v1.13.0
+    helm.sh/chart: meilisearch-0.12.0
+  name: karakeep-meilisearch
+  namespace: karakeep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: karakeep
+      app.kubernetes.io/name: meilisearch
+  serviceName: karakeep-meilisearch
+  template:
+    metadata:
+      annotations:
+        checksum/config: 87186460929524abb1a98fcb0deb528c232cee24aeb7ae42a939fb5c84882977
+      labels:
+        app.kubernetes.io/component: search-engine
+        app.kubernetes.io/instance: karakeep
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: meilisearch
+        app.kubernetes.io/part-of: meilisearch
+        app.kubernetes.io/version: v1.13.0
+        helm.sh/chart: meilisearch-0.12.0
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: karakeep-meilisearch-environment
+            - secretRef:
+                name: karakeep-meilisearch-secret
+          image: getmeili/meilisearch:v1.13.0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+          name: meilisearch
+          ports:
+            - containerPort: 7700
+              name: http
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+          resources: {}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          startupProbe:
+            failureThreshold: 60
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 1
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /meili_data
+              name: data
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccountName: karakeep-meilisearch
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: data
+          persistentVolumeClaim:
+            claimName: karakeep-meilisearch

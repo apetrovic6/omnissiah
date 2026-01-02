@@ -1,6 +1,7 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
-  meiliSearchSecret= "karakeep-meilisearch-secret";
+  meiliSearchSecret = "karakeep-meilisearch-secret";
+  karakeepSecret = "karakeep-secret";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${meiliSearchSecret} = {
@@ -35,42 +36,38 @@ in {
       '';
     };
 
-    # clan.core.vars.generators.${fileNameAdmin} = {
-    #   share = true;
+    clan.core.vars.generators.${karakeepSecret} = {
+      share = true;
 
-    #   prompts.admin-token = {
-    #     description = "Enter Garage admin token: ";
-    #     type = "hidden";
-    #     persist = false;
-    #   };
+      files.${karakeepSecret}.secret = false;
 
-    #   files.${fileNameAdmin}.secret = false;
+      runtimeInputs = [pkgs.coreutils pkgs.sops pkgs.openssl];
 
-    #   runtimeInputs = [pkgs.coreutils pkgs.sops pkgs.openssl];
+      script = ''
+               set -euo pipefail
 
-    #   script = ''
-    #            set -euo pipefail
+               secret="$(openssl rand -base64 36)"
+               nextpublicsecret="$(openssl rand -base64 36)"
 
-    #             secret="$(tr -d '\r\n' < "$prompts/admin-token")"
-
-    #     sops encrypt \
-    #       --age "${ageKey}" \
-    #       --encrypted-suffix "Templates" \
-    #       --input-type yaml --output-type yaml \
-    #       /dev/stdin > "$out/${fileNameAdmin}" <<EOF
-    #     apiVersion: isindir.github.com/v1alpha3
-    #     kind: SopsSecret
-    #     metadata:
-    #       name: ${fileNameAdmin}
-    #       namespace: garage
-    #     spec:
-    #       secretTemplates:
-    #         - name: ${fileNameAdmin}
-    #           type: Opaque
-    #           stringData:
-    #             admin-token: "$secret"
-    #     EOF
-    #   '';
-    # };
+        sops encrypt \
+          --age "${ageKey}" \
+          --encrypted-suffix "Templates" \
+          --input-type yaml --output-type yaml \
+          /dev/stdin > "$out/${karakeepSecret}" <<EOF
+        apiVersion: isindir.github.com/v1alpha3
+        kind: SopsSecret
+        metadata:
+          name: ${karakeepSecret}
+          namespace: karakeep
+        spec:
+          secretTemplates:
+            - name: ${karakeepSecret}
+              type: Opaque
+              stringData:
+                NEXTAUTH_SECRET: "$secret"
+                NEXT_PUBLIC?SECRET: "$nextpublicsecret"
+        EOF
+      '';
+    };
   };
 }

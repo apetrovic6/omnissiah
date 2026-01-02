@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    app.kubernetes.io/instance: karakeep
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: karakeep
+    app.kubernetes.io/version: 0.27.0
+    helm.sh/chart: karakeep-0.27.0
+  name: karakeep
+  namespace: karakeep
+spec:
+  rules:
+    - host: karakeep.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: karakeep
+                port:
+                  number: 3000
+            path: /
+            pathType: Prefix
