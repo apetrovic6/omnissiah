@@ -14,7 +14,6 @@ in {
       (builtins.readFile ../../../../../../../vars/shared/garage-ui-jwt-token-secret/garage-ui-jwt-token-secret/value)
 
       ''
-
         apiVersion: cert-manager.io/v1
         kind: Certificate
         metadata:
