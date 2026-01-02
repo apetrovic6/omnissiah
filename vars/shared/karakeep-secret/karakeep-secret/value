@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: karakeep-secret
+    namespace: karakeep
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:P1x4B+saXcDL6UjT+keC,iv:cIPATXS8AuEo8x+l42YyZM8pPWOjW2eAWuiKTQbJr4g=,tag:+yibYWl1CGGzn165yIb8pg==,type:str]
+          type: ENC[AES256_GCM,data:mj25d+0W,iv:ToYXxwQaaWVSn9ShvrpomP69GgSRU7bii4PhFj3AWEo=,tag:0KG6KgpDMl7Qxw3TCbv6YA==,type:str]
+          stringData:
+            NEXTAUTH_SECRET: ENC[AES256_GCM,data:rdlKXEYWxJnOAzPbfU1AM1J6YIjvEh+SbC+71b9/6W/H4CPPWAX8PUiBBUoKazx2,iv:gEj3o2mIMhDzvv21nyCsow/k6XeeKIYIeowAYTxbH/0=,tag:SyAR9fwfaUV6lb9VBl+11A==,type:str]
+            NEXT_PUBLIC?SECRET: ENC[AES256_GCM,data:sXzI5SC+QeK0WWfqWxqcwv8sUOuhEuWV0zBPA+vAqXT4Rq380CDdY6JBbTphvpRS,iv:NNLKMyavv3zx1oS/mGWvX0rJI11de9du8CNJqwgjZhA=,tag:sXJlsUS16S6sPhkBMHqHGg==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBFL0E0d2NwL3NlU21XMkhD
+            R1I4bXRGNmpLZlZVd21xOStWTzQxYTg1dlVzCno0bkJmMjNUZy9FeXl4UlJJRGZS
+            NEwzdE5CY1VFQkdoT1Y3SnpZR1Njc0EKLS0tIGsweHdYVVorcnJINTlZRnVBWVBC
+            VkF3bVM3VDdqZXJ4bUhzVVc4cVJqZ1kKpRAGPiuaII1d4MJQVlvfrFd7xsF61kEA
+            3QcGk7lmi8R970yOrOLeOPakVH2iXGUal6eCGt3MEczWVX6AUMIPbg==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-02T12:28:05Z"
+    mac: ENC[AES256_GCM,data:h5vX8Vg55EOJoz3qTYSxUYRY177YLuJFbAQs6wJ1kyYLyCnseBJO++31FIikfp3LU8309c5hQhOxaV+37LXGm/FDRgdBvRFxzxFIAMndu4XbkeijyGfwDj5t/hEhG2S4eAGwjKBdM94pQQic3agoBsF6XT98OO/s+8h+Plz+wkg=,iv:h8rrcmcTfAvmaQuvL3+7AStJZRHsCMAik2RTqgwgso4=,tag:p8bng8QTK8BFNuIIUwi7QQ==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
