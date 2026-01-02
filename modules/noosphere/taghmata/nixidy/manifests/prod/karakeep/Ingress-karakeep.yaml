@@ -21,3 +21,7 @@ spec:
                   number: 3000
             path: /
             pathType: Prefix
+  tls:
+    - hosts:
+        - karakeep.noosphere.uk
+      secretName: karakeep-tls
