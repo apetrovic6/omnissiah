@@ -65,7 +65,7 @@ in {
               type: Opaque
               stringData:
                 NEXTAUTH_SECRET: "$secret"
-                NEXT_PUBLIC?SECRET: "$nextpublicsecret"
+                NEXT_PUBLIC_SECRET: "$nextpublicsecret"
         EOF
       '';
     };
