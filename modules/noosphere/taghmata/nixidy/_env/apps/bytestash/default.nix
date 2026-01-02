@@ -47,6 +47,9 @@ in {
           };
         };
 
+        livenessProbe = { initialDelaySeconds = 120;};
+        readinessProbe = { initialDelaySecodns = 120;};
+
         ingress = {
           enabled = true;
           className = "traefik";
