@@ -15,7 +15,7 @@ in {
       (builtins.readFile ../../../../../../../vars/shared/karakeep-meilisearch-secret/karakeep-meilisearch-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/karakeep-secret/karakeep-secret/value)
 
-     ''
+      ''
         apiVersion: cert-manager.io/v1
         kind: Certificate
         metadata:
@@ -44,7 +44,12 @@ in {
 
         meilisearch.auth.existingMasterKeySecret = meiliSecret;
 
-        ingress.karakeep.tls = [ {secretName = "karakeep-tls"; hosts = ["karakeep.${domain}"];}];
+        ingress.karakeep.tls = [
+          {
+            secretName = "karakeep-tls";
+            hosts = ["karakeep.${domain}"];
+          }
+        ];
 
         controllers = {
           karakeep = {
