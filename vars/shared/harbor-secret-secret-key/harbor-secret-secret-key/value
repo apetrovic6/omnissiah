@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: harbor-secret-secret-key
+    namespace: harbor
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:AXn1nRnU0DRGstoe40H/OKRfiBIqH39m,iv:wce/gL5Qv0UePiwf+vqWPLuD/yvPZe8MOMAQIVWa6XM=,tag:xBtkmvO/JftsKwHLAXt+4Q==,type:str]
+          type: ENC[AES256_GCM,data:rvKxLDvJ,iv:yvHlnL9I03HdXSPhD/MtFlwrsfX6dN9hGOX9c3b/E2U=,tag:X7w+EQOa2Owz0eQqNRjREQ==,type:str]
+          stringData:
+            secretKey: ENC[AES256_GCM,data:zrjTYcr3Twu2gbI3BjHdLQ==,iv:/pZPsF0xeb0eCGK0/3cphi59ZG1aRlXDTyj+DmA9mKA=,tag:u7okrqGr4jJNQy9koZoSVw==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBJbXV0QlRCelIyd1hDTEdP
+            dEs2WmtjTFhybEczaVk2aTdJekg2WmNKODJjCmZuaDBwekkybVlDVjdlZjdwem85
+            Tm9aWU5YSGk5RzhUVUd1UnFjVUZnOE0KLS0tIHVmYzhSUUlUcDVDaVd4L1lab0Zk
+            S1lxWlJ2RWFvOGdNQmtGNVJQWmMvN0kKqcC4I//EY4ZvxK1rXrnN/ypFs35xVUxH
+            ahx/vRU5QZ7cUDlvyykUzbnm1r3b2OGWH+A6TULYdxhsN6Q8bHc7CA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-03T10:18:42Z"
+    mac: ENC[AES256_GCM,data:rt4oco+466wAssjECNqyWOQeCN5JmqKZZVxk5Aa8ggxVjnH5LeYZMCcB9vAFVqswwkO/NZXAj0yjXmgfDov0Of14I8GnGaY0Xjwnumu0j/NBVWes26TEVgNYAwFp3knqcQ1EuHbvjWXoZjnntXH8owK1xag+jAFaUvg/GBJ6oWQ=,iv:Ih4ztaoJJmGrDvHw4r0z55zHo56DaoPhQLr6M8dPpWs=,tag:EbqD9zjNTXPkW41Dou3kGg==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0

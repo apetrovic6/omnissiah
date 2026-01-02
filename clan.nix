@@ -103,6 +103,7 @@
           "libvirtd"
           "kvm"
           "adb"
+          "podman"
           "docker"
         ];
       };

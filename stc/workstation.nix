@@ -22,9 +22,15 @@ in {
       self.inputs.magos.nixosModules.default
       # self.nixosModules.flatpak
       self.nixosModules.bluetooth
+      self.nixosModules.virtualisation
     ];
 
     services.imperium.flatpak.enable = true;
+
+    services.imperium.virtualisation.podman = {
+      enable = true;
+      enableDockerSocket = true;
+    };
 
     hardware.keyboard.qmk.enable = true;
 

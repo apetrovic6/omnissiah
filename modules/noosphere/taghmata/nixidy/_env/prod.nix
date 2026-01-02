@@ -23,6 +23,7 @@ in {
     ./apps/excalidraw
     ./apps/karakeep
     ./apps/bytestash
+    ./apps/harbor
   ];
 
   # nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";

@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: harbor-redis-password-secret
+    namespace: harbor
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:HcTHl+V28x8hS2PP8CE553nl38Bw0vnNxg3HKg==,iv:utOCoZRDTFzycOrD95RUU6WtsxLa8EeuZd38yYnYm2o=,tag:u2VgqvjypJg3u0h/xjSSwQ==,type:str]
+          type: ENC[AES256_GCM,data:F+BWk1gt,iv:ruzDHUWyRRSfrGFXd8XBPaRPn7UIjUwzdpMZbG0EDSM=,tag:OaADx8enazCjGyDM4OA3tQ==,type:str]
+          stringData:
+            REDIS_PASSWORD: ENC[AES256_GCM,data:LSeaG9e461iHDj0zNJECvxMuVPIavtgbapSlHnhQ7g4=,iv:A2HwnVYto7YZRhQr5geH4O9JFn71iXSqf0PQ/WTGQaI=,tag:vPei9DRB3y4nhD1Bg0afPQ==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAzY2dpQlhRcXE4UzMwTjBY
+            R1hRdzIvQXdLWm5qby9EOXlKQVo1bXNlSUFZCkVONUxTaEdOMzNEcUc1cjhhRU8r
+            WUtFYndEOWpMV2NmTE1UZmU2Q0MvNFkKLS0tIE1XTkJVNGp2eWJ6VTBLK3l5a0dt
+            cjRPSTlVVk9Tc1EvSG9nQXJ2ZU9lMHMK9KXGLXoATvZUa70dJyI6sJB5Oa0s8Pbp
+            8+XrZna7NQtayCKj1AdboT0VyiQQUgH0Qogvhoc/NQ74QrFt3Q6lAA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-03T10:18:41Z"
+    mac: ENC[AES256_GCM,data:MCd33y71gy3lmckMKgiL/v9HsD4Ng6dCwFhD8kfGnXSyblIMP1V+QGAeR5wIzEwntDjBnr7loileZxDhWIdNGOJHscLsQ+3BpQ1JS3DgYYDQ3oZB8eojyG/TIOryKDlBnxmtye6H3DZ9cI/J2NR6o6Yhs4DwZW7VVO19Y8oyuD0=,iv:FWSPDpSmLXJXW6nE/S0fuNaE+k20eSipP2ivDBYfdyg=,tag:qyyYvJ7IfFJUgPHmTyjkQw==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0

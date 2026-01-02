@@ -1,0 +1,14 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  annotations:
+    argocd.proj.io/hook: PreSync
+    argocd.proj.io/sync-options: Prune=false,Delete=false
+    argocd.proj.io/sync-wave: "-10"
+  name: registry
+  namespace: harbor
+spec:
+  cluster:
+    name: pg-harbor
+  name: registry
+  owner: harbor

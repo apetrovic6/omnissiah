@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: harbor-token-cert
+  namespace: harbor
+spec:
+  commonName: harbor-token
+  issuerRef:
+    kind: Issuer
+    name: harbor-token-issuer
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 4096
+  secretName: harbor-core-svc-tls

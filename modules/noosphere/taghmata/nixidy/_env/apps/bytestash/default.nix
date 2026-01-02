@@ -39,7 +39,7 @@ in {
         };
 
         bytestash = {
-          baseUrl = "bytestash.${domain}";
+          baseUrl = "";
           existingJwtSecret = {
             secretName = "bytestash-jwt-secret";
             jwtKey = "jwt-key";
@@ -47,8 +47,8 @@ in {
           };
         };
 
-        livenessProbe = { initialDelaySeconds = 120;};
-        readinessProbe = { initialDelaySecodns = 120;};
+        livenessProbe = {initialDelaySeconds = 120;};
+        readinessProbe = {initialDelaySecodns = 120;};
 
         ingress = {
           enabled = true;

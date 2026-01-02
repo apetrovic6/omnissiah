@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: harbor
+    app.kubernetes.io/component: core
+    app.kubernetes.io/instance: harbor
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: harbor
+    app.kubernetes.io/part-of: harbor
+    app.kubernetes.io/version: 2.14.1
+    chart: harbor
+    component: core
+    heritage: Helm
+    release: harbor
+  name: harbor-core
+  namespace: harbor
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: harbor
+      component: core
+      release: harbor
+  template:
+    metadata:
+      annotations:
+        checksum/configmap: d245c4d209d172fa049081d14c88f4bd869091d5b04e81e863923970d682d37d
+        checksum/secret: dbbc4f9b641d5b6b473a87b69999060d2170fad45fd7ab44e30f8d142ff90a65
+        checksum/secret-jobservice: d95a9b319aea3eeedf845e1a2478d7d8a449307132d66f0f8d23417ef0d5c6e5
+      labels:
+        app: harbor
+        app.kubernetes.io/component: core
+        app.kubernetes.io/instance: harbor
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: harbor
+        app.kubernetes.io/part-of: harbor
+        app.kubernetes.io/version: 2.14.1
+        chart: harbor
+        component: core
+        heritage: Helm
+        release: harbor
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - env:
+            - name: CORE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: secret
+                  name: harbor-core-secret
+            - name: JOBSERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: JOBSERVICE_SECRET
+                  name: harbor-job-service-secret
+            - name: HARBOR_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: HARBOR_ADMIN_PASSWORD
+                  name: harbor-admin-password-secret
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-harbor-postgres-secret
+            - name: REGISTRY_CREDENTIAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: REGISTRY_PASSWD
+                  name: harbor-registry-credentials-secret
+            - name: CSRF_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: CSRF_KEY
+                  name: harbor-core-secret
+          envFrom:
+            - configMapRef:
+                name: harbor-core
+            - secretRef:
+                name: harbor-core
+          image: goharbor/harbor-core:v2.14.1
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 2
+            httpGet:
+              path: /api/v2.0/ping
+              port: 8080
+              scheme: HTTP
+            periodSeconds: 10
+          name: core
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            failureThreshold: 2
+            httpGet:
+              path: /api/v2.0/ping
+              port: 8080
+              scheme: HTTP
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          startupProbe:
+            failureThreshold: 360
+            httpGet:
+              path: /api/v2.0/ping
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - mountPath: /etc/core/app.conf
+              name: config
+              subPath: app.conf
+            - mountPath: /etc/core/key
+              name: secret-key
+              subPath: key
+            - mountPath: /etc/core/private_key.pem
+              name: token-service-private-key
+              subPath: tls.key
+            - mountPath: /etc/core/token
+              name: psc
+      securityContext:
+        fsGroup: 10000
+        runAsUser: 10000
+      terminationGracePeriodSeconds: 120
+      volumes:
+        - configMap:
+            items:
+              - key: app.conf
+                path: app.conf
+            name: harbor-core
+          name: config
+        - name: secret-key
+          secret:
+            items:
+              - key: secretKey
+                path: key
+            secretName: harbor-secret-secret-key
+        - name: token-service-private-key
+          secret:
+            secretName: harbor-core-svc-tls
+        - emptyDir: {}
+          name: psc
