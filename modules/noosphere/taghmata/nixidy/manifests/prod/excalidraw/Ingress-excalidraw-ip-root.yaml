@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: excalidraw-ip-root
+  namespace: excalidraw
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: excalidraw.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: excalidraw
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - excalidraw.noosphere.uk
+      secretName: excalidraw-tls
