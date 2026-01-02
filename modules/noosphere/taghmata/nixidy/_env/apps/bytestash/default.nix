@@ -25,18 +25,19 @@ in {
           existingJwtSecret = {
             secretName = "bytestash-jwt-secret";
             jwtKey = "jwt-key";
-            expirityKey = "expirity-key";
+            expirityKey = "expiry";
           };
         };
 
-        ingress = {
-          enabled = true;
-          className = "traefik";
-          host = "bytestash.${domain}";
-          path = "/";
-          pathType = "Prefix";
-          tls = ["bytestash-tls"];
-        };
+        # ingress = {
+        #   enabled = true;
+        #   className = "traefik";
+        #   host = "bytestash.${domain}";
+        #   path = "/";
+        #   pathType = "Prefix";
+        #   tls = ["bytestash-tls"];
+        # };
+
         containerSecurityContext = {
           capabilities = {
             drop = ["ALL"];
