@@ -1,22 +1,43 @@
-{config, pkgs, ...}:
-let
+{
+  config,
+  charts,
+  ...
+}: let
   namespace = "karakeep";
-  domain = config.nooshpere.domain.domain;
-in
- {
-    applications.karakeep = {
-      inherit namespace;
-      createNamespace = true;
+  domain = config.nooshpere.domain;
+in {
+  applications.karakeep = {
+    inherit namespace;
+    createNamespace = true;
 
-      kustomization = {
-        src = pkgs.fetchFromGitHub {
-          owner = "karakeep-app";
-          repo = "karakeep";
-          rev = "0.30.0";
-          hash =  "";
+    helm.releases.karakeep = {
+      chart = charts.karakeep-app.karakeep;
+
+      values = {
+        applicationHost = "karakeep.${domain}";
+        controllers = {
+          containers = {
+            karakeep = {
+              envFrom = [
+                {name = "karakeep-secret";}
+                {name = "karakeep-meilesearch-secret";}
+              ];
+            };
+          };
+
+          statefulset = {
+            volumeClaimTemplates = [
+              {
+                name = "data";
+                accessMode = "ReadWriteOnce";
+                size = "2Gi";
+                storageClass = "longhorn";
+                globalMounts = [{path = "/data";}];
+              }
+            ];
+          };
         };
-
-        path = "kubernetes";
       };
     };
+  };
 }
