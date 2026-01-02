@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    app.kubernetes.io/instance: bytestash
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: bytestash
+    app.kubernetes.io/version: 1.5.7
+    helm.sh/chart: bytestash-0.1.1
+  name: bytestash
+  namespace: bytestash
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bytestash.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: bytestash
+                port:
+                  number: 5000
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - bytestash.noosphere.uk
+      secretName: bytestash-tls

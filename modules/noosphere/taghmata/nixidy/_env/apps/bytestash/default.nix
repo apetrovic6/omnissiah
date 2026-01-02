@@ -10,6 +10,24 @@ in {
     inherit namespace;
     createNamespace = true;
 
+    yamls = [
+      (builtins.readFile ../../../../../../../vars/shared/bytestash-jwt-secret/bytestash-jwt-secret/value)
+      ''
+        apiVersion: cert-manager.io/v1
+        kind: Certificate
+        metadata:
+          name: bytestash-tls
+          namespace: ${namespace}
+        spec:
+          secretName: bytestash-tls
+          issuerRef:
+            kind: ClusterIssuer
+            name: letsencrypt-cloudflare
+          dnsNames:
+            - bytestash.${domain}
+      ''
+    ];
+
     helm.releases.bytestash = {
       chart = charts.bytestash.bytestash;
 
@@ -29,14 +47,19 @@ in {
           };
         };
 
-        # ingress = {
-        #   enabled = true;
-        #   className = "traefik";
-        #   host = "bytestash.${domain}";
-        #   path = "/";
-        #   pathType = "Prefix";
-        #   tls = ["bytestash-tls"];
-        # };
+        ingress = {
+          enabled = true;
+          className = "traefik";
+          host = "bytestash.${domain}";
+          path = "/";
+          pathType = "Prefix";
+          tls = [
+            {
+              secretName = "bytestash-tls";
+              hosts = ["bytestash.${domain}"];
+            }
+          ];
+        };
 
         containerSecurityContext = {
           capabilities = {
