@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: bytestash-jwt-secret
+    namespace: bytestash
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:7a7+KQuw8bWPfDOSzypbUBs5k34=,iv:Y3QDliqSEJ3O9x4jaSI+pHHApDArx7zdQwKXwj1V5ak=,tag:FIWJPa5WY2c8tlAQciPLmw==,type:str]
+          type: ENC[AES256_GCM,data:KLOLzyeo,iv:56HgkIH81aNc9Ky80xFRP8djF7rmfTaJaBaDF1/MYuA=,tag:jr3KgWwSkL/HDb12pY5fGA==,type:str]
+          stringData:
+            jwt-key: ENC[AES256_GCM,data:hvREyJyicMm1FzMnfNqi94sF5UyInr4v5qS7XdFYnmYmblTG2ZULvt50dtiZXUCQBK/C3Z0TkFm0blElcX0YwA==,iv:2MORkccMWj4P2g399nym5OJDQMt+L/Dwsau/Jexy1pw=,tag:sVx/LrJX3OPhO2BRB/CC7Q==,type:str]
+            expirity-key: ENC[AES256_GCM,data:ETo1jwPIKusbCuUd1Z+8S0Gmn4XyM1VtLeq2aNMjjyf11qTQHb9FE2sTnet6ghMVQdAH+iXin4pIhVPCggNpyw==,iv:9dXx34rK8CQHBIA6PZoEU9h9TF98AaA+7zSK3pYCVIQ=,tag:rj4WKBhUTOm8b+N6wp7sMg==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBvUlpaV3lDNzFWUkIvc0F2
+            SjMwdndLakdaUEd3NStCSVpaK2txZHZwZlJVCmRScnRoUUhYN3NtMitiSGJQNVp4
+            dEdNd2huMFowdlUveGVadlFKVEhET2sKLS0tIFFVSnEvcWRSSFhTR2FRQ05lbGh3
+            anN4ekdMaWVhTzhxeTNWYkdrNUE2aW8K7fxnfpjLo9UNGxBMnf+LH3xigmETQJnx
+            E3oU7Zih2uOinFDo9EtX6H3umYYFpoDWP2WR8xsVmW17lyZTVw/zow==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-02T16:44:53Z"
+    mac: ENC[AES256_GCM,data:nNBerhL+uIvwX6lGUtoA1AMQnAofgt5HOkhrdBU+K3TfBtRI6BUEkXXHbUQzkcTz8QAPBls5x+ZyHuONYUwcUxQ7pB+ZHLWI8wOqEeDfyg5mtudOu7lzMMAeWBFwD8dnw5lpOJVoIpOJBzb4JPfGQn9QNlt4xxhWohGFB6E27oM=,iv:eUCC33OMdVJvMZxkRbDOVGT29lEhA5x13tE6eYfvhtA=,tag:SzLKeUd/0U/5WMg2MpIsSQ==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
