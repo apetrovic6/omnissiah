@@ -48,9 +48,9 @@ in {
                     mountPath = "/app/config";
                   }
                 ];
-                envFrom = [
-                  {secretRef.name = "glance-secrets";} # created by your SOPS operator
-                ];
+                # envFrom = [
+                #   {secretRef.name = "glance-secrets";} # created by your SOPS operator
+                # ];
               }
             ];
           };
