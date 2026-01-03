@@ -24,7 +24,12 @@ spec:
           volumeMounts:
             - mountPath: /app/config
               name: glance-config
+            - mountPath: /app/assets
+              name: glance-assets
       volumes:
         - configMap:
             name: glance-config
           name: glance-config
+        - emptyDir:
+            sizeLimit: 500Mi
+          name: glance-assets

@@ -30,7 +30,11 @@ in {
                 name = "glance-config";
                 configMap.name = "glance-config";
               }
-            ];
+
+              {
+                name = "glance-assets";
+                emptyDir.sizeLimit = "500Mi";
+              }            ];
             containers = [
               {
                 name = "glance";
@@ -47,7 +51,11 @@ in {
                     name = "glance-config";
                     mountPath = "/app/config";
                   }
-                ];
+
+                  {
+                    name = "glance-assets";
+                    mountPath = "/app/assets";
+                  }                ];
                 # envFrom = [
                 #   {secretRef.name = "glance-secrets";} # created by your SOPS operator
                 # ];
