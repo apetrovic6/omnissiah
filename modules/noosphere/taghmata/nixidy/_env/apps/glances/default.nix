@@ -6,6 +6,7 @@
 in {
   applications.glance = {
     inherit namespace;
+    createNamespace = true;
 
     resources.configMaps.glance-config = {
       data = {
@@ -14,6 +15,7 @@ in {
       };
     };
 
+
     resources.deployments.glance = {
       metadata.labels = labels;
       spec = {
@@ -21,7 +23,14 @@ in {
         selector.matchLabels = labels;
 
         template = {
+          metadata.labels = labels;
           spec = {
+            volumes = [
+              {
+                name = "glance-config";
+                configMap.name = "glance-config";
+              }
+            ];
             containers = [
               {
                 name = "glance";
@@ -32,8 +41,6 @@ in {
                     name = "http";
                   }
                 ];
-
-                args = ["--config" "/app/config/glance.yml"];
 
                 volumeMounts = [
                   {
@@ -49,24 +56,24 @@ in {
           };
         };
       };
+    };
+
+    resources.services.glance = {
+      # metadata = {};
+
+      spec = {
+        type = "ClusterIP";
+        selector = labels;
+
+        ports = [
+          {
+            name = "http";
+            protocol = "TCP";
+            port = 80;
+            targetPort = "http";
+          }
+        ];
       };
-
-      resources.services.glance = {
-        # metadata = {};
-
-        spec = {
-          type = "ClusterIP";
-          selector = labels;
-
-          ports = [
-            {
-              name = "http";
-              protocol = "TCP";
-              port = 80;
-              targetPort = "http";
-            }
-          ];
-        };
-      };
+    };
   };
 }

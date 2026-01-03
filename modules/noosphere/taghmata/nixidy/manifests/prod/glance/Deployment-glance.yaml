@@ -11,12 +11,12 @@ spec:
     matchLabels:
       app: glance
   template:
+    metadata:
+      labels:
+        app: glance
     spec:
       containers:
-        - args:
-            - --config
-            - /app/config/glance.yml
-          envFrom:
+        - envFrom:
             - secretRef:
                 name: glance-secrets
           image: glanceapp/glance:v0.8.4
@@ -27,3 +27,7 @@ spec:
           volumeMounts:
             - mountPath: /app/config
               name: glance-config
+      volumes:
+        - configMap:
+            name: glance-config
+          name: glance-config
