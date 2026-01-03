@@ -2,6 +2,14 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    category: yarr
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Media Management
+    glance/icon: di:jellyseerr
+    glance/id: seerr
+    glance/name: Seerr
+    glance/parent: seerr
+    glance/url: https://seerr.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: seerr-ip-root
   namespace: yarr

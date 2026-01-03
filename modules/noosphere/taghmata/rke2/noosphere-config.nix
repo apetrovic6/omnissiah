@@ -128,6 +128,8 @@ in {
             self.inputs.nixhelm.chartsDerivations.${system}
             // {
               deuxfleurs.garage = "${self.inputs.garage}/script/helm/garage";
+              lukasdietrich.glance-k8s = "${self.inputs.glance-k8s}/charts/glance-k8s";
+              lukasdietrich.glance = "${self.inputs.glance-k8s}/charts/glance-k8s";
             };
 
           envs = lib.mapAttrs mkEnv enabledEnvs;

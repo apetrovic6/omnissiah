@@ -1,0 +1,141 @@
+apiVersion: v1
+data:
+  glance.yml: |
+    server:
+      assets-path: /app/assets
+      proxied: true
+
+    theme:
+      # Note: assets are cached by the browser, changes to the CSS file
+      # will not be reflected until the browser cache is cleared (Ctrl+F5)
+      custom-css-file: /assets/user.css
+
+    pages:
+      # It's not necessary to create a new file for each page and include it, you can simply
+      # put its contents here, though multiple pages are easier to manage when separated
+      - $include: home.yml
+      - $include: services.yml
+  home.yml: |
+    - columns:
+      - size: small
+        widgets:
+        - first-day-of-the-week: monday
+          type: calendar
+        - cache: 12h
+          collapse-after: 3
+          feeds:
+          - title: selfh.st
+            url: https://selfh.st/rss/
+          limit: 10
+          type: rss
+        - channels:
+          - theprimeagen
+          - christitustech
+          type: twitch-channels
+      - size: full
+        widgets:
+        - type: group
+          widgets:
+          - type: hacker-news
+          - type: lobsters
+        - channels:
+          - UCXuqSBlHAE6Xw-yeJA0Tunw
+          - UCR-DXc1voovS8nhAvccRZhg
+          - UCsBjURrPoezykLs9EqgamOA
+          - UCshObcm-nLhbu8MY50EZ5Ng
+          - UC7rzjM9zAfOXRnXV8yKpgsg
+          - UCoAVMy_9E_n75aZXbotfVjw
+          - UCJa14zeVf8p6clixTOIOVyQ
+          - UCylGUf9BvQooEFjgdNudoQg
+          collapse-after-rows: 2
+          style: horizontal-cards
+          type: videos
+        - type: group
+          widgets:
+          - subreddit: nixos
+            type: reddit
+          - subreddit: linux
+            type: reddit
+          - subreddit: rust
+            type: reddit
+          - subreddit: kubernetes
+            type: reddit
+          - subreddit: selfhosted
+            type: reddit
+          - subreddit: homelab
+            type: reddit
+          - subreddit: technology
+            type: reddit
+          - subreddit: unixporn
+            type: reddit
+      - size: small
+        widgets:
+        - cache: 1d
+          repositories:
+          - glanceapp/glance
+          - immich-app/immich
+          - codeberg:forgejo/forgejo
+          - lukasdietrich/glance-k8s
+          - karakeep-app/karakeep
+          show-source-icon: true
+          type: releases
+      name: Home
+  services.yml: |
+    - center-vertically: true
+      columns:
+      - size: full
+        widgets:
+        - allow-potentially-dangerous-html: true
+          cache: 1s
+          title: Nodes
+          type: extension
+          url: http://glance-k8s/extension/nodes
+        - allow-potentially-dangerous-html: true
+          cache: 1s
+          parameters:
+            show-if: 'namespace != "kube-system" and
+
+              "glance/name" in annotations and
+
+              annotations["glance/hide"] != "true" and
+
+              ("category" in annotations && annotations["category"] == "storage")
+
+              '
+          title: Storage
+          type: extension
+          url: http://glance-k8s/extension/apps
+        - allow-potentially-dangerous-html: true
+          cache: 1s
+          parameters:
+            show-if: "namespace != \"kube-system\" and\n\"glance/name\" in annotations\
+              \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
+              monitoring\")\n"
+          title: Monitoring
+          type: extension
+          url: http://glance-k8s/extension/apps
+        - allow-potentially-dangerous-html: true
+          cache: 1s
+          parameters:
+            show-if: "namespace != \"kube-system\" and\n\"glance/name\" in annotations\
+              \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
+              yarr\")\n"
+          title: Yarr
+          type: extension
+          url: http://glance-k8s/extension/apps
+        - allow-potentially-dangerous-html: true
+          cache: 1s
+          parameters:
+            show-if: "namespace != \"kube-system\" and\n\"glance/name\" in annotations\
+              \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
+              utils\")\n"
+          title: Utils
+          type: extension
+          url: http://glance-k8s/extension/apps
+        width: slim
+      name: Services
+      width: slim
+kind: ConfigMap
+metadata:
+  name: glance-config
+  namespace: glance

@@ -2,23 +2,24 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
-  name: longhorn-ip-root
-  namespace: longhorn-system
+  name: glance-ip-root
+  namespace: glance
 spec:
   ingressClassName: traefik
   rules:
-    - host: longhorn.noosphere.uk
+    - host: glance.noosphere.uk
       http:
         paths:
           - backend:
               service:
-                name: longhorn-frontend
+                name: glance
                 port:
                   number: 80
             path: /
             pathType: Prefix
   tls:
     - hosts:
-        - longhorn.noosphere.uk
-      secretName: longhorn-tls
+        - glance.noosphere.uk
+      secretName: glance-tls

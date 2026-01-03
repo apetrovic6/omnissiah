@@ -63,6 +63,13 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+          "glance/name" = "Excalidraw";
+          "glance/icon" = "di:excalidraw";
+          "glance/url" = "https://excalidraw.${domain}";
+          "glance/description" = "Draw diagrams";
+          "glance/id" = "excalidraw";
+          "glance/parent" = "excalidraw";
+          "category" = "utils";
         };
       };
 

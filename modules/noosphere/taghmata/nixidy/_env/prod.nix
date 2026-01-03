@@ -24,6 +24,7 @@ in {
     ./apps/karakeep
     ./apps/bytestash
     ./apps/harbor
+    ./apps/glances
   ];
 
   # nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
@@ -124,33 +125,6 @@ in {
                     backend:
                       service:
                         name: argo-cd-argocd-server
-                        port:
-                          number: 80
-      ''
-
-      ''
-        apiVersion: networking.k8s.io/v1
-        kind: Ingress
-        metadata:
-          name: longhorn-ip-root
-          namespace: longhorn-system
-          annotations:
-            traefik.ingress.kubernetes.io/router.entrypoints: websecure
-        spec:
-          ingressClassName: traefik
-          tls:
-            - secretName: longhorn-tls
-              hosts:
-                - longhorn.${domain}
-          rules:
-            - host: longhorn.${domain}
-              http:
-                paths:
-                  - path: /
-                    pathType: Prefix
-                    backend:
-                      service:
-                        name: longhorn-frontend
                         port:
                           number: 80
       ''

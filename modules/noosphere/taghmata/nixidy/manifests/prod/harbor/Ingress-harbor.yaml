@@ -2,7 +2,14 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    category: storage
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Registry
+    glance/icon: di:harbor
+    glance/id: harbor
+    glance/name: Harbor
+    glance/parent: harbor
+    glance/url: https://harbor.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
   name: harbor

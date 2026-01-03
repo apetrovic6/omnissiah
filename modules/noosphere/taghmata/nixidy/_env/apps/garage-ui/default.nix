@@ -35,6 +35,13 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+          "glance/name" = "Garage";
+          "glance/icon" = "di:garage";
+          "glance/url" = "https://ui.garage.${domain}";
+          "glance/description" = "Distributed S3 Storage";
+          "glance/id" = "garage";
+          "glance/parent" = "garage";
+          "category" = "storage";
         };
       };
 

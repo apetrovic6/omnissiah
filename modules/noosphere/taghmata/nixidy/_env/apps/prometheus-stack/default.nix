@@ -132,20 +132,20 @@ in {
             version: 3.11.0
       ''
 
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: grafana-tls
-          namespace: observability
-        spec:
-          secretName: grafana-tls
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - grafana.${domain}
-      ''
+      # ''
+      #   apiVersion: cert-manager.io/v1
+      #   kind: Certificate
+      #   metadata:
+      #     name: grafana-tls
+      #     namespace: observability
+      #   spec:
+      #     secretName: grafana-tls
+      #     issuerRef:
+      #       kind: ClusterIssuer
+      #       name: letsencrypt-cloudflare
+      #     dnsNames:
+      #       - grafana.${domain}
+      # ''
     ];
 
     resources.ingresses.grafana-ip-root = {
@@ -154,6 +154,14 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+          "glance/name" = "Grafana";
+          "glance/icon" = "di:grafana";
+          "glance/url" = "https://grafana.${domain}";
+          "glance/description" = "Dashboards";
+          "glance/id" = "grafana";
+          "glance/parent" = "grafana";
+          "category" = "monitoring";
         };
       };
 

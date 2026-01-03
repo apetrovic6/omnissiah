@@ -1,6 +1,15 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  annotations:
+    category: utils
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Code Snipet Solution
+    glance/icon: di:bytestash
+    glance/id: longhorn
+    glance/name: ByteStash
+    glance/parent: bytestash
+    glance/url: https://bytestash.noosphere.uk
   labels:
     app.kubernetes.io/instance: bytestash
     app.kubernetes.io/managed-by: Helm

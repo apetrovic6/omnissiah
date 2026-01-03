@@ -44,13 +44,25 @@ in {
 
         meilisearch.auth.existingMasterKeySecret = meiliSecret;
 
-        ingress.karakeep.tls = [
-          {
-            secretName = "karakeep-tls";
-            hosts = ["karakeep.${domain}"];
-          }
-        ];
+        ingress = {
+          karakeep.annotations = {
+            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+            "glance/name" = "Karakeep";
+            "glance/icon" = "di:karakeep";
+            "glance/url" = "https://karakeep.${domain}";
+            "glance/description" = "Bookmark Management";
+            "glance/id" = "karakeep";
+            "glance/parent" = "karakeep";
+            "category" = "utils";
+          };
 
+          karakeep.tls = [
+            {
+              secretName = "karakeep-tls";
+              hosts = ["karakeep.${domain}"];
+            }
+          ];
+        };
         controllers = {
           karakeep = {
             statefulset = {

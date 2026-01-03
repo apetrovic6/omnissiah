@@ -38,6 +38,13 @@ in {
             cert-manager.io/cluster-issuer: letsencrypt-cloudflare
             traefik.ingress.kubernetes.io/router.entrypoints: websecure
             traefik.ingress.kubernetes.io/router.tls: "true"
+            glance/name: Harbor
+            glance/icon: di:harbor
+            glance/url: https://harbor.${domain}
+            glance/description: Registry
+            glance/id: harbor
+            glance/parent: harbor
+            category: storage
         spec:
           ingressClassName: traefik
           tls:
@@ -91,50 +98,6 @@ in {
                         port:
                           number: 80
       ''
-
-      # ''
-      # apiVersion: traefik.io/v1alpha1
-      # kind: IngressRoute
-      # metadata:
-      #   name: harbor-portal
-      #   namespace: harbor
-      # spec:
-      #   entryPoints:
-      #     - websecure
-      #   routes:
-      #     - match: Host(`${harborHost}`) && PathPrefix(`/`)
-      #       kind: Rule
-      #       services:
-      #         - name: harbor-portal
-      #           port: 80
-      #     - match: Host(`${harborHost}`) && PathPrefix(`/c/`)
-      #       kind: Rule
-      #       services:
-      #         - name: harbor-core
-      #           port: 80
-      #     - match: Host(`${harborHost}`) && PathPrefix(`/api/`)
-      #       kind: Rule
-      #       services:
-      #         - name: harbor-core
-      #           port: 80
-      #     - match: Host(`${harborHost}`) && PathPrefix(`/service/`)
-      #       kind: Rule
-      #       services:
-      #         - name: harbor-core
-      #           port: 80
-      #     - match: Host(`${harborHost}`) && PathPrefix(`/v2/`)
-      #       kind: Rule
-      #       services:
-      #         - name: harbor-core
-      #           port: 80
-      #     - match: Host(`${harborHost}`) && PathPrefix(`/chartrepo/`)
-      #       kind: Rule
-      #       services:
-      #         - name: harbor-core
-      #           port: 80
-      #   tls:
-      #     secretName: harbor-tls
-      # ''
       ''
         apiVersion: cert-manager.io/v1
         kind: Issuer
@@ -226,8 +189,15 @@ in {
           clusterIP = {
             name = "harbor";
             port.httpPort = 80;
+
+            annotations = {
+              "glance/hide" = "true";
+            };
+
           };
 
+
+          
           ingress = {
             hosts = {
               core = "harbor.${domain}";
@@ -235,9 +205,9 @@ in {
 
             controller = "default";
             className = "traefik";
-            annotations =
-              lib.mkForce {
-              };
+            annotations = {
+              "glance/hide" = "true";
+            };
 
             # route = {
             #   hosts = [

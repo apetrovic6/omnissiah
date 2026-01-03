@@ -625,6 +625,22 @@
         "type": "github"
       }
     },
+    "glance-k8s": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767400459,
+        "narHash": "sha256-u/LtTpNAPJ3IdZlcI4WIMWGg8+fZKbnmpDUjuQFWPO0=",
+        "owner": "lukasdietrich",
+        "repo": "glance-k8s",
+        "rev": "e6185bb748711e07d1ec80f276f90eff60804153",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lukasdietrich",
+        "repo": "glance-k8s",
+        "type": "github"
+      }
+    },
     "gnome-shell": {
       "flake": false,
       "locked": {
@@ -1930,6 +1946,7 @@
         "darwin": "darwin",
         "flake-parts": "flake-parts_2",
         "garage": "garage",
+        "glance-k8s": "glance-k8s",
         "home-manager": "home-manager",
         "homebrew-cask": "homebrew-cask",
         "homebrew-core": "homebrew-core",

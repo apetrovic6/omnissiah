@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: glance-k8s
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: glance-k8s
+    app.kubernetes.io/version: v0.0.0
+    helm.sh/chart: glance-k8s-v0.0.0
+  name: glance-k8s
+  namespace: glance
+spec:
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/instance: glance-k8s
+    app.kubernetes.io/name: glance-k8s
+  type: ClusterIP

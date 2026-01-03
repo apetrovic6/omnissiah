@@ -133,6 +133,14 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+          "glance/name" = "Seerr";
+          "glance/icon" = "di:jellyseerr";
+          "glance/url" = "https://seerr.${domain}";
+          "glance/description" = "Media Management";
+          "glance/id" = "seerr";
+          "glance/parent" = "seerr";
+          "category" = "yarr";
         };
       };
 
@@ -166,20 +174,20 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: seerr-tls
-          namespace: ${namespace}
-        spec:
-          secretName: seerr-tls
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - seerr.${domain}
-      ''
+      # ''
+      #   apiVersion: cert-manager.io/v1
+      #   kind: Certificate
+      #   metadata:
+      #     name: seerr-tls
+      #     namespace: ${namespace}
+      #   spec:
+      #     secretName: seerr-tls
+      #     issuerRef:
+      #       kind: ClusterIssuer
+      #       name: letsencrypt-cloudflare
+      #     dnsNames:
+      #       - seerr.${domain}
+      # ''
     ];
 
     resources.clusters.pg-yarr = {

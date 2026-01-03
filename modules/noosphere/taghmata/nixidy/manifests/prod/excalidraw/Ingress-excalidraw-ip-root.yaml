@@ -2,6 +2,13 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    category: utils
+    glance/description: Draw diagrams
+    glance/icon: di:excalidraw
+    glance/id: excalidraw
+    glance/name: Excalidraw
+    glance/parent: excalidraw
+    glance/url: https://excalidraw.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: excalidraw-ip-root
   namespace: excalidraw

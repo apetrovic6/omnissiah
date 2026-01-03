@@ -1,6 +1,15 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  annotations:
+    category: utils
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Bookmark Management
+    glance/icon: di:karakeep
+    glance/id: karakeep
+    glance/name: Karakeep
+    glance/parent: karakeep
+    glance/url: https://karakeep.noosphere.uk
   labels:
     app.kubernetes.io/instance: karakeep
     app.kubernetes.io/managed-by: Helm

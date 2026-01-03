@@ -2,6 +2,14 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    category: monitoring
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Dashboards
+    glance/icon: di:grafana
+    glance/id: grafana
+    glance/name: Grafana
+    glance/parent: grafana
+    glance/url: https://grafana.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: grafana-ip-root
   namespace: observability

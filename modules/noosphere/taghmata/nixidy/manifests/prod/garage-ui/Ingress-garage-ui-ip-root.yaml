@@ -2,6 +2,13 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    category: storage
+    glance/description: Distributed S3 Storage
+    glance/icon: di:garage
+    glance/id: garage
+    glance/name: Garage
+    glance/parent: garage
+    glance/url: https://ui.garage.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: garage-ui-ip-root
   namespace: garage

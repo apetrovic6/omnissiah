@@ -80,6 +80,11 @@
       url = "github:homebrew/homebrew-cask";
       flake = false;
     };
+
+    glance-k8s = {
+      url = "github:lukasdietrich/glance-k8s";
+      flake = false;
+    };
   };
 
   outputs = inputs @ {
