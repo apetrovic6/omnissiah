@@ -19,55 +19,54 @@ in {
       spec = {
         replicas = 1;
         selector.matchLabels = labels;
+
+        template = {
+          spec = {
+            containers = [
+              {
+                name = "glance";
+                image = "glanceapp/glance:v0.8.4";
+                ports = [
+                  {
+                    containerPort = 8080;
+                    name = "http";
+                  }
+                ];
+
+                args = ["--config" "/app/config/glance.yml"];
+
+                volumeMounts = [
+                  {
+                    name = "glance-config";
+                    mountPath = "/app/config";
+                  }
+                ];
+                envFrom = [
+                  {secretRef.name = "glance-secrets";} # created by your SOPS operator
+                ];
+              }
+            ];
+          };
+        };
+      };
       };
 
-      template = {
-        medatadata.labels = labels;
+      resources.services.glance = {
+        # metadata = {};
 
         spec = {
-          containers = [
+          type = "ClusterIP";
+          selector = labels;
+
+          ports = [
             {
-              name = "glance";
-              image = "glanceapp/glance:v0.8.4";
-              ports = [
-                {
-                  containerPort = 8080;
-                  name = "http";
-                }
-              ];
-
-              args = ["--config" "/app/config/glance.yml"];
-
-              volumeMounts = [
-                {
-                  name = "glance-config";
-                  mountPath = "/app/config";
-                }
-              ];
-              envFrom = [
-                {secretRef.name = "glance-secrets";} # created by your SOPS operator
-              ];
+              name = "http";
+              protocol = "TCP";
+              port = 80;
+              targetPort = "http";
             }
           ];
         };
       };
-    };
-
-    resources.services.glance = {
-      # metadata = {};
-
-      spec = {
-        type = "ClusterIP";
-        selector = labels;
-
-        ports = [
-          {
-            name = "http";
-            protocol = "TCP";
-            port = "http";
-          }
-        ];
-      };
-    };
   };
 }
