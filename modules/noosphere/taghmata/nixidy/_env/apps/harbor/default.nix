@@ -13,7 +13,7 @@ in {
     inherit namespace;
     createNamespace = true;
 
-resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
+    resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
 
     yamls = let
       harborHost = "harbor.{$domain}";
@@ -125,56 +125,23 @@ resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
             kind: Issuer
       ''
 
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: harbor-tls
-          namespace: ${namespace}
-        spec:
-          secretName: harbor-tls
-          privateKey:
-            rotationPolicy: Always
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - harbor.${domain}
-      ''
+      # ''
+      #   apiVersion: cert-manager.io/v1
+      #   kind: Certificate
+      #   metadata:
+      #     name: harbor-tls
+      #     namespace: ${namespace}
+      #   spec:
+      #     secretName: harbor-tls
+      #     privateKey:
+      #       rotationPolicy: Always
+      #     issuerRef:
+      #       kind: ClusterIssuer
+      #       name: letsencrypt-cloudflare
+      #     dnsNames:
+      #       - harbor.${domain}
+      # ''
     ];
-    # resources.ingresses.harbor = {
-    #   metadata = {
-    #     name = "harbor";
-    #     namespace = "harbor";
-    #     annotations = {
-    #       "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-    #       "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-    #       "traefik.ingress.kubernetes.io/router.tls" = "true";
-    #     };
-    #   };
-
-    #   spec = {
-    #     ingressClassName = "traefik";
-
-    #     tls = [{
-    #       hosts = [ "harbor.noosphere.uk" ];
-    #       secretName = "harbor-tls";
-    #     }];
-
-    #     rules = [{
-    #       host = "harbor.noosphere.uk";
-    #       http.paths = [{
-    #         path = "/";
-    #         pathType = "Prefix";
-    #         backend.service = {
-    #           name = "harbor";
-    #           port.number = 80;
-    #         };
-    #       }];
-    #     }];
-    #   };
-    # };
-
     helm.releases.harbor = {
       chart = charts.goharbor.harbor;
 

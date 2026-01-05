@@ -1,4 +1,8 @@
-{...}: {
+{...}:
+let
+cache = "1m";
+in
+{
   services = [
     {
       name = "Services";
@@ -14,7 +18,7 @@
               title = "Nodes";
               url = "http://glance-k8s/extension/nodes";
               allow-potentially-dangerous-html = true;
-              cache = "1s";
+              inherit cache;
             }
 
             {
@@ -22,7 +26,7 @@
               title = "Storage";
               url = "http://glance-k8s/extension/apps";
               allow-potentially-dangerous-html = true;
-              cache = "1s";
+              inherit cache;
 
               parameters = {
                 # Environment.name = "Storage";
@@ -40,7 +44,7 @@
               title = "Monitoring";
               url = "http://glance-k8s/extension/apps";
               allow-potentially-dangerous-html = true;
-              cache = "1s";
+              inherit cache;
 
               parameters = {
                 # Environment.name = "Storage";
@@ -57,7 +61,7 @@
               title = "Yarr";
               url = "http://glance-k8s/extension/apps";
               allow-potentially-dangerous-html = true;
-              cache = "1s";
+              inherit cache;
 
               parameters = {
                 show-if = ''
@@ -73,7 +77,7 @@
               title = "Utils";
               url = "http://glance-k8s/extension/apps";
               allow-potentially-dangerous-html = true;
-              cache = "1s";
+              inherit cache;
 
               parameters = {
                 show-if = ''
