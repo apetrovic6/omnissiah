@@ -13,8 +13,6 @@
   }: {
     imports = [];
 
-    nix.settings.trusted-users = ["apetrovic"];
-
     environment.systemPackages = with pkgs; [
       attic-client
       tree
@@ -39,7 +37,10 @@
         dates = "daily";
         options = "--delete-older-than 10d";
       };
-      settings.auto-optimise-store = true;
+      settings = {
+        trusted-users = ["apetrovic"];
+        auto-optimise-store = true;
+      };
     };
 
     networking.networkmanager.enable = true;

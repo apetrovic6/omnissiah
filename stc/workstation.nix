@@ -25,6 +25,13 @@ in {
       self.nixosModules.virtualisation
     ];
 
+    services.xserver = {
+      xkb = {
+        layout = "us";
+        variant = "";
+      };
+    };
+
     services.imperium.flatpak.enable = true;
 
     services.imperium.virtualisation.podman = {
@@ -119,6 +126,8 @@ in {
 
       virt-manager
       qemu
+
+      k9s
       kubectl
     ];
 
