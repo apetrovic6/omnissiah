@@ -13,6 +13,8 @@ in {
     inherit namespace;
     createNamespace = true;
 
+resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
+
     yamls = let
       harborHost = "harbor.{$domain}";
     in [
@@ -26,7 +28,6 @@ in {
       (builtins.readFile ../../../../../../../vars/shared/pg-harbor-postgres-secret/pg-harbor-postgres-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/harbor-core-secret/harbor-core-secret/value)
       # (builtins.readFile ../../../../../../../vars/shared/harbor-core-svc-tls/harbor-core-svc-tls/value)
-      #
 
       ''
         apiVersion: networking.k8s.io/v1
@@ -193,11 +194,8 @@ in {
             annotations = {
               "glance/hide" = "true";
             };
-
           };
 
-
-          
           ingress = {
             hosts = {
               core = "harbor.${domain}";

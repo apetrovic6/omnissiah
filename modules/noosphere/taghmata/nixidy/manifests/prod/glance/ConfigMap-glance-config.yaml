@@ -72,11 +72,11 @@ data:
         widgets:
         - cache: 1d
           repositories:
-          - glanceapp/glance
           - immich-app/immich
           - codeberg:forgejo/forgejo
-          - lukasdietrich/glance-k8s
           - karakeep-app/karakeep
+          - glanceapp/glance
+          - lukasdietrich/glance-k8s
           show-source-icon: true
           type: releases
       name: Home

@@ -1,6 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    glance/hide: "true"
   labels:
     app: harbor
     app.kubernetes.io/component: core

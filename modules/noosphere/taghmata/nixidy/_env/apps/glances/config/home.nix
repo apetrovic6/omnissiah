@@ -60,7 +60,7 @@
   #   type = "weather";
   # };
 
-  repositories = ["glanceapp/glance" "immich-app/immich" "codeberg:forgejo/forgejo" "lukasdietrich/glance-k8s" "karakeep-app/karakeep"];
+  repositories = ["immich-app/immich" "codeberg:forgejo/forgejo" "karakeep-app/karakeep" "glanceapp/glance" "lukasdietrich/glance-k8s"];
 
   releases = {
     type = "releases";
