@@ -3,6 +3,7 @@ kind: Ingress
 metadata:
   annotations:
     category: storage
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: Distributed S3 Storage
     glance/icon: di:garage
     glance/id: garage

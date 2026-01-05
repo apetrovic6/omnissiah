@@ -3,6 +3,7 @@ kind: Ingress
 metadata:
   annotations:
     category: utils
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: Draw diagrams
     glance/icon: di:excalidraw
     glance/id: excalidraw

@@ -1,8 +1,6 @@
-{...}:
-let
-cache = "1m";
-in
-{
+{...}: let
+  cache = "1m";
+in {
   services = [
     {
       name = "Services";

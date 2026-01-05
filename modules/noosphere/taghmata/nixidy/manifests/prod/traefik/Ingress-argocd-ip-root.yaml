@@ -2,6 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: argocd-ip-root
   namespace: argocd

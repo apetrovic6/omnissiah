@@ -40,7 +40,6 @@ in {
       };
     };
 
-
     resources.ingresses.excalidraw-ip-root = {
       metadata = {
         inherit namespace;

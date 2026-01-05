@@ -110,6 +110,7 @@ in {
           namespace: argocd
           annotations:
             traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            cert-manager.io/cluster-issuer: letsencrypt-cloudflare
         spec:
           ingressClassName: traefik
           tls:
