@@ -57,8 +57,10 @@
           in {
             configs = {
               cm = {
+                url = "https://argocd.${domain}";
                 "oidc.config" = ''
                   name: Zitadel
+                  url: https
                   issuer: https://zitadel.${domain}
                   clientID: $zitadel-argocd-secret:oidc.zitadel.clientId
                   clientSecret: $zitadel-argocd-secret:oidc.zitadel.clientSecret
@@ -87,6 +89,23 @@
           };
 
           extraDeploy = [
+             {
+                apiVersion = "v1";
+                kind = "ConfigMap";
+                metadata = {
+                  name = "coredns-custom";
+                  namespace = "kube-system";
+                };
+                data = {
+                  "noosphere.server" = ''
+                    noosphere.uk:53 {
+                      errors
+                      cache 30
+                      forward . 192.168.1.81
+                    }
+                  '';
+                };
+              }
             ../vars/shared/zitadel-argocd-secret/zitadel-argocd-secret/value
           ];
         };
