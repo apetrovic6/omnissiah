@@ -50,14 +50,20 @@ in {
     };
   };
 
-  # programs.noctalia-shell = {
-  #   settings = {
-  #     bar.backgroundOpacity = 0;
-  #     location = {
-  #       name = "Zagreb";
-  #     };
-  #   };
-  # };
+  magos.hm.core.swayosd.enable = false;
+  magos.hm.core.swaync.enable = false;
+  magos.hm.core.waybar.enable = false;
+
+  magos.hm.noctalia.enable = true;
+
+  programs.noctalia-shell = {
+    settings = {
+      # bar.backgroundOpacity = lib.mkForce 0.0;
+      location = {
+        name = "Zagreb";
+      };
+    };
+  };
 
   magos.hm.stylix = {
     enable = true;
