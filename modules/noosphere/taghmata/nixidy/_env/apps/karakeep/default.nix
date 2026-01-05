@@ -14,21 +14,6 @@ in {
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/karakeep-meilisearch-secret/karakeep-meilisearch-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/karakeep-secret/karakeep-secret/value)
-
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: karakeep-tls
-          namespace: ${namespace}
-        spec:
-          secretName: karakeep-tls
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - karakeep.${domain}
-      ''
     ];
 
     helm.releases.karakeep = {

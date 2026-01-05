@@ -34,25 +34,6 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-rpc-secret/garage-rpc-secret/value)
-
-      # ''
-
-      #   apiVersion: cert-manager.io/v1
-      #   kind: Certificate
-      #   metadata:
-      #     name: garage-tls
-      #     namespace: garage
-      #   spec:
-      #     secretName: garage-tls
-      #     issuerRef:
-      #       kind: ClusterIssuer
-      #       name: letsencrypt-cloudflare
-      #     dnsNames:
-      #       - s3.${domain}
-      #       - web.${domain}
-      #       - "*.s3.${domain}"
-      #       - "*.web.${domain}"
-      # ''
     ];
 
     helm.releases.garage = {

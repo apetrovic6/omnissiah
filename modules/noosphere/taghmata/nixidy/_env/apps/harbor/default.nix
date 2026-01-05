@@ -124,23 +124,6 @@ in {
             name: harbor-token-issuer
             kind: Issuer
       ''
-
-      # ''
-      #   apiVersion: cert-manager.io/v1
-      #   kind: Certificate
-      #   metadata:
-      #     name: harbor-tls
-      #     namespace: ${namespace}
-      #   spec:
-      #     secretName: harbor-tls
-      #     privateKey:
-      #       rotationPolicy: Always
-      #     issuerRef:
-      #       kind: ClusterIssuer
-      #       name: letsencrypt-cloudflare
-      #     dnsNames:
-      #       - harbor.${domain}
-      # ''
     ];
     helm.releases.harbor = {
       chart = charts.goharbor.harbor;

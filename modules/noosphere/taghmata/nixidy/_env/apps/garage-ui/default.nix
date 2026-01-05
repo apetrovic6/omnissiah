@@ -12,21 +12,6 @@ in {
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-ui-admin-token/garage-ui-admin-token/value)
       (builtins.readFile ../../../../../../../vars/shared/garage-ui-jwt-token-secret/garage-ui-jwt-token-secret/value)
-
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: garage-ui-tls
-          namespace: ${namespace}
-        spec:
-          secretName: garage-ui-tls
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - ui.garage.${domain}
-      ''
     ];
 
     resources.ingresses.garage-ui-ip-root = {
@@ -35,6 +20,7 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
           "glance/name" = "Garage";
           "glance/icon" = "di:garage";
           "glance/url" = "https://ui.garage.${domain}";

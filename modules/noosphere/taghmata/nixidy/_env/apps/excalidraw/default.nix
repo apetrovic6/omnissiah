@@ -14,7 +14,7 @@ in {
       };
 
       spec = {
-        replicas = 3;
+        replicas = 1;
         selector.matchLabels = labels;
 
         template = {
@@ -40,22 +40,6 @@ in {
       };
     };
 
-    yamls = [
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: excalidraw-tls
-          namespace: ${namespace}
-        spec:
-          secretName: excalidraw-tls
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - excalidraw.${domain}
-      ''
-    ];
 
     resources.ingresses.excalidraw-ip-root = {
       metadata = {
@@ -63,6 +47,7 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
           "glance/name" = "Excalidraw";
           "glance/icon" = "di:excalidraw";
           "glance/url" = "https://excalidraw.${domain}";

@@ -12,20 +12,6 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/bytestash-jwt-secret/bytestash-jwt-secret/value)
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: bytestash-tls
-          namespace: ${namespace}
-        spec:
-          secretName: bytestash-tls
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - bytestash.${domain}
-      ''
     ];
 
     helm.releases.bytestash = {

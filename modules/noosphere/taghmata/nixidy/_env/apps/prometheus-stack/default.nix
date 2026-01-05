@@ -131,21 +131,6 @@ in {
             encrypted_suffix: Templates
             version: 3.11.0
       ''
-
-      # ''
-      #   apiVersion: cert-manager.io/v1
-      #   kind: Certificate
-      #   metadata:
-      #     name: grafana-tls
-      #     namespace: observability
-      #   spec:
-      #     secretName: grafana-tls
-      #     issuerRef:
-      #       kind: ClusterIssuer
-      #       name: letsencrypt-cloudflare
-      #     dnsNames:
-      #       - grafana.${domain}
-      # ''
     ];
 
     resources.ingresses.grafana-ip-root = {

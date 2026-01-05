@@ -174,20 +174,6 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
-      # ''
-      #   apiVersion: cert-manager.io/v1
-      #   kind: Certificate
-      #   metadata:
-      #     name: seerr-tls
-      #     namespace: ${namespace}
-      #   spec:
-      #     secretName: seerr-tls
-      #     issuerRef:
-      #       kind: ClusterIssuer
-      #       name: letsencrypt-cloudflare
-      #     dnsNames:
-      #       - seerr.${domain}
-      # ''
     ];
 
     resources.clusters.pg-yarr = {

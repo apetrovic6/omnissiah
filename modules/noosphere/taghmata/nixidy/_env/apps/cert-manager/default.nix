@@ -118,21 +118,6 @@ in {
             - argocd.${domain}
       ''
 
-      # ''
-      #   apiVersion: cert-manager.io/v1
-      #   kind: Certificate
-      #   metadata:
-      #     name: longhorn-tls
-      #     namespace: longhorn-system
-      #   spec:
-      #     secretName: longhorn-tls
-      #     issuerRef:
-      #       kind: ClusterIssuer
-      #       name: letsencrypt-cloudflare
-      #     dnsNames:
-      #       - longhorn.${domain}
-      # ''
-
       ''
         apiVersion: cert-manager.io/v1
         kind: ClusterIssuer
