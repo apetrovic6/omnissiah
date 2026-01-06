@@ -16,7 +16,7 @@ in {
       spec = {
         configuration = {
           destinationPath = "s3://cnpg-backup-bucket/backups";
-          endpointURL = "http://garage.garage.svc.cluster.local:9000";
+          endpointURL = "http://garage.garage.svc.cluster.local:3900";
           s3Credentials = {
             accessKeyId = {
               name = "barman-s3-secret-key";
