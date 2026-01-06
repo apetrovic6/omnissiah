@@ -22,7 +22,7 @@ in {
             "glance/description" = "Identity Provider";
             "glance/id" = "zitadel";
             "glance/parent" = "zitadel";
-            "category" = "Security";
+            "category" = "security";
             };
       };
 
