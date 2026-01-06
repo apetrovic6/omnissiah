@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: bytestash-zitadel-client-secret
+    namespace: bytestash
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:KxvW4Mik/EYK4uOl6VfrJHO2GeaHoI7+xnd34qDQFg==,iv:JrZQoMdb09U9BnRaCrmiSGxzD7BX570dwP3I6rd+KBE=,tag:D8k5pmp5LPZn+cfDhhSmuw==,type:str]
+          type: ENC[AES256_GCM,data:yECsEjIK,iv:sdJW8/cWSkJO3fwKqv71cbUoWUPK9UgG4v12NmFZGoQ=,tag:N/y9u/uiQJKqRa63RvBNCg==,type:str]
+          stringData:
+            oidc.zitadel.clientId: ENC[AES256_GCM,data:Zjek8UZjuB6+KqQj1kddi6z7,iv:HMN6eugaddBF/NX/V7ReQqjBV7chmR2Rt5q/Cjw6D6M=,tag:a6i2FxDTeILjrJbwGpOjdg==,type:str]
+            oidc.zitadel.clientSecret: ENC[AES256_GCM,data:yZmchgwaqoTK6w4FVMx/4AXzFsv0OUZLENciq+SqGICJSHxyiRrsb+omGSVsRogV+fNC0eoID2zv3r7I44YrAQ==,iv:xRCTLZZJvKvwX6PN0+PTLFgCqKD/Td20SWPID6uYnvk=,tag:VkqMHvvRfLHFsAUtJf34qA==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBNdVBwejdRMno2Vi9ueXJK
+            VkY2Q1BJSTlRWUtLMWs4TFlyanUzN3Z1a2xvCk1DUU5hcTIxUXJhVGQ5N3lRcnl2
+            ZXc3UGtaQkZHWjJ6aHVoZndYWHVxR00KLS0tIHhiTGdvZGdONFNXWmJvbGRUdmli
+            SVI2Q1h3MUVwWkhOY2hQcjBEa2QrZkkK0k7gv6RgGWEAxvZiTy1UvF43JUP/ccVI
+            S5Pa4tWJJNDRK/0NNCafWqhciEaHWjcFrTszVkfbU7qGG1CbTt+nig==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-06T14:16:56Z"
+    mac: ENC[AES256_GCM,data:i3xwZ3nCC7L+XjT2hqF2L40zJ24pd2jQqKhrFclOJc0N5tP4Djx8gtX04rl8EacA3lb8rlPSM6S7g2azMNSwrM7Ih6rtS+iMcuUs2zkTlS63qaA23X1tak7KExXrCtR5aWPXUIHbz6g+5OaMw3LSrlU2ISmnF9HxhGdZYNT6tHY=,iv:tb18x/pXfaFKx2WrW1KQ5T+CsTXe3kebE+nn2ZYlsJc=,tag:UVTHhSc9BMMV+byjJU8N+Q==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
