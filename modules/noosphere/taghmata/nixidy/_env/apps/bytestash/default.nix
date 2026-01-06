@@ -60,6 +60,14 @@ in {
           ];
         };
 
+        oidc = {
+          enabled = true;
+          name = "Zitadel";
+          issuerUrl = "zitadel.${domain}";
+          clientSecret = "bytestash-zitadel-client-secret";
+          scopes = "openid profile email groups";
+        };
+
         containerSecurityContext = {
           capabilities = {
             drop = ["ALL"];
