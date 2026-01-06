@@ -12,6 +12,7 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/bytestash-jwt-secret/bytestash-jwt-secret/value)
+      (builtins.readFile ../../../../../../../vars/shared/bytestash-zitadel-client-secret/bytestash-zitadel-client-secret/value)
     ];
 
     helm.releases.bytestash = {
