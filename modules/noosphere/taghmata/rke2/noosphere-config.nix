@@ -2,14 +2,17 @@
   self,
   lib,
   flake-parts-lib,
+  config,
   ...
 }: let
   inherit (lib) mkOption types;
   inherit (flake-parts-lib) mkPerSystemOption;
+
+  # Global domain from flake-level config (set in flake.nix as noosphere.domain = "…")
+  globalDomain = config.noosphere.domain;
 in {
   options = {
     perSystem = mkPerSystemOption ({
-      config,
       pkgs,
       system,
       ...
@@ -57,19 +60,16 @@ in {
                 default = null;
                 description = "Override rootPath for this env.";
               };
-
               extraModules = mkOption {
                 type = types.listOf types.path;
                 default = [];
               };
             };
           }));
-
           default = {
             dev = {};
             prod = {enable = false;};
           };
-
           description = "Nixidy environments to be generated";
         };
       };
@@ -84,6 +84,7 @@ in {
       ...
     }: let
       cfg = config.noosphere;
+
       enabledEnvs = lib.filterAttrs (_: e: e.enable) cfg.envs;
 
       mkEnv = envName: envCfg: let
@@ -91,24 +92,25 @@ in {
           if envCfg.branch != null
           then envCfg.branch
           else cfg.nixidy.branch;
+
         rootPath =
-          if envCfg != null
+          if envCfg.rootPath != null
           then envCfg.rootPath
           else "${cfg.nixidy.rootPath}/${envName}";
       in {
         modules =
           [
-            ../nixidy/modules/noosphere-options.nix
+            ../nixidy/_modules/noosphere-options.nix
 
             ({...}: {
+              # This value goes INTO the nixidy module graph
               noosphere.domain = cfg.domain;
             })
 
             ({...}: {
               nixidy.target = {
                 repository = cfg.nixidy.repository;
-                branch = branch;
-                rootPath = rootPath;
+                inherit branch rootPath;
               };
             })
           ]
@@ -120,21 +122,23 @@ in {
           ++ envCfg.extraModules;
       };
     in {
-      legacyPackages = {
-        nixidyEnvs.${system} = self.inputs.nixidy.lib.mkEnvs {
-          inherit pkgs;
+      # Default per-system domain from the flake-level domain
+      noosphere.domain = lib.mkDefault globalDomain;
 
-          charts =
-            self.inputs.nixhelm.chartsDerivations.${system}
-            // {
-              deuxfleurs.garage = "${self.inputs.garage}/script/helm/garage";
-              lukasdietrich.glance-k8s = "${self.inputs.glance-k8s}/charts/glance-k8s";
-              lukasdietrich.glance = "${self.inputs.glance-k8s}/charts/glance-k8s";
-            };
+      legacyPackages.nixidyEnvs.${system} = self.inputs.nixidy.lib.mkEnvs {
+        inherit pkgs;
 
-          envs = lib.mapAttrs mkEnv enabledEnvs;
-        };
+        charts =
+          self.inputs.nixhelm.chartsDerivations.${system}
+          // {
+            deuxfleurs.garage = "${self.inputs.garage}/script/helm/garage";
+            lukasdietrich.glance-k8s = "${self.inputs.glance-k8s}/charts/glance-k8s";
+            lukasdietrich.glance = "${self.inputs.glance-k8s}/charts/glance-k8s";
+          };
+
+        envs = lib.mapAttrs mkEnv enabledEnvs;
       };
+
       packages.nixidy = self.inputs.nixidy.packages.${system}.default;
     };
   };

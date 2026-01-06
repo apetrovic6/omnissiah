@@ -3,11 +3,15 @@
   config,
   ...
 }: let
-  inherit (lib) types mkOption mkIf mkDefault;
-in {
-  options.noosphere = {
+  inherit (lib) mkOption types;
+
+  flakeCfg = config;
+
+  # Define the option set ONCE, reuse in both module systems
+  noosphereOptions = {
     agePublicKey = mkOption {
-      type = types.str;
+      type = types.nullOr types.str;
+      default = null;
       description = "AGE public key which will be used to encrypt sops secrets";
     };
 
@@ -16,23 +20,26 @@ in {
       description = "Domain name for the K8S cluster";
     };
   };
+in {
+  # flake-parts options
+  options.noosphere = noosphereOptions;
 
+  # exported NixOS module
   config.flake.nixosModules.noosphere = {lib, ...}: let
-    flakeAgeKey = config.noosphere.agePublicKey;
+    inherit (lib) mkIf mkMerge mkDefault;
   in {
-    options.noosphere.agePublicKey = mkOption {
-      type = types.str;
-      description = "AGE public key which will be used to encrypt sops secrets";
-    };
+    # NixOS options (same definitions, reused)
+    options.noosphere = noosphereOptions;
 
-    options.noosphere.domain = mkOption {
-      type = types.str;
-      description = "Domain name for the K8S cluster";
-    };
+    # propagate flake values into NixOS config as defaults
+    config = mkMerge [
+      {
+        noosphere.domain = mkDefault flakeCfg.noosphere.domain;
+      }
 
-    config = mkIf (flakeAgeKey != null) {
-      noosphere.agePublicKey = mkDefault flakeAgeKey;
-      noosphere.domain = config.noosphere.domain;
-    };
+      (mkIf (flakeCfg.noosphere.agePublicKey != null) {
+        noosphere.agePublicKey = mkDefault flakeCfg.noosphere.agePublicKey;
+      })
+    ];
   };
 }

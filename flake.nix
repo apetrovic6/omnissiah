@@ -94,7 +94,7 @@
     nixhelm,
     ...
   }:
-    flake-parts.lib.mkFlake {inherit inputs;} rec {
+    flake-parts.lib.mkFlake {inherit inputs;} {
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -121,7 +121,6 @@
         inputs',
         self',
         system,
-        config,
         ...
       }: {
         checks = {
@@ -134,7 +133,6 @@
         };
 
         noosphere = {
-          domain = config.noosphere.domain;
           nixidy = {
             repository = "https://github.com/apetrovic6/omnissiah.git";
             branch = "master";
