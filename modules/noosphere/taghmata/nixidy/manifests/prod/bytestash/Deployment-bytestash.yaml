@@ -49,7 +49,7 @@ spec:
             - name: OIDC_DISPLAY_NAME
               value: Zitadel
             - name: OIDC_ISSUER_URL
-              value: zitadel.noosphere.uk
+              value: https://zitadel.noosphere.uk
             - name: OIDC_CLIENT_ID
               value: ""
             - name: OIDC_CLIENT_SECRET
