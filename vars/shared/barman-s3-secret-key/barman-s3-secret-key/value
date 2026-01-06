@@ -2,7 +2,7 @@ apiVersion: isindir.github.com/v1alpha3
 kind: SopsSecret
 metadata:
     name: barman-s3-secret-key
-    namespace: cnpg-system
+    namespace: yarr
 spec:
     secretTemplates:
         - name: ENC[AES256_GCM,data:7ZkVlzDVnkyuYIKOjiDxzCqdXFU=,iv:Jr5hn4wrIvoZu2/2zHF3NjOePcl4WHJj8rYt1Lr11bU=,tag:wF/61+1u8BlYN/t2sD8uSA==,type:str]

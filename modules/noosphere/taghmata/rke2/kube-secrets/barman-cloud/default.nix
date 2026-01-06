@@ -38,7 +38,7 @@ in {
         kind: SopsSecret
         metadata:
           name: ${barmanS3Storage}
-          namespace: cnpg-system
+          namespace: yarr
         spec:
           secretTemplates:
             - name: ${barmanS3Storage}
