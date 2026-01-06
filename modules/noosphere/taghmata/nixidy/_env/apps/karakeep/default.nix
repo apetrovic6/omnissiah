@@ -67,6 +67,7 @@ in {
               karakeep = {
 
                 env = {
+                  NEXTAUTH_URL = "https://karakeep.${domain}";
                   OAUTH_WELLKNOWN_URL = "https://zitadel.noosphere.uk/.well-known/openid-configuration";
                   OAUTH_SCOPE = "openid email profile";
                   OAUTH_PROVIDER_NAME = "Zitadel";

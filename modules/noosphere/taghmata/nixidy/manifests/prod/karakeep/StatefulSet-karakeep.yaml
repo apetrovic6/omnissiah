@@ -36,7 +36,7 @@ spec:
             - name: MEILI_ADDR
               value: http://karakeep-meilisearch:7700
             - name: NEXTAUTH_URL
-              value: http://karakeep.noosphere.uk
+              value: https://karakeep.noosphere.uk
             - name: OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING
               value: "true"
             - name: OAUTH_PROVIDER_NAME
