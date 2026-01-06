@@ -12,12 +12,17 @@
     self,
     ...
   }: {
-    imports = [
-    ];
+    imports = [ ];
 
     systemd.services.iscsid.serviceConfig = {
       PrivateMounts = "yes";
       BindPaths = "/run/current-system/sw/bin:/bin";
+    };
+
+    services.imperium.taghmata.rke2.registryCache = {
+      enable = true;
+      dockerProject = "docker_cache";
+      ghcrProject = "github_cache";
     };
 
     # Make mount helpers visible in FHS-ish locations Longhorn expects via nsenter
@@ -89,23 +94,23 @@
           };
 
           extraDeploy = [
-             {
-                apiVersion = "v1";
-                kind = "ConfigMap";
-                metadata = {
-                  name = "coredns-custom";
-                  namespace = "kube-system";
-                };
-                data = {
-                  "noosphere.server" = ''
-                    noosphere.uk:53 {
-                      errors
-                      cache 30
-                      forward . 192.168.1.81
-                    }
-                  '';
-                };
-              }
+            {
+              apiVersion = "v1";
+              kind = "ConfigMap";
+              metadata = {
+                name = "coredns-custom";
+                namespace = "kube-system";
+              };
+              data = {
+                "noosphere.server" = ''
+                  noosphere.uk:53 {
+                    errors
+                    cache 30
+                    forward . 192.168.1.81
+                  }
+                '';
+              };
+            }
             ../vars/shared/zitadel-argocd-secret/zitadel-argocd-secret/value
           ];
         };
