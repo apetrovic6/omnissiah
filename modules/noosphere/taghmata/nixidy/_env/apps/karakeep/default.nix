@@ -65,7 +65,6 @@ in {
 
             containers = {
               karakeep = {
-
                 env = {
                   NEXTAUTH_URL = "https://karakeep.${domain}";
                   OAUTH_WELLKNOWN_URL = "https://zitadel.noosphere.uk/.well-known/openid-configuration";
@@ -75,11 +74,12 @@ in {
                 };
 
                 envFrom = [
-                {secretRef = {name = "karakeep-secret";};}
-                {secretRef = {name = "karakeep-zitadel-secret";};}
-                {secretRef = {name = meiliSecret;};}
-              ];
-            };};
+                  {secretRef = {name = "karakeep-secret";};}
+                  {secretRef = {name = "karakeep-zitadel-secret";};}
+                  {secretRef = {name = meiliSecret;};}
+                ];
+              };
+            };
           };
         };
       };

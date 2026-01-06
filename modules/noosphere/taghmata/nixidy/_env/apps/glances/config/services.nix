@@ -70,7 +70,7 @@ in {
               };
             }
 
-{
+            {
               type = "extension";
               title = "Security";
               url = "http://glance-k8s/extension/apps";

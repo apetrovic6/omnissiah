@@ -116,5 +116,6 @@ in {
                 OAUTH_CLIENT_SECRET: "$clientSecret"
         EOF
       '';
-    };  };
+    };
+  };
 }

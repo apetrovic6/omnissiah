@@ -15,15 +15,16 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-            "glance/name" = "zitadel";
-            "glance/icon" = "di:z/itadel";
-            "glance/url" = "https://zitadel.${domain}";
-            "glance/description" = "Identity Provider";
-            "glance/id" = "zitadel";
-            "glance/parent" = "zitadel";
-            "category" = "security";
-            };
+          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
+          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+          "glance/name" = "zitadel";
+          "glance/icon" = "di:z/itadel";
+          "glance/url" = "https://zitadel.${domain}";
+          "glance/description" = "Identity Provider";
+          "glance/id" = "zitadel";
+          "glance/parent" = "zitadel";
+          "category" = "security";
+        };
       };
 
       spec = {
@@ -147,8 +148,8 @@ in {
         login = {
           enabled = true;
           annotations = {
-          "argocd.argoproj.io/sync-wave" = "12";
-          # "argocd.argoproj.io/hook" = "PreSync";
+            "argocd.argoproj.io/sync-wave" = "12";
+            # "argocd.argoproj.io/hook" = "PreSync";
           };
           ingress = {
             enabled = true;
