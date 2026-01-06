@@ -1,7 +1,6 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
   barmanS3Storage = "barman-s3-secret-key";
-
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${barmanS3Storage} = {
@@ -52,7 +51,5 @@ in {
         EOF
       '';
     };
-
-
   };
 }

@@ -177,6 +177,14 @@ in {
       (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
     ];
 
+    resources.backups.pg-yarr-backup = {
+      spec = {
+        cluster.name = "pg-yarr";
+        method = "plugin";
+        pluginConfiguration.name = "barman-cloud.cloudnative-pg.io";
+      };
+    };
+
     resources.clusters.pg-yarr = {
       metadata = {
         inherit namespace;
@@ -197,6 +205,14 @@ in {
           storageClass = "longhorn-cnpg-strict-local";
           size = "1Gi";
         };
+
+        plugins = [
+          {
+            name = "barman-cloud.cloudnative-pg.io";
+            isWALArchiver = true;
+            parameters.barmanObjectName = "garage-store";
+          }
+        ];
 
         postgresql.parameters = {
           shared_buffers = "1GB";

@@ -18,6 +18,11 @@ spec:
         superuser: false
   monitoring:
     enablePodMonitor: true
+  plugins:
+    - isWALArchiver: true
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: garage-store
   postgresql:
     parameters:
       log_statement: ddl

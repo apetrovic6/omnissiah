@@ -49,6 +49,7 @@ in {
     ../_generated/alloy-operator-crd.nix
     ../_generated/kube-prometheus-stack-crd.nix
     ../_generated/prometheus-crd.nix
+    ../_generated/barman-cloud.nix
   ];
 
   nixidy.defaults.syncPolicy.autoSync = {

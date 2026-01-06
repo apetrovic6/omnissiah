@@ -1,0 +1,11 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: pg-yarr-backup
+  namespace: seerr
+spec:
+  cluster:
+    name: pg-yarr
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

@@ -11,8 +11,48 @@
 in {
   applications.barman-cloud = {
     namespace = "cnpg-system";
+    resources.objectStores.garage-store = {
+      spec = {
+        configuration = {
+          destinationPath = "s3://cnpg-backup-bucket/backups";
+          endpointURL = "http://garage.garage.svc.cluster.local:9000";
+          s3Credentials = {
+            accessKeyId = {
+              name = "barman-s3-secret-key";
+              key = "ACCESS_KEY_ID";
+            };
+
+            secretAccessKey = {
+              name = "barman-s3-secret-key";
+              key = "ACCESS_SECRET_KEY";
+            };
+          };
+          wal.compression = "gzip";
+        };
+      };
+    };
     yamls = [
       (builtins.readFile barmanManifest)
+
+      # ''
+      #   apiVersion: barmancloud.cnpg.io/v1
+      #   kind: ObjectStore
+      #   metadata:
+      #     name: minio-store
+      #   spec:
+      #     configuration:
+      #       destinationPath: s3://backups/
+      #       endpointURL: http://minio:9000
+      #       s3Credentials:
+      #         accessKeyId:
+      #           name: minio
+      #           key: ACCESS_KEY_ID
+      #         secretAccessKey:
+      #           name: minio
+      #           key: ACCESS_SECRET_KEY
+      #       wal:
+      #         compression: gzip
+      # ''
     ];
   };
 
