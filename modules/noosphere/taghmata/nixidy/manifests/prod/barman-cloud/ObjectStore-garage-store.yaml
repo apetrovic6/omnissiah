@@ -2,7 +2,7 @@ apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
   name: garage-store
-  namespace: cnpg-system
+  namespace: yarr
 spec:
   configuration:
     destinationPath: s3://cnpg-backup-bucket/backups
