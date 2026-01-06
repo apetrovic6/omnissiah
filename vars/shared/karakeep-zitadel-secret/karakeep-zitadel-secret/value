@@ -2,7 +2,7 @@ apiVersion: isindir.github.com/v1alpha3
 kind: SopsSecret
 metadata:
     name: karakeep-zitadel-secret
-    namespace: bytestash
+    namespace: karakeep
 spec:
     secretTemplates:
         - name: ENC[AES256_GCM,data:DYdQbAzZ5UUzmcegPELuRXZrpVNf0NI=,iv:fbMzlPShZYvYb/E6wRpnUKz6X00zknIY9PkqjwcbGsM=,tag:G0BAN2OtnuIfO0v2ybCqMA==,type:str]

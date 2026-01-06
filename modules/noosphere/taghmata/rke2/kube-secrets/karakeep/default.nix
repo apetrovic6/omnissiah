@@ -106,7 +106,7 @@ in {
         kind: SopsSecret
         metadata:
           name: ${karakeepOidcSecret}
-          namespace: bytestash
+          namespace: karakeep
         spec:
           secretTemplates:
             - name: ${karakeepOidcSecret}
