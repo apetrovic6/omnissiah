@@ -37,9 +37,19 @@ spec:
               value: http://karakeep-meilisearch:7700
             - name: NEXTAUTH_URL
               value: http://karakeep.noosphere.uk
+            - name: OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING
+              value: "true"
+            - name: OAUTH_PROVIDER_NAME
+              value: Zitadel
+            - name: OAUTH_SCOPE
+              value: openid email profile
+            - name: OAUTH_WELLKNOWN_URL
+              value: https://zitadel.noosphere.uk/.well-known/openid-configuration
           envFrom:
             - secretRef:
                 name: karakeep-secret
+            - secretRef:
+                name: karakeep-zitadel-secret
             - secretRef:
                 name: karakeep-meilisearch-secret
           image: ghcr.io/karakeep-app/karakeep:0.27.0

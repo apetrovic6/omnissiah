@@ -12,7 +12,6 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/bytestash-jwt-secret/bytestash-jwt-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/bytestash-zitadel-client-secret/bytestash-zitadel-client-secret/value)
     ];
 
     helm.releases.bytestash = {
@@ -61,13 +60,13 @@ in {
           ];
         };
 
-        oidc = {
-          enabled = true;
-          name = "Zitadel";
-          issuerUrl = "https://zitadel.${domain}";
-          clientSecret = "bytestash-zitadel-client-secret";
-          scopes = "openid profile email groups";
-        };
+        # oidc = {
+        #   enabled = false;
+        #   name = "Zitadel";
+        #   issuerUrl = "https://zitadel.${domain}";
+        #   clientSecret = "bytestash-zitadel-client-secreta";
+        #   scopes = "openid profile email groups";
+        # };
 
         containerSecurityContext = {
           capabilities = {

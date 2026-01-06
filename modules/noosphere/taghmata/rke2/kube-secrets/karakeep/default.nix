@@ -2,6 +2,7 @@
   ageKey = config.noosphere.agePublicKey;
   meiliSearchSecret = "karakeep-meilisearch-secret";
   karakeepSecret = "karakeep-secret";
+  karakeepOidcSecret = "karakeep-zitadel-secret";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${meiliSearchSecret} = {
@@ -69,5 +70,51 @@ in {
         EOF
       '';
     };
-  };
+
+    clan.core.vars.generators.${karakeepOidcSecret} = {
+      share = true;
+
+      prompts.client-id = {
+        description = "Client ID";
+        type = "line";
+        persist = false;
+      };
+
+      prompts.client-secret = {
+        description = "Client Secret";
+        type = "hidden";
+        persist = false;
+      };
+
+      files.${karakeepOidcSecret}.secret = false;
+
+      runtimeInputs = [pkgs.coreutils pkgs.sops];
+
+      script = ''
+               set -euo pipefail
+
+               clientId="$(tr -d '\r\n' < "$prompts/client-id")"
+               clientSecret="$(tr -d '\r\n' < "$prompts/client-secret")"
+
+
+        sops encrypt \
+          --age "${ageKey}" \
+          --encrypted-suffix "Templates" \
+          --input-type yaml --output-type yaml \
+          /dev/stdin > "$out/${karakeepOidcSecret}" <<EOF
+        apiVersion: isindir.github.com/v1alpha3
+        kind: SopsSecret
+        metadata:
+          name: ${karakeepOidcSecret}
+          namespace: bytestash
+        spec:
+          secretTemplates:
+            - name: ${karakeepOidcSecret}
+              type: Opaque
+              stringData:
+                OAUTH_CLIENT_ID: "$clientId"
+                OAUTH_CLIENT_SECRET: "$clientSecret"
+        EOF
+      '';
+    };  };
 }

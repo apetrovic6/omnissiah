@@ -44,18 +44,6 @@ spec:
                 secretKeyRef:
                   key: expiry
                   name: bytestash-jwt-secret
-            - name: OIDC_ENABLED
-              value: "true"
-            - name: OIDC_DISPLAY_NAME
-              value: Zitadel
-            - name: OIDC_ISSUER_URL
-              value: https://zitadel.noosphere.uk
-            - name: OIDC_CLIENT_ID
-              value: ""
-            - name: OIDC_CLIENT_SECRET
-              value: bytestash-zitadel-client-secret
-            - name: OIDC_SCOPES
-              value: openid profile email groups
           image: ghcr.io/jordan-dalby/bytestash:1.5.7
           imagePullPolicy: IfNotPresent
           livenessProbe:
