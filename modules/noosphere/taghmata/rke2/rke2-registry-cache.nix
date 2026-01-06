@@ -1,9 +1,10 @@
-{
-  lib,
-  config,
-  ...
-}: {
-  flake.nixosModules.noosphere = {...}: let
+{...}: {
+  flake.nixosModules.noosphere = {
+    lib,
+    pkgs,
+    config,
+    ...
+  }: let
     cfg = config.services.imperium.taghmata.rke2.registryCache;
 
     domain = config.noosphere.domain;
@@ -50,19 +51,26 @@
         mode = "0644";
         text = registriesYaml;
       };
+      # Restart RKE2 when registries.yaml changes (without referencing config.systemd.services)
+      systemd.services.rke2-restart-on-registries-change = {
+        description = "Restart rke2 when /etc/rancher/rke2/registries.yaml changes";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.bash}/bin/bash -lc ''
+          ${pkgs.systemd}/bin/systemctl try-restart rke2-server.service || true
+          ${pkgs.systemd}/bin/systemctl try-restart rke2-agent.service || true
+        ''";
+        };
+      };
 
-      # Restart RKE2 when the registries file changes
-      systemd.services = let
-        regFile = config.environment.etc."rancher/rke2/registries.yaml".source;
-      in
-        lib.mkMerge [
-          (lib.mkIf (config.systemd.services ? rke2-server) {
-            rke2-server.restartTriggers = [regFile];
-          })
-          (lib.mkIf (config.systemd.services ? rke2-agent) {
-            rke2-agent.restartTriggers = [regFile];
-          })
-        ];
+      systemd.paths.rke2-registries = {
+        description = "Watch rke2 registries.yaml";
+        wantedBy = ["multi-user.target"];
+        pathConfig = {
+          PathChanged = "/etc/rancher/rke2/registries.yaml";
+          Unit = "rke2-restart-on-registries-change.service";
+        };
+      };
     };
   };
 }

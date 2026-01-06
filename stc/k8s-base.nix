@@ -12,7 +12,7 @@
     self,
     ...
   }: {
-    imports = [ ];
+    imports = [];
 
     systemd.services.iscsid.serviceConfig = {
       PrivateMounts = "yes";

@@ -109,6 +109,7 @@
       ];
 
       noosphere.agePublicKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
+      noosphere.domain = "noosphere.uk";
 
       # https://docs.clan.lol/guides/flake-parts
       clan = {
@@ -120,6 +121,7 @@
         inputs',
         self',
         system,
+        config,
         ...
       }: {
         checks = {
@@ -132,7 +134,7 @@
         };
 
         noosphere = {
-          domain = "noosphere.uk";
+          domain = config.noosphere.domain;
           nixidy = {
             repository = "https://github.com/apetrovic6/omnissiah.git";
             branch = "master";
