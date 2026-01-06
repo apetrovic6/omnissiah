@@ -1,0 +1,29 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: barman-s3-secret-key
+    namespace: cnpg-system
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:7ZkVlzDVnkyuYIKOjiDxzCqdXFU=,iv:Jr5hn4wrIvoZu2/2zHF3NjOePcl4WHJj8rYt1Lr11bU=,tag:wF/61+1u8BlYN/t2sD8uSA==,type:str]
+          labels:
+            cnpg.io/reload: ENC[AES256_GCM,data:/3YCWQ==,iv:81n7rIFSZ4PYNssG28VM/Du5jvyuq/nZ+xbqe3UZisQ=,tag:fQ2mOxy6UG58+tcyaznHDw==,type:str]
+          type: ENC[AES256_GCM,data:JGpcitIB,iv:UMSocl0ldm1ZEd79TGRPqUARdbgL5yGjEYXbf6RQZE4=,tag:q4OG/sOqQdO4ADywxRd9cw==,type:str]
+          stringData:
+            ACCESS_KEY_ID: ENC[AES256_GCM,data:3Qqa84I0sLyuL/bIT8pVZ2TxkjncXliXL0w=,iv:1f0ZkHpmWrmoA2q0Rocz/vJJsLb6cdo7ky9IW/5n1DE=,tag:ruB+0hujzid+JBDn9Wn87g==,type:str]
+            ACCESS_SECRET_KEY: ENC[AES256_GCM,data:8WLa1a9uhk2mdopCT2HdykJN+QV60Lvm54cfnORccDYiCsFpO50Wcw0yg6w3OwDvrqLKXKDTiCOYFWXhhm9P8Q==,iv:Fd66HG9HEilqPvHjKfgRWLPVmOl7W0RCNvyutOzPv1E=,tag:aHKyrJ81d5XYiQXgCHBsjg==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBPSWFoa3h5aEpjODNXelBo
+            L0tkVWwrdzJHMDZlNWU4VjdOZEIrZUIvMEVzCis0RlhKRjJZK2JmMHJmRHJYMkdH
+            eEZIWUhHUGJiWU9YK1R3eHdOK21JcVEKLS0tIEpsYS8xNWpEbytuSnh5N0w0Qytp
+            cGRrcWtoTkRYTUlNcTBqVHhPSWt5ZDQKL19bE8CxLK+ivmPu4YCmEgiWJ8X8MVEt
+            54ZhdlK4tEmtOV2mD98vqMzfsG/EnXkvbOVehscTq+vGIiuReqN5iQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-06T18:32:29Z"
+    mac: ENC[AES256_GCM,data:WySsQYdBimPraG5ArxHWjgzgzZRGVNjVWllgVGdkdpvjBvyHlb8cI2yhTZcNvBUlqomAFKZc7brBKfH8ZI0uQJ8AFV+/QWTmIKeaJQSKHuPW079QSIXZUZ6ODzYBBPv0Z8hLps0pCE3CPd2lYG0pfeZ7GZ21hfP4ETUEpxziRbo=,iv:fr9Ukm+OQYUVXgyr8kkFbsDAs50hCU71xEgEfmjtmvU=,tag:sXwRQzj1m3B71P0Mq6kpPg==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
