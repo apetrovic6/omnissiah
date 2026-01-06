@@ -178,6 +178,7 @@ in {
     ];
 
     resources.backups.pg-yarr-backup = {
+      metadata.namespace = namespace;
       spec = {
         cluster.name = "pg-yarr";
         method = "plugin";
