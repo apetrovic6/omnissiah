@@ -129,6 +129,7 @@ in {
 
       k9s
       kubectl
+      kubectl-cnpg
     ];
 
     programs.localsend = {
