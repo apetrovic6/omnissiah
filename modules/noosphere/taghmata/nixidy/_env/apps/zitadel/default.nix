@@ -15,7 +15,15 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-        };
+            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+            "glance/name" = "zitadel";
+            "glance/icon" = "di:z/itadel";
+            "glance/url" = "https://zitadel.${domain}";
+            "glance/description" = "Identity Provider";
+            "glance/id" = "zitadel";
+            "glance/parent" = "zitadel";
+            "category" = "Security";
+            };
       };
 
       spec = {
@@ -47,20 +55,6 @@ in {
     };
 
     yamls = [
-      ''
-        apiVersion: cert-manager.io/v1
-        kind: Certificate
-        metadata:
-          name: zitadel-tls
-          namespace: zitadel
-        spec:
-          secretName: zitadel-tls
-          issuerRef:
-            kind: ClusterIssuer
-            name: letsencrypt-cloudflare
-          dnsNames:
-            - zitadel.${domain}
-      ''
       ''
         apiVersion: isindir.github.com/v1alpha3
         kind: SopsSecret

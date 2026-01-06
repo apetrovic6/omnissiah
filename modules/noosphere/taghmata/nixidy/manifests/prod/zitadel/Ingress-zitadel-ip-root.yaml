@@ -2,6 +2,14 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    category: Security
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Identity Provider
+    glance/icon: di:z/itadel
+    glance/id: zitadel
+    glance/name: zitadel
+    glance/parent: zitadel
+    glance/url: https://zitadel.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: zitadel-ip-root
   namespace: zitadel
