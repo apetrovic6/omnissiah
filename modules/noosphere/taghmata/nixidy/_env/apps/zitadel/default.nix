@@ -146,6 +146,10 @@ in {
 
         login = {
           enabled = true;
+          annotations = {
+          "argocd.argoproj.io/sync-wave" = "12";
+          # "argocd.argoproj.io/hook" = "PreSync";
+          };
           ingress = {
             enabled = true;
             className = "traefik";
