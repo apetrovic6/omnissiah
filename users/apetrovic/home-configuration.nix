@@ -53,6 +53,7 @@ in {
   magos.hm.core.swayosd.enable = false;
   magos.hm.core.swaync.enable = false;
   magos.hm.core.waybar.enable = false;
+  magos.hm.hyprlock.enable = false;
 
   magos.hm.noctalia.enable = true;
 
