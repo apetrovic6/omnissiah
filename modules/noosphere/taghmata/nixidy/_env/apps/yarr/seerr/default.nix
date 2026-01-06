@@ -3,6 +3,7 @@
   domain = config.noosphere.domain;
 in {
   applications.seerr = {
+   
     resources.namespaces.yarr = {
       metadata = {
         name = namespace;
@@ -175,6 +176,7 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
+      (builtins.readFile ../../../../../../../../vars/shared/barman-s3-secret-key/barman-s3-secret-key/value)
     ];
 
     resources.backups.pg-yarr-backup = {

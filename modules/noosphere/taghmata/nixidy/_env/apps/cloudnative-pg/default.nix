@@ -12,6 +12,7 @@ in {
   applications.barman-cloud = {
     namespace = "cnpg-system";
     resources.objectStores.garage-store = {
+      metadata.namespace = "yarr";
       spec = {
         configuration = {
           destinationPath = "s3://cnpg-backup-bucket/backups";
