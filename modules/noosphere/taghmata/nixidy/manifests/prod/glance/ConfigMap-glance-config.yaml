@@ -128,6 +128,15 @@ data:
           parameters:
             show-if: "namespace != \"kube-system\" and\n\"glance/name\" in annotations\
               \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
+              security\")\n"
+          title: Security
+          type: extension
+          url: http://glance-k8s/extension/apps
+        - allow-potentially-dangerous-html: true
+          cache: 1m
+          parameters:
+            show-if: "namespace != \"kube-system\" and\n\"glance/name\" in annotations\
+              \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
               utils\")\n"
           title: Utils
           type: extension

@@ -70,6 +70,21 @@ in {
               };
             }
 
+{
+              type = "extension";
+              title = "Security";
+              url = "http://glance-k8s/extension/apps";
+              allow-potentially-dangerous-html = true;
+              inherit cache;
+
+              parameters = {
+                show-if = ''
+                  namespace != "kube-system" and
+                  "glance/name" in annotations and
+                   ("category" in annotations && annotations["category"] == "security")
+                '';
+              };
+            }
             {
               type = "extension";
               title = "Utils";
