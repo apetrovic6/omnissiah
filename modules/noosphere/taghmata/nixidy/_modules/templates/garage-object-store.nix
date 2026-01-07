@@ -3,19 +3,13 @@
 in {
   templates.garageObjectStore = {
     options = {
-      name = mkOption {
-        type = types.str;
-        default = "";
-        description = "Name of the object store";
-      };
-
       namespace = mkOption {
         type = types.str;
         default = "";
         description = "Namespace for the object store";
       };
 
-      AwsDefaultRegion = mkOption {
+      awsDefaultRegion = mkOption {
         type = types.str;
         default = "garage";
         description = "Region of the Garage object store";
@@ -69,53 +63,57 @@ in {
         description = "Compression type.";
       };
     };
-  };
 
-  output = {config, ...}: let
-    cfg = config;
-  in {
-    resources.objectStores.${cfg.name} = {
-      metadata.namespace = cfg.namespace;
-      spec = {
-        instanceSidecarConfiguration = {
-          env = [
-            # MUST match Garage's s3_region in garage.toml / chart values
-            {
-              name = "AWS_DEFAULT_REGION";
-              value = cfg.AwsDefaultRegion;
-            }
+    output = {
+      name,
+      config,
+      ...
+    }: let
+      cfg = config;
+    in {
+      objectStores.${name} = {
+        metadata.namespace = cfg.namespace;
+        spec = {
+          instanceSidecarConfiguration = {
+            env = [
+              # MUST match Garage's s3_region in garage.toml / chart values
+              {
+                name = "AWS_DEFAULT_REGION";
+                value = cfg.awsDefaultRegion;
+              }
 
-            # Recommended for some S3-compatible implementations (boto3 checksum behavior)
-            {
-              name = "AWS_REQUEST_CHECKSUM_CALCULATION";
-              value = "when_required";
-            }
-            {
-              name = "AWS_RESPONSE_CHECKSUM_VALIDATION";
-              value = "when_required";
-            }
+              # Recommended for some S3-compatible implementations (boto3 checksum behavior)
+              {
+                name = "AWS_REQUEST_CHECKSUM_CALCULATION";
+                value = "when_required";
+              }
+              {
+                name = "AWS_RESPONSE_CHECKSUM_VALIDATION";
+                value = "when_required";
+              }
 
-            # Optional: makes boto3 stop trying IMDS in some environments
-            # { name = "AWS_EC2_METADATA_DISABLED"; value = "true"; }
-          ];
-        };
-        configuration = {
-          destinationPath = cfg.destinationPath;
-          endpointURL = cfg.endpointUrl;
-          s3Credentials = let
-            s3 = cfg.S3Credentials;
-          in {
-            accessKeyId = {
-              name = s3.accessKeyId.name;
-              key = s3.accessKeyId.key;
-            };
-
-            secretAccessKey = {
-              name = s3.secretAccessKey.name;
-              key = s3.secretAccessKey.key;
-            };
+              # Optional: makes boto3 stop trying IMDS in some environments
+              # { name = "AWS_EC2_METADATA_DISABLED"; value = "true"; }
+            ];
           };
-          wal.compression = cfg.wal.compression;
+          configuration = {
+            destinationPath = cfg.destinationPath;
+            endpointURL = cfg.endpointUrl;
+            s3Credentials = let
+              s3 = cfg.S3Credentials;
+            in {
+              accessKeyId = {
+                name = s3.accessKeyId.name;
+                key = s3.accessKeyId.key;
+              };
+
+              secretAccessKey = {
+                name = s3.secretAccessKey.name;
+                key = s3.secretAccessKey.key;
+              };
+            };
+            wal.compression = cfg.wal.compression;
+          };
         };
       };
     };
