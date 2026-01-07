@@ -14,7 +14,7 @@
       machineClass = "darwin";
     };
 
-    sol = {
+    cerberus = {
       tags = ["base" "server"];
       # deploy.targetHost = "root@192.168.1.81";
       deploy.targetHost = "root@192.168.71.146";
@@ -28,6 +28,11 @@
     luna = {
       tags = ["base" "k8s-base" "k8s-server"];
       deploy.targetHost = "root@192.168.1.59";
+    };
+
+    sol = {
+      tags = ["base" "k8s-base" "k8s-server"];
+      deploy.targetHost = "root@192.168.1.126";
     };
   };
 }
