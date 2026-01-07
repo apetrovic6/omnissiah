@@ -1,41 +1,6 @@
 apiVersion: v1
 data:
-  garage.toml: |-
-    metadata_dir = "/mnt/meta"
-    data_dir = "/mnt/data"
-
-    db_engine = "lmdb"
-
-    block_size = 1048576
-
-    replication_factor = 3
-    consistency_mode = "consistent"
-
-    compression_level = 1
-
-    rpc_bind_addr = "[::]:3901"
-    # rpc_secret will be populated by the init container from a k8s secret object
-    rpc_secret = "__RPC_SECRET_REPLACE__"
-
-    bootstrap_peers = []
-
-    [kubernetes_discovery]
-    namespace = "garage"
-    service_name = "garage"
-    skip_crd = false
-
-    [s3_api]
-    s3_region = "garage"
-    api_bind_addr = "[::]:3900"
-    root_domain = ".s3.garage.tld"
-
-    [s3_web]
-    bind_addr = "[::]:3902"
-    root_domain = ".web.garage.tld"
-    index = "index.html"
-
-    [admin]
-    api_bind_addr = "[::]:3903"
+  garage.toml: "metadata_dir = \"/mnt/meta\"\ndata_dir = \"/mnt/data\"\n\ndb_engine = \"lmdb\"\n\nblock_size = 1048576\n\nreplication_factor = 3\nconsistency_mode = \"consistent\"\n\ncompression_level = 1\n\nrpc_bind_addr = \"[::]:3901\"\n# rpc_secret will be populated by the init container from a k8s secret object\nrpc_secret = \"__RPC_SECRET_REPLACE__\"\n\nbootstrap_peers = [ \n]\n\n[kubernetes_discovery]\nnamespace = \"garage\"\nservice_name = \"garage\"\nskip_crd = false\n\n[s3_api]\ns3_region = \"garage\"\napi_bind_addr = \"[::]:3900\"\nroot_domain = \".s3.garage.tld\"\n\n[s3_web]\nbind_addr = \"[::]:3902\"\nroot_domain = \".web.garage.tld\"\nindex = \"index.html\"\n\n[admin]\napi_bind_addr = \"[::]:3903\""
 kind: ConfigMap
 metadata:
   name: garage-config
