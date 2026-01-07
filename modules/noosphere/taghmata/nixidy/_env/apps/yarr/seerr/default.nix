@@ -187,6 +187,7 @@ in {
     ];
 
     resources.scheduledBackups."${db-cluster-name}-scheduled-backup" = {
+      metadata.namespace = namespace;
       spec = {
         schedule = "0 2 0 * * *"; # Backup at 2AM every night
         backupOwnerReference = "self";

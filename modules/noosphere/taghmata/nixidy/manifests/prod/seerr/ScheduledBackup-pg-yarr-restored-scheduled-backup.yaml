@@ -2,7 +2,7 @@ apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
   name: pg-yarr-restored-scheduled-backup
-  namespace: seerr
+  namespace: yarr
 spec:
   backupOwnerReference: self
   cluster:
