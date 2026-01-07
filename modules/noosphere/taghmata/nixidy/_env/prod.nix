@@ -55,7 +55,7 @@ in {
   nixidy.defaults.syncPolicy.autoSync = {
     enable = true;
     prune = true;
-    selfHeal = true;
+    selfHeal = false;
   };
 
   # applications.prometheus = {
