@@ -38,7 +38,7 @@ in {
         kind: SopsSecret
         metadata:
           name: ${barmanS3Storage}
-          namespace: yarr
+          namespace: reflector
         spec:
           secretTemplates:
             - name: ${barmanS3Storage}
@@ -47,6 +47,8 @@ in {
               annotations:
                 reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
                 reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "yarr,zitadel,harbor"
+                reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+                reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "yarr,zitadel,harbor"
               type: Opaque
               stringData:
                 ACCESS_KEY_ID: "$access_key"
