@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/instance: reflector
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: reflector
+    app.kubernetes.io/version: 9.1.45
+    helm.sh/chart: reflector-9.1.45
+  name: reflector
+  namespace: reflector
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - secrets
+    verbs:
+      - '*'
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - watch
+      - list

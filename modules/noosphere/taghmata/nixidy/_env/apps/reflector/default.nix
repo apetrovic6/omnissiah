@@ -1,7 +1,4 @@
-{
-  charts,
-  ...
-}: let
+{charts, ...}: let
   namespace = "reflector";
 in {
   applications.reflector = {
