@@ -122,20 +122,20 @@ keycloakOperator = pkgs.fetchurl {
           size = "1Gi";
         };
 
-        bootstrap.recovery.source = "origin";
+        # bootstrap.recovery.source = "origin";
 
-        externalClusters = [
-          {
-            name = "origin";
-            plugin = {
-              name = barmanPluginName;
-              parameters = {
-                barmanObjectName = objectStoreName;
-                serverName = "pg-yarr";
-              };
-            };
-          }
-        ];
+        # externalClusters = [
+        #   {
+        #     name = "origin";
+        #     plugin = {
+        #       name = barmanPluginName;
+        #       parameters = {
+        #         barmanObjectName = objectStoreName;
+        #         serverName = "";
+        #       };
+        #     };
+        #   }
+        # ];
 
         walStorage = {
           storageClass = "longhorn-cnpg-strict-local";

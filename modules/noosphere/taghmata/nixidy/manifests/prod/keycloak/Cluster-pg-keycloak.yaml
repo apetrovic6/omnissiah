@@ -7,16 +7,6 @@ metadata:
   name: pg-keycloak
   namespace: keycloak
 spec:
-  bootstrap:
-    recovery:
-      source: origin
-  externalClusters:
-    - name: origin
-      plugin:
-        name: barman-cloud.cloudnative-pg.io
-        parameters:
-          barmanObjectName: keycloak-object-store
-          serverName: pg-yarr
   instances: 2
   monitoring:
     enablePodMonitor: true
