@@ -1,5 +1,8 @@
-{pkgs, config, ...}:
-let
+{
+  pkgs,
+  config,
+  ...
+}: let
   keycloakVersion = "26.5.0";
   keycloakCrds1 = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/${keycloakVersion}/kubernetes/keycloaks.k8s.keycloak.org-v1.yml";
@@ -11,7 +14,7 @@ let
     hash = "sha256-MlKbZ7Mst/cKVKDoaL8Jb3Ul13tmcHIiK0bSWLlLaDY=";
   };
 
-keycloakOperator = pkgs.fetchurl {
+  keycloakOperator = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/keycloak/keycloak-k8s-resources/${keycloakVersion}/kubernetes/kubernetes.yml";
     hash = "sha256-ROYGpL+GpFo042JuPE1gY7eZO8blhucyYJDBfY248kg=";
   };
@@ -21,69 +24,112 @@ keycloakOperator = pkgs.fetchurl {
   objectStoreName = "keycloak-object-store";
   barmanPluginName = "barman-cloud.cloudnative-pg.io";
   domain = config.noosphere.domain;
-  
-  in
- {
-   applications.keycloak = {
-      inherit namespace;
-      createNamespace = true;
+in {
+  applications.keycloak = {
+    inherit namespace;
+    createNamespace = true;
 
-      yamls = [
-        (builtins.readFile keycloakCrds1)
-        (builtins.readFile keycloakCrds2)
-        (builtins.readFile keycloakOperator)
-      ];
+    yamls = [
+      (builtins.readFile keycloakCrds1)
+      (builtins.readFile keycloakCrds2)
+      (builtins.readFile keycloakOperator)
+
+      ''
+        apiVersion: k8s.keycloak.org/v2alpha1
+        kind: Keycloak
+        metadata:
+          name: ${namespace}
+        spec:
+          instances: 1
+          db:
+            vendor: postgres
+            host: pg-keycloak-rw
+            database: app
+            port: 5432
+            usernameSecret:
+              name: ${db-cluster-name}-app
+              key: username
+            passwordSecret:
+              name: ${db-cluster-name}-app
+              key: password
+          http:
+            httpEnabled: true
+          ingress:
+            enabled: true
+            tlsSecret: keycloak-tls
+            className: traefik
+          hostname:
+            hostname: keycloak.${domain}
+          proxy:
+            headers: xforwarded # double check your reverse proxy sets and overwrites the X-Forwarded-* headers
+      ''
+
+      ''
+        apiVersion: cert-manager.io/v1
+        kind: Certificate
+        metadata:
+          name: keycloak-tls
+          namespace: ${namespace}
+        spec:
+          secretName: keycloak-tls
+          issuerRef:
+            kind: ClusterIssuer
+            name: letsencrypt-cloudflare
+          dnsNames:
+            - keycloak.${domain}
+      ''
+    ];
 
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
     };
 
-    
-    resources.ingresses.keycloak-ip-root = {
-      metadata = {
-        inherit namespace;
+    # resources.ingresses.keycloak-ip-root = {
+    #   metadata = {
+    #     inherit namespace;
 
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Keycloak";
-          "glance/icon" = "di:keycloak";
-          "glance/url" = "https://keycloak.${domain}";
-          "glance/description" = "Identity Provider";
-          "glance/id" = "keycloak";
-          "glance/parent" = "keycloak";
-          "category" = "security";
-        };
-      };
+    #     annotations = {
+    #       "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+    #       "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
+    #       "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+    #       "glance/name" = "Keycloak";
+    #       "glance/icon" = "di:keycloak";
+    #       "glance/url" = "https://auth.${domain}";
+    #       "glance/description" = "Identity Provider";
+    #       "glance/id" = "keycloak";
+    #       "glance/parent" = "keycloak";
+    #       "category" = "security";
+    #     };
+    #   };
 
-      spec = {
-        ingressClassName = "traefik";
+    #   spec = {
+    #     ingressClassName = "traefik";
 
-        tls = [
-          {
-            secretName = "keycloak-tls";
-            hosts = ["keycloak.${domain}"];
-          }
-        ];
+    #     tls = [
+    #       {
+    #         secretName = "auth-tls";
+    #         hosts = ["auth.${domain}"];
+    #       }
+    #     ];
 
-        rules = [
-          {
-            host = "keycloak.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "keycloak";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
-      };
-    };
+    #     rules = [
+    #       {
+    #         host = "auth.${domain}";
+    #         http.paths = [
+    #           {
+    #             path = "/";
+    #             pathType = "Prefix";
+    #             backend.service = {
+    #               name = "keycloak";
+    #               port.number = 8080;
+    #             };
+    #           }
+    #         ];
+    #       }
+    #     ];
+    #   };
+    # };
+
     resources.scheduledBackups."${db-cluster-name}-scheduled-backup" = {
       metadata.namespace = namespace;
       spec = {
@@ -158,6 +204,6 @@ keycloakOperator = pkgs.fetchurl {
 
         monitoring.enablePodMonitor = true;
       };
-    };   };
-
+    };
+  };
 }

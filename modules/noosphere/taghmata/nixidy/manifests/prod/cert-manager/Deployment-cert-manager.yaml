@@ -39,6 +39,8 @@ spec:
             - --cluster-resource-namespace=$(POD_NAMESPACE)
             - --leader-election-namespace=cert-manager
             - --acme-http01-solver-image=quay.io/jetstack/cert-manager-acmesolver:v1.19.2
+            - --dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53
+            - --dns01-recursive-nameservers-only
             - --max-concurrent-challenges=60
           env:
             - name: POD_NAMESPACE

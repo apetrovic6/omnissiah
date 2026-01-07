@@ -1,0 +1,27 @@
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+spec:
+  db:
+    database: app
+    host: pg-keycloak-rw
+    passwordSecret:
+      key: password
+      name: pg-keycloak-app
+    port: 5432
+    usernameSecret:
+      key: username
+      name: pg-keycloak-app
+    vendor: postgres
+  hostname:
+    hostname: keycloak.noosphere.uk
+  http:
+    httpEnabled: true
+  ingress:
+    className: traefik
+    enabled: true
+    tlsSecret: keycloak-tls
+  instances: 1
+  proxy:
+    headers: xforwarded

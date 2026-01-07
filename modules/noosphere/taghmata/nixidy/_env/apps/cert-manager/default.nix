@@ -144,6 +144,10 @@ in {
       values = {
         global.leaderElection.namespace = "cert-manager";
         crds.enabled = true;
+        extraArgs = [
+          "--dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53"
+          "--dns01-recursive-nameservers-only"
+        ];
       };
     };
   };

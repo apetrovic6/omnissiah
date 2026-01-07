@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: keycloak-tls
+  namespace: keycloak
+spec:
+  dnsNames:
+    - keycloak.noosphere.uk
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-cloudflare
+  secretName: keycloak-tls
