@@ -7,8 +7,12 @@
   namespace = "harbor";
   domain = config.noosphere.domain;
   db-cluster-name = "pg-harbor";
-  barmanPluginName  = "barman-cloud.cloudnative-pg.io";
+  barmanPluginName = "barman-cloud.cloudnative-pg.io";
+  objectStoreName = "harbor-object-store";
 in {
+
+  imports = [  ../../../_modules/templates/garage-object-store.nix];
+  
   applications.harbor = let
     storageClass = "longhorn";
   in {
@@ -262,7 +266,9 @@ in {
       };
     };
 
-    resources.backups."${db-cluster-name}-backup" = {
+    templates.garageObjectStore.${objectStoreName} = { inherit namespace; };
+    
+    resources.backups."${db-cluster-name}-on-demand-backup" = {
       metadata.namespace = namespace;
       spec = {
         cluster.name = db-cluster-name;
@@ -270,6 +276,16 @@ in {
         pluginConfiguration.name = barmanPluginName;
       };
     };
+
+    resources.scheduledBackups."${db-cluster-name}-backup" = {
+      spec = {
+        schedule = "0 2 0 * * *"; # Backup at 2AM every night
+        backupOwnerReference = "self";
+        cluster.name = db-cluster-name;
+        immediate = true;
+      };
+    };
+    
 
     resources.clusters.${db-cluster-name} = {
       metadata = {
@@ -298,7 +314,7 @@ in {
           {
             name = barmanPluginName;
             isWALArchiver = true;
-            parameters.barmanObjectName = "garage-store";
+            parameters.barmanObjectName = objectStoreName;
           }
         ];
 
