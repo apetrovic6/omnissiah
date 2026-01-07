@@ -8,15 +8,15 @@
   imports = [
     self.nixosModules.smb
     self.nixosModules.impermanence
-    # self.inputs.magos.nixosModules.stylix
+    self.inputs.magos.nixosModules.stylix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.inputs.magos.nixosModules.default
   ];
 
-  # magos.stylix = {
-  #   enable = true;
-  #   image = ../../wallpapers/lofi/17.png;
-  # };
+  magos.stylix = {
+    enable = true;
+    image = ../../wallpapers/lofi/17.png;
+  };
 
   # nix = {
   #   extraOptions = ''
@@ -34,23 +34,23 @@
 
   services.imperium.smb.enable = false;
 
-  # services.imperium.impermanence = {
-  #   enable = false; # TODO: Setup impermanence
-  # };
+  services.imperium.impermanence = {
+    enable = false; # TODO: Setup impermanence
+  };
 
-  # environment.persistence."/persist" = {
-  #   enable = false;
-  #   directories = [
-  #     "/etc"
-  #     "/var/spool"
-  #     "/root"
-  #     "/srv"
-  #     "/var/lib/nixos"
-  #     "/var/db/sudo/lectured"
-  #     "/var/lib/systemd/coredump"
-  #     "/etc/NetworkManager/system-connections"
-  #   ];
-  # };
+  environment.persistence."/persist" = {
+    enable = false;
+    directories = [
+      "/etc"
+      "/var/spool"
+      "/root"
+      "/srv"
+      "/var/lib/nixos"
+      "/var/db/sudo/lectured"
+      "/var/lib/systemd/coredump"
+      "/etc/NetworkManager/system-connections"
+    ];
+  };
 
   users.groups.media = {
     gid = 1337;

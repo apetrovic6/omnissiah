@@ -6,6 +6,8 @@
 }: let
   namespace = "harbor";
   domain = config.noosphere.domain;
+  db-cluster-name = "pg-harbor";
+  barmanPluginName  = "barman-cloud.cloudnative-pg.io";
 in {
   applications.harbor = let
     storageClass = "longhorn";
@@ -250,17 +252,26 @@ in {
         database = {
           type = "external";
           external = {
-            host = "pg-harbor-rw";
+            host = "${db-cluster-name}-rw";
             port = "5432";
             username = "harbor";
-            existingSecret = "pg-harbor-postgres-secret";
+            existingSecret = "${db-cluster-name}-postgres-secret";
             coreDatabase = "registry";
           };
         };
       };
     };
 
-    resources.clusters.pg-harbor = {
+    resources.backups."${db-cluster-name}-backup" = {
+      metadata.namespace = namespace;
+      spec = {
+        cluster.name = db-cluster-name;
+        method = "plugin";
+        pluginConfiguration.name = barmanPluginName;
+      };
+    };
+
+    resources.clusters.${db-cluster-name} = {
       metadata = {
         inherit namespace;
         annotations = {
@@ -283,6 +294,14 @@ in {
           size = "20Gi";
         };
 
+        plugins = [
+          {
+            name = barmanPluginName;
+            isWALArchiver = true;
+            parameters.barmanObjectName = "garage-store";
+          }
+        ];
+
         postgresql.parameters = {
           shared_buffers = "1GB";
           max_connections = "200";
@@ -297,7 +316,7 @@ in {
               comment = "Harbor User";
               login = true;
               superuser = false;
-              passwordSecret.name = "pg-harbor-postgres-secret";
+              passwordSecret.name = "${db-cluster-name}-postgres-secret";
             }
           ];
         };
@@ -318,7 +337,7 @@ in {
       spec = {
         name = "registry";
         owner = "harbor";
-        cluster.name = "pg-harbor";
+        cluster.name = "${db-cluster-name}";
       };
     };
   };

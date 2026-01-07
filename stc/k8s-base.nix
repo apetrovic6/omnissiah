@@ -45,6 +45,11 @@
 
     networking.firewall.interfaces.tailscale0.allowedTCPPorts = [80 443 9000];
 
+    boot.kernel.sysctl = {
+      "net.ipv4.conf.all.rp_filter" = 0;
+      "net.ipv4.conf.default.rp_filter" = 0;
+    };
+
     services.rke2 = {
       package = pkgs.rke2_1_34;
       autoDeployCharts = {

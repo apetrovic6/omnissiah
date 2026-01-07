@@ -54,6 +54,7 @@ in {
         };
       };
     };
+
     yamls = [
       (builtins.readFile barmanManifest)
 
