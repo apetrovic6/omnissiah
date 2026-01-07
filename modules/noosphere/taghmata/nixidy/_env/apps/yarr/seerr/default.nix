@@ -1,9 +1,9 @@
 {config, ...}: let
   namespace = "yarr";
   domain = config.noosphere.domain;
+  db-cluster-name = "pg-yarr-restored";
 in {
   applications.seerr = {
-   
     resources.namespaces.yarr = {
       metadata = {
         name = namespace;
@@ -69,7 +69,7 @@ in {
 
                 {
                   name = "DB_HOST";
-                  value = "pg-yarr-rw";
+                  value = "${db-cluster-name}-rw";
                 }
 
                 {
@@ -182,13 +182,13 @@ in {
     resources.backups.pg-yarr-backup = {
       metadata.namespace = namespace;
       spec = {
-        cluster.name = "pg-yarr";
+        cluster.name = "${db-cluster-name}";
         method = "plugin";
         pluginConfiguration.name = "barman-cloud.cloudnative-pg.io";
       };
     };
 
-    resources.clusters.pg-yarr = {
+    resources.clusters.${db-cluster-name} = {
       metadata = {
         inherit namespace;
         annotations = {
@@ -215,10 +215,9 @@ in {
               parameters = {
                 barmanObjectName = "garage-store";
                 serverName = "pg-yarr";
-      
               };
             };
-          } 
+          }
         ];
 
         walStorage = {
@@ -267,7 +266,7 @@ in {
       spec = {
         name = "seerr";
         owner = "seerr";
-        cluster.name = "pg-yarr";
+        cluster.name = "${db-cluster-name}";
       };
     };
   };

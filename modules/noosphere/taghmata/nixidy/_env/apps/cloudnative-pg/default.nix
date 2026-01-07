@@ -14,6 +14,28 @@ in {
     resources.objectStores.garage-store = {
       metadata.namespace = "yarr";
       spec = {
+        instanceSidecarConfiguration = {
+          env = [
+            # MUST match Garage's s3_region in garage.toml / chart values
+            {
+              name = "AWS_DEFAULT_REGION";
+              value = "garage";
+            }
+
+            # Recommended for some S3-compatible implementations (boto3 checksum behavior)
+            {
+              name = "AWS_REQUEST_CHECKSUM_CALCULATION";
+              value = "when_required";
+            }
+            {
+              name = "AWS_RESPONSE_CHECKSUM_VALIDATION";
+              value = "when_required";
+            }
+
+            # Optional: makes boto3 stop trying IMDS in some environments
+            # { name = "AWS_EC2_METADATA_DISABLED"; value = "true"; }
+          ];
+        };
         configuration = {
           destinationPath = "s3://cnpg-backup-bucket/backups";
           endpointURL = "http://garage.garage.svc.cluster.local:3900";

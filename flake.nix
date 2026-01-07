@@ -212,6 +212,20 @@
           chart = nixhelm.chartsDerivations.${system}.kubernetes-csi.csi-driver-nfs;
         };
 
+        packages.barman-cloud = inputs.nixidy.packages.${system}.generators.fromCRD {
+          name = "barman-cloud";
+          src = pkgs.fetchFromGitHub {
+            owner = "cloudnative-pg";
+            repo = "plugin-barman-cloud";
+            rev = "v0.10.0";
+            hash = "sha256-JB0ia2qpkoJYE6GsdmQwvb6wlteCJHpIf/N16ibicgc=";
+          };
+
+          crds = [
+            "config/crd/bases/barmancloud.cnpg.io_objectstores.yaml"
+          ];
+        };
+
         # packages.zitadel= inputs.nixidy.packages.${system}.generators.fromChartCRD {
         #   name = "zitadel";
         #   chart = nixhelm.chartsDerivations.${system}.zitadel.zitadel;
@@ -265,6 +279,9 @@
 
                 echo "generate csi driver nfs crds"
                 cat ${self'.packages.csi-driver-nfs} > ${path}/csi-driver-nfs-crd.nix
+
+                echo "generate barman cloud crds"
+                cat ${self'.packages.barman-cloud} > ${path}/barman-cloud.nix
               '').outPath;
           };
         };
