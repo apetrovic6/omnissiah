@@ -2,8 +2,16 @@
   namespace = "yarr";
   domain = config.noosphere.domain;
   db-cluster-name = "pg-yarr-restored";
+  objectStoreName = "yarr-object-store";
+  barmanPluginName = "barman-cloud.cloudnative-pg.io";
 in {
+  imports = [../../../../_modules/templates/garage-object-store.nix];
+
   applications.seerr = {
+    templates.garageObjectStore."${objectStoreName}" = {
+      inherit namespace;
+    };
+
     resources.namespaces.yarr = {
       metadata = {
         name = namespace;
@@ -178,6 +186,16 @@ in {
       (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
     ];
 
+    resources.scheduledBackups."${db-cluster-name}-scheduled-backup" = {
+      spec = {
+        schedule = "0 2 0 * * *"; # Backup at 2AM every night
+        backupOwnerReference = "self";
+        cluster.name = db-cluster-name;
+        method = "plugin";
+        pluginConfiguration.name = barmanPluginName;
+        immediate = true;
+      };
+    };
     resources.backups.pg-yarr-backup = {
       metadata.namespace = namespace;
       spec = {
@@ -212,7 +230,7 @@ in {
             plugin = {
               name = "barman-cloud.cloudnative-pg.io";
               parameters = {
-                barmanObjectName = "garage-store";
+                barmanObjectName = objectStoreName;
                 serverName = "pg-yarr";
               };
             };
@@ -228,7 +246,7 @@ in {
           {
             name = "barman-cloud.cloudnative-pg.io";
             isWALArchiver = true;
-            parameters.barmanObjectName = "garage-store";
+            parameters.barmanObjectName = objectStoreName;
           }
         ];
 

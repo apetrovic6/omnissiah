@@ -10,9 +10,8 @@
   barmanPluginName = "barman-cloud.cloudnative-pg.io";
   objectStoreName = "harbor-object-store";
 in {
+  imports = [../../../_modules/templates/garage-object-store.nix];
 
-  imports = [  ../../../_modules/templates/garage-object-store.nix];
-  
   applications.harbor = let
     storageClass = "longhorn";
   in {
@@ -266,8 +265,8 @@ in {
       };
     };
 
-    templates.garageObjectStore.${objectStoreName} = { inherit namespace; };
-    
+    templates.garageObjectStore.${objectStoreName} = {inherit namespace;};
+
     resources.backups."${db-cluster-name}-on-demand-backup" = {
       metadata.namespace = namespace;
       spec = {
@@ -277,15 +276,16 @@ in {
       };
     };
 
-    resources.scheduledBackups."${db-cluster-name}-backup" = {
+    resources.scheduledBackups."${db-cluster-name}-scheduled-backup" = {
       spec = {
         schedule = "0 2 0 * * *"; # Backup at 2AM every night
         backupOwnerReference = "self";
         cluster.name = db-cluster-name;
+        method = "plugin";
+        pluginConfiguration.name = barmanPluginName;
         immediate = true;
       };
     };
-    
 
     resources.clusters.${db-cluster-name} = {
       metadata = {
