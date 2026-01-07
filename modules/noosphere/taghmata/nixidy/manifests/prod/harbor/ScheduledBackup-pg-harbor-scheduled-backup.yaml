@@ -1,7 +1,7 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
-  name: pg-harbor-backup
+  name: pg-harbor-scheduled-backup
   namespace: harbor
 spec:
   backupOwnerReference: self
