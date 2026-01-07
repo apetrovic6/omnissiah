@@ -19,7 +19,7 @@ in {
     createNamespace = true;
 
     helm.releases.kube-prometheus-stack = let
-      endpoints = ["192.168.1.48" "192.168.1.59"];
+      endpoints = ["192.168.1.48" "192.168.1.59" "192.168.1.126"];
     in {
       chart = charts.prometheus-community.kube-prometheus-stack;
       includeCRDs = false;
