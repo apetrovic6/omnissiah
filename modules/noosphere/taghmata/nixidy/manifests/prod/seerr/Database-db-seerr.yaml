@@ -7,6 +7,6 @@ metadata:
   namespace: yarr
 spec:
   cluster:
-    name: pg-yarr
+    name: pg-yarr-restored
   name: seerr
   owner: seerr
