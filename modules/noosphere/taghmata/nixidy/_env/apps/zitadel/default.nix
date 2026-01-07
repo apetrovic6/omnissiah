@@ -5,10 +5,20 @@
 }: let
   namespace = "zitadel";
   domain = config.noosphere.domain;
+  objectStoreName = "zitadel-object-store";
+  barmanPluginName = "barman-cloud.cloudnative-pg.io";
+  db-cluster-name = "pg-zitadel";
 in {
+  imports = [../../../_modules/templates/garage-object-store.nix];
+
   applications.zitadel = {
     inherit namespace;
     createNamespace = true;
+
+    templates.garageObjectStore."${objectStoreName}" = {
+      inherit namespace;
+    };
+
     resources.ingresses.zitadel-ip-root = {
       metadata = {
         namespace = "zitadel";
@@ -104,7 +114,7 @@ in {
           {
             name = "ZITADEL_DATABASE_POSTGRES_USER_PASSWORD";
             valueFrom.secretKeyRef = {
-              name = "pg-zitadel-app";
+              name = "${db-cluster-name}-app";
               key = "password";
             };
           }
@@ -118,7 +128,7 @@ in {
             ExternalPort = 443;
             TLS.enabled = false;
             Database.Postgres = {
-              Host = "pg-zitadel-rw";
+              Host = "${db-cluster-name}-rw";
               Port = "5432";
               Database = "app";
               AwaitInitialConn = "5m";
@@ -135,7 +145,7 @@ in {
                 SSL.Mode = "disable";
               };
             };
-            dbSslCaCrtSecret = "pg-zitadel-ca";
+            dbSslCaCrtSecret = "${db-cluster-name}-ca";
           };
         };
 
@@ -169,7 +179,7 @@ in {
         };
 
         initJob = {
-          enabled = true;
+          enabled = false;
           annotations = {
             "argocd.argoproj.io/sync-wave" = "10";
             # "argocd.argoproj.io/hook" = "PostSync";
@@ -186,7 +196,28 @@ in {
       };
     };
 
-    resources.clusters.pg-zitadel = {
+    resources.scheduledBackups."${db-cluster-name}-scheduled-backup" = {
+      metadata.namespace = namespace;
+      spec = {
+        schedule = "0 2 0 * * *"; # Backup at 2AM every night
+        backupOwnerReference = "self";
+        cluster.name = db-cluster-name;
+        method = "plugin";
+        pluginConfiguration.name = barmanPluginName;
+        immediate = true;
+      };
+    };
+
+    resources.backups."${db-cluster-name}-backup" = {
+      metadata.namespace = namespace;
+      spec = {
+        cluster.name = "${db-cluster-name}";
+        method = "plugin";
+        pluginConfiguration.name = barmanPluginName;
+      };
+    };
+
+    resources.clusters.${db-cluster-name} = {
       metadata = {
         inherit namespace;
         annotations = {
@@ -216,6 +247,14 @@ in {
           storageClass = "longhorn-cnpg-strict-local";
           size = "2Gi";
         };
+
+        plugins = [
+          {
+            name = barmanPluginName;
+            isWALArchiver = true;
+            parameters.barmanObjectName = objectStoreName;
+          }
+        ];
 
         postgresql.parameters = {
           shared_buffers = "1GB";

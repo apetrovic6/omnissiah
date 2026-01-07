@@ -197,7 +197,8 @@ in {
         immediate = true;
       };
     };
-    resources.backups.pg-yarr-backup = {
+
+    resources.backups."${db-cluster-name}-backup" = {
       metadata.namespace = namespace;
       spec = {
         cluster.name = "${db-cluster-name}";
