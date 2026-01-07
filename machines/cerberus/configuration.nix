@@ -11,6 +11,7 @@ in {
     self.nixosModules.impermanence
     self.inputs.magos.nixosModules.stylix
     # self.inputs.impermanence.nixosModules.impermanence
+    # self.nixosModules.noosphere
     # self.inputs.magos.nixosModules.default
   ];
 
@@ -39,19 +40,19 @@ in {
     enable = false; # TODO: Setup impermanence
   };
 
-  environment.persistence."/persist" = {
-    enable = false;
-    directories = [
-      "/etc"
-      "/var/spool"
-      "/root"
-      "/srv"
-      "/var/lib/nixos"
-      "/var/db/sudo/lectured"
-      "/var/lib/systemd/coredump"
-      "/etc/NetworkManager/system-connections"
-    ];
-  };
+  # environment.persistence."/persist" = {
+  #   enable = false;
+  #   directories = [
+  #     "/etc"
+  #     "/var/spool"
+  #     "/root"
+  #     "/srv"
+  #     "/var/lib/nixos"
+  #     "/var/db/sudo/lectured"
+  #     "/var/lib/systemd/coredump"
+  #     "/etc/NetworkManager/system-connections"
+  #   ];
+  # };
 
   users.groups.media = {
     gid = 1337;
