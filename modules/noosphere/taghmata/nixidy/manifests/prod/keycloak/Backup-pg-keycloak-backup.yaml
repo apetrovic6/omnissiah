@@ -1,0 +1,11 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: pg-keycloak-backup
+  namespace: keycloak
+spec:
+  cluster:
+    name: pg-keycloak
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

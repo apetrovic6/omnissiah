@@ -26,6 +26,7 @@ in {
     ./apps/harbor
     ./apps/glances
     ./apps/reflector
+    ./apps/keycloak-operator
   ];
 
   # nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
