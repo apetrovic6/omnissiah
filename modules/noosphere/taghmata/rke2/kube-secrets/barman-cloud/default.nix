@@ -44,6 +44,9 @@ in {
             - name: ${barmanS3Storage}
               labels:
                 cnpg.io/reload: "true"
+              annotations:
+                reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+                reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "yarr,zitadel,harbor"
               type: Opaque
               stringData:
                 ACCESS_KEY_ID: "$access_key"

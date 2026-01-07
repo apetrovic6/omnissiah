@@ -62,7 +62,7 @@ in {
       values = {
         longhorn.preUpgradeChecker.jobEnabled = false;
         persistence = {
-          defaultClassReplicaCount = 2;
+          defaultClassReplicaCount = 3;
           reclaimPolicy = "Retain";
         };
       };

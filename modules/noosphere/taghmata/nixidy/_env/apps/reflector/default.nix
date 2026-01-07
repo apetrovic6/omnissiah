@@ -1,10 +1,8 @@
 {
   charts,
-  config,
   ...
 }: let
   namespace = "reflector";
-  domain = config.noosphere.domain;
 in {
   applications.reflector = {
     inherit namespace;
