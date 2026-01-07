@@ -2,10 +2,21 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   annotations:
+    argocd.proj.io/sync-hook: PreSync
     argocd.proj.io/sync-options: Prune=false,Delete=false
   name: pg-yarr
   namespace: yarr
 spec:
+  bootstrap:
+    recovery:
+      source: origin
+  externalClusters:
+    - name: origin
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: garage-store
+          serverName: pg-yarr
   instances: 2
   managed:
     roles:

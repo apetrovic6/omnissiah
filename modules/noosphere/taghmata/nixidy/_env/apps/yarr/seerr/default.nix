@@ -193,6 +193,7 @@ in {
         inherit namespace;
         annotations = {
           "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
+          "argocd.proj.io/sync-hook" = "PreSync";
         };
       };
 
@@ -203,6 +204,22 @@ in {
           storageClass = "longhorn-cnpg-strict-local";
           size = "1Gi";
         };
+
+        bootstrap.recovery.source = "origin";
+
+        externalClusters = [
+          {
+            name = "origin";
+            plugin = {
+              name = "barman-cloud.cloudnative-pg.io";
+              parameters = {
+                barmanObjectName = "garage-store";
+                serverName = "pg-yarr";
+      
+              };
+            };
+          } 
+        ];
 
         walStorage = {
           storageClass = "longhorn-cnpg-strict-local";
