@@ -4,7 +4,7 @@ metadata:
   annotations:
     argocd.proj.io/sync-hook: PreSync
     argocd.proj.io/sync-options: Prune=false,Delete=false
-  name: pg-yarr
+  name: pg-yarr-restored
   namespace: yarr
 spec:
   bootstrap:
