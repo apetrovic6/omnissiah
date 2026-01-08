@@ -40,11 +40,11 @@ spec:
             - name: OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING
               value: "true"
             - name: OAUTH_PROVIDER_NAME
-              value: Zitadel
+              value: Keycloak
             - name: OAUTH_SCOPE
               value: openid email profile
             - name: OAUTH_WELLKNOWN_URL
-              value: https://zitadel.noosphere.uk/.well-known/openid-configuration
+              value: https://keycloak.noosphere.uk/.well-known/openid-configuration
           envFrom:
             - secretRef:
                 name: karakeep-secret

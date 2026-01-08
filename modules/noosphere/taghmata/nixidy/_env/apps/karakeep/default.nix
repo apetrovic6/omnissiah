@@ -5,6 +5,7 @@
 }: let
   namespace = "karakeep";
   domain = config.noosphere.domain;
+  sso = config.noosphere.sso;
   meiliSecret = "karakeep-meilisearch-secret";
 in {
   applications.karakeep = {
@@ -67,9 +68,9 @@ in {
               karakeep = {
                 env = {
                   NEXTAUTH_URL = "https://karakeep.${domain}";
-                  OAUTH_WELLKNOWN_URL = "https://zitadel.noosphere.uk/.well-known/openid-configuration";
+                  OAUTH_WELLKNOWN_URL = "https://${sso.url}/.well-known/openid-configuration";
                   OAUTH_SCOPE = "openid email profile";
-                  OAUTH_PROVIDER_NAME = "Zitadel";
+                  OAUTH_PROVIDER_NAME = sso.provider;
                   OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING = true;
                 };
 

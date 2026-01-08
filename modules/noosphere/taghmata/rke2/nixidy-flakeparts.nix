@@ -11,8 +11,8 @@
   # Global domain from flake-level config (set in flake.nix as noosphere.domain = "…")
   globalDomain = config.noosphere.domain;
 
-  # globalSsoProvider = lib.attrByPath ["noosphere" "sso" "provider"] "" config;
-  # globalSsoUrl = lib.attrByPath ["noosphere" "sso" "url"] "" config;
+  globalSsoProvider = lib.attrByPath ["noosphere" "sso" "provider"] "" config;
+  globalSsoUrl = lib.attrByPath ["noosphere" "sso" "url"] "" config;
 in {
   options = {
     perSystem = mkPerSystemOption ({...}: {
@@ -23,19 +23,18 @@ in {
           description = "Base domain used by nixidy modules.";
         };
 
-  #       sso = {
-  #           provider = mkOption {
-  #   type = types.str;
-  #   default = "";
-  #   description = "Name of the SSO Provider.";
-  # };
+        sso = {
+          provider = mkOption {
+            type = types.str;
+            default = "";
+            description = "Name of the SSO Provider.";
+          };
 
-  # url = mkOption {
-  #   type = types.str;
-  #   default = "";
-  #   description = "URL/FQDN of the SSO Provider.";
-  # };
-
+          url = mkOption {
+            type = types.str;
+            default = "";
+            description = "URL/FQDN of the SSO Provider.";
+          };
         };
 
         nixidy = {
@@ -115,11 +114,22 @@ in {
         modules =
           [
             ../nixidy/_modules/noosphere-options.nix
+            (
+              {lib, ...}:
+              # These values go INTO the nixidy module graph
+                lib.mkMerge [
+                  {
+                    noosphere.domain = lib.mkDefault cfg.domain;
+                    noosphere.sso.provider = lib.mkDefault cfg.sso.provider;
+                  }
 
-            ({...}: {
-              # This value goes INTO the nixidy module graph
-              noosphere.domain = cfg.domain;
-            })
+                  (lib.mkIf (cfg.sso.url != "") {
+                    # If explicitly set at flake/perSystem, pass it through.
+                    # Plain assignment is fine; it will override mkDefault-derived values.
+                    noosphere.sso.url = cfg.sso.url;
+                  })
+                ]
+            )
 
             ({...}: {
               nixidy.target = {
@@ -138,6 +148,8 @@ in {
     in {
       # Default per-system domain from the flake-level domain
       noosphere.domain = lib.mkDefault globalDomain;
+      noosphere.sso.provider = lib.mkDefault globalSsoProvider;
+      noosphere.sso.url = lib.mkDefault globalSsoUrl;
 
       legacyPackages.nixidyEnvs.${system} = self.inputs.nixidy.lib.mkEnvs {
         inherit pkgs;

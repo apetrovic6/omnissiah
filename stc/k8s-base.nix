@@ -62,16 +62,14 @@
           createNamespace = true;
           targetNamespace = "argocd";
 
-          values = let
-            domain = "noosphere.uk";
-          in {
+          values = {
             configs = {
               cm = {
-                url = "https://argocd.${domain}";
+                url = "https://argocd.${config.noosphere.domain}";
                 "oidc.config" = ''
                   name: Zitadel
                   url: https
-                  issuer: https://zitadel.${domain}
+                  issuer: https://${config.noosphere.sso.url}
                   clientID: $zitadel-argocd-secret:oidc.zitadel.clientId
                   clientSecret: $zitadel-argocd-secret:oidc.zitadel.clientSecret
                   requestedScopes:
@@ -79,7 +77,7 @@
                     - profile
                     - email
                     - groups
-                  logoutURL: https://zitadel.${domain}/oidc/v1/end_session
+                  logoutURL: https://${config.noosphere.sso.url}/oidc/v1/end_session
                 '';
               };
 

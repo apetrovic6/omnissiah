@@ -65,17 +65,17 @@ in {
       ''
 
       ''
-      apiVersion: k8s.keycloak.org/v2alpha1
-      kind: KeycloakRealmImport
-      metadata:
-        name: adeptus-terra
-      spec:
-        keycloakCRName: adeptus-terra
-        realm:
-          id: adeptus-terra
-          realm: adeptus-terra
-          displayName: AdeptusTerra
-          enabled: true
+        apiVersion: k8s.keycloak.org/v2alpha1
+        kind: KeycloakRealmImport
+        metadata:
+          name: adeptus-terra
+        spec:
+          keycloakCRName: adeptus-terra
+          realm:
+            id: adeptus-terra
+            realm: adeptus-terra
+            displayName: AdeptusTerra
+            enabled: true
       ''
 
       ''

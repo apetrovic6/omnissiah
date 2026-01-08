@@ -8,7 +8,7 @@
   flakeCfg = config;
 
   # Define the option set ONCE, reuse in both module systems
-  noosphereOptions = rec {
+  noosphereOptions = {
     agePublicKey = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -29,7 +29,7 @@
 
       url = lib.mkOption {
         type = lib.types.str;
-        default = "${lib.toLower sso.provider}.${domain}";
+        default = "";
         description = "Base domain used by nixidy modules.";
       };
     };
@@ -49,6 +49,10 @@ in {
     config = mkMerge [
       {
         noosphere.domain = mkDefault flakeCfg.noosphere.domain;
+      }
+
+      {
+        noosphere.sso.url = "${lib.toLower flakeCfg.sso.provider}.${flakeCfg.sso.domain}";
       }
 
       (mkIf (flakeCfg.noosphere.agePublicKey != null) {
