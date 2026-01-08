@@ -8,7 +8,7 @@
   flakeCfg = config;
 
   # Define the option set ONCE, reuse in both module systems
-  noosphereOptions = {
+  noosphereOptions = rec {
     agePublicKey = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -18,6 +18,20 @@
     domain = mkOption {
       type = types.str;
       description = "Domain name for the K8S cluster";
+    };
+
+    sso = {
+      provider = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = "Base domain used by nixidy modules.";
+      };
+
+      url = lib.mkOption {
+        type = lib.types.str;
+        default = "${lib.toLower sso.provider}.${domain}";
+        description = "Base domain used by nixidy modules.";
+      };
     };
   };
 in {

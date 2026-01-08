@@ -110,6 +110,7 @@
 
       noosphere.agePublicKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
       noosphere.domain = "noosphere.uk";
+      noosphere.sso.provider = "Keycloak";
 
       # https://docs.clan.lol/guides/flake-parts
       clan = {
@@ -225,21 +226,6 @@
             "config/crd/bases/barmancloud.cnpg.io_objectstores.yaml"
           ];
         };
-
-        # packages.zitadel= inputs.nixidy.packages.${system}.generators.fromChartCRD {
-        #   name = "zitadel";
-        #   chart = nixhelm.chartsDerivations.${system}.zitadel.zitadel;
-        # };
-
-        # packages.seerr = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-        #   name = "seerr";
-        #   chartAttrs = {
-        #     repo = "oci://ghcr.io/fallenbagel/jellyseerr/jellyseerr-chart";
-        #     chart = "seerr-chart";
-        #     version = "3.0.0";
-        #     chartHash = lib.fakeHash;
-        #   };
-        # };
 
         apps = {
           gen-crd = let
