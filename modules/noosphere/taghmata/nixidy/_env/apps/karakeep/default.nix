@@ -15,7 +15,7 @@ in {
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/karakeep-meilisearch-secret/karakeep-meilisearch-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/karakeep-secret/karakeep-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/karakeep-zitadel-secret/karakeep-zitadel-secret/value)
+      (builtins.readFile ../../../../../../../vars/shared/karakeep-sso-secret/karakeep-sso-secret/value)
     ];
 
     helm.releases.karakeep = {
@@ -76,7 +76,7 @@ in {
 
                 envFrom = [
                   {secretRef = {name = "karakeep-secret";};}
-                  {secretRef = {name = "karakeep-zitadel-secret";};}
+                  {secretRef = {name = "karakeep-sso-secret";};}
                   {secretRef = {name = meiliSecret;};}
                 ];
               };

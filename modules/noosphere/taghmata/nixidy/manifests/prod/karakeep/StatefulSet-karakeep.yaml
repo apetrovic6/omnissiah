@@ -44,12 +44,12 @@ spec:
             - name: OAUTH_SCOPE
               value: openid email profile
             - name: OAUTH_WELLKNOWN_URL
-              value: https://keycloak.noosphere.uk/.well-known/openid-configuration
+              value: https://keycloak.noosphere.uk/realms/adeptus-terra/.well-known/openid-configuration
           envFrom:
             - secretRef:
                 name: karakeep-secret
             - secretRef:
-                name: karakeep-zitadel-secret
+                name: karakeep-sso-secret
             - secretRef:
                 name: karakeep-meilisearch-secret
           image: ghcr.io/karakeep-app/karakeep:0.27.0

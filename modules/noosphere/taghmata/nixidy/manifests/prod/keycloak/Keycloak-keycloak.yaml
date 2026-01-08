@@ -22,6 +22,6 @@ spec:
     className: traefik
     enabled: true
     tlsSecret: keycloak-tls
-  instances: 1
+  instances: 3
   proxy:
     headers: xforwarded

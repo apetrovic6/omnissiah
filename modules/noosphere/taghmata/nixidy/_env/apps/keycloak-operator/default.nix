@@ -40,7 +40,7 @@ in {
         metadata:
           name: ${namespace}
         spec:
-          instances: 1
+          instances: 3
           db:
             vendor: postgres
             host: pg-keycloak-rw

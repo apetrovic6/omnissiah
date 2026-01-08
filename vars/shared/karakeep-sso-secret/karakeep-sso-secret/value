@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: karakeep-sso-secret
+    namespace: karakeep
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:qh8y9aDJ8+O+yRNHa1nrMyDM2A==,iv:Ds/qiF1gEnD/9ve4UJGClO0MUi1xYoz6kgGlCho8Lb0=,tag:R2z2qLerz/7d8u/OK6VZRw==,type:str]
+          type: ENC[AES256_GCM,data:nQeO1Tkj,iv:eUpKnxKMOXjxB48h3LhfhOrF3wSZFK/KmRm/v1Qh6Kk=,tag:7hR6jDCBsRmPk6Q6GWW9dg==,type:str]
+          stringData:
+            OAUTH_CLIENT_ID: ENC[AES256_GCM,data:fnEav9MCXLA=,iv:HNPOQybo37LXd3EYsBogg0MS0Tt2H6DWY62ZskSB9v0=,tag:VNQyYaO6zV29lngO8dkoAg==,type:str]
+            OAUTH_CLIENT_SECRET: ENC[AES256_GCM,data:Sgq7ODQz1vEXsWluxpSAIKN2WakoCJQDBt2lMi70Tdw=,iv:m+GXBfqRzXhVonFb8MqsEjFJ1NDO+tfGmNs833hvQFQ=,tag:C2DuCb7ASHvql74hjX3F/A==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSArZ1RNbGd2K3hvQUpQa3g3
+            cXNick92ZXE2UG5DUHJWckpBTXRYd3dvaDBjCitUNnROTDBhNkVpUTduNzQ0ckd6
+            bVdoMFZlUjEwYmJGZmduK2Q4TTEycTQKLS0tIGIzQmtMemdZam9iUm9mejJtcVMx
+            VUV1OGhRVU1tM3BTNnZDbGZnUk9sSzAKKkaqRGMynUmS5lr/Whv/gCSTtNlU0fgu
+            gAyCsAkyENfGvCvZTVYybtQj7lIa0nO5gfFHYTgkS2cG73cUxzYuAw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-08T15:06:52Z"
+    mac: ENC[AES256_GCM,data:fy1gQwohQbCoH8VKM37nx5iPnSKmXfmpbW4JrXlmXxM47hlzqtRXJyYaGu7N4PhHccbzVMlg+cSWUtvnKqsPy+beOFTSvt9dlP5cJErP6DMCltUpH4DeXScMHAzxr46Kn1vvzZ78MbW+MMCGYNKqSufEuyKf36S4TelATnerrhs=,iv:tPvm8lhCH1As6BpSViQldEBWbr3vdwkdfxVlkcvHIio=,tag:6T6OPGpEmYPK9VLHZJIe/A==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
