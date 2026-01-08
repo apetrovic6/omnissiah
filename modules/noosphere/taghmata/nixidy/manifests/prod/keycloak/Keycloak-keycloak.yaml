@@ -19,6 +19,14 @@ spec:
   http:
     httpEnabled: true
   ingress:
+    annotations:
+      category: security
+      glance/description: Identity Provider
+      glance/icon: di:keycloak
+      glance/id: keycloak
+      glance/name: Keycloak
+      glance/parent: keycloak
+      glance/url: https://keycloak.noosphere.uk
     className: traefik
     enabled: true
     tlsSecret: keycloak-tls

@@ -2,7 +2,7 @@
   ageKey = config.noosphere.agePublicKey;
   meiliSearchSecret = "karakeep-meilisearch-secret";
   karakeepSecret = "karakeep-secret";
-  karakeepOidcSecret = "karakeep-zitadel-secret";
+  karakeepOidcSecret = "karakeep-sso-secret";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${meiliSearchSecret} = {

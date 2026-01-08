@@ -13,6 +13,7 @@
 
   globalSsoProvider = lib.attrByPath ["noosphere" "sso" "provider"] "" config;
   globalSsoUrl = lib.attrByPath ["noosphere" "sso" "url"] "" config;
+  globalWellKnownUrl = lib.attrByPath ["noosphere" "sso" "wellKnownUrl"] "" config;
 in {
   options = {
     perSystem = mkPerSystemOption ({...}: {
@@ -35,7 +36,14 @@ in {
             default = "";
             description = "URL/FQDN of the SSO Provider.";
           };
-        };
+
+wellKnownUrl = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = "Well known URL endpoint";
+      };
+
+            };
 
         nixidy = {
           repository = mkOption {
@@ -121,6 +129,7 @@ in {
                   {
                     noosphere.domain = lib.mkDefault cfg.domain;
                     noosphere.sso.provider = lib.mkDefault cfg.sso.provider;
+                    noosphere.sso.wellKnownUrl = lib.mkDefault cfg.sso.wellKnownUrl;
                   }
 
                   (lib.mkIf (cfg.sso.url != "") {
@@ -150,6 +159,7 @@ in {
       noosphere.domain = lib.mkDefault globalDomain;
       noosphere.sso.provider = lib.mkDefault globalSsoProvider;
       noosphere.sso.url = lib.mkDefault globalSsoUrl;
+      noosphere.sso.wellKnownUrl = lib.mkDefault globalWellKnownUrl;
 
       legacyPackages.nixidyEnvs.${system} = self.inputs.nixidy.lib.mkEnvs {
         inherit pkgs;

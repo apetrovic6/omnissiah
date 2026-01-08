@@ -32,6 +32,12 @@
         default = "";
         description = "Base domain used by nixidy modules.";
       };
+
+      wellKnownUrl = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = "Well known URL endpoint";
+      };
     };
   };
 in {
@@ -53,6 +59,10 @@ in {
 
       {
         noosphere.sso.url = "${lib.toLower flakeCfg.sso.provider}.${flakeCfg.sso.domain}";
+      }
+
+      {
+                noosphere.sso.wellKnownUrl = flakeCfg.sso.wellKnownUrl;
       }
 
       (mkIf (flakeCfg.noosphere.agePublicKey != null) {

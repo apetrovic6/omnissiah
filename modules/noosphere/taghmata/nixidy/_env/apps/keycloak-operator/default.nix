@@ -54,6 +54,14 @@ in {
               key: password
           http:
             httpEnabled: true
+            annotations:
+              glance/name: Keycloak
+              glance/icon:  di:keycloak
+              glance/url:  https://keycloak.${domain}
+              glance/description: "Identity Provider"
+              glance/id: keycloak
+              glance/parent: keycloak
+              category: security
           ingress:
             enabled: true
             tlsSecret: keycloak-tls

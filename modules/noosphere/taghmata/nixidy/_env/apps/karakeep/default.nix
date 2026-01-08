@@ -68,7 +68,7 @@ in {
               karakeep = {
                 env = {
                   NEXTAUTH_URL = "https://karakeep.${domain}";
-                  OAUTH_WELLKNOWN_URL = "https://${sso.url}/.well-known/openid-configuration";
+                  OAUTH_WELLKNOWN_URL = sso.wellKnownUrl;
                   OAUTH_SCOPE = "openid email profile";
                   OAUTH_PROVIDER_NAME = sso.provider;
                   OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING = true;
