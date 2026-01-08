@@ -57,13 +57,25 @@ in {
         noosphere.domain = mkDefault flakeCfg.noosphere.domain;
       }
 
+      # pass provider through as a default
       {
-        noosphere.sso.url = "${lib.toLower flakeCfg.sso.provider}.${flakeCfg.sso.domain}";
+        noosphere.sso.provider = mkDefault flakeCfg.noosphere.sso.provider;
       }
 
-      {
-                noosphere.sso.wellKnownUrl = flakeCfg.sso.wellKnownUrl;
-      }
+      # if url is explicitly set at flake level, pass it through
+      (mkIf (flakeCfg.noosphere.sso.url != "") {
+        noosphere.sso.url = mkDefault flakeCfg.noosphere.sso.url;
+      })
+
+      # otherwise derive url from provider + domain
+      (mkIf (flakeCfg.noosphere.sso.url == "" && flakeCfg.noosphere.sso.provider != "" && flakeCfg.noosphere.domain != "") {
+        noosphere.sso.url = mkDefault "${lib.toLower flakeCfg.noosphere.sso.provider}.${flakeCfg.noosphere.domain}";
+      })
+
+      # wellKnownUrl pass-through (or you can derive it similarly if you want)
+      (mkIf (flakeCfg.noosphere.sso.wellKnownUrl != "") {
+        noosphere.sso.wellKnownUrl = mkDefault flakeCfg.noosphere.sso.wellKnownUrl;
+      })
 
       (mkIf (flakeCfg.noosphere.agePublicKey != null) {
         noosphere.agePublicKey = mkDefault flakeCfg.noosphere.agePublicKey;

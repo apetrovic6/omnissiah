@@ -108,10 +108,12 @@
         (import-tree ./modules)
       ];
 
-      noosphere.agePublicKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
-      noosphere.domain = "noosphere.uk";
-      noosphere.sso.provider = "Keycloak";
-
+      noosphere = {
+        agePublicKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
+        domain = "noosphere.uk";
+        sso.provider = "Keycloak";
+        sso.wellKnownUrl = "https://keycloak.noosphere.uk/realms/adeptus-terra/.well-known/openid-configuration";
+      };
       # https://docs.clan.lol/guides/flake-parts
       clan = {
         imports = [./clan.nix];

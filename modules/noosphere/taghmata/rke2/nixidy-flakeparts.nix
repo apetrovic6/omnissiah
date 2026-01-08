@@ -37,13 +37,12 @@ in {
             description = "URL/FQDN of the SSO Provider.";
           };
 
-wellKnownUrl = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = "Well known URL endpoint";
-      };
-
-            };
+          wellKnownUrl = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Well known URL endpoint";
+          };
+        };
 
         nixidy = {
           repository = mkOption {

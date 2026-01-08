@@ -54,6 +54,7 @@ in {
               key: password
           http:
             httpEnabled: true
+          ingress:
             annotations:
               glance/name: Keycloak
               glance/icon:  di:keycloak
@@ -62,7 +63,6 @@ in {
               glance/id: keycloak
               glance/parent: keycloak
               category: security
-          ingress:
             enabled: true
             tlsSecret: keycloak-tls
             className: traefik

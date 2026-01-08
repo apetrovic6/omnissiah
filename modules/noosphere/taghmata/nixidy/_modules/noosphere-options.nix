@@ -22,11 +22,12 @@ in {
       default = "";
     };
 
-      sso.wellKnownUrl = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = "Well known URL endpoint";
-      };  };
+    sso.wellKnownUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "Well known URL endpoint";
+    };
+  };
 
   config = mkIf (config.noosphere.sso.provider != "" && config.noosphere.domain != "") {
     noosphere.sso.url =
