@@ -2,7 +2,14 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
+    category: utils
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: GitOps tool
+    glance/icon: di:argo-cd
+    glance/id: argocd
+    glance/name: ArgoCD
+    glance/parent: argocd
+    glance/url: https://argocd.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: argocd-ip-root
   namespace: argocd
