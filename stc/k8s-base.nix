@@ -69,9 +69,9 @@
                 "oidc.config" = ''
                   name: Zitadel
                   url: https
-                  issuer: https://${config.noosphere.sso.url}
-                  clientID: $zitadel-argocd-secret:oidc.zitadel.clientId
-                  clientSecret: $zitadel-argocd-secret:oidc.zitadel.clientSecret
+                  issuer: https://${config.noosphere.sso.url}/realms/adeptus-terra
+                  clientID: argocd
+                  enablePKCEAuthentication: true
                   requestedScopes:
                     - openid
                     - profile
@@ -89,8 +89,8 @@
                 "policy.default" = "";
                 scopes = "[groups]";
                 "policy.csv" = ''
-                  g, argocd_administrators, role:admin
-                  g, argocd_users, role:readonly
+                  g, ArgoCDAdmins, role:admin
+                  g, ArgoCDUsers, role:readonly
                 '';
               };
             };
