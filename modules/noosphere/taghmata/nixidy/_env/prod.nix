@@ -14,7 +14,7 @@ in {
     ./apps/sops-secrets-operator
     ./apps/alloy
     ./apps/cert-manager
-    ./apps/zitadel
+    # ./apps/zitadel
     ./apps/prometheus-stack
     ./apps/yarr/seerr
     ./apps/csi-driver-nfs
@@ -114,6 +114,13 @@ in {
           annotations:
             traefik.ingress.kubernetes.io/router.entrypoints: websecure
             cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+            glance/name: ArgoCD
+            glance/icon:  di:argo-cd
+            glance/url:  https://argocd.${domain}
+            glance/description: "GitOps tool"
+            glance/id: argocd
+            glance/parent: argocd
+            category: utils
         spec:
           ingressClassName: traefik
           tls:
