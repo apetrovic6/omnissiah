@@ -10,18 +10,32 @@
 
   # Global domain from flake-level config (set in flake.nix as noosphere.domain = "…")
   globalDomain = config.noosphere.domain;
+
+  # globalSsoProvider = lib.attrByPath ["noosphere" "sso" "provider"] "" config;
+  # globalSsoUrl = lib.attrByPath ["noosphere" "sso" "url"] "" config;
 in {
   options = {
-    perSystem = mkPerSystemOption ({
-      pkgs,
-      system,
-      ...
-    }: {
+    perSystem = mkPerSystemOption ({...}: {
       options.noosphere = {
         domain = mkOption {
           type = types.str;
           default = "";
           description = "Base domain used by nixidy modules.";
+        };
+
+  #       sso = {
+  #           provider = mkOption {
+  #   type = types.str;
+  #   default = "";
+  #   description = "Name of the SSO Provider.";
+  # };
+
+  # url = mkOption {
+  #   type = types.str;
+  #   default = "";
+  #   description = "URL/FQDN of the SSO Provider.";
+  # };
+
         };
 
         nixidy = {
@@ -134,6 +148,7 @@ in {
             deuxfleurs.garage = "${self.inputs.garage}/script/helm/garage";
             lukasdietrich.glance-k8s = "${self.inputs.glance-k8s}/charts/glance-k8s";
             lukasdietrich.glance = "${self.inputs.glance-k8s}/charts/glance-k8s";
+            # operator-lifecycle-manager = "${self.inputs.operator-lifecycle-manager}/deploy/chart";
           };
 
         envs = lib.mapAttrs mkEnv enabledEnvs;
