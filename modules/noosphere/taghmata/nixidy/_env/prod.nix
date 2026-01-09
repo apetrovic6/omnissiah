@@ -14,7 +14,7 @@ in {
     ./apps/sops-secrets-operator
     ./apps/alloy
     ./apps/cert-manager
-    # ./apps/zitadel
+    ./apps/crowci
     ./apps/prometheus-stack
     ./apps/yarr/seerr
     ./apps/csi-driver-nfs

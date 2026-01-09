@@ -68,6 +68,18 @@ in {
       };
     };
 
+    resources.storageClasses.longhorn-rec-delete-strict-local = {
+      provisioner = "driver.longhorn.io";
+      allowVolumeExpansion = true;
+      reclaimPolicy = "Delete";
+      parameters = {
+        numberOfReplicas = "1";
+        dataLocality = "strict-local";
+        staleReplicaTimeout = "2880"; # 48h
+        fsType = "ext4";
+      };
+    };
+
     resources.storageClasses.longhorn-cnpg-strict-local = {
       provisioner = "driver.longhorn.io";
       allowVolumeExpansion = true;

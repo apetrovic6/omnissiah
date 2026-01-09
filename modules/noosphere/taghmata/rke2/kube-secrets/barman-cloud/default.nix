@@ -46,9 +46,9 @@ in {
                 cnpg.io/reload: "true"
               annotations:
                 reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
-                reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "yarr,zitadel,harbor,keycloak"
+                reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "yarr,zitadel,harbor,keycloak,crow"
                 reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
-                reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "yarr,zitadel,harbor,keycloak"
+                reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "yarr,zitadel,harbor,keycloak,crow"
               type: Opaque
               stringData:
                 ACCESS_KEY_ID: "$access_key"
