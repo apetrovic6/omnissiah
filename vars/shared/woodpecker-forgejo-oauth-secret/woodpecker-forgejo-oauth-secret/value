@@ -2,7 +2,7 @@ apiVersion: isindir.github.com/v1alpha3
 kind: SopsSecret
 metadata:
     name: woodpecker-forgejo-oauth-secret
-    namespace: reflector
+    namespace: woodpecker
 spec:
     secretTemplates:
         - name: ENC[AES256_GCM,data:ZTcHfPZz2OJfF8CqVczffcDHlcaCmd38pKJU9xwYdA==,iv:L+R3GYsK4tAJlHP64vvIDRW14DusuhOg3YMmhPNZwg8=,tag:ElmX/iOerssazL5wJ3TyZw==,type:str]

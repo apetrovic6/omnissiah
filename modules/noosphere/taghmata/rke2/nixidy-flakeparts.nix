@@ -169,7 +169,7 @@ in {
             deuxfleurs.garage = "${self.inputs.garage}/script/helm/garage";
             lukasdietrich.glance-k8s = "${self.inputs.glance-k8s}/charts/glance-k8s";
             lukasdietrich.glance = "${self.inputs.glance-k8s}/charts/glance-k8s";
-            # operator-lifecycle-manager = "${self.inputs.operator-lifecycle-manager}/deploy/chart";
+            woodpecker-ci.woodpecker = "${self.inputs.woodpecker-ci}/charts/woodpecker";
           };
 
         envs = lib.mapAttrs mkEnv enabledEnvs;

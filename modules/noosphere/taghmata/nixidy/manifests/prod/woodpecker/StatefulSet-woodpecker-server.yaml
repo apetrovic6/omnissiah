@@ -33,6 +33,14 @@ spec:
               value: $(uri)
             - name: WOODPECKER_DATABASE_DRIVER
               value: postgres
+            - name: WOODPECKER_FORGEJO
+              value: "true"
+            - name: WOODPECKER_FORGEJO_CLIENT
+              value: $(CLIENT_ID)
+            - name: WOODPECKER_FORGEJO_SECRET
+              value: $(CLIENT_SECRET)
+            - name: WOODPECKER_FORGEJO_URL
+              value: https://forge.manjaca.xyz
             - name: WOODPECKER_HOST
               value: https://woodpecker.noosphere.uk
           envFrom:
@@ -40,6 +48,8 @@ spec:
                 name: pg-woodpecker-app
             - secretRef:
                 name: woodpecker-agent-secret
+            - secretRef:
+                name: woodpecker-forgejo-oauth-secret
           image: docker.io/woodpeckerci/woodpecker-server:v3.12.0
           imagePullPolicy: IfNotPresent
           livenessProbe:

@@ -1995,7 +1995,8 @@
         "nixvirt": "nixvirt",
         "nvf": "nvf",
         "omnishell": "omnishell",
-        "treefmt-nix": "treefmt-nix_5"
+        "treefmt-nix": "treefmt-nix_5",
+        "woodpecker-ci": "woodpecker-ci"
       }
     },
     "rust-overlay": {
@@ -2432,6 +2433,22 @@
       "original": {
         "owner": "abenz1267",
         "repo": "walker",
+        "type": "github"
+      }
+    },
+    "woodpecker-ci": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767788226,
+        "narHash": "sha256-2sQFpcRlmQ03YiFzU36k+dIvo12hLshN6juV2zLo1B4=",
+        "owner": "woodpecker-ci",
+        "repo": "helm",
+        "rev": "38ef4e3f4c1efbafc30ac1945936251bdaf9dc55",
+        "type": "github"
+      },
+      "original": {
+        "owner": "woodpecker-ci",
+        "repo": "helm",
         "type": "github"
       }
     },

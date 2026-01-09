@@ -1,6 +1,7 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
   woodpeckerAgentSecret = "woodpecker-agent-secret";
+  forgejoWoodpeckerOauth = "woodpecker-forgejo-oauth-secret";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${woodpeckerAgentSecret} = {
@@ -34,5 +35,51 @@ in {
         EOF
       '';
     };
-  };
+
+    clan.core.vars.generators.${forgejoWoodpeckerOauth} = {
+      share = true;
+
+      prompts.client-id= {
+        description = "Enter Client ID: ";
+        type = "line";
+        persist = false;
+      };
+
+      prompts.client-secret= {
+        description = "Enter Client Secret: ";
+        type = "hidden";
+        persist = false;
+      };
+
+      files.${forgejoWoodpeckerOauth}.secret = false;
+
+      runtimeInputs = [pkgs.coreutils pkgs.sops];
+
+      script = ''
+                set -euo pipefail
+
+                client_id="$(tr -d '\r\n' < "$prompts/client-id")"
+                client_secret="$(tr -d '\r\n' < "$prompts/client-secret")"
+
+
+        sops encrypt \
+          --age "${ageKey}" \
+          --encrypted-suffix "Templates" \
+          --input-type yaml --output-type yaml \
+          /dev/stdin > "$out/${forgejoWoodpeckerOauth}" <<EOF
+        apiVersion: isindir.github.com/v1alpha3
+        kind: SopsSecret
+        metadata:
+          name: ${forgejoWoodpeckerOauth}
+          namespace: woodpecker
+        spec:
+          secretTemplates:
+            - name: ${forgejoWoodpeckerOauth}
+              type: Opaque
+              stringData:
+                CLIENT_ID: "$client_id"
+                CLIENT_SECRET: "$client_secret"
+        EOF
+      '';
+    };  };
 }

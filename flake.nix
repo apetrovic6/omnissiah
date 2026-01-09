@@ -11,6 +11,11 @@
       flake = false;
     };
 
+    woodpecker-ci = {
+      url = "github:woodpecker-ci/helm";
+      flake = false;
+    };
+
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
 
     nixpkgs.follows = "nixpkgs-unstable";
