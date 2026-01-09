@@ -1,6 +1,6 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
-  woodpeckerAgentSecret = "woodpecker-agent-secret";
+  woodpeckerAgentSecret = "woodpecker-default-agent-secret";
   forgejoWoodpeckerOauth = "woodpecker-forgejo-oauth-secret";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
@@ -31,7 +31,7 @@ in {
             - name: ${woodpeckerAgentSecret}
               type: Opaque
               stringData:
-                agentSecret: "$secret"
+                WOODPECKER_DEFAULT_AGENT_SECRET: "$secret"
         EOF
       '';
     };
@@ -77,8 +77,8 @@ in {
             - name: ${forgejoWoodpeckerOauth}
               type: Opaque
               stringData:
-                CLIENT_ID: "$client_id"
-                CLIENT_SECRET: "$client_secret"
+                WOODPECKER_CLIENT_ID: "$client_id"
+                WOODPECKER_CLIENT_SECRET: "$client_secret"
         EOF
       '';
     };  };

@@ -36,9 +36,9 @@ spec:
             - name: WOODPECKER_FORGEJO
               value: "true"
             - name: WOODPECKER_FORGEJO_CLIENT
-              value: $(CLIENT_ID)
+              value: $(WOODPECKER_CLIENT_ID)
             - name: WOODPECKER_FORGEJO_SECRET
-              value: $(CLIENT_SECRET)
+              value: $(WOODPECKER_CLIENT_SECRET)
             - name: WOODPECKER_FORGEJO_URL
               value: https://forge.manjaca.xyz
             - name: WOODPECKER_HOST
@@ -47,7 +47,7 @@ spec:
             - secretRef:
                 name: pg-woodpecker-app
             - secretRef:
-                name: woodpecker-agent-secret
+                name: woodpecker-default-agent-secret
             - secretRef:
                 name: woodpecker-forgejo-oauth-secret
           image: docker.io/woodpeckerci/woodpecker-server:v3.12.0
