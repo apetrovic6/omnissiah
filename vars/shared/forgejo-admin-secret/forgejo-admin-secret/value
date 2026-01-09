@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: forgejo-admin-secret
+    namespace: forgejo
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:n/R1FxTQxnd1Id9hytWWjsdAY4I=,iv:8BFtrtzjh3/SnDpneOBtxIiBQ0DHC5MF7M9Tb5RBU4Q=,tag:1e4vfH+qC9N8BEHb6aK9sg==,type:str]
+          type: ENC[AES256_GCM,data:mnh/Py+q,iv:L+tOnkXDg2vCx+V7PZWiakLVDQq25EZ7Nd5QejljwdY=,tag:QNw+etmZS7+3krSA9ox/Ew==,type:str]
+          stringData:
+            username: ENC[AES256_GCM,data:1joJyMk=,iv:PQjRxBbcTkRdfKdfhLi1nzos+ukvEzi9tYiKK6TT0b0=,tag:pft1TaDcFsGIVkpj7cUFjg==,type:str]
+            password: ENC[AES256_GCM,data:iOqPVnfMGY0thpJmAbpR53vBjvia,iv:ZXbXGsloWj4Xho2sb8ol3Qa0Fxwe99qtSEWgZEhkHpQ=,tag:plqwU9HIM/A+5/Bg/3mHmA==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB6UWVza1hvYkNjTGhleWlB
+            Ui9zUDNiVUVsZnVERHBPM2lhTDRlNVdCcURnCnllcTNsTnVSZGx4RlY0cTlpMVlI
+            T2ZTSTlPRmpTaXFjY0Rjd3pEVCtma0EKLS0tIEFIQjFSeHFTM1lGK29qQmZOUHBa
+            RnI1S0lVL1Zia3NLMlZpVU1ONlVWbDAKqtAm7y/IFLUiLlcAW+W9KcY/ay9uVnOh
+            ZP/KIrhmQQCOMtvm3L6jF7gpkRbyWhyqwVEjydW50j49lBA2dXNIcA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-09T19:00:57Z"
+    mac: ENC[AES256_GCM,data:MHzVWfMnLesUaINJWqLZwZ/zr81iLR1LTn/DCz/FHwSv1qG50ZTcX08ZZzyG/cBhicoG5mopKh94035nBmdrvkqIrqQPrvmdrXc2AgcK4P/lz1EYMC63EZmnqTD2tkkxwryXx1SkzrGPEkKcwYjTOobaKE7UUpOigEYBZQGLS8o=,iv:EeTYzgNSwTTccqDb9AkR2tijp3E7hMYUNSG3JMOFBAM=,tag:ZGNpIgF1wHNaFuARgAH+rA==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
