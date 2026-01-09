@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    category: utils
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: CI/CD
+    glance/icon: di:woodpecker-ci
+    glance/id: woodpecker
+    glance/name: Woodpecker CI
+    glance/parent: woodpecker
+    glance/url: https://woodpecker.noosphere.uk
+  labels:
+    app.kubernetes.io/instance: woodpecker
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: server
+    app.kubernetes.io/version: 3.12.0
+    helm.sh/chart: server-3.0.1
+  name: woodpecker-server
+  namespace: woodpecker
+spec:
+  rules:
+    - host: woodpecker.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: woodpecker-server
+                port:
+                  name: http
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - woodpecker.noosphere.uk
+      secretName: woodpecker-tls

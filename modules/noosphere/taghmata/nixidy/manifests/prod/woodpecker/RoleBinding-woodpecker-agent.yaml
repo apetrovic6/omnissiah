@@ -1,0 +1,19 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/instance: woodpecker
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: agent
+    app.kubernetes.io/version: 3.12.0
+    helm.sh/chart: agent-2.0.1
+  name: woodpecker-agent
+  namespace: woodpecker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: woodpecker-agent
+subjects:
+  - kind: ServiceAccount
+    name: woodpecker-agent
+    namespace: woodpecker

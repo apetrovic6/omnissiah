@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/instance: woodpecker
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: server
+    app.kubernetes.io/version: 3.12.0
+    helm.sh/chart: server-3.0.1
+  name: woodpecker-server
+  namespace: woodpecker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: woodpecker
+      app.kubernetes.io/name: server
+  serviceName: woodpecker-server-headless
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: woodpecker
+        app.kubernetes.io/name: server
+    spec:
+      containers:
+        - env:
+            - name: FORGEJO_URL
+              value: https://forge.manjaca.xyz
+            - name: WOODPECKER_ADMIN
+              value: woodpecker,admin,manjo
+            - name: WOODPECKER_AGENT_SECRET
+              value: $(agentSecret)
+            - name: WOODPECKER_DATABASE_DATASOURCE
+              value: $(uri)
+            - name: WOODPECKER_DATABASE_DRIVER
+              value: postgres
+            - name: WOODPECKER_FORGEJO
+            - name: WOODPECKER_HOST
+              value: https://woodpecker.noosphere.uk
+          envFrom:
+            - secretRef:
+                name: pg-woodpecker-app
+            - secretRef:
+                name: woodpecker-agent-secret
+          image: docker.io/woodpeckerci/woodpecker-server:v3.12.0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 8000
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+          name: server
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+            - containerPort: 9000
+              name: grpc
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 8000
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+          resources: {}
+          securityContext:
+            runAsGroup: 1000
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /var/lib/woodpecker
+              name: data
+      securityContext:
+        fsGroup: 1000
+      serviceAccountName: default
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: longhorn

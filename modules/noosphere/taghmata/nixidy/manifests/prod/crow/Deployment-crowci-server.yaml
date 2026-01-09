@@ -40,6 +40,8 @@ spec:
               value: https://crow.noosphere.uk
             - name: CROW_MAINTENANCE_KUBERNETES_CLEANUP_AGE
               value: 168h
+            - name: FORGE_URL
+              value: https://forge.manjaca.xyz
             - name: CROW_METRICS_SERVER_ADDR
               value: :9001
             - name: CROW_ENABLE_HA
