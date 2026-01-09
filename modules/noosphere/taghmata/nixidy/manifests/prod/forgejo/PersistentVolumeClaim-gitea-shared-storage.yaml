@@ -13,4 +13,3 @@ spec:
       storage: 10Gi
   storageClassName: longhorn
   volumeMode: Filesystem
-  volumeName: vol-forgejo
