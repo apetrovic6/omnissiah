@@ -11,11 +11,11 @@
   barmanPluginName = "barman-cloud.cloudnative-pg.io";
   volumeSize = "2Gi";
 in {
+  imports = [../../../_modules/templates/garage-object-store.nix];
+
   applications.crow = {
     inherit namespace;
     createNamespace = true;
-
-    imports = [../../../_modules/templates/garage-object-store.nix];
 
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
@@ -54,7 +54,12 @@ in {
               "glance/parent" = "crowci";
               "category" = "utils";
             };
-            tls = "crow-tls";
+            tls = [
+              {
+                secretName = "crow-tls";
+                hosts = [url];
+              }
+            ];
             hosts = [
               {
                 ingressClassName = "traefik";

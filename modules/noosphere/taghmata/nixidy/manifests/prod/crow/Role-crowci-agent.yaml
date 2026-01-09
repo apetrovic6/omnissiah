@@ -1,0 +1,37 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/instance: crowci
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: crow-server
+    app.kubernetes.io/version: 5.1.0
+    helm.sh/chart: crow-1.0.2
+  name: crowci-agent
+  namespace: crow
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - persistentvolumeclaims
+      - services
+      - secrets
+    verbs:
+      - create
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - watch
+      - create
+      - delete
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods/log
+    verbs:
+      - get
