@@ -15,6 +15,7 @@ in {
     ./apps/alloy
     ./apps/cert-manager
     ./apps/crowci
+    ./apps/woodpecker-ci
     ./apps/prometheus-stack
     ./apps/yarr/seerr
     ./apps/csi-driver-nfs
