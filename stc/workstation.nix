@@ -103,7 +103,7 @@ in {
     };
 
     environment.systemPackages = with pkgs; [
-      xfce.thunar
+      thunar
       zathura
       file-roller
       obsidian

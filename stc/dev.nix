@@ -25,9 +25,9 @@
       lazydocker
       lazygit
       steam-run
+      android-tools
     ];
 
-    programs.adb.enable = true;
 
     programs.direnv = {
       enable = true;
