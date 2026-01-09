@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: forgejo-keycloak-oauth-secret
+    namespace: forgejo
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:4LAGVFoA3/JTWKHhFcQXIWVbvaWtI3vYx+v6zCI=,iv:IcJLgslbD9lENZqrrkfrakjNmdkp/ULiS1UhMteQW+s=,tag:qWy1cT6Rd/W6xAC8X8CP9g==,type:str]
+          type: ENC[AES256_GCM,data:IfxV1/xW,iv:ignLFF91OWkgQzIZNbyjhOp2REBdS5CjZI8Izbmj5FM=,tag:HE+pFUZOvXkCgNBEGBk9pA==,type:str]
+          stringData:
+            key: ENC[AES256_GCM,data:fwCr08SP8g==,iv:2ZNFp8v08quWxZTWmPDObtOM5FqXTEy+3/QCMOXc4zI=,tag:HIJPVFdlyA2s+2T0mt91gw==,type:str]
+            secret: ENC[AES256_GCM,data:qo8P2fLJwfp99S0YLyss+xWekTAdCUnA1GWUJe0hS5A=,iv:evmjkNmc9bIGO3/Hebh3Gd3gyCyR3bFmHlQNUai5bNQ=,tag:HXAlZAkWTeZLaXFsxQzLJQ==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBKUmhQTjZOUDdMK3lYc3Ri
+            S1RSR1BsVUdyK0UxcDZaaTg5TXBiRmZOZkhrCm9MV3JUK0ZIazJVYksxUmVmOFgx
+            eGtYRWJmSkdvMDBHWHNhVXhVc0xDNDgKLS0tIEQvM3dDQzIxMXcwTTU5VEFabzV3
+            L0l0NDlWb0E3M0kxRGJnZW9BcVdQbnMKa2YvP+YaAREByLSWyNdSNqP6su7qAWZr
+            ZPlSWvk50zD6pxFhV/AnUXsXKpBn/8xoHqj5xk1Gn1pxl0FXG/7+vA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-09T19:00:57Z"
+    mac: ENC[AES256_GCM,data:iL/WmqK1s3hS52YEKjd/bCC6wy9m5CdqM0/Dk1A8iZW6p/4v+pzuYiCAX2x6Mvc9Jr6CcSbCkEInSGUCsZ4s4hRW1Y5UF3v6OBAMZYJX+f4Q6rycX4EQM2Y/DNj3O5G5tdP43ch0Vn+Xdr34HJPz9AOFxXcH3tw6GmiYXRRkpsA=,iv:tXk0iWc2bZkt1N5sZxlQaUQ8WR2OuCe4mRoRY8rsOh8=,tag:mVbm83edSljASE0vOorSlg==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
