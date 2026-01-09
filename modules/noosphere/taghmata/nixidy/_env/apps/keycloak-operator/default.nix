@@ -184,7 +184,7 @@ in {
 
       spec = {
         primaryUpdateStrategy = "unsupervised";
-        instances = 2;
+        instances = 3;
         storage = {
           storageClass = "longhorn-cnpg-strict-local";
           size = "1Gi";

@@ -114,6 +114,7 @@
         sso.provider = "Keycloak";
         sso.wellKnownUrl = "https://keycloak.noosphere.uk/realms/adeptus-terra/.well-known/openid-configuration";
       };
+
       # https://docs.clan.lol/guides/flake-parts
       clan = {
         imports = [./clan.nix];

@@ -8,7 +8,7 @@ metadata:
   name: pg-harbor
   namespace: harbor
 spec:
-  instances: 2
+  instances: 3
   managed:
     roles:
       - comment: Harbor User

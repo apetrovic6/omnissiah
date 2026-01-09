@@ -17,7 +17,7 @@ spec:
         parameters:
           barmanObjectName: yarr-object-store
           serverName: pg-yarr
-  instances: 2
+  instances: 3
   managed:
     roles:
       - comment: Seerr User

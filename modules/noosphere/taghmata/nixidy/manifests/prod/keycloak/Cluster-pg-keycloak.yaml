@@ -7,7 +7,7 @@ metadata:
   name: pg-keycloak
   namespace: keycloak
 spec:
-  instances: 2
+  instances: 3
   monitoring:
     enablePodMonitor: true
   plugins:
