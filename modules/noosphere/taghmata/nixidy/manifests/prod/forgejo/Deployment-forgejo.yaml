@@ -149,7 +149,7 @@ spec:
               value: /tmp/gitea
             - name: FORGEJO__database__DB_TYPE
               value: postgres
-            - name: FORGEJO__database__host
+            - name: FORGEJO__database__HOST
               value: pg-forgejo-rw:5432
             - name: FORGEJO__database__NAME
               valueFrom:
@@ -161,7 +161,7 @@ spec:
                 secretKeyRef:
                   key: username
                   name: pg-forgejo-app
-            - name: FORGEJO__database__password
+            - name: FORGEJO__database__PASSWD
               valueFrom:
                 secretKeyRef:
                   key: password
