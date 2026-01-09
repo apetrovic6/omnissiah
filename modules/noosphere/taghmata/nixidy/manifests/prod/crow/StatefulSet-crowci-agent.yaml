@@ -29,7 +29,7 @@ spec:
             - name: CROW_BACKEND_K8S_NAMESPACE
               value: crow
             - name: CROW_AGENT_SECRET
-              value: ${CROW_AGENT_SECRET}
+              value: $(CROW_DEFAULT_AGENT_SECRET)
             - name: CROW_BACKEND
               value: kubernetes
             - name: CROW_BACKEND_K8S_POD_ANNOTATIONS
@@ -48,7 +48,7 @@ spec:
             - secretRef:
                 name: crow-default-agent-secret
             - secretRef:
-                name: crow-agent-secret
+                name: crow-default-agent-secret
           image: codeberg.org/crowci/crow-agent:v5.1.0
           imagePullPolicy: IfNotPresent
           name: crow

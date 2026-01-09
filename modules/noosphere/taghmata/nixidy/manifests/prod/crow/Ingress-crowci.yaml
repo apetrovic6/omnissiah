@@ -19,7 +19,7 @@ metadata:
   namespace: crow
 spec:
   rules:
-    - host: https://crow.noosphere.uk
+    - host: crow.noosphere.uk
       http:
         paths:
           - backend:
@@ -27,6 +27,7 @@ spec:
                 name: crowci
                 port:
                   name: http
+            path: /
             pathType: Prefix
   tls:
     - hosts:

@@ -17,6 +17,8 @@ in {
     inherit namespace;
     createNamespace = true;
 
+    yamls = [(builtins.readFile ../../../../../../../vars/shared/crow-default-agent-secret/crow-default-agent-secret/value)];
+
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
     };
@@ -26,14 +28,14 @@ in {
       values = {
         server = {
           enabled = true;
-          encryption.disable = true;
-          createAgentSecret = true;
+          encrypgtion.enable = false;
+          createAgentSecret = false;
           env = {
             CROW_ADMIN = "crow,admin,manjo";
             CROW_HOST = "https://${url}";
             CROW_FORGEJO = true;
             CROW_DATABASE_DRIVER = "postgres";
-            CROW_DATABASE_DATASOURCE = "postgres://\${username}:\${password}@${db-cluster-name}-rw:5432/app?sslmode=disable";
+            CROW_DATABASE_DATASOURCE = "$(uri)";
             CROW_BACKEND_K8S_VOLUME_SIZE = volumeSize;
             CROW_MAINTENANCE_KUBERNETES_CLEANUP_AGE = "168h";
             # CROW_CONFIG_SERVICE_ENDPOINT="http://config-service.crow.svc:8080";
@@ -41,6 +43,7 @@ in {
 
           extraSecretNamesForEnvFrom = [
             "${db-cluster-name}-app"
+            "crow-default-agent-secret"
           ];
 
           ingress = {
@@ -63,9 +66,11 @@ in {
             hosts = [
               {
                 ingressClassName = "traefik";
-                host = "https://${url}";
+                host = url;
                 paths = [
                   {
+                    path = "/";
+                    pathType = "Prefix";
                     backend = {
                       serviceName = "crow-server";
                       servicePort = 8080;
@@ -84,9 +89,12 @@ in {
         agent = {
           storageClass = "longhorn-rec-delete-strict-local ";
           replicaCount = 3;
-          extraSecretNamesForEnvFrom = [];
+          extraSecretNamesForEnvFrom = [
+            "crow-default-agent-secret"
+          ];
           env = {
             CROW_BACKEND_K8S_VOLUME_SIZE = volumeSize;
+            CROW_AGENT_SECRET = "$(CROW_DEFAULT_AGENT_SECRET)";
           };
         };
 

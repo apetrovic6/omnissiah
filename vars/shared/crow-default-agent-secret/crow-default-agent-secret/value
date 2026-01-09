@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: crow-default-agent-secret
+    namespace: crow
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:K8KCRnWGxamgVfWDcd0qHlJ7K5uQDajXIw==,iv:SBjuQ+31MA4fdjDx6S4cpG+7D4Vb6Hyw6XiYSVZnob4=,tag:49CeLVPzCtFASEyc8h95mA==,type:str]
+          type: ENC[AES256_GCM,data:ZyPQhHmR,iv:0pEebbIU7YtPEyUXkuK6OORNfeBkromeqLMMGmK8cZY=,tag:mmC5DbO9EnQrH49Z4J872w==,type:str]
+          stringData:
+            CROW_DEFAULT_AGENT_SECRET: ENC[AES256_GCM,data:mwRymM7dmNsXLfvT/y9dF/xI9X+6gREXKTAiAFSNui4=,iv:jF3iycbvtmvQz9kAr2XSjv6u9zYP3iFZgEVe6O1VjJw=,tag:R19yFYz48soTO6z5m6PwlQ==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBtTFplbGhZYm1LMDNXZklI
+            TVJCeldKWjVNcHR4QmdUQjRxNkhrcG10RVhRCnFVWi9Ia3dMQkl0UURSTFRodHJz
+            eGdlUkF5K1RoOTh5Y0tkMmdWUU5zNDgKLS0tIDlPZlFFa0lrTStDMnJQV1o4TXo2
+            Ui9qMzNCTDJXL3NMQ0M1NDk2SEFKWU0KmyC+XH0Y0ykIucSXKet98bwtJ9Fpuqv0
+            Vej1+FEiLAm9L+E7RAvpwp51St532Q1oHOt1OSqYd0kJqT+0fvJ7vA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-09T14:43:04Z"
+    mac: ENC[AES256_GCM,data:XJj2AYGvOmRbvBf20HDcygdD9x5ea6HFlvCpPhM1Usjep3EZspke+UEv1oUPyQu0hzNWgPsIAIRUgVAJ5b5abawc4tjrTRADN6662UgcQ/nexUMQ/WoDUN1U7RlZIrE3WhoSAv/eFoAvb9i6md6tv48Ur0wwgcZXydeyKkKS+Ik=,iv:FgSuVmlyEkIWB7JC76HYpWvmI9TZ4OwH+t+AwFieOwY=,tag:CDxItm1HsMClSzLBP+Z81A==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
