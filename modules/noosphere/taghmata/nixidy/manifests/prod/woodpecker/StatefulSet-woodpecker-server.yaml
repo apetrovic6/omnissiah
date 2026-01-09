@@ -25,8 +25,6 @@ spec:
     spec:
       containers:
         - env:
-            - name: FORGEJO_URL
-              value: https://forge.manjaca.xyz
             - name: WOODPECKER_ADMIN
               value: woodpecker,admin,manjo
             - name: WOODPECKER_AGENT_SECRET
@@ -35,7 +33,6 @@ spec:
               value: $(uri)
             - name: WOODPECKER_DATABASE_DRIVER
               value: postgres
-            - name: WOODPECKER_FORGEJO
             - name: WOODPECKER_HOST
               value: https://woodpecker.noosphere.uk
           envFrom:
