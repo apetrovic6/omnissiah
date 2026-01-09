@@ -50,9 +50,9 @@ spec:
               value: "true"
           envFrom:
             - secretRef:
-                name: crow-default-agent-secret
-            - secretRef:
                 name: pg-crow-app
+            - secretRef:
+                name: crow-agent-secret
           image: codeberg.org/crowci/crow-server:v5.1.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
