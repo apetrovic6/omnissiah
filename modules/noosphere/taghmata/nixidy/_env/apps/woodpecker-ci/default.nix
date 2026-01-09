@@ -42,7 +42,7 @@ in {
             WOODPECKER_DATABASE_DATASOURCE = "$(uri)";
             WOODPECKER_AGENT_SECRET = "$(agentSecret)";
 
-            WOODPECKER_FORGEJO = true;
+            WOODPECKER_FORGEJO = "true";
             WOODPECKER_FORGEJO_URL = "https://forge.manjaca.xyz";
             WOODPECKER_FORGEJO_CLIENT = "$(CLIENT_ID)";
             WOODPECKER_FORGEJO_SECRET = "$(CLIENT_SECRET)";
