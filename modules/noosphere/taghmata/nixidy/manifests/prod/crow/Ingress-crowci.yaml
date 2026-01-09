@@ -3,6 +3,7 @@ kind: Ingress
 metadata:
   annotations:
     category: utils
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: CI/CD
     glance/icon: https://codeberg.org/repo-avatars/26541ad8113b12ff2f55a506416973d715de94518717de5e8c67faa59ccd13ba
     glance/id: crowci
