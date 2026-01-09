@@ -40,7 +40,7 @@ spec:
             - name: WOODPECKER_FORGEJO_SECRET
               value: $(WOODPECKER_CLIENT_SECRET)
             - name: WOODPECKER_FORGEJO_URL
-              value: https://forge.manjaca.xyz
+              value: http://forgejo.forgejo.svc.cluster.local:3000
             - name: WOODPECKER_HOST
               value: https://woodpecker.noosphere.uk
           envFrom:

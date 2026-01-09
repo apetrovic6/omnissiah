@@ -39,13 +39,13 @@ in {
     clan.core.vars.generators.${forgejoWoodpeckerOauth} = {
       share = true;
 
-      prompts.client-id= {
+      prompts.client-id = {
         description = "Enter Client ID: ";
         type = "line";
         persist = false;
       };
 
-      prompts.client-secret= {
+      prompts.client-secret = {
         description = "Enter Client Secret: ";
         type = "hidden";
         persist = false;
@@ -81,5 +81,6 @@ in {
                 WOODPECKER_CLIENT_SECRET: "$client_secret"
         EOF
       '';
-    };  };
+    };
+  };
 }

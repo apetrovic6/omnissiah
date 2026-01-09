@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    category: utils
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Git Forge
+    glance/icon: di:forgejo
+    glance/id: forgejo
+    glance/name: Forgejo
+    glance/parent: forgejo
+    glance/url: https://forge.noosphere.uk
+  labels:
+    app: forgejo
+    app.kubernetes.io/instance: forgejo
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: forgejo
+    app.kubernetes.io/version: 13.0.4
+    helm.sh/chart: forgejo-15.0.4
+    version: 13.0.4
+  name: forgejo
+  namespace: forgejo
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: forge.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: forgejo-http
+                port:
+                  name: http
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - forge.noosphere.uk
+      secretName: forgejo-tls
