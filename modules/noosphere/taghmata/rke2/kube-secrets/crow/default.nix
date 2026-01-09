@@ -1,7 +1,6 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
-  crowAgentSecret = "crow-agent-secret";
-
+  crowAgentSecret = "crow-default-agent-secret";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${crowAgentSecret} = {
@@ -31,11 +30,10 @@ in {
             - name: ${crowAgentSecret}
               type: Opaque
               stringData:
+                CROW_DEFAULT_AGENT_SECRET: "$secret"
                 CROW_AGENT_SECRET: "$secret"
         EOF
       '';
     };
-
-
   };
 }
