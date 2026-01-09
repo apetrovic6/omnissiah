@@ -40,7 +40,7 @@ in {
             WOODPECKER_HOST = "https://${url}";
             WOODPECKER_DATABASE_DRIVER = "postgres";
             WOODPECKER_DATABASE_DATASOURCE = "$(uri)";
-            WOODPECKER_AGENT_SECRET = "$(agentSecret)";
+            WOODPECKER_AGENT_SECRET = "$(WOODPECKER_AGENT_SECRET)";
 
             WOODPECKER_FORGEJO = "true";
             WOODPECKER_FORGEJO_URL = "https://forge.manjaca.xyz";
@@ -103,7 +103,7 @@ in {
           env = {
             WOODPECKER_BACKEND_K8S_STORAGE_CLASS = "longhorn-rec-delete-strict-local";
             WOODPECKER_SERVER = "woodpecker-server:9000";
-            WOODPECKER_AGENT_SECRET = "$(agentSecret)";
+            WOODPECKER_AGENT_SECRET = "$(WOODPECKER_AGENT_SECRET)";
           };
         };
 
