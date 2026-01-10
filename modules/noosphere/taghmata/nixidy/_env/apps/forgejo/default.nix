@@ -120,7 +120,7 @@ in {
         };
 
         gitea = {
-          additionalConfigSources = [ ];
+          additionalConfigSources = [];
 
           additionalConfigFromEnvs = [
             {
