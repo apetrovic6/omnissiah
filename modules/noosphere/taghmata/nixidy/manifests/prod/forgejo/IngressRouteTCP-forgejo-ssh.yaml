@@ -7,7 +7,7 @@ spec:
   entryPoints:
     - ssh
   routes:
-    - match: HostSNI(`*`)
+    - match: Host(`*)
       services:
         - name: forgejo-ssh
           port: 22
