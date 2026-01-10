@@ -1412,11 +1412,11 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1767959136,
-        "narHash": "sha256-gefMAq5hJ3G4pgF5dGAzyTS/zHdG9ye/haiqfhFXAgc=",
+        "lastModified": 1768042159,
+        "narHash": "sha256-SplzLsopZshTO5jpoV9xTo3En1nFiL5O7asuwsa+fHc=",
         "owner": "apetrovic6",
         "repo": "nixhelm",
-        "rev": "b0de1d435b7adbb53da440a31538543e428cf94b",
+        "rev": "2efb5f7c5f33f77a5fa0410ea8af472950395f5d",
         "type": "github"
       },
       "original": {
