@@ -101,6 +101,9 @@ in {
           valuesContent: |-
             service:
               type: LoadBalancer
+              annotations:
+                metallb.io/allow-shared-ip: "noosphere"
+                metallb.io/loadBalancerIPs: "192.168.1.240" 
 
             providers:
               kubernetesGateway:

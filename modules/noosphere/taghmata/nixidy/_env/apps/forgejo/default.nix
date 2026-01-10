@@ -35,7 +35,7 @@ in {
       entryPoints = [ "ssh" ];
       routes = [
         {
-          match = "HostSNI(`*`)";
+          match = "HostSNI(`forge.noosphere.uk)";
           services = [
             { name = "forgejo-ssh"; port = 22; }
           ];
@@ -106,9 +106,16 @@ in {
           accessModes = ["ReadWriteMany"];
         };
 
-        service.ssh.annotations = {
-          "metallb.io/allow-shared-ip" = "192.168.1.240";
-        };
+service.ssh = {
+      type = "LoadBalancer";
+      port = 22; # or 2222 if you prefer
+      annotations = {
+        # sharing key (same key on both Services you want to share an IP)
+        "metallb.io/allow-shared-ip" = "noosphere";
+        "metallb.io/loadBalancerIPs" = "192.168.1.240";
+      };
+    };
+
 
         gitea = {
           additionalConfigSources = [

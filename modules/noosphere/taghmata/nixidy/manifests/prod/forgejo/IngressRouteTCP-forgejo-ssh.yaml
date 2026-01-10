@@ -7,7 +7,7 @@ spec:
   entryPoints:
     - ssh
   routes:
-    - match: Host(`*)
+    - match: HostSNI(`forge.noosphere.uk)
       services:
         - name: forgejo-ssh
           port: 22
