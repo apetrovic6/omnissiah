@@ -12,7 +12,7 @@ metadata:
   name: forgejo
   namespace: forgejo
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app.kubernetes.io/instance: forgejo
@@ -26,7 +26,7 @@ spec:
     metadata:
       annotations:
         checksum/config: e709773cacf397d78b767f2980c14c28cce3e5b3eb5df4f654279095d8e2c1b4
-        checksum/oauth_0: 34a89d7c439bf2f9ea251b40383d9278713616fabf587d5b766d94edacbe029a
+        checksum/oauth_0: 77644db45f286d011f857014d1ead5a52273a99d55902c3cdd352b6e1380fa55
       labels:
         app: forgejo
         app.kubernetes.io/instance: forgejo
