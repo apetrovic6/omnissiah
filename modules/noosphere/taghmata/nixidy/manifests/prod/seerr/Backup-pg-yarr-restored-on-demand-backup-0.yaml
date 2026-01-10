@@ -1,7 +1,7 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Backup
 metadata:
-  name: pg-yarr-restored-ondemand-backup-0
+  name: pg-yarr-restored-on-demand-backup-0
   namespace: yarr
 spec:
   cluster:

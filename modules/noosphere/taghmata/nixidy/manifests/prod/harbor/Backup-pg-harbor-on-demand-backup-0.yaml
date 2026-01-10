@@ -1,11 +1,11 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Backup
 metadata:
-  name: pg-yarr-restored-backup
-  namespace: yarr
+  name: pg-harbor-on-demand-backup-0
+  namespace: harbor
 spec:
   cluster:
-    name: pg-yarr-restored
+    name: pg-harbor
   method: plugin
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io

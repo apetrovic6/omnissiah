@@ -8,6 +8,7 @@ metadata:
   name: pg-harbor
   namespace: harbor
 spec:
+  externalClusters: []
   instances: 3
   managed:
     roles:
