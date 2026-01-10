@@ -125,6 +125,9 @@
       k9s
       kubectl
       kubectl-cnpg
+
+      claude-code
+      claude-monitor
     ];
 
     programs.localsend = {
