@@ -2,13 +2,19 @@
   inherit (lib) mkOption types;
   barmanPluginName = "barman-cloud.cloudnative-pg.io";
   defaultStorageClass = "longhorn-cnpg-strict-local";
-  defaultStorageSize = "2Gi";
+  defaultStorageSize = "1Gi";
 in {
   templates.cnpg-database-cluster = {
     options = {
+      overrideObjectStore = mkOption {
+        type = types.str;
+        default = "";
+        description = "Barman object store for the cluster";
+      };
+
       cluster = {
         annotations = mkOption {
-          type = types.nullOr types.attrSet;
+          type = types.nullOr types.attrs;
           default = {
             "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
             "argocd.proj.io/sync-hook" = "PreSync";
@@ -39,7 +45,7 @@ in {
             size = mkOption {
               type = types.str;
               default = defaultStorageSize;
-              descripon = "Storage size.";
+              description = "Storage size.";
             };
           };
 
@@ -53,14 +59,8 @@ in {
             size = mkOption {
               type = types.str;
               default = defaultStorageSize;
-              descripon = "Storage size.";
+              description = "Storage size.";
             };
-          };
-
-          overrideObjectStore = mkOption {
-            type = types.str;
-            default = "";
-            description = "Barman object store for the cluster";
           };
 
           bootstrap.recovery.source = mkOption {
@@ -75,41 +75,45 @@ in {
                 name = mkOption {
                   type = types.str;
                   default = "origin";
-                  example = "origin";
                 };
 
                 plugin = mkOption {
-                  type = types.attrsOf (types.submodule ({...}: {
+                  # single plugin object
+                  type = types.submodule ({...}: {
                     options = {
                       name = mkOption {
                         type = types.str;
                         default = barmanPluginName;
                         description = "Name of the plugin";
                       };
+
                       parameters = mkOption {
-                        type = types.attrsOf (types.submodule ({...}: {
+                        # single parameters object
+                        type = types.submodule ({...}: {
                           options = {
                             barmanObjectName = mkOption {
                               type = types.str;
-                              example = "my-object-store";
                               default = "";
-                              description = "Name of the object store";
                             };
                             serverName = mkOption {
                               type = types.str;
                               default = "";
-                              description = "Name of the postgres cluster to restore";
                             };
                           };
-                        }));
+                        });
+
+                        default = {}; # allows omitting parameters entirely
                       };
                     };
-                  }));
+                  });
+
+                  default = {}; # allows omitting plugin entirely
                 };
               };
             }));
-          };
 
+            default = [];
+          };
           plugins = mkOption {
             type = types.listOf (types.submodule ({...}: {
               options = {
@@ -119,7 +123,7 @@ in {
                   example = barmanPluginName;
                 };
 
-                isWalArchiver = mkOption {
+                isWALArchiver = mkOption {
                   type = types.bool;
                   default = false;
                 };
@@ -167,7 +171,7 @@ in {
             }));
           };
           postgresql.parameters = mkOption {
-            type = types.attrSet;
+            type = types.attrs;
             default = {
               shared_buffers = "1GB";
               max_connections = "200";
@@ -198,7 +202,7 @@ in {
                   default = false;
                 };
                 passwordSecret.name = mkOption {
-                  type = types.string;
+                  type = types.str;
                   default = "";
                 };
               };
@@ -224,14 +228,14 @@ in {
       databases = mkOption {
         type = types.listOf (types.submodule ({...}: {
           options = {
-            namespace = mkOption {
+            name = mkOption {
               type = types.str;
               default = "";
-              description = "Namespace for the DB deployment";
+              description = "Name of the DB";
             };
 
-            annotations = {
-              type = types.attrSet;
+            metadata.annotations = mkOption {
+              type = types.attrs;
               default = {
                 "argocd.proj.io/sync-options" = "Prune=false";
               };
@@ -239,25 +243,21 @@ in {
             };
 
             spec = {
-              type = types.attrsOf (types.submodule ({...}: {
-                options = {
-                  name = mkOption {
-                    type = types.str;
-                    default = "";
-                    description = "Name of the database.";
-                  };
-                  owner = mkOption {
-                    type = types.str;
-                    default = "";
-                    description = "Owner of the database.";
-                  };
-                  cluster.name = mkOption {
-                    type = types.str;
-                    default = "";
-                    description = "Name of the cluster the database belongs to.";
-                  };
-                };
-              }));
+              name = mkOption {
+                type = types.str;
+                default = "";
+                description = "User name";
+              };
+              owner = mkOption {
+                type = types.str;
+                default = "";
+                description = "Owner of the database.";
+              };
+              cluster.name = mkOption {
+                type = types.str;
+                default = "";
+                description = "Name of the cluster the database belongs to.";
+              };
             };
           };
         }));
@@ -309,12 +309,6 @@ in {
         onDemandBackups = mkOption {
           type = types.listOf (types.submodule ({...}: {
             options = {
-              metadata.namespace = mkOption {
-                type = types.str;
-                default = "";
-                description = "Namespace for the scheduled backup";
-              };
-
               spec = {
                 method = mkOption {
                   type = types.str;
@@ -334,29 +328,49 @@ in {
         };
       };
     };
-  };
 
-  output = {
-    name,
-    config,
-    ...
-  }: let
-    cfg = config;
-  in {
-    clusters."pg-${name}" = {
-      metadata = {
-        namespace = cfg.cluster.namespace;
-        annotations = cfg.cluster.annotations;
+    output = {
+      name,
+      config,
+      ...
+    }: let
+      cfg = config;
+    in {
+      clusters."pg-${name}" = {
+        metadata = {
+          namespace = cfg.namespace;
+          annotations = cfg.cluster.annotations;
+        };
+        spec = let
+          baseSpec = cfg.cluster.spec;
+          basePlugins = baseSpec.plugins or [];
+          extraPlugins = baseSpec.extraPlugins or [];
+        in
+          (lib.removeAttrs baseSpec ["extraPlugins"])
+          // {
+            plugins = basePlugins ++ extraPlugins;
+          };
       };
-      spec = cfg.cluster.spec;
-      walStorage = cfg.cluster.walStorage;
-      plugins = cfg.cluster.plugins ++ cfg.cluster.extraPlugins;
-      postgresql.parameters = cfg.cluster.postgresql.parameters;
-      monitoring.enablePodMonitor = cfg.cluster.enablePodMonitor;
-      managed.roles = cfg.cluster.managed.roles;
-      externalClusters = cfg.cluster.externalClusters;
+
+      databases = lib.listToAttrs (map (
+          db: let
+            base = lib.removeAttrs db ["name"];
+          in
+            lib.nameValuePair db.name (base
+              // {
+                metadata =
+                  (base.metadata or {})
+                  // {
+                    namespace = cfg.namespace;
+                  };
+              })
+        )
+        cfg.databases);
+
+      backups."pg-${name}-backup" = {
+        metadata.namespace = cfg.namespace;
+        cluster.name = "pg-${name}";
+      };
     };
-
-
   };
 }
