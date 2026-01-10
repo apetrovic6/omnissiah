@@ -87,6 +87,11 @@ in {
   programs.git = {
     enable = true;
     lfs.enable = true;
+    config = {
+      init.defaultBranch = "master";
+      pull.rebase = true;
+    };
+
     settings.user = {
       name = "apetrovic";
       email = "petrovicante6@gmail.com";
