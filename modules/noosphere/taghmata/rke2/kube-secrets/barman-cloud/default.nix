@@ -1,6 +1,7 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
   barmanS3Storage = "barman-s3-secret-key";
+  namespacesToReplicate = "yarr,zitadel,harbor,keycloak,woodpecker,forgejo";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${barmanS3Storage} = {
@@ -46,9 +47,9 @@ in {
                 cnpg.io/reload: "true"
               annotations:
                 reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
-                reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "yarr,zitadel,harbor,keycloak,crow"
+                reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "${namespacesToReplicate}"
                 reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
-                reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "yarr,zitadel,harbor,keycloak,crow"
+                reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "${namespacesToReplicate}"
               type: Opaque
               stringData:
                 ACCESS_KEY_ID: "$access_key"

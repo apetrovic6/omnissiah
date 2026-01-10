@@ -32,7 +32,7 @@ in {
     helm.releases.${name} = {
       chart = charts.forgejo-helm.forgejo;
       values = {
-        replicaCount = 3;
+        replicaCount = 1; # TODO: Implement Redis / Valkey for high availability
         containerSecurityContext = {
           allowPrivilegeEscalation = false;
           capabilities = {
