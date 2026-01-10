@@ -1,5 +1,4 @@
-{ ... }: 
-{
+{...}: {
   _class = "clan.service";
   manifest.name = "workstation";
   manifest.readme = "";
