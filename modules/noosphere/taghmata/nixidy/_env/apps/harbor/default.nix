@@ -1,16 +1,17 @@
 {
   charts,
   config,
-  lib,
   ...
 }: let
   namespace = "harbor";
   domain = config.noosphere.domain;
   db-cluster-name = "pg-harbor";
-  barmanPluginName = "barman-cloud.cloudnative-pg.io";
   objectStoreName = "harbor-object-store";
 in {
-  imports = [../../../_modules/templates/garage-object-store.nix];
+  imports = [
+    ../../../_modules/templates/garage-object-store.nix
+    ../../../_modules/templates/database-template.nix
+  ];
 
   applications.harbor = let
     storageClass = "longhorn";
@@ -20,9 +21,7 @@ in {
 
     resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
 
-    yamls = let
-      harborHost = "harbor.{$domain}";
-    in [
+    yamls = [
       (builtins.readFile ../../../../../../../vars/shared/harbor-s3-secret-key/harbor-s3-secret-key/value)
       (builtins.readFile ../../../../../../../vars/shared/harbor-admin-password-secret/harbor-admin-password-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/harbor-secret-secret-key/harbor-secret-secret-key/value)
@@ -267,65 +266,34 @@ in {
 
     templates.garageObjectStore.${objectStoreName} = {inherit namespace;};
 
-    resources.backups."${db-cluster-name}-on-demand-backup" = {
-      metadata.namespace = namespace;
-      spec = {
-        cluster.name = db-cluster-name;
-        method = "plugin";
-        pluginConfiguration.name = barmanPluginName;
-      };
-    };
+    templates.cnpg-database-cluster.harbor = {
+      inherit namespace;
+      overrideObjectStore = objectStoreName;
 
-    resources.scheduledBackups."${db-cluster-name}-scheduled-backup" = {
-      spec = {
-        schedule = "0 2 0 * * *"; # Backup at 2AM every night
-        backupOwnerReference = "self";
-        cluster.name = db-cluster-name;
-        method = "plugin";
-        pluginConfiguration.name = barmanPluginName;
-        immediate = true;
-      };
-    };
-
-    resources.clusters.${db-cluster-name} = {
-      metadata = {
-        inherit namespace;
+      cluster = {
         annotations = {
           "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
           "argocd.proj.io/sync-wave" = "-10";
           "argocd.proj.io/hook" = "PreSync";
         };
-      };
 
-      spec = {
-        primaryUpdateStrategy = "unsupervised";
-        instances = 3;
-        storage = {
-          storageClass = "longhorn-cnpg-strict-local";
-          size = "20Gi";
-        };
+        spec = {
+          storage = {
+            size = "20Gi";
+          };
 
-        walStorage = {
-          storageClass = "longhorn-cnpg-strict-local";
-          size = "20Gi";
-        };
+          walStorage = {
+            size = "20Gi";
+          };
 
-        plugins = [
-          {
-            name = barmanPluginName;
-            isWALArchiver = true;
-            parameters.barmanObjectName = objectStoreName;
-          }
-        ];
+          plugins = [
+            {
+              isWALArchiver = true;
+              parameters.barmanObjectName = objectStoreName;
+            }
+          ];
 
-        postgresql.parameters = {
-          shared_buffers = "1GB";
-          max_connections = "200";
-          log_statement = "ddl";
-        };
-
-        managed = {
-          roles = [
+          managed.roles = [
             {
               name = "harbor";
               ensure = "present";
@@ -336,24 +304,41 @@ in {
             }
           ];
         };
-
-        monitoring.enablePodMonitor = true;
       };
-    };
 
-    resources.databases.registry = {
-      metadata = {
-        inherit namespace;
-        annotations = {
-          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-          "argocd.proj.io/sync-wave" = "-10";
-          "argocd.proj.io/hook" = "PreSync";
-        };
-      };
-      spec = {
-        name = "registry";
-        owner = "harbor";
-        cluster.name = "${db-cluster-name}";
+      databases = [
+        {
+          name = "registry";
+          metadata.annotations = {
+            "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
+            "argocd.proj.io/sync-wave" = "-10";
+            "argocd.proj.io/hook" = "PreSync";
+          };
+          spec = {
+            name = "registry";
+            owner = "harbor";
+            cluster.name = db-cluster-name;
+          };
+        }
+      ];
+
+      backups = {
+        scheduledBackups = [
+          {
+            metadata.namespace = namespace;
+            spec = {
+              schedule = "0 2 0 * * *"; # Backup at 2AM every night
+              backupOwnerReference = "self";
+              immediate = true;
+            };
+          }
+        ];
+
+        onDemandBackups = [
+          {
+            spec = {};
+          }
+        ];
       };
     };
   };
