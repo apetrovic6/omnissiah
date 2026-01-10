@@ -28,6 +28,21 @@ in {
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
     };
+  resources.ingressRouteTCPs."forgejo-ssh" = {
+    kind = "IngressRouteTCP";
+    metadata.namespace =  namespace ;
+    spec = {
+      entryPoints = [ "ssh" ];
+      routes = [
+        {
+          match = "HostSNI(`*`)";
+          services = [
+            { name = "forgejo-ssh"; port = 22; }
+          ];
+        }
+      ];
+    };
+  };
 
     helm.releases.${name} = {
       chart = charts.forgejo-helm.forgejo;

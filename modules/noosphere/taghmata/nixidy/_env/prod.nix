@@ -119,7 +119,7 @@ in {
             glance/name: ArgoCD
             glance/icon:  di:argo-cd
             glance/url:  https://argocd.${domain}
-            glance/description: "GitOps tool"
+            glance/description: "CD Tool"
             glance/id: argocd
             glance/parent: argocd
             category: gitops

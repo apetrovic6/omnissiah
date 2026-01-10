@@ -4,7 +4,7 @@ metadata:
   annotations:
     category: gitops
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
-    glance/description: GitOps tool
+    glance/description: CD Tool
     glance/icon: di:argo-cd
     glance/id: argocd
     glance/name: ArgoCD
