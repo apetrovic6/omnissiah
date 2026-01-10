@@ -14,7 +14,7 @@ in {
     ./apps/sops-secrets-operator
     ./apps/alloy
     ./apps/cert-manager
-    ./apps/crowci
+    # ./apps/crowci
     ./apps/woodpecker-ci
     ./apps/prometheus-stack
     ./apps/yarr/seerr
