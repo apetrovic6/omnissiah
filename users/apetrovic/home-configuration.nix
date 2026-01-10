@@ -90,6 +90,7 @@ in {
     config = {
       init.defaultBranch = "master";
       pull.rebase = true;
+      push.autoSetupRemote = true;
     };
 
     settings.user = {
