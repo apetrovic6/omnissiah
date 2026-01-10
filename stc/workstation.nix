@@ -1,9 +1,5 @@
+{ ... }: 
 {
-  config,
-  lib,
-  ...
-}: let
-in {
   _class = "clan.service";
   manifest.name = "workstation";
   manifest.readme = "";
@@ -82,7 +78,7 @@ in {
       settings = {
         default_session = {
           user = "apetrovic";
-          command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland"; # start Hyprland with a TUI login manager
+          command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd start-hyprland"; # start Hyprland with a TUI login manager
         };
       };
     };
