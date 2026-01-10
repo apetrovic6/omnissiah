@@ -48,6 +48,7 @@
             "Pictures"
             "Documents"
             "Videos"
+            "programming"
             ".config/attic"
             ".config/Bitwarden"
             ".config/noctalia"
