@@ -43,7 +43,7 @@ in {
             WOODPECKER_AGENT_SECRET = "$(WOODPECKER_AGENT_SECRET)";
 
             WOODPECKER_FORGEJO = "true";
-            WOODPECKER_FORGEJO_URL = "http://forgejo-http.forgejo.svc.cluster.local:3000";
+            WOODPECKER_FORGEJO_URL = "https://forge.noosphere.uk";
             WOODPECKER_FORGEJO_CLIENT = "$(WOODPECKER_CLIENT_ID)";
             WOODPECKER_FORGEJO_SECRET = "$(WOODPECKER_CLIENT_SECRET)";
           };
