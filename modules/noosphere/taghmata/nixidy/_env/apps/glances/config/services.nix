@@ -11,7 +11,23 @@ in {
           width = "slim";
           size = "full";
           widgets = [
+
             {
+              type = "extension";
+              title = "GitOps";
+              url = "http://glance-k8s/extension/apps";
+              allow-potentially-dangerous-html = true;
+              inherit cache;
+
+              parameters = {
+                show-if = ''
+                  namespace != "kube-system" and
+                  "glance/name" in annotations and
+                   ("category" in annotations && annotations["category"] == "gitops")
+                '';
+              };
+            }
+                        {
               type = "extension";
               title = "Nodes";
               url = "http://glance-k8s/extension/nodes";

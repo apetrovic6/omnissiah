@@ -155,7 +155,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: dbname
-                  name: pg-forgejo-app
+                  name: app
             - name: FORGEJO__database__USER
               valueFrom:
                 secretKeyRef:

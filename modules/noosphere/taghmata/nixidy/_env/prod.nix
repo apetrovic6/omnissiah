@@ -28,6 +28,7 @@ in {
     ./apps/glances
     ./apps/reflector
     ./apps/keycloak-operator
+    ./apps/forgejo
   ];
 
   # nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
@@ -121,7 +122,7 @@ in {
             glance/description: "GitOps tool"
             glance/id: argocd
             glance/parent: argocd
-            category: utils
+            category: gitops
         spec:
           ingressClassName: traefik
           tls:

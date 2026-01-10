@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
-    category: utils
+    category: gitops
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: CI/CD
     glance/icon: di:woodpecker-ci

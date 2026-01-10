@@ -34,6 +34,7 @@ in {
             CROW_ADMIN = "crow,admin,manjo";
             CROW_HOST = "https://${url}";
             CROW_FORGEJO = true;
+            FORGE_URL = "https://forge.manjaca.xyz";
             CROW_DATABASE_DRIVER = "postgres";
             CROW_DATABASE_DATASOURCE = "$(uri)";
             CROW_BACKEND_K8S_VOLUME_SIZE = volumeSize;
@@ -49,13 +50,14 @@ in {
           ingress = {
             enabled = true;
             annotations = {
+              "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
               "glance/name" = "Crow CI";
               "glance/icon" = "https://codeberg.org/repo-avatars/26541ad8113b12ff2f55a506416973d715de94518717de5e8c67faa59ccd13ba";
               "glance/url" = "https://${url}";
               "glance/description" = "CI/CD";
               "glance/id" = "crowci";
               "glance/parent" = "crowci";
-              "category" = "utils";
+              "category" = "gitops";
             };
             tls = [
               {
@@ -87,14 +89,16 @@ in {
         };
 
         agent = {
-          storageClass = "longhorn-rec-delete-strict-local ";
+          storageClass = "longhorn-rec-delete-strict-local";
           replicaCount = 3;
+
           extraSecretNamesForEnvFrom = [
             "crow-default-agent-secret"
           ];
+
           env = {
             CROW_BACKEND_K8S_VOLUME_SIZE = volumeSize;
-            CROW_AGENT_SECRET = "$(CROW_DEFAULT_AGENT_SECRET)";
+            CROW_AGENT_SECRET = "$(CROW_AGENT_SECRET)";
           };
         };
 

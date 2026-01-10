@@ -77,6 +77,7 @@ data:
           - karakeep-app/karakeep
           - glanceapp/glance
           - lukasdietrich/glance-k8s
+          - dockerhub:seerr/seerr
           show-source-icon: true
           type: releases
       name: Home
@@ -85,6 +86,15 @@ data:
       columns:
       - size: full
         widgets:
+        - allow-potentially-dangerous-html: true
+          cache: 1m
+          parameters:
+            show-if: "namespace != \"kube-system\" and\n\"glance/name\" in annotations\
+              \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
+              gitops\")\n"
+          title: GitOps
+          type: extension
+          url: http://glance-k8s/extension/apps
         - allow-potentially-dangerous-html: true
           cache: 1m
           title: Nodes
