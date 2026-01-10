@@ -64,8 +64,8 @@ in {
           };
 
           bootstrap.recovery.source = mkOption {
-            type = types.str;
-            default = "origin";
+            type = types.nullOr types.str;
+            default = null;
             description = "Recovery source for the cluster";
           };
 
@@ -350,8 +350,12 @@ in {
           baseSpec = cfg.cluster.spec;
           basePlugins = baseSpec.plugins or [];
           extraPlugins = baseSpec.extraPlugins or [];
+
+          # Remove bootstrap if recovery source is not set
+          attrsToRemove = ["extraPlugins"]
+            ++ lib.optional (cfg.cluster.spec.bootstrap.recovery.source == null) "bootstrap";
         in
-          (lib.removeAttrs baseSpec ["extraPlugins"])
+          (lib.removeAttrs baseSpec attrsToRemove)
           // {
             plugins = basePlugins ++ extraPlugins;
           };
@@ -379,37 +383,23 @@ in {
               metadata = {
                 namespace = backup.metadata.namespace or cfg.namespace;
               };
-              spec =
-                backup.spec
-                // {
-                  cluster.name = "pg-${name}";
-                };
+              spec = backup.spec // {
+                cluster.name = "pg-${name}";
+              };
             }
         )
         cfg.backups.scheduledBackups
       );
 
       backups =
-        {
-          "pg-${name}-backup" = {
-            metadata.namespace = cfg.namespace;
-            spec = {
-              cluster.name = "pg-${name}";
-              method = "plugin";
-              pluginConfiguration.name = barmanPluginName;
-            };
-          };
-        }
-        // lib.listToAttrs (
+       lib.listToAttrs (
           lib.imap0 (
             i: backup:
-              lib.nameValuePair "pg-${name}-ondemand-backup-${toString i}" {
+              lib.nameValuePair "pg-${name}-on-demand-backup-${toString i}" {
                 metadata.namespace = cfg.namespace;
-                spec =
-                  backup.spec
-                  // {
-                    cluster.name = "pg-${name}";
-                  };
+                spec = backup.spec // {
+                  cluster.name = "pg-${name}";
+                };
               }
           )
           cfg.backups.onDemandBackups
