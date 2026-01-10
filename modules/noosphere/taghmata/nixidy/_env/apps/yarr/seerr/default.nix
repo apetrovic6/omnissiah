@@ -3,7 +3,6 @@
   domain = config.noosphere.domain;
   db-cluster-name = "pg-yarr-restored";
   objectStoreName = "yarr-object-store";
-  barmanPluginName = "barman-cloud.cloudnative-pg.io";
 in {
   imports = [
     ../../../../_modules/templates/garage-object-store.nix
@@ -189,18 +188,6 @@ in {
       (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
     ];
 
-    resources.scheduledBackups."${db-cluster-name}-scheduled-backup" = {
-      metadata.namespace = namespace;
-      spec = {
-        schedule = "0 2 0 * * *"; # Backup at 2AM every night
-        backupOwnerReference = "self";
-        cluster.name = db-cluster-name;
-        method = "plugin";
-        pluginConfiguration.name = barmanPluginName;
-        immediate = true;
-      };
-    };
-
     templates.cnpg-database-cluster.yarr-restored = {
       inherit namespace;
       overrideObjectStore = objectStoreName;
@@ -257,104 +244,23 @@ in {
       ];
 
       backups = {
-        # onDemandBackups = [
-        #   {
+        scheduledBackups = [
+          {
+            metadata.namespace = namespace;
+            spec = {
+              schedule = "0 2 0 * * *"; # Backup at 2AM every night
+              backupOwnerReference = "self";
+              immediate = true;
+            };
+          }
+        ];
 
-        #   }
-
-        # ];
+        onDemandBackups = [
+          {
+            spec = {};
+          }
+        ];
       };
     };
-
-    resources.backups."${db-cluster-name}-backup" = {
-      metadata.namespace = namespace;
-      spec = {
-        cluster.name = "${db-cluster-name}";
-        method = "plugin";
-        pluginConfiguration.name = "barman-cloud.cloudnative-pg.io";
-      };
-    };
-
-    # resources.databases.db-seerr = {
-    #   metadata = {
-    #     inherit namespace;
-    #     annotations = {
-    #       "argocd.proj.io/sync-options" = "Prune=false";
-    #     };
-    #   };
-    #   spec = {
-    #     name = "seerr";
-    #     owner = "seerr";
-    #     cluster.name = "${db-cluster-name}";
-    #   };
-    # };
-
-    # resources.clusters.${db-cluster-name} = {
-    #   metadata = {
-    #     inherit namespace;
-    #     annotations = {
-    #       "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-    #       "argocd.proj.io/sync-hook" = "PreSync";
-    #     };
-    #   };
-
-    #   spec = {
-    #     primaryUpdateStrategy = "unsupervised";
-    #     instances = 3;
-    #     storage = {
-    #       storageClass = "longhorn-cnpg-strict-local";
-    #       size = "1Gi";
-    #     };
-
-    #     bootstrap.recovery.source = "origin";
-
-    #     externalClusters = [
-    #       {
-    #         name = "origin";
-    #         plugin = {
-    #           name = "barman-cloud.cloudnative-pg.io";
-    #           parameters = {
-    #             barmanObjectName = objectStoreName;
-    #             serverName = "pg-yarr";
-    #           };
-    #         };
-    #       }
-    #     ];
-
-    #     walStorage = {
-    #       storageClass = "longhorn-cnpg-strict-local";
-    #       size = "1Gi";
-    #     };
-
-    #     plugins = [
-    #       {
-    #         name = "barman-cloud.cloudnative-pg.io";
-    #         isWALArchiver = true;
-    #         parameters.barmanObjectName = objectStoreName;
-    #       }
-    #     ];
-
-    #     postgresql.parameters = {
-    #       shared_buffers = "1GB";
-    #       max_connections = "200";
-    #       log_statement = "ddl";
-    #     };
-
-    # managed = {
-    #   roles = [
-    #     {
-    #       name = "seerr";
-    #       ensure = "present";
-    #       comment = "Seerr User";
-    #       login = true;
-    #       superuser = false;
-    #       passwordSecret.name = "pg-seerr-password";
-    #     }
-    #   ];
-    # };
-
-    #     monitoring.enablePodMonitor = true;
-    #   };
-    # };
   };
 }
