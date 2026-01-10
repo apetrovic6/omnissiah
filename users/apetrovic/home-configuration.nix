@@ -87,15 +87,13 @@ in {
   programs.git = {
     enable = true;
     lfs.enable = true;
-    config = {
-      init.defaultBranch = "master";
-      pull.rebase = true;
-      push.autoSetupRemote = true;
-    };
 
     settings.user = {
       name = "apetrovic";
       email = "petrovicante6@gmail.com";
+      init.defaultBranch = "master";
+      pull.rebase = true;
+      push.autoSetupRemote = true;
     };
   };
 
