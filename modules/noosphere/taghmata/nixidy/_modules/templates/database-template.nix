@@ -274,7 +274,7 @@ in {
               };
 
               spec = mkOption {
-                type = types.attrsOf (types.submodule ({...}: {
+                type = types.submodule ({...}: {
                   options = {
                     schedule = mkOption {
                       type = types.str;
@@ -299,8 +299,13 @@ in {
                       type = types.str;
                       default = barmanPluginName;
                     };
+                    immediate = mkOption {
+                      type = types.bool;
+                      default = false;
+                      description = "Whether to trigger an immediate backup";
+                    };
                   };
-                }));
+                });
               };
             };
           }));
@@ -367,10 +372,48 @@ in {
         )
         cfg.databases);
 
-      backups."pg-${name}-backup" = {
-        metadata.namespace = cfg.namespace;
-        cluster.name = "pg-${name}";
-      };
+      scheduledBackups = lib.listToAttrs (
+        lib.imap0 (
+          i: backup:
+            lib.nameValuePair "pg-${name}-scheduled-backup-${toString i}" {
+              metadata = {
+                namespace = backup.metadata.namespace or cfg.namespace;
+              };
+              spec =
+                backup.spec
+                // {
+                  cluster.name = "pg-${name}";
+                };
+            }
+        )
+        cfg.backups.scheduledBackups
+      );
+
+      backups =
+        {
+          "pg-${name}-backup" = {
+            metadata.namespace = cfg.namespace;
+            spec = {
+              cluster.name = "pg-${name}";
+              method = "plugin";
+              pluginConfiguration.name = barmanPluginName;
+            };
+          };
+        }
+        // lib.listToAttrs (
+          lib.imap0 (
+            i: backup:
+              lib.nameValuePair "pg-${name}-ondemand-backup-${toString i}" {
+                metadata.namespace = cfg.namespace;
+                spec =
+                  backup.spec
+                  // {
+                    cluster.name = "pg-${name}";
+                  };
+              }
+          )
+          cfg.backups.onDemandBackups
+        );
     };
   };
 }
