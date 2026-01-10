@@ -88,6 +88,11 @@ data:
         widgets:
         - allow-potentially-dangerous-html: true
           cache: 1m
+          title: Nodes
+          type: extension
+          url: http://glance-k8s/extension/nodes
+        - allow-potentially-dangerous-html: true
+          cache: 1m
           parameters:
             show-if: "namespace != \"kube-system\" and\n\"glance/name\" in annotations\
               \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
@@ -95,11 +100,6 @@ data:
           title: GitOps
           type: extension
           url: http://glance-k8s/extension/apps
-        - allow-potentially-dangerous-html: true
-          cache: 1m
-          title: Nodes
-          type: extension
-          url: http://glance-k8s/extension/nodes
         - allow-potentially-dangerous-html: true
           cache: 1m
           parameters:

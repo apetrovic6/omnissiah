@@ -11,6 +11,13 @@ in {
           width = "slim";
           size = "full";
           widgets = [
+            {
+              type = "extension";
+              title = "Nodes";
+              url = "http://glance-k8s/extension/nodes";
+              allow-potentially-dangerous-html = true;
+              inherit cache;
+            }
 
             {
               type = "extension";
@@ -27,14 +34,6 @@ in {
                 '';
               };
             }
-                        {
-              type = "extension";
-              title = "Nodes";
-              url = "http://glance-k8s/extension/nodes";
-              allow-potentially-dangerous-html = true;
-              inherit cache;
-            }
-
             {
               type = "extension";
               title = "Storage";
