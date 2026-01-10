@@ -5,7 +5,7 @@ metadata:
     category: gitops
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: CI/CD
-    glance/icon: di:woodpecker-ci
+    glance/icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/woodpecker-ci.svg
     glance/id: woodpecker
     glance/name: Woodpecker CI
     glance/parent: woodpecker

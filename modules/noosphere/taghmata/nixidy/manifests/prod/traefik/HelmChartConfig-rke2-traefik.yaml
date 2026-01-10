@@ -4,4 +4,13 @@ metadata:
   name: rke2-traefik
   namespace: kube-system
 spec:
-  valuesContent: "service:\n  type: LoadBalancer\n  annotations:\n    metallb.io/allow-shared-ip: \"noosphere\"\n    metallb.io/loadBalancerIPs: \"192.168.1.240\" \n\nproviders:\n  kubernetesGateway:\n    enabled: true"
+  valuesContent: |-
+    service:
+      type: LoadBalancer
+      annotations:
+        metallb.io/allow-shared-ip: "noosphere"
+        metallb.io/loadBalancerIPs: "192.168.1.240"
+
+    providers:
+      kubernetesGateway:
+        enabled: true

@@ -59,7 +59,7 @@ in {
             annotations = {
               "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
               "glance/name" = "Woodpecker CI";
-              "glance/icon" = "di:woodpecker-ci";
+              "glance/icon" = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/woodpecker-ci.svg";
               "glance/url" = "https://${url}";
               "glance/description" = "CI/CD";
               "glance/id" = name;

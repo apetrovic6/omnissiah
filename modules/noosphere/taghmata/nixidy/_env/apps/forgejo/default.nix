@@ -28,21 +28,24 @@ in {
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
     };
-  resources.ingressRouteTCPs."forgejo-ssh" = {
-    kind = "IngressRouteTCP";
-    metadata.namespace =  namespace ;
-    spec = {
-      entryPoints = [ "ssh" ];
-      routes = [
-        {
-          match = "HostSNI(`forge.noosphere.uk)";
-          services = [
-            { name = "forgejo-ssh"; port = 22; }
-          ];
-        }
-      ];
+    resources.ingressRouteTCPs."forgejo-ssh" = {
+      kind = "IngressRouteTCP";
+      metadata.namespace = namespace;
+      spec = {
+        entryPoints = ["ssh"];
+        routes = [
+          {
+            match = "HostSNI(`forge.noosphere.uk)";
+            services = [
+              {
+                name = "forgejo-ssh";
+                port = 22;
+              }
+            ];
+          }
+        ];
+      };
     };
-  };
 
     helm.releases.${name} = {
       chart = charts.forgejo-helm.forgejo;
@@ -106,21 +109,18 @@ in {
           accessModes = ["ReadWriteMany"];
         };
 
-service.ssh = {
-      type = "LoadBalancer";
-      port = 22; # or 2222 if you prefer
-      annotations = {
-        # sharing key (same key on both Services you want to share an IP)
-        "metallb.io/allow-shared-ip" = "noosphere";
-        "metallb.io/loadBalancerIPs" = "192.168.1.240";
-      };
-    };
-
+        service.ssh = {
+          type = "LoadBalancer";
+          port = 22;
+          annotations = {
+            # sharing key (same key on both Services you want to share an IP)
+            "metallb.io/allow-shared-ip" = "noosphere";
+            "metallb.io/loadBalancerIPs" = "192.168.1.240";
+          };
+        };
 
         gitea = {
-          additionalConfigSources = [
-            # {secret.secretName = "${db-cluster-name}-app";}
-          ];
+          additionalConfigSources = [ ];
 
           additionalConfigFromEnvs = [
             {
