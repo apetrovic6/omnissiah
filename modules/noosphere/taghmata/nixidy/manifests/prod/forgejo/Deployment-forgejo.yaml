@@ -195,8 +195,6 @@ spec:
               name: data
             - mountPath: /env-to-ini-mounts/inlines/
               name: inline-config-sources
-            - mountPath: /env-to-ini-mounts/additionals/0/
-              name: additional-config-sources-0
         - command:
             - /usr/sbin/configure_gitea.sh
           env:
@@ -274,9 +272,6 @@ spec:
         - name: inline-config-sources
           secret:
             secretName: forgejo-inline-config
-        - name: additional-config-sources-0
-          secret:
-            secretName: pg-forgejo-app
         - emptyDir: {}
           name: temp
         - name: data
