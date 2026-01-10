@@ -1,7 +1,7 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Backup
 metadata:
-  name: pg-forgejo-backup
+  name: pg-forgejo-on-demand-backup-0
   namespace: forgejo
 spec:
   cluster:

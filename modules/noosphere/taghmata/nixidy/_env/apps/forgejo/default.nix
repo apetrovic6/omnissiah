@@ -9,12 +9,13 @@
   namespace = "${name}";
   db-cluster-name = "pg-${name}";
   objectStoreName = "${name}-object-store";
-  barmanPluginName = "barman-cloud.cloudnative-pg.io";
-  volumeSize = "2Gi";
   forgejo-admin-secret = "forgejo-admin-secret";
   forgejo-keycloak-oauth-secret = "forgejo-keycloak-oauth-secret";
 in {
-  imports = [../../../_modules/templates/garage-object-store.nix];
+  imports = [
+    ../../../_modules/templates/garage-object-store.nix
+    ../../../_modules/templates/database-template.nix
+  ];
 
   applications.${name} = {
     inherit namespace;
@@ -28,24 +29,24 @@ in {
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
     };
-    resources.ingressRouteTCPs."forgejo-ssh" = {
-      kind = "IngressRouteTCP";
-      metadata.namespace = namespace;
-      spec = {
-        entryPoints = ["ssh"];
-        routes = [
-          {
-            match = "HostSNI(`forge.noosphere.uk)";
-            services = [
-              {
-                name = "forgejo-ssh";
-                port = 22;
-              }
-            ];
-          }
-        ];
-      };
-    };
+    # resources.ingressRouteTCPs."forgejo-ssh" = {
+    #   kind = "IngressRouteTCP";
+    #   metadata.namespace = namespace;
+    #   spec = {
+    #     entryPoints = ["ssh"];
+    #     routes = [
+    #       {
+    #         match = "HostSNI(`forge.noosphere.uk)";
+    #         services = [
+    #           {
+    #             name = "forgejo-ssh";
+    #             port = 22;
+    #           }
+    #         ];
+    #       }
+    #     ];
+    #   };
+    # };
 
     helm.releases.${name} = {
       chart = charts.forgejo-helm.forgejo;
@@ -187,107 +188,47 @@ in {
       };
     };
 
-    resources.scheduledBackups."${db-cluster-name}-scheduled-backup" = {
-      metadata.namespace = namespace;
-      spec = {
-        schedule = "0 2 0 * * *"; # Backup at 2AM every night
-        backupOwnerReference = "self";
-        cluster.name = db-cluster-name;
-        method = "plugin";
-        pluginConfiguration.name = barmanPluginName;
-        immediate = true;
-      };
-    };
+    templates.cnpg-database-cluster.forgejo = {
+      inherit namespace;
+      overrideObjectStore = objectStoreName;
 
-    resources.backups."${db-cluster-name}-backup" = {
-      metadata.namespace = namespace;
-      spec = {
-        cluster.name = "${db-cluster-name}";
-        method = "plugin";
-        pluginConfiguration.name = barmanPluginName;
-      };
-    };
-
-    resources.clusters.${db-cluster-name} = {
-      metadata = {
-        inherit namespace;
+      cluster = {
         annotations = {
           "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
           "argocd.proj.io/sync-hook" = "PreSync";
         };
+
+        spec = {
+          plugins = [
+            {
+              isWALArchiver = true;
+              parameters.barmanObjectName = objectStoreName;
+            }
+          ];
+        };
       };
 
-      spec = {
-        primaryUpdateStrategy = "unsupervised";
-        instances = 3;
-        storage = {
-          storageClass = "longhorn-cnpg-strict-local";
-          size = "1Gi";
-        };
+      # Forgejo uses the default database created with the cluster
+      databases = [];
 
-        # bootstrap.recovery.source = "origin";
-
-        # externalClusters = [
-        #   {
-        #     name = "origin";
-        #     plugin = {
-        #       name = "barman-cloud.cloudnative-pg.io";
-        #       parameters = {
-        #         barmanObjectName = objectStoreName;
-        #         serverName = "pg-yarr";
-        #       };
-        #     };
-        #   }
-        # ];
-
-        walStorage = {
-          storageClass = "longhorn-cnpg-strict-local";
-          size = "1Gi";
-        };
-
-        plugins = [
+      backups = {
+        scheduledBackups = [
           {
-            name = "barman-cloud.cloudnative-pg.io";
-            isWALArchiver = true;
-            parameters.barmanObjectName = objectStoreName;
+            metadata.namespace = namespace;
+            spec = {
+              schedule = "0 2 0 * * *"; # Backup at 2AM every night
+              backupOwnerReference = "self";
+              immediate = true;
+            };
           }
         ];
 
-        postgresql.parameters = {
-          shared_buffers = "1GB";
-          max_connections = "200";
-          log_statement = "ddl";
-        };
-
-        # managed = {
-        #   roles = [
-        #     {
-        #       name = "seerr";
-        #       ensure = "present";
-        #       comment = "Seerr User";
-        #       login = true;
-        #       superuser = false;
-        #       passwordSecret.name = "pg-seerr-password";
-        #     }
-        #   ];
-        # };
-
-        monitoring.enablePodMonitor = true;
+        onDemandBackups = [
+          {
+            spec = {};
+          }
+        ];
       };
     };
-
-    # resources.databases.db-crow = {
-    #   metadata = {
-    #     inherit namespace;
-    #     annotations = {
-    #       "argocd.proj.io/sync-options" = "Prune=false";
-    #     };
-    #   };
-    #   spec = {
-    #     name = "crow";
-    #     owner = "app";
-    #     cluster.name = "${db-cluster-name}";
-    #   };
-    # };
   };
 }

@@ -170,6 +170,7 @@ in {
               };
             }));
           };
+
           postgresql.parameters = mkOption {
             type = types.attrs;
             default = {
@@ -180,7 +181,7 @@ in {
           };
 
           managed.roles = mkOption {
-            type = types.listOf (types.submodule ({...}: {
+            type = types.nullOr (types.listOf (types.submodule ({...}: {
               options = {
                 name = mkOption {
                   type = types.str;
@@ -206,7 +207,7 @@ in {
                   default = "";
                 };
               };
-            }));
+            })));
             default = null;
             description = "Add a list of users.";
           };
@@ -352,8 +353,10 @@ in {
           extraPlugins = baseSpec.extraPlugins or [];
 
           # Remove bootstrap if recovery source is not set
+          # Remove managed if roles is not set
           attrsToRemove = ["extraPlugins"]
-            ++ lib.optional (cfg.cluster.spec.bootstrap.recovery.source == null) "bootstrap";
+            ++ lib.optional (cfg.cluster.spec.bootstrap.recovery.source == null) "bootstrap"
+            ++ lib.optional (cfg.cluster.spec.managed.roles == null) "managed";
         in
           (lib.removeAttrs baseSpec attrsToRemove)
           // {
