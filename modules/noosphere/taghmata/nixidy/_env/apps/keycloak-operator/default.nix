@@ -22,7 +22,6 @@
   namespace = "keycloak";
   db-cluster-name = "pg-keycloak";
   objectStoreName = "keycloak-object-store";
-  barmanPluginName = "barman-cloud.cloudnative-pg.io";
   domain = config.noosphere.domain;
 in {
   imports = [
