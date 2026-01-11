@@ -7,7 +7,6 @@ metadata:
   name: pg-forgejo
   namespace: forgejo
 spec:
-  externalClusters: []
   instances: 3
   monitoring:
     enablePodMonitor: true

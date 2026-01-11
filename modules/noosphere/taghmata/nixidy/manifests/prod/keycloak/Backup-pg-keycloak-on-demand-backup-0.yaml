@@ -1,7 +1,7 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Backup
 metadata:
-  name: pg-keycloak-backup
+  name: pg-keycloak-on-demand-backup-0
   namespace: keycloak
 spec:
   cluster:

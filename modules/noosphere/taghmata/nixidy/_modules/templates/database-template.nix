@@ -70,7 +70,7 @@ in {
           };
 
           externalClusters = mkOption {
-            type = types.listOf (types.submodule ({...}: {
+            type = types.nullOr (types.listOf (types.submodule ({...}: {
               options = {
                 name = mkOption {
                   type = types.str;
@@ -110,9 +110,9 @@ in {
                   default = {}; # allows omitting plugin entirely
                 };
               };
-            }));
+            })));
 
-            default = [];
+            default = null;
           };
           plugins = mkOption {
             type = types.listOf (types.submodule ({...}: {
@@ -354,7 +354,8 @@ in {
 
           # Remove bootstrap if recovery source is not set
           # Remove managed if roles is not set
-          attrsToRemove = ["extraPlugins"]
+          attrsToRemove =
+            ["extraPlugins"]
             ++ lib.optional (cfg.cluster.spec.bootstrap.recovery.source == null) "bootstrap"
             ++ lib.optional (cfg.cluster.spec.managed.roles == null) "managed";
         in
@@ -386,27 +387,30 @@ in {
               metadata = {
                 namespace = backup.metadata.namespace or cfg.namespace;
               };
-              spec = backup.spec // {
-                cluster.name = "pg-${name}";
-              };
+              spec =
+                backup.spec
+                // {
+                  cluster.name = "pg-${name}";
+                };
             }
         )
         cfg.backups.scheduledBackups
       );
 
-      backups =
-       lib.listToAttrs (
-          lib.imap0 (
-            i: backup:
-              lib.nameValuePair "pg-${name}-on-demand-backup-${toString i}" {
-                metadata.namespace = cfg.namespace;
-                spec = backup.spec // {
+      backups = lib.listToAttrs (
+        lib.imap0 (
+          i: backup:
+            lib.nameValuePair "pg-${name}-on-demand-backup-${toString i}" {
+              metadata.namespace = cfg.namespace;
+              spec =
+                backup.spec
+                // {
                   cluster.name = "pg-${name}";
                 };
-              }
-          )
-          cfg.backups.onDemandBackups
-        );
+            }
+        )
+        cfg.backups.onDemandBackups
+      );
     };
   };
 }
