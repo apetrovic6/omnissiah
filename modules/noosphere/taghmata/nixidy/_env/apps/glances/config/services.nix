@@ -202,7 +202,7 @@ in {
                     {
                       title = "Clan.lol";
                       url = "https://docs.clan.lol";
-                      icon = "https://docs.clan.lol/main/static/icons/clan-logo.svg";
+                      icon = "auto-invert https://docs.clan.lol/main/static/icons/clan-logo.svg";
                     }
                   ];
                 }

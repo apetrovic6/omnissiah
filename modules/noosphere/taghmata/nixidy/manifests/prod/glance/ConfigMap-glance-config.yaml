@@ -197,7 +197,7 @@ data:
             - icon: di:nixos
               title: Nixos Search
               url: https://search.nixos.org/packages
-            - icon: https://docs.clan.lol/main/static/icons/clan-logo.svg
+            - icon: auto-invert https://docs.clan.lol/main/static/icons/clan-logo.svg
               title: Clan.lol
               url: https://docs.clan.lol
             title: Nix
