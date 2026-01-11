@@ -151,6 +151,16 @@ data:
           title: Utils
           type: extension
           url: http://glance-k8s/extension/apps
+        - groups:
+          - links:
+            - title: Nixidy
+              url: https://nixidy.dev/
+            - title: Artifact Hub
+              url: https://artifacthub.io/
+            - title: Operator Hub
+              url: https://operatorhub.io/
+            title: K8s
+          type: bookmarks
         width: slim
       name: Services
       width: slim

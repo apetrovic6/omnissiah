@@ -115,6 +115,31 @@ in {
                 '';
               };
             }
+
+            {
+              type = "bookmarks";
+              groups = [
+                {
+                  title = "K8s";
+                  links = [
+                    {
+                      title = "Nixidy";
+                      url = "https://nixidy.dev/";
+                    }
+
+                    {
+                      title = "Artifact Hub";
+                      url = "https://artifacthub.io/";
+                    }
+
+                    {
+                      title = "Operator Hub";
+                      url = "https://operatorhub.io/";
+                    }
+                  ];
+                }
+              ];
+            }
           ];
         }
       ];
