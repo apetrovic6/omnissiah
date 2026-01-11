@@ -60,7 +60,18 @@
   #   type = "weather";
   # };
 
-  repositories = ["immich-app/immich" "codeberg:forgejo/forgejo" "karakeep-app/karakeep" "glanceapp/glance" "lukasdietrich/glance-k8s" "dockerhub:seerr/seerr"];
+  repositories = [
+    "immich-app/immich"
+    "codeberg:forgejo/forgejo"
+    "karakeep-app/karakeep"
+    "glanceapp/glance"
+    "lukasdietrich/glance-k8s"
+    "dockerhub:seerr/seerr"
+    "arnarg/nixidy"
+    "nix-community/nixhelm"
+    "cloudnative-pg/cloudnative-pg"
+    "kubernetes-csi/csi-driver-nfs"
+  ];
 
   releases = {
     type = "releases";

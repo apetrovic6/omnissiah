@@ -120,21 +120,123 @@ in {
               type = "bookmarks";
               groups = [
                 {
+                  hide-arrow = true;
                   title = "K8s";
                   links = [
                     {
                       title = "Nixidy";
                       url = "https://nixidy.dev/";
+                      icon = "https://nixidy.dev/logo.svg";
                     }
 
                     {
                       title = "Artifact Hub";
                       url = "https://artifacthub.io/";
+                      icon = "di:artifacthub";
                     }
 
                     {
                       title = "Operator Hub";
                       url = "https://operatorhub.io/";
+                      icon = "di:artifacthub";
+                    }
+                  ];
+                }
+
+                {
+                  hide-arrow = true;
+                  title = "Docs";
+                  links = [
+                    {
+                      title = "Cloud Native PG";
+                      url = "https://cloudnative-pg.io/docs/";
+                      icon = "sh:postgresql";
+                    }
+
+                    {
+                      title = "Cloud Native PG Examples";
+                      url = "https://github.com/cloudnative-pg/cloudnative-pg/tree/main/docs/src/samples";
+                      icon = "sh:postgresql";
+                    }
+                    {
+                      title = "Barman Cloud Plugin";
+                      url = "https://cloudnative-pg.io/plugin-barman-cloud/docs/usage/";
+                      icon = "sh:postgresql";
+                    }
+
+                    {
+                      title = "Argo CD";
+                      url = "https://argo-cd.readthedocs.io/en/stable/";
+                      icon = "di:argo-cd";
+                    }
+
+                    {
+                      title = "Longhorn";
+                      url = "https://longhorn.io/docs";
+                      icon = "di:longhorn";
+                    }
+                  ];
+                }
+
+                {
+                  hide-arrow = true;
+                  title = "Nix";
+                  links = [
+                    {
+                      title = "Nix Wiki";
+                      url = "https://wiki.nixos.org/wiki/NixOS_Wiki";
+                      icon = "di:nixos";
+                    }
+                    {
+                      title = "Noogle";
+                      url = "https://operatorhub.io/";
+                      icon = "di:nixos";
+                    }
+
+                    {
+                      title = "Nixos Search";
+                      url = "https://search.nixos.org/packages";
+                      icon = "di:nixos";
+                    }
+
+                    {
+                      title = "Clan.lol";
+                      url = "https://docs.clan.lol";
+                      icon = "https://docs.clan.lol/main/static/icons/clan-logo.svg";
+                    }
+                  ];
+                }
+
+                {
+                  hide-arrow = true;
+                  title = "Utils";
+                  links = [
+                    {
+                      title = "Deep Wiki";
+                      url = "https://deepwiki.org/";
+                      icon = "https://external-content.duckduckgo.com/ip3/deepwiki.org.ico";
+                    }
+                  ];
+                }
+                {
+                  hide-arrow = true;
+                  title = "Icons";
+                  links = [
+                    {
+                      title = "Material Design Icons";
+                      url = "https://pictogrammers.com/library/mdi/";
+                      icon = "mdi:material-ui";
+                    }
+                    {
+                      title = "Dashboard Icons";
+                      url = "https://dashboardicons.com/icons";
+                      icon = "di:dashboard-icons";
+                    }
+
+                    {
+                      title = "Selfh.st Icons";
+                      url = "https://selfh.st/icons/";
+                      icon = "sh:selfh-st";
                     }
                   ];
                 }

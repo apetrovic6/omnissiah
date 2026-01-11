@@ -78,6 +78,10 @@ data:
           - glanceapp/glance
           - lukasdietrich/glance-k8s
           - dockerhub:seerr/seerr
+          - arnarg/nixidy
+          - nix-community/nixhelm
+          - cloudnative-pg/cloudnative-pg
+          - kubernetes-csi/csi-driver-nfs
           show-source-icon: true
           type: releases
       name: Home
@@ -152,14 +156,69 @@ data:
           type: extension
           url: http://glance-k8s/extension/apps
         - groups:
-          - links:
-            - title: Nixidy
+          - hide-arrow: true
+            links:
+            - icon: https://nixidy.dev/logo.svg
+              title: Nixidy
               url: https://nixidy.dev/
-            - title: Artifact Hub
+            - icon: di:artifacthub
+              title: Artifact Hub
               url: https://artifacthub.io/
-            - title: Operator Hub
+            - icon: di:artifacthub
+              title: Operator Hub
               url: https://operatorhub.io/
             title: K8s
+          - hide-arrow: true
+            links:
+            - icon: sh:postgresql
+              title: Cloud Native PG
+              url: https://cloudnative-pg.io/docs/
+            - icon: sh:postgresql
+              title: Cloud Native PG Examples
+              url: https://github.com/cloudnative-pg/cloudnative-pg/tree/main/docs/src/samples
+            - icon: sh:postgresql
+              title: Barman Cloud Plugin
+              url: https://cloudnative-pg.io/plugin-barman-cloud/docs/usage/
+            - icon: di:argo-cd
+              title: Argo CD
+              url: https://argo-cd.readthedocs.io/en/stable/
+            - icon: di:longhorn
+              title: Longhorn
+              url: https://longhorn.io/docs
+            title: Docs
+          - hide-arrow: true
+            links:
+            - icon: di:nixos
+              title: Nix Wiki
+              url: https://wiki.nixos.org/wiki/NixOS_Wiki
+            - icon: di:nixos
+              title: Noogle
+              url: https://operatorhub.io/
+            - icon: di:nixos
+              title: Nixos Search
+              url: https://search.nixos.org/packages
+            - icon: https://docs.clan.lol/main/static/icons/clan-logo.svg
+              title: Clan.lol
+              url: https://docs.clan.lol
+            title: Nix
+          - hide-arrow: true
+            links:
+            - icon: https://external-content.duckduckgo.com/ip3/deepwiki.org.ico
+              title: Deep Wiki
+              url: https://deepwiki.org/
+            title: Utils
+          - hide-arrow: true
+            links:
+            - icon: mdi:material-ui
+              title: Material Design Icons
+              url: https://pictogrammers.com/library/mdi/
+            - icon: di:dashboard-icons
+              title: Dashboard Icons
+              url: https://dashboardicons.com/icons
+            - icon: sh:selfh-st
+              title: Selfh.st Icons
+              url: https://selfh.st/icons/
+            title: Icons
           type: bookmarks
         width: slim
       name: Services
