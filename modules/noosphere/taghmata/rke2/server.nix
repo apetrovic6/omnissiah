@@ -123,6 +123,7 @@
           2380 # etcd peer
           2381 # etcd metrics
           10250 # kubelet metrics
+          9100 # node-exporter metrics
           5473
           9098
           9099

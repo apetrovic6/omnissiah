@@ -1,5 +1,28 @@
-{...}: let
+{lib, ...}: let
   cache = "1m";
+
+  mkLink = site: separator: lib.join "" (lib.splitString separator (lib.toLower site));
+
+  k8s = [
+    {
+      title = "Nixidy";
+      url = "https://nixidy.dev/";
+      icon = "https://nixidy.dev/logo.svg";
+    }
+
+    {
+      title = "Artifact Hub";
+      url = "https://artifacthub.io/";
+      icon = "di:artifacthub";
+    }
+
+    {
+      title = "Operator Hub";
+      url = "https://operatorhub.io/";
+      icon = "di:artifacthub";
+    }
+  ];
+  
 in {
   services = [
     {
@@ -122,25 +145,7 @@ in {
                 {
                   hide-arrow = true;
                   title = "K8s";
-                  links = [
-                    {
-                      title = "Nixidy";
-                      url = "https://nixidy.dev/";
-                      icon = "https://nixidy.dev/logo.svg";
-                    }
-
-                    {
-                      title = "Artifact Hub";
-                      url = "https://artifacthub.io/";
-                      icon = "di:artifacthub";
-                    }
-
-                    {
-                      title = "Operator Hub";
-                      url = "https://operatorhub.io/";
-                      icon = "di:artifacthub";
-                    }
-                  ];
+                  links = k8s;
                 }
 
                 {
@@ -148,13 +153,13 @@ in {
                   title = "Docs";
                   links = [
                     {
-                      title = "Cloud Native PG";
+                      title = "CloudNative PG";
                       url = "https://cloudnative-pg.io/docs/";
                       icon = "sh:postgresql";
                     }
 
                     {
-                      title = "Cloud Native PG Examples";
+                      title = "CloudNative PG Examples";
                       url = "https://github.com/cloudnative-pg/cloudnative-pg/tree/main/docs/src/samples";
                       icon = "sh:postgresql";
                     }
@@ -189,7 +194,7 @@ in {
                     }
                     {
                       title = "Noogle";
-                      url = "https://operatorhub.io/";
+                      url = "https://noogle.dev";
                       icon = "di:nixos";
                     }
 

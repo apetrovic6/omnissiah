@@ -59,6 +59,7 @@
             ".config/BraveSoftware"
             ".config/teams-for-linux"
             ".config/obsidian"
+            ".claude"
             ".local/share"
             ".librewolf"
             ".mozilla"
@@ -81,6 +82,7 @@
             ".local/share/direnv"
           ];
           files = [
+            # ".claude.json"
             # ".screenrc"
             # ".bash_history"
             # ".gitconfig"

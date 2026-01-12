@@ -37,6 +37,7 @@
 
     magos = {
       url = "github:apetrovic6/magos";
+      # url = "path:/home/apetrovic/clan/magos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
