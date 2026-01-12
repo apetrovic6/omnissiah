@@ -42,6 +42,8 @@ spec:
               value: 10G
             - name: WOODPECKER_CONNECT_RETRY_COUNT
               value: "1"
+            - name: WOODPECKER_MAX_WORKFLOWS
+              value: "2"
             - name: WOODPECKER_SERVER
               value: woodpecker-server:9000
           envFrom:

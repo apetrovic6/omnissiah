@@ -146,7 +146,6 @@
           repository = "https://github.com/apetrovic6/omnissiah.git";
           branch = "master";
 
-          # CRD definitions - single place to define all CRDs
           crds.definitions = {
             cert-manager.chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
             metallb.chart = nixhelm.chartsDerivations.${system}.metallb.metallb;

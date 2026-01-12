@@ -104,6 +104,7 @@ in {
             WOODPECKER_BACKEND_K8S_STORAGE_CLASS = "longhorn-rec-delete-strict-local";
             WOODPECKER_SERVER = "woodpecker-server:9000";
             WOODPECKER_AGENT_SECRET = "$(WOODPECKER_AGENT_SECRET)";
+            WOODPECKER_MAX_WORKFLOWS = "2";
           };
         };
 
