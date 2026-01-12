@@ -142,19 +142,52 @@
           phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
         };
 
-        noosphere = {
-          nixidy = {
-            repository = "https://github.com/apetrovic6/omnissiah.git";
-            branch = "master";
-            rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod";
+        noosphere.nixidy = {
+          repository = "https://github.com/apetrovic6/omnissiah.git";
+          branch = "master";
+
+          # CRD definitions - single place to define all CRDs
+          crds.definitions = {
+            cert-manager.chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
+            metallb.chart = nixhelm.chartsDerivations.${system}.metallb.metallb;
+            sops-secrets-operator.chart = nixhelm.chartsDerivations.${system}.isindir.sops-secrets-operator;
+            longhorn = {
+              chart = nixhelm.chartsDerivations.${system}.longhorn.longhorn;
+              namePrefix = "longhorn";
+            };
+            cloudnativepg = {
+              chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.cloudnative-pg;
+              outputName = "cloudnativepg-crd.nix";
+            };
+            traefik.chart = nixhelm.chartsDerivations.${system}.traefik.traefik;
+            alloy-operator.chart = nixhelm.chartsDerivations.${system}.grafana.alloy-operator;
+            kube-prometheus-stack.chart = nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
+            prometheus.chart = nixhelm.chartsDerivations.${system}.prometheus-community.prometheus;
+            csi-driver-nfs.chart = nixhelm.chartsDerivations.${system}.kubernetes-csi.csi-driver-nfs;
+            barman-cloud = {
+              src = pkgs.fetchFromGitHub {
+                owner = "cloudnative-pg";
+                repo = "plugin-barman-cloud";
+                rev = "v0.10.0";
+                hash = "sha256-JB0ia2qpkoJYE6GsdmQwvb6wlteCJHpIf/N16ibicgc=";
+              };
+              crds = ["config/crd/bases/barmancloud.cnpg.io_objectstores.yaml"];
+              outputName = "barman-cloud.nix";
+            };
           };
 
-          envs.dev.enable = false;
+          # Extra charts beyond nixhelm
+          extraCharts = {
+            "deuxfleurs/garage" = "${self.inputs.garage}/script/helm/garage";
+            "lukasdietrich/glance-k8s" = "${self.inputs.glance-k8s}/charts/glance-k8s";
+            "woodpecker-ci/woodpecker" = "${self.inputs.woodpecker-ci}/charts/woodpecker";
+          };
+
+          # Environments
           envs.prod = {
             enable = true;
-            branch = "master";
+            module = modules/noosphere/taghmata/nixidy/_env/prod.nix;
             rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod";
-            extraModules = [modules/noosphere/taghmata/nixidy/_env/prod.nix];
           };
         };
 
@@ -170,116 +203,8 @@
             done
           '';
 
-        packages.certManager = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "cert-manager";
-
-          chart = nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
-        };
-
-        packages.metallb = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "metallb";
-          chart = nixhelm.chartsDerivations.${system}.metallb.metallb;
-        };
-
-        packages.sops-secrets-operator = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "sops-secrets-operator";
-          chart = nixhelm.chartsDerivations.${system}.isindir.sops-secrets-operator;
-        };
-
-        packages.longhorn = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "longhorn";
-          namePrefix = "longhorn";
-          chart = nixhelm.chartsDerivations.${system}.longhorn.longhorn;
-        };
-
-        packages.cloudnativepg = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "cloudnative-pg";
-          chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.cloudnative-pg;
-        };
-
-        packages.traefik = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "traefik";
-          chart = nixhelm.chartsDerivations.${system}.traefik.traefik;
-        };
-
-        packages.alloy-operator = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "alloy-operator";
-          chart = nixhelm.chartsDerivations.${system}.grafana.alloy-operator;
-        };
-
-        packages.kube-prometheus-stack = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "kube-prometheus-stack";
-          chart = nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
-        };
-
-        packages.prometheus = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "prometheus";
-          chart = nixhelm.chartsDerivations.${system}.prometheus-community.prometheus;
-        };
-
-        packages.csi-driver-nfs = inputs.nixidy.packages.${system}.generators.fromChartCRD {
-          name = "csi-driver-nfs";
-          chart = nixhelm.chartsDerivations.${system}.kubernetes-csi.csi-driver-nfs;
-        };
-
-        packages.barman-cloud = inputs.nixidy.packages.${system}.generators.fromCRD {
-          name = "barman-cloud";
-          src = pkgs.fetchFromGitHub {
-            owner = "cloudnative-pg";
-            repo = "plugin-barman-cloud";
-            rev = "v0.10.0";
-            hash = "sha256-JB0ia2qpkoJYE6GsdmQwvb6wlteCJHpIf/N16ibicgc=";
-          };
-
-          crds = [
-            "config/crd/bases/barmancloud.cnpg.io_objectstores.yaml"
-          ];
-        };
-
-        apps = {
-          gen-crd = let
-            path = "modules/noosphere/taghmata/nixidy/_generated";
-          in {
-            type = "app";
-            program =
-              (pkgs.writeShellScript "generate-modules" ''
-                set -eo pipefail
-
-                echo "generate cert manager crds"
-                cat ${self'.packages.certManager} > ${path}/cert-manager-crd.nix
-
-                echo "generate longhorn crds"
-                cat ${self'.packages.longhorn} > ${path}/longhorn-crd.nix
-
-                echo "generate metallb crds"
-                cat ${self'.packages.metallb} > ${path}/metallb-crd.nix
-
-                echo "generate cloudnative pg crds"
-                cat ${self'.packages.cloudnativepg} > ${path}/cloudnativepg-crd.nix
-
-                echo "generate sops-secrets-operator crds"
-                cat ${self'.packages.sops-secrets-operator} > ${path}/sops-secrets-operator-crd.nix
-
-                echo "generate traefik crds"
-                cat ${self'.packages.traefik} > ${path}/traefik-crd.nix
-
-                echo "generate alloy operator crds"
-                cat ${self'.packages.alloy-operator} > ${path}/alloy-operator-crd.nix
-
-                echo "generate kube prometheus stack crds"
-                cat ${self'.packages.kube-prometheus-stack} > ${path}/kube-prometheus-stack-crd.nix
-
-                echo "generate prometheus crds"
-                cat ${self'.packages.prometheus} > ${path}/prometheus-crd.nix
-
-                echo "generate csi driver nfs crds"
-                cat ${self'.packages.csi-driver-nfs} > ${path}/csi-driver-nfs-crd.nix
-
-                echo "generate barman cloud crds"
-                cat ${self'.packages.barman-cloud} > ${path}/barman-cloud.nix
-              '').outPath;
-          };
-        };
+        # CRD packages and gen-crd app are now auto-generated by
+        # modules/noosphere/taghmata/nixidy/flake-module.nix
 
         treefmt = {
           projectRootFile = "flake.nix";

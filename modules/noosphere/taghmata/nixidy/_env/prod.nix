@@ -31,30 +31,8 @@ in {
     ./apps/forgejo
   ];
 
-  # nixidy.target.repository = "https://github.com/apetrovic6/omnissiah.git";
-  # nixidy.chartsDir = ./charts;
-
-  # Set the target branch the rendered manifests for _this_
-  # environment should be pushed to in the repository defined
-  # above.
-  # nixidy.target.branch = "master";
-
-  # Set the target sub-directory to copy the generated
-  # manifests to when running `nixidy switch .#dev`.
-  # nixidy.target.rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod/";
-
-  nixidy.applicationImports = [
-    ../_generated/cert-manager-crd.nix
-    ../_generated/metallb-crd.nix
-    ../_generated/sops-secrets-operator-crd.nix
-    ../_generated/cloudnativepg-crd.nix
-    ../_generated/longhorn-crd.nix
-    ../_generated/traefik-crd.nix
-    ../_generated/alloy-operator-crd.nix
-    ../_generated/kube-prometheus-stack-crd.nix
-    ../_generated/prometheus-crd.nix
-    ../_generated/barman-cloud.nix
-  ];
+  # CRD imports are now auto-discovered by the flake-module
+  # nixidy.target is configured in flake.nix via noosphere.nixidy.envs.prod
 
   nixidy.defaults.syncPolicy.autoSync = {
     enable = true;

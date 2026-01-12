@@ -171,10 +171,10 @@ data:
           - hide-arrow: true
             links:
             - icon: sh:postgresql
-              title: Cloud Native PG
+              title: CloudNative PG
               url: https://cloudnative-pg.io/docs/
             - icon: sh:postgresql
-              title: Cloud Native PG Examples
+              title: CloudNative PG Examples
               url: https://github.com/cloudnative-pg/cloudnative-pg/tree/main/docs/src/samples
             - icon: sh:postgresql
               title: Barman Cloud Plugin
@@ -193,7 +193,7 @@ data:
               url: https://wiki.nixos.org/wiki/NixOS_Wiki
             - icon: di:nixos
               title: Noogle
-              url: https://operatorhub.io/
+              url: https://noogle.dev
             - icon: di:nixos
               title: Nixos Search
               url: https://search.nixos.org/packages
