@@ -158,7 +158,7 @@ in {
         instances = 3;
         storage = {
           storageClass = "longhorn-cnpg-strict-local";
-          size = "1Gi";
+          size = "15Gi";
         };
 
         # bootstrap.recovery.source = "origin";
@@ -178,7 +178,7 @@ in {
 
         walStorage = {
           storageClass = "longhorn-cnpg-strict-local";
-          size = "1Gi";
+          size = "15Gi";
         };
 
         plugins = [
