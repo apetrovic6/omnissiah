@@ -80,5 +80,5 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 1Gi
+            storage: 10Gi
         storageClassName: longhorn-rec-delete-strict-local

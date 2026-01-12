@@ -92,7 +92,10 @@ in {
         };
 
         agent = {
-          persistence.storageClass = "longhorn-rec-delete-strict-local";
+          persistence = {
+            storageClass = "longhorn-rec-delete-strict-local";
+            size = "10Gi";
+          };
           replicaCount = 3;
 
           extraSecretNamesForEnvFrom = [
