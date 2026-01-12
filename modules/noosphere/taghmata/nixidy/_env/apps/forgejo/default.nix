@@ -166,6 +166,12 @@ in {
               HOST = "${db-cluster-name}-rw";
             };
 
+            oauth2 = {
+              # Prevent "token was already used" errors when multiple
+              # concurrent requests try to refresh the same token
+              INVALIDATE_REFRESH_TOKENS = false;
+            };
+
             openid = {};
           };
 
