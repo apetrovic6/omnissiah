@@ -22,7 +22,6 @@
       icon = "di:artifacthub";
     }
   ];
-  
 in {
   services = [
     {

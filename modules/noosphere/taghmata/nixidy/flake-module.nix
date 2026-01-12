@@ -142,82 +142,82 @@ in {
   }: {
     options.noosphere = {
       nixidy = {
-      repository = mkOption {
-        type = types.str;
-        description = ''
-          Git repository URL where rendered manifests are pushed.
-        '';
-        example = "https://github.com/user/repo.git";
-      };
-
-      branch = mkOption {
-        type = types.str;
-        default = "master";
-        description = ''
-          Default branch for rendered manifests.
-        '';
-      };
-
-      crds = {
-        enable = mkEnableOption "CRD generation" // {default = true;};
-
-        outputPath = mkOption {
+        repository = mkOption {
           type = types.str;
-          default = "modules/noosphere/taghmata/nixidy/_generated";
           description = ''
-            Output directory for generated CRD modules.
+            Git repository URL where rendered manifests are pushed.
+          '';
+          example = "https://github.com/user/repo.git";
+        };
+
+        branch = mkOption {
+          type = types.str;
+          default = "master";
+          description = ''
+            Default branch for rendered manifests.
           '';
         };
 
-        definitions = mkOption {
-          type = types.attrsOf crdSubmodule;
+        crds = {
+          enable = mkEnableOption "CRD generation" // {default = true;};
+
+          outputPath = mkOption {
+            type = types.str;
+            default = "modules/noosphere/taghmata/nixidy/_generated";
+            description = ''
+              Output directory for generated CRD modules.
+            '';
+          };
+
+          definitions = mkOption {
+            type = types.attrsOf crdSubmodule;
+            default = {};
+            description = ''
+              CRD definitions. Each entry generates:
+              - A package under packages.<name>
+              - An entry in the gen-crd script
+              - Auto-imported into nixidy.applicationImports
+            '';
+            example = lib.literalExpression ''
+              {
+                cert-manager.chart = nixhelm.chartsDerivations.''${system}.jetstack.cert-manager;
+                metallb.chart = nixhelm.chartsDerivations.''${system}.metallb.metallb;
+              }
+            '';
+          };
+        };
+
+        extraCharts = mkOption {
+          type = types.attrsOf types.path;
           default = {};
           description = ''
-            CRD definitions. Each entry generates:
-            - A package under packages.<name>
-            - An entry in the gen-crd script
-            - Auto-imported into nixidy.applicationImports
+            Additional Helm charts beyond nixhelm.
+            Keys should be "vendor/chart" format.
           '';
           example = lib.literalExpression ''
             {
-              cert-manager.chart = nixhelm.chartsDerivations.''${system}.jetstack.cert-manager;
-              metallb.chart = nixhelm.chartsDerivations.''${system}.metallb.metallb;
+              "deuxfleurs/garage" = "''${inputs.garage}/script/helm/garage";
             }
           '';
         };
-      };
 
-      extraCharts = mkOption {
-        type = types.attrsOf types.path;
-        default = {};
-        description = ''
-          Additional Helm charts beyond nixhelm.
-          Keys should be "vendor/chart" format.
-        '';
-        example = lib.literalExpression ''
-          {
-            "deuxfleurs/garage" = "''${inputs.garage}/script/helm/garage";
-          }
-        '';
-      };
-
-      envs = mkOption {
-        type = types.attrsOf envSubmodule;
-        default = {};
-        description = ''
-          Nixidy environments to generate.
-        '';
-        example = lib.literalExpression ''
-          {
-            prod = {
-              enable = true;
-              module = ./nixidy/_env/prod.nix;
-            };
-          }
-        '';
-      };
-      };  # close nixidy
-    };  # close noosphere
+        envs = mkOption {
+          type = types.attrsOf envSubmodule;
+          default = {};
+          description = ''
+            Nixidy environments to generate.
+          '';
+          example = lib.literalExpression ''
+            {
+              prod = {
+                enable = true;
+                module = ./nixidy/_env/prod.nix;
+              };
+            }
+          '';
+        };
+      }; # close nixidy
+    }; # close noosphere
   });
 
   config = {
