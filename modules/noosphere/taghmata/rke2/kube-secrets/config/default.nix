@@ -24,19 +24,19 @@
       provider = lib.mkOption {
         type = lib.types.str;
         default = "";
-        description = "Base domain used by nixidy modules.";
+        description = "SSO provider name (e.g., Keycloak)";
       };
 
       url = lib.mkOption {
         type = lib.types.str;
         default = "";
-        description = "Base domain used by nixidy modules.";
+        description = "SSO provider URL. If empty, derived from provider + domain.";
       };
 
       wellKnownUrl = lib.mkOption {
         type = lib.types.str;
         default = "";
-        description = "Well known URL endpoint";
+        description = "OpenID Connect well-known configuration URL";
       };
     };
   };

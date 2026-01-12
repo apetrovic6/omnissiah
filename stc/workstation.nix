@@ -128,6 +128,8 @@
 
       claude-code
       claude-monitor
+
+      exercism
     ];
 
     programs.localsend = {
