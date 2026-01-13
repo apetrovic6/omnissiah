@@ -251,6 +251,7 @@ in {
         };
 
         redis.external.existingSecret = "harbor-redis-password-secret";
+
         database = {
           type = "external";
           external = {
@@ -260,6 +261,11 @@ in {
             existingSecret = "${db-cluster-name}-postgres-secret";
             coreDatabase = "registry";
           };
+        };
+
+        metrics = {
+          enabled = true;
+          serviceMonitor.enabled = true;
         };
       };
     };

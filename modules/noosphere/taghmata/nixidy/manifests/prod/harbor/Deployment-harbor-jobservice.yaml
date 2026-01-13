@@ -28,8 +28,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: 183734c88d80930084033093c90de77a8581b584ad95033265e62ba35c8016bc
-        checksum/configmap-env: 501e895ef89a3e041fc2e6d876ffc4119ac01f55374dca1dbe91bb8858dbc8e0
+        checksum/configmap: 71bf150c6d44c07ca7e749b2cb0f17669f286bb282f699d870c854de796075f5
+        checksum/configmap-env: 94c186beef611a1894f4c4388dfb8913c76981db1907985b81e59f17bcf65f40
         checksum/secret: d95a9b319aea3eeedf845e1a2478d7d8a449307132d66f0f8d23417ef0d5c6e5
         checksum/secret-core: dbbc4f9b641d5b6b473a87b69999060d2170fad45fd7ab44e30f8d142ff90a65
       labels:

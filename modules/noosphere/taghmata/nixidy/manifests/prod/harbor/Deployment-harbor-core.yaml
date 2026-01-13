@@ -28,7 +28,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: d245c4d209d172fa049081d14c88f4bd869091d5b04e81e863923970d682d37d
+        checksum/configmap: e37a54b18a31d18266efa91d34384522b82dfdbcd7ca08b4b701ec46e8d8c9fb
         checksum/secret: dbbc4f9b641d5b6b473a87b69999060d2170fad45fd7ab44e30f8d142ff90a65
         checksum/secret-jobservice: d95a9b319aea3eeedf845e1a2478d7d8a449307132d66f0f8d23417ef0d5c6e5
       labels:

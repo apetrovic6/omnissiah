@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: harbor
+    app.kubernetes.io/component: exporter
+    app.kubernetes.io/instance: harbor
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: harbor
+    app.kubernetes.io/part-of: harbor
+    app.kubernetes.io/version: 2.14.1
+    chart: harbor
+    component: exporter
+    heritage: Helm
+    release: harbor
+  name: harbor-exporter
+  namespace: harbor
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: harbor
+      component: exporter
+      release: harbor
+  template:
+    metadata:
+      annotations:
+        checksum/configmap: f8079b0c86148d211c155ba65ee6d2f931394acd5f8f29535234f70df1902508
+        checksum/secret: 9b7d7b9811e8100b8a6960e9bfec53248561025b235858a581824762fe5b0fdf
+      labels:
+        app: harbor
+        app.kubernetes.io/component: exporter
+        app.kubernetes.io/instance: harbor
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: harbor
+        app.kubernetes.io/part-of: harbor
+        app.kubernetes.io/version: 2.14.1
+        chart: harbor
+        component: exporter
+        heritage: Helm
+        release: harbor
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - args:
+            - -log-level
+            - info
+          env:
+            - name: HARBOR_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-harbor-postgres-secret
+            - name: HARBOR_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: HARBOR_ADMIN_PASSWORD
+                  name: harbor-admin-password-secret
+          envFrom:
+            - configMapRef:
+                name: harbor-exporter-env
+            - secretRef:
+                name: harbor-exporter
+          image: goharbor/harbor-exporter:v2.14.1
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8001
+            initialDelaySeconds: 300
+            periodSeconds: 10
+          name: exporter
+          ports:
+            - containerPort: 8001
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+      securityContext:
+        fsGroup: 10000
+        runAsUser: 10000
+      volumes:
+        - name: config
+          secret:
+            secretName: harbor-exporter
