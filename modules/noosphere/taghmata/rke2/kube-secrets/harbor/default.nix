@@ -10,6 +10,7 @@
   harborPostgresSecret = "pg-harbor-postgres-secret";
   harborCoreSecret = "harbor-core-secret";
   harborTokenSvcTls = "harbor-core-svc-tls";
+  harborOidcSecret = "harbor-oidc-secret";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${harborAdminPassword} = {
@@ -403,6 +404,93 @@ in {
           $(sed 's/^/          /' "$tmp/tls.key")
           EOF
         '';
+    };
+
+    clan.core.vars.generators.${harborOidcSecret} = {
+      share = true;
+
+      prompts.client-id = {
+        description = "Keycloak Client ID for Harbor";
+        type = "line";
+        persist = false;
+      };
+
+      prompts.client-secret = {
+        description = "Keycloak Client Secret for Harbor";
+        type = "hidden";
+        persist = false;
+      };
+
+      prompts.oidc-endpoint = {
+        description = "Keycloak OIDC Endpoint (e.g., https://keycloak.noosphere.uk/realms/adeptus-terra)";
+        type = "line";
+        persist = false;
+      };
+
+      files.${harborOidcSecret}.secret = false;
+
+      runtimeInputs = [pkgs.coreutils pkgs.sops pkgs.jq];
+
+      script = ''
+        set -euo pipefail
+
+        client_id="$(tr -d '\r\n' < "$prompts/client-id")"
+        client_secret="$(tr -d '\r\n' < "$prompts/client-secret")"
+        oidc_endpoint="$(tr -d '\r\n' < "$prompts/oidc-endpoint")"
+
+        # Create Harbor CONFIG_OVERWRITE_JSON
+        config_json=$(jq -cn \
+          --arg auth_mode "oidc_auth" \
+          --arg oidc_name "Keycloak" \
+          --arg oidc_endpoint "$oidc_endpoint" \
+          --arg oidc_client_id "$client_id" \
+          --arg oidc_client_secret "$client_secret" \
+          --arg oidc_groups_claim "groups" \
+          --arg oidc_admin_group "harbor-admins" \
+          --arg oidc_scope "openid,profile,email,offline_access" \
+          --argjson oidc_verify_cert true \
+          --argjson oidc_auto_onboard true \
+          --arg oidc_user_claim "preferred_username" \
+          '{
+            auth_mode: $auth_mode,
+            oidc_name: $oidc_name,
+            oidc_endpoint: $oidc_endpoint,
+            oidc_client_id: $oidc_client_id,
+            oidc_client_secret: $oidc_client_secret,
+            oidc_groups_claim: $oidc_groups_claim,
+            oidc_admin_group: $oidc_admin_group,
+            oidc_scope: $oidc_scope,
+            oidc_verify_cert: $oidc_verify_cert,
+            oidc_auto_onboard: $oidc_auto_onboard,
+            oidc_user_claim: $oidc_user_claim
+          }'
+        )
+
+        # Create the SopsSecret YAML using jq to handle proper escaping
+        jq -n \
+          --arg config_json "$config_json" \
+          '{
+            apiVersion: "isindir.github.com/v1alpha3",
+            kind: "SopsSecret",
+            metadata: {
+              name: "harbor-oidc-config",
+              namespace: "harbor"
+            },
+            spec: {
+              secretTemplates: [{
+                name: "harbor-oidc-config",
+                type: "Opaque",
+                stringData: {
+                  CONFIG_OVERWRITE_JSON: $config_json
+                }
+              }]
+            }
+          }' | sops encrypt \
+          --age "${ageKey}" \
+          --encrypted-suffix "Templates" \
+          --input-type json --output-type yaml \
+          /dev/stdin > "$out/${harborOidcSecret}"
+      '';
     };
   };
 }

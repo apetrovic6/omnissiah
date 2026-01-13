@@ -31,7 +31,7 @@ in {
       (builtins.readFile ../../../../../../../vars/shared/harbor-redis-password-secret/harbor-redis-password-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/pg-harbor-postgres-secret/pg-harbor-postgres-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/harbor-core-secret/harbor-core-secret/value)
-      # (builtins.readFile ../../../../../../../vars/shared/harbor-core-svc-tls/harbor-core-svc-tls/value)
+      (builtins.readFile ../../../../../../../vars/shared/harbor-oidc-secret/harbor-oidc-secret/value)
 
       ''
         apiVersion: networking.k8s.io/v1
@@ -179,7 +179,7 @@ in {
           };
         };
 
-        externalUrl = ["https://harbor.${domain}"];
+        externalURL = "https://harbor.${domain}";
 
         persistence = {
           persistentVolumeClaim = {
@@ -229,6 +229,16 @@ in {
         core = let
           harborCoreSecret = "harbor-core-secret";
         in {
+          # OIDC Configuration via CONFIG_OVERWRITE_JSON
+          extraEnvVars = [
+            {
+              name = "CONFIG_OVERWRITE_JSON";
+              valueFrom.secretKeyRef = {
+                name = "harbor-oidc-config";
+                key = "CONFIG_OVERWRITE_JSON";
+              };
+            }
+          ];
           existingSecret = harborCoreSecret;
           existingXsrfSecret = harborCoreSecret;
           secretName = "harbor-core-svc-tls";

@@ -28,7 +28,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: e37a54b18a31d18266efa91d34384522b82dfdbcd7ca08b4b701ec46e8d8c9fb
+        checksum/configmap: ce79f2c726c585c26e766906cb85934ddcc0d2c501a360015d8ceee0316e2689
         checksum/secret: dbbc4f9b641d5b6b473a87b69999060d2170fad45fd7ab44e30f8d142ff90a65
         checksum/secret-jobservice: d95a9b319aea3eeedf845e1a2478d7d8a449307132d66f0f8d23417ef0d5c6e5
       labels:
@@ -77,6 +77,11 @@ spec:
                 secretKeyRef:
                   key: CSRF_KEY
                   name: harbor-core-secret
+            - name: CONFIG_OVERWRITE_JSON
+              valueFrom:
+                secretKeyRef:
+                  key: CONFIG_OVERWRITE_JSON
+                  name: harbor-oidc-config
           envFrom:
             - configMapRef:
                 name: harbor-core
