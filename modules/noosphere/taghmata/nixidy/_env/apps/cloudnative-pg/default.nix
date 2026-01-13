@@ -28,6 +28,7 @@ in {
       chart = charts.cloudnative-pg.cloudnative-pg;
 
       values = {
+        replicaCount = 3;
         # Enable Prometheus monitoring
         monitoring = {
           # Enable PodMonitor for Prometheus scraping
