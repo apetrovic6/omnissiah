@@ -4,6 +4,8 @@ metadata:
   annotations:
     argocd.proj.io/sync-hook: PreSync
     argocd.proj.io/sync-options: Prune=false,Delete=false
+  labels:
+    release: kube-prometheus-stack
   name: pg-yarr-restored
   namespace: yarr
 spec:
@@ -28,7 +30,20 @@ spec:
           name: pg-seerr-password
         superuser: false
   monitoring:
+    customQueriesConfigMap:
+      - key: queries
+        name: cnpg-default-monitoring
     enablePodMonitor: true
+    podMonitorMetricRelabelings:
+      - action: replace
+        sourceLabels:
+          - cluster
+        targetLabel: cnpg_cluster
+    podMonitorRelabelings:
+      - action: replace
+        sourceLabels:
+          - __meta_kubernetes_pod_name
+        targetLabel: pod
   plugins:
     - isWALArchiver: true
       name: barman-cloud.cloudnative-pg.io

@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: cloudnative-pg
     app.kubernetes.io/version: 1.28.0
     helm.sh/chart: cloudnative-pg-0.27.0
-    prometheus: kube-prometheus
+    release: kube-prometheus-stack
   name: cloudnative-pg
   namespace: cnpg-system
 spec:

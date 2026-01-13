@@ -362,6 +362,30 @@ in {
           (lib.removeAttrs baseSpec attrsToRemove)
           // {
             plugins = basePlugins ++ extraPlugins;
+            monitoring = {
+              enablePodMonitor = baseSpec.monitoring.enablePodMonitor;
+              # Custom queries from default monitoring configmap
+              customQueriesConfigMap = [
+                {
+                  name = "cnpg-default-monitoring";
+                  key = "queries";
+                }
+              ];
+              podMonitorMetricRelabelings = [
+                {
+                  sourceLabels = ["cluster"];
+                  targetLabel = "cnpg_cluster";
+                  action = "replace";
+                }
+              ];
+              podMonitorRelabelings = [
+                {
+                  sourceLabels = ["__meta_kubernetes_pod_name"];
+                  targetLabel = "pod";
+                  action = "replace";
+                }
+              ];
+            };
           };
       };
 

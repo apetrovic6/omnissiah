@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a7a9454c3851c81e79da208a196af23b3a925c9cbfa4bda358a04fd2cd1e9ac5
+        checksum/config: e1ed5dd1c4d340e6842db24ca9b4a8f8913df3fd5e03c8aad0442d2e597ca09f
         checksum/monitoring-config: 3a0c136e8aa14d2ead0c98ddf802fc6cae813ff43843a52d2bd10563a96c65aa
         checksum/rbac: 38c8e90d05df8f3145ca62273f16b4b369d9d81442b60f1f63ac3df1cddc16d5
       labels:

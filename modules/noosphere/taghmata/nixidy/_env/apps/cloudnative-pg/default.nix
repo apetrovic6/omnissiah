@@ -29,6 +29,7 @@ in {
 
       values = {
         replicaCount = 3;
+
         # Enable Prometheus monitoring
         monitoring = {
           # Enable PodMonitor for Prometheus scraping
@@ -45,6 +46,14 @@ in {
               # Label for Grafana sidecar to auto-discover the dashboard
               grafana_dashboard = "1";
             };
+          };
+        };
+
+        # Configure default monitoring queries
+        config = {
+          data = {
+            INHERITED_LABELS = "prometheus";
+            WATCH_NAMESPACE = "";
           };
         };
       };
