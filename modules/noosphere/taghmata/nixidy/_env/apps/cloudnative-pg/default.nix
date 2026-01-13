@@ -9,6 +9,8 @@
     hash = "sha256-9yjeqQqt490v60xLOTX6dLyHQwdjU8lwY1kbHQrUuKQ=";
   };
 in {
+  # TODO: Replace with the helm chart
+  # https://artifacthub.io/packages/helm/cloudnative-pg/plugin-barman-cloud
   applications.barman-cloud = {
     namespace = "cnpg-system";
     yamls = [
@@ -24,6 +26,27 @@ in {
 
     helm.releases.cloudnative-pg = {
       chart = charts.cloudnative-pg.cloudnative-pg;
+
+      values = {
+        # Enable Prometheus monitoring
+        monitoring = {
+          # Enable PodMonitor for Prometheus scraping
+          podMonitorEnabled = true;
+          podMonitorAdditionalLabels = {
+            prometheus = "kube-prometheus";
+          };
+
+          # Enable Grafana dashboard ConfigMap
+          grafanaDashboard = {
+            create = true;
+            configMapName = "cnpg-grafana-dashboard";
+            labels = {
+              # Label for Grafana sidecar to auto-discover the dashboard
+              grafana_dashboard = "1";
+            };
+          };
+        };
+      };
     };
   };
 }
