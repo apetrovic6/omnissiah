@@ -90,19 +90,30 @@ in {
             labels = {prometheus = "kube-prometheus";};
           };
 
+          server = {
+            domain = "ui.garage.${domain}";
+            root_url = "https://ui.garage.${domain}";
+            protocol = "http";
+            host = "0.0.0.0";
+            port = 8080;
+            environment = "production";
+          };
+
           auth = {
             jwt_private_key_secret = {
               name = "garage-ui-jwt-token-secret";
               key = "jwt-key.pem";
             };
 
-            oidc = {
+            oidc = let
+              provider = lib.toLower sso.provider;
+            in {
               enabled = true;
-              provider_name = lib.toUpper sso.provider;
-              issuer_url = "https://${sso.provider}.${domain}/realms/adeptus-terra";
-              auth_url = "https://${sso.provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/auth";
-              token_url = "https://${sso.provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/token";
-              userinfo_url = "https://${sso.provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/userinfo";
+              provider_name = sso.provider;
+              issuer_url = "https://${provider}.${domain}/realms/adeptus-terra";
+              auth_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/auth";
+              token_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/token";
+              userinfo_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/userinfo";
               client_id = "garage-ui";
               existingSecret = {
                 name = "garage-ui-oidc-secret";

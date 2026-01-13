@@ -10,7 +10,7 @@ data:
         username: admin
       oidc:
         admin_role: admin
-        auth_url: https://Keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/auth
+        auth_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/auth
         client_id: garage-ui
         cookie_http_only: true
         cookie_name: garage_session
@@ -21,9 +21,9 @@ data:
         existingSecret:
           key: client-secret
           name: garage-ui-oidc-secret
-        issuer_url: https://Keycloak.noosphere.uk/realms/adeptus-terra
+        issuer_url: https://keycloak.noosphere.uk/realms/adeptus-terra
         name_attribute: name
-        provider_name: KEYCLOAK
+        provider_name: Keycloak
         role_attribute_path: resource_access.garage-ui.roles
         scopes:
         - openid
@@ -33,8 +33,8 @@ data:
         skip_expiry_check: false
         skip_issuer_check: false
         tls_skip_verify: false
-        token_url: https://Keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/token
-        userinfo_url: https://Keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/userinfo
+        token_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/token
+        userinfo_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/userinfo
         username_attribute: preferred_username
     cors:
       allow_credentials: false
@@ -67,7 +67,7 @@ data:
       format: json
       level: info
     server:
-      domain: garage-ui.example.com
+      domain: ui.garage.noosphere.uk
       environment: production
       host: 0.0.0.0
       max_body_size: 314572800
@@ -75,7 +75,7 @@ data:
       port: 8080
       protocol: http
       read_buffer_size: 4096
-      root_url: https://garage-ui.example.com
+      root_url: https://ui.garage.noosphere.uk
       write_buffer_size: 4096
     serviceMonitor:
       enabled: true
