@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 18d8a644f501389be2d2447040731d07012576cd0de2f0922a3e2c11a10cac04
+        checksum/config: 75f66dce063e32918b0b0adc34111699282f21e62d16804a8a8b3ea52bfd0b36
       labels:
         app.kubernetes.io/instance: garage-ui
         app.kubernetes.io/name: garage-ui
@@ -35,6 +35,11 @@ spec:
                 secretKeyRef:
                   key: jwt-key.pem
                   name: garage-ui-jwt-token-secret
+            - name: GARAGE_UI_AUTH_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: client-secret
+                  name: garage-ui-oidc-secret
           image: noooste/garage-ui:v0.1.2
           imagePullPolicy: IfNotPresent
           livenessProbe:

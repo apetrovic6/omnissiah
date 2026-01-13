@@ -1,10 +1,12 @@
 {
   charts,
   config,
+  lib,
   ...
 }: let
   namespace = "garage";
   domain = config.noosphere.domain;
+  sso = config.noosphere.sso;
 in {
   applications.garage-ui = {
     inherit namespace;
@@ -12,6 +14,7 @@ in {
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-ui-admin-token/garage-ui-admin-token/value)
       (builtins.readFile ../../../../../../../vars/shared/garage-ui-jwt-token-secret/garage-ui-jwt-token-secret/value)
+      (builtins.readFile ../../../../../../../vars/shared/garage-ui-oidc-secret/garage-ui-oidc-secret/value)
     ];
 
     resources.ingresses.garage-ui-ip-root = {
@@ -91,6 +94,34 @@ in {
             jwt_private_key_secret = {
               name = "garage-ui-jwt-token-secret";
               key = "jwt-key.pem";
+            };
+
+            oidc = {
+              enabled = true;
+              provider_name = lib.toUpper sso.provider;
+              issuer_url = "https://${sso.provider}.${domain}/realms/adeptus-terra";
+              auth_url = "https://${sso.provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/auth";
+              token_url = "https://${sso.provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/token";
+              userinfo_url = "https://${sso.provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/userinfo";
+              client_id = "garage-ui";
+              existingSecret = {
+                name = "garage-ui-oidc-secret";
+                key = "client-secret";
+              };
+              scopes = ["openid" "email" "profile"];
+              username_attribute = "preferred_username";
+              email_attribute = "email";
+              name_attribute = "name";
+              admin_role = "admin";
+              role_attribute_path = "resource_access.garage-ui.roles";
+              cookie_secure = true;
+              cookie_http_only = true;
+              cookie_same_site = "lax";
+              cookie_name = "garage_session";
+              session_max_age = 86400;
+              tls_skip_verify = false;
+              skip_issuer_check = false;
+              skip_expiry_check = false;
             };
           };
         };
