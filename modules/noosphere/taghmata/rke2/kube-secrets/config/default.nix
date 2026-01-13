@@ -3,43 +3,10 @@
   config,
   ...
 }: let
-  inherit (lib) mkOption types;
-
   flakeCfg = config;
 
-  # Define the option set ONCE, reuse in both module systems
-  noosphereOptions = {
-    agePublicKey = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = "AGE public key which will be used to encrypt sops secrets";
-    };
-
-    domain = mkOption {
-      type = types.str;
-      description = "Domain name for the K8S cluster";
-    };
-
-    sso = {
-      provider = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = "SSO provider name (e.g., Keycloak)";
-      };
-
-      url = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = "SSO provider URL. If empty, derived from provider + domain.";
-      };
-
-      wellKnownUrl = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = "OpenID Connect well-known configuration URL";
-      };
-    };
-  };
+  # Import shared noosphere options (prefixed with _ to avoid import-tree)
+  noosphereOptions = import ../../../../../vars/_noosphere-options.nix {inherit lib;};
 in {
   # flake-parts options
   options.noosphere = noosphereOptions;

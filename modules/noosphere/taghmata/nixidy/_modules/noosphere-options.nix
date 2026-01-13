@@ -1,34 +1,20 @@
-# ./nixidy/options/noosphere.nix
+# Noosphere options for nixidy module graph
+#
+# This module provides the noosphere options (domain, SSO) to nixidy
+# application definitions via config.noosphere.*
 {
   lib,
   config,
   ...
 }: let
-  inherit (lib) mkOption mkIf mkDefault types;
+  inherit (lib) mkIf mkDefault;
+
+  # Import shared noosphere options (prefixed with _ to avoid import-tree)
+  noosphereOptions = import ../../../../vars/_noosphere-options.nix {inherit lib;};
 in {
-  options.noosphere = {
-    domain = mkOption {
-      type = types.str;
-      default = "";
-    };
+  options.noosphere = noosphereOptions;
 
-    sso.provider = mkOption {
-      type = types.str;
-      default = "";
-    };
-
-    sso.url = mkOption {
-      type = types.str;
-      default = "";
-    };
-
-    sso.wellKnownUrl = lib.mkOption {
-      type = lib.types.str;
-      default = "";
-      description = "Well known URL endpoint";
-    };
-  };
-
+  # Auto-derive SSO URL from provider + domain if not set
   config = mkIf (config.noosphere.sso.provider != "" && config.noosphere.domain != "") {
     noosphere.sso.url =
       mkDefault
