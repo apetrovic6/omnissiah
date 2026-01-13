@@ -22,7 +22,7 @@ data:
       delete:
         enabled: true
       redirect:
-        disable: false
+        disable: true
     redis:
       addr: harbor-redis:6379
       db: 2

@@ -217,6 +217,10 @@ in {
               regionendpoint = "http://garage.garage.svc.cluster.local:3900";
               bucket = "harbor-bucket";
             };
+
+            # Disable redirects - proxy blobs through Harbor instead of redirecting to S3
+            # This allows external clients to pull images without accessing Garage directly
+            disableredirect = true;
           };
         };
 
