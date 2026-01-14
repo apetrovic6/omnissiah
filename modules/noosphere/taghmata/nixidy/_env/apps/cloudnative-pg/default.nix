@@ -35,7 +35,8 @@ in {
           # Enable PodMonitor for Prometheus scraping
           podMonitorEnabled = true;
           podMonitorAdditionalLabels = {
-            prometheus = "kube-prometheus";
+            # This label is required for Prometheus to discover the operator's PodMonitor
+            release = "kube-prometheus-stack";
           };
 
           # Enable Grafana dashboard ConfigMap
@@ -49,10 +50,11 @@ in {
           };
         };
 
-        # Configure default monitoring queries
+        # Configure operator to inherit labels from Clusters to their PodMonitors
         config = {
           data = {
-            INHERITED_LABELS = "prometheus";
+            # Inherit the 'release' label from Clusters to their PodMonitors
+            INHERITED_LABELS = "release";
             WATCH_NAMESPACE = "";
           };
         };

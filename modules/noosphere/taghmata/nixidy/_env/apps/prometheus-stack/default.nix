@@ -18,9 +18,7 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    helm.releases.kube-prometheus-stack = let
-      endpoints = ["192.168.1.48" "192.168.1.59" "192.168.1.126"];
-    in {
+    helm.releases.kube-prometheus-stack = {
       chart = charts.prometheus-community.kube-prometheus-stack;
       includeCRDs = false;
 
@@ -62,32 +60,15 @@ in {
           };
         };
 
-        kubeControllerManager = {
-          enabled = true;
-          inherit endpoints;
-        };
+        # Disable control plane component monitoring for RKE2
+        # These create Endpoint resources that ArgoCD excludes
+        kubeControllerManager.enabled = false;
+        kubeEtcd.enabled = false;
+        kubeScheduler.enabled = false;
+        kubeProxy.enabled = false;
 
+        # CoreDNS works fine
         coredDns.enabled = true;
-
-        kubeEtcd = {
-          enabled = true;
-          inherit endpoints;
-          service = {
-            enabled = true;
-            port = 2381;
-            targetPort = 2381;
-          };
-        };
-
-        kubeScheduler = {
-          enabled = true;
-          inherit endpoints;
-        };
-
-        kubeProxy = {
-          enabled = true;
-          inherit endpoints;
-        };
 
         kube-state-metrics = {
           fullnameOverride = "kube-state-metrics";
