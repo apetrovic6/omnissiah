@@ -346,6 +346,10 @@ in {
         metadata = {
           namespace = cfg.namespace;
           annotations = cfg.cluster.annotations;
+          # Labels that will be inherited by the PodMonitor
+          labels = {
+            release = "kube-prometheus-stack";
+          };
         };
         spec = let
           baseSpec = cfg.cluster.spec;
