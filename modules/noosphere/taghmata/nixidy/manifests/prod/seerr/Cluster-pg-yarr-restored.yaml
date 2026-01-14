@@ -9,6 +9,9 @@ metadata:
   name: pg-yarr-restored
   namespace: yarr
 spec:
+  backup:
+    retentionPolicy: 30d
+    target: prefer-standby
   bootstrap:
     recovery:
       source: origin

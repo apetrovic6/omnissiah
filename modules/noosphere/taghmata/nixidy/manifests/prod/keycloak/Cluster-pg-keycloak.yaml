@@ -9,6 +9,9 @@ metadata:
   name: pg-keycloak
   namespace: keycloak
 spec:
+  backup:
+    retentionPolicy: 30d
+    target: prefer-standby
   instances: 3
   monitoring:
     customQueriesConfigMap:

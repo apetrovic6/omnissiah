@@ -9,6 +9,9 @@ metadata:
   name: pg-forgejo
   namespace: forgejo
 spec:
+  backup:
+    retentionPolicy: 30d
+    target: prefer-standby
   instances: 3
   monitoring:
     customQueriesConfigMap:

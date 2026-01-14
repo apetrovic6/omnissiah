@@ -10,6 +10,9 @@ metadata:
   name: pg-harbor
   namespace: harbor
 spec:
+  backup:
+    retentionPolicy: 30d
+    target: prefer-standby
   instances: 3
   managed:
     roles:

@@ -366,6 +366,13 @@ in {
           (lib.removeAttrs baseSpec attrsToRemove)
           // {
             plugins = basePlugins ++ extraPlugins;
+
+            # Enable backup functionality (required even when using plugins)
+            backup = {
+              target = "prefer-standby";
+              retentionPolicy = "30d";
+            };
+
             monitoring = {
               enablePodMonitor = baseSpec.monitoring.enablePodMonitor;
               # Custom queries from default monitoring configmap
@@ -416,7 +423,12 @@ in {
                 namespace = backup.metadata.namespace or cfg.namespace;
               };
               spec =
-                backup.spec
+                {
+                  # Ensure method and pluginConfiguration are always set
+                  method = backup.spec.method or "plugin";
+                  pluginConfiguration.name = backup.spec.pluginConfiguration.name or barmanPluginName;
+                }
+                // backup.spec
                 // {
                   cluster.name = "pg-${name}";
                 };
@@ -430,11 +442,12 @@ in {
           i: backup:
             lib.nameValuePair "pg-${name}-on-demand-backup-${toString i}" {
               metadata.namespace = cfg.namespace;
-              spec =
-                backup.spec
-                // {
-                  cluster.name = "pg-${name}";
-                };
+              spec = {
+                # Ensure method and pluginConfiguration are always set
+                method = backup.spec.method or "plugin";
+                cluster.name = "pg-${name}";
+                pluginConfiguration.name = backup.spec.pluginConfiguration.name or barmanPluginName;
+              };
             }
         )
         cfg.backups.onDemandBackups
