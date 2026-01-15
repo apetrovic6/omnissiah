@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: forgejo
     app.kubernetes.io/version: 13.0.4
-    helm.sh/chart: forgejo-15.0.4
+    helm.sh/chart: forgejo-15.1.0
     version: 13.0.4
   name: forgejo
   namespace: forgejo
@@ -18,14 +18,11 @@ spec:
       app.kubernetes.io/instance: forgejo
       app.kubernetes.io/name: forgejo
   strategy:
-    rollingUpdate:
-      maxSurge: 100%
-      maxUnavailable: 0
-    type: RollingUpdate
+    type: Recreate
   template:
     metadata:
       annotations:
-        checksum/config: fd1a468de7e3f1c6fb2d8b4578a86889e7b59f7d24566ac263ce53418761bbfe
+        checksum/config: 3176765e6d053522d61f1688da4ccfb73ac76034003b195566c0a511cb4ad169
         checksum/oauth_0: 77644db45f286d011f857014d1ead5a52273a99d55902c3cdd352b6e1380fa55
       labels:
         app: forgejo
@@ -33,7 +30,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: forgejo
         app.kubernetes.io/version: 13.0.4
-        helm.sh/chart: forgejo-15.0.4
+        helm.sh/chart: forgejo-15.1.0
         version: 13.0.4
     spec:
       containers:
