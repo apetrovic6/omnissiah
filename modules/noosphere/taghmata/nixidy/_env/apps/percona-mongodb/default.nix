@@ -6,7 +6,7 @@ in {
     createNamespace = true;
 
     helm.releases.percona-server-mongodb-operator = {
-      chart = charts.percona.percona-server-mongodb-operator;
+      chart = charts.percona.psmdb-operator;
 
       values = {
         # Watch all namespaces

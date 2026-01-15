@@ -5,158 +5,155 @@
   config,
   ...
 }:
-
-with lib;
-
-let
+with lib; let
   hasAttrNotNull = attr: set: hasAttr attr set && set.${attr} != null;
 
-  attrsToList =
-    values:
-    if values != null then
+  attrsToList = values:
+    if values != null
+    then
       sort (
         a: b:
-        if (hasAttrNotNull "_priority" a && hasAttrNotNull "_priority" b) then
-          a._priority < b._priority
-        else
-          false
+          if (hasAttrNotNull "_priority" a && hasAttrNotNull "_priority" b)
+          then a._priority < b._priority
+          else false
       ) (mapAttrsToList (n: v: v) values)
-    else
-      values;
+    else values;
 
-  getDefaults =
-    resource: group: version: kind:
+  getDefaults = resource: group: version: kind:
     catAttrs "default" (
       filter (
         default:
-        (default.resource == null || default.resource == resource)
-        && (default.group == null || default.group == group)
-        && (default.version == null || default.version == version)
-        && (default.kind == null || default.kind == kind)
-      ) config.defaults
+          (default.resource == null || default.resource == resource)
+          && (default.group == null || default.group == group)
+          && (default.version == null || default.version == version)
+          && (default.kind == null || default.kind == kind)
+      )
+      config.defaults
     );
 
-  types = lib.types // rec {
-    str = mkOptionType {
-      name = "str";
-      description = "string";
-      check = isString;
-      merge = mergeEqualOption;
-    };
-
-    # Either value of type `finalType` or `coercedType`, the latter is
-    # converted to `finalType` using `coerceFunc`.
-    coercedTo =
-      coercedType: coerceFunc: finalType:
-      mkOptionType rec {
-        inherit (finalType) getSubOptions getSubModules;
-
-        name = "coercedTo";
-        description = "${finalType.description} or ${coercedType.description}";
-        check = x: finalType.check x || coercedType.check x;
-        merge =
-          loc: defs:
-          let
-            coerceVal =
-              val:
-              if finalType.check val then
-                val
-              else
-                let
-                  coerced = coerceFunc val;
-                in
-                assert finalType.check coerced;
-                coerced;
-
-          in
-          finalType.merge loc (map (def: def // { value = coerceVal def.value; }) defs);
-        substSubModules = m: coercedTo coercedType coerceFunc (finalType.substSubModules m);
-        typeMerge = t1: t2: null;
-        functor = (defaultFunctor name) // {
-          wrapped = finalType;
-        };
+  types =
+    lib.types
+    // rec {
+      str = mkOptionType {
+        name = "str";
+        description = "string";
+        check = isString;
+        merge = mergeEqualOption;
       };
-  };
+
+      # Either value of type `finalType` or `coercedType`, the latter is
+      # converted to `finalType` using `coerceFunc`.
+      coercedTo = coercedType: coerceFunc: finalType:
+        mkOptionType rec {
+          inherit (finalType) getSubOptions getSubModules;
+
+          name = "coercedTo";
+          description = "${finalType.description} or ${coercedType.description}";
+          check = x: finalType.check x || coercedType.check x;
+          merge = loc: defs: let
+            coerceVal = val:
+              if finalType.check val
+              then val
+              else let
+                coerced = coerceFunc val;
+              in
+                assert finalType.check coerced; coerced;
+          in
+            finalType.merge loc (map (def: def // {value = coerceVal def.value;}) defs);
+          substSubModules = m: coercedTo coercedType coerceFunc (finalType.substSubModules m);
+          typeMerge = t1: t2: null;
+          functor =
+            (defaultFunctor name)
+            // {
+              wrapped = finalType;
+            };
+        };
+    };
 
   mkOptionDefault = mkOverride 1001;
 
-  mergeValuesByKey =
-    attrMergeKey: listMergeKeys: values:
+  mergeValuesByKey = attrMergeKey: listMergeKeys: values:
     listToAttrs (
       imap0 (
         i: value:
-        nameValuePair (
-          if hasAttr attrMergeKey value then
-            if isAttrs value.${attrMergeKey} then
-              toString value.${attrMergeKey}.content
+          nameValuePair (
+            if hasAttr attrMergeKey value
+            then
+              if isAttrs value.${attrMergeKey}
+              then toString value.${attrMergeKey}.content
+              else (toString value.${attrMergeKey})
             else
-              (toString value.${attrMergeKey})
-          else
-            # generate merge key for list elements if it's not present
-            "__kubenix_list_merge_key_"
-            + (concatStringsSep "" (
-              map (
-                key: if isAttrs value.${key} then toString value.${key}.content else (toString value.${key})
-              ) listMergeKeys
-            ))
-        ) (value // { _priority = i; })
-      ) values
+              # generate merge key for list elements if it's not present
+              "__kubenix_list_merge_key_"
+              + (concatStringsSep "" (
+                map (
+                  key:
+                    if isAttrs value.${key}
+                    then toString value.${key}.content
+                    else (toString value.${key})
+                )
+                listMergeKeys
+              ))
+          ) (value // {_priority = i;})
+      )
+      values
     );
 
-  submoduleOf =
-    ref:
+  submoduleOf = ref:
     types.submodule (
-      { name, ... }:
-      {
-        options = definitions."${ref}".options or { };
-        config = definitions."${ref}".config or { };
+      {name, ...}: {
+        options = definitions."${ref}".options or {};
+        config = definitions."${ref}".config or {};
       }
     );
 
-  globalSubmoduleOf =
-    ref:
+  globalSubmoduleOf = ref:
     types.submodule (
-      { name, ... }:
-      {
-        options = config.definitions."${ref}".options or { };
-        config = config.definitions."${ref}".config or { };
+      {name, ...}: {
+        options = config.definitions."${ref}".options or {};
+        config = config.definitions."${ref}".config or {};
       }
     );
 
-  submoduleWithMergeOf =
-    ref: mergeKey:
+  submoduleWithMergeOf = ref: mergeKey:
     types.submodule (
-      { name, ... }:
-      let
-        convertName =
-          name: if definitions."${ref}".options.${mergeKey}.type == types.int then toInt name else name;
-      in
-      {
-        options = definitions."${ref}".options // {
-          # position in original array
-          _priority = mkOption {
-            type = types.nullOr types.int;
-            default = null;
-            internal = true;
+      {name, ...}: let
+        convertName = name:
+          if definitions."${ref}".options.${mergeKey}.type == types.int
+          then toInt name
+          else name;
+      in {
+        options =
+          definitions."${ref}".options
+          // {
+            # position in original array
+            _priority = mkOption {
+              type = types.nullOr types.int;
+              default = null;
+              internal = true;
+            };
           };
-        };
-        config = definitions."${ref}".config // {
-          ${mergeKey} = mkOverride 1002 (
-            # use name as mergeKey only if it is not coming from mergeValuesByKey
-            if (!hasPrefix "__kubenix_list_merge_key_" name) then convertName name else null
-          );
-        };
+        config =
+          definitions."${ref}".config
+          // {
+            ${mergeKey} = mkOverride 1002 (
+              # use name as mergeKey only if it is not coming from mergeValuesByKey
+              if (!hasPrefix "__kubenix_list_merge_key_" name)
+              then convertName name
+              else null
+            );
+          };
       }
     );
 
-  submoduleForDefinition =
-    ref: resource: kind: group: version:
-    let
-      apiVersion = if group == "core" then version else "${group}/${version}";
-    in
+  submoduleForDefinition = ref: resource: kind: group: version: let
+    apiVersion =
+      if group == "core"
+      then version
+      else "${group}/${version}";
+  in
     types.submodule (
-      { name, ... }:
-      {
+      {name, ...}: {
         inherit (definitions."${ref}") options;
 
         imports = getDefaults resource group version kind;
@@ -173,31 +170,28 @@ let
       }
     );
 
-  coerceAttrsOfSubmodulesToListByKey =
-    ref: attrMergeKey: listMergeKeys:
-    (types.coercedTo (types.listOf (submoduleOf ref)) (mergeValuesByKey attrMergeKey listMergeKeys) (
-      types.attrsOf (submoduleWithMergeOf ref attrMergeKey)
-    ));
+  coerceAttrsOfSubmodulesToListByKey = ref: attrMergeKey: listMergeKeys: (types.coercedTo (types.listOf (submoduleOf ref)) (mergeValuesByKey attrMergeKey listMergeKeys) (
+    types.attrsOf (submoduleWithMergeOf ref attrMergeKey)
+  ));
 
   definitions = {
     "mongodb.com.v1.ClusterMongoDBRole" = {
-
       options = {
         "apiVersion" = mkOption {
           description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "kind" = mkOption {
           description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "metadata" = mkOption {
           description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
         };
         "spec" = mkOption {
           description = "ClusterMongoDBRoleSpec defines the desired state of ClusterMongoDBRole.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.ClusterMongoDBRoleSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.ClusterMongoDBRoleSpec");
         };
       };
 
@@ -207,10 +201,8 @@ let
         "metadata" = mkOverride 1002 null;
         "spec" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.ClusterMongoDBRoleSpec" = {
-
       options = {
         "authenticationRestrictions" = mkOption {
           description = "";
@@ -236,7 +228,7 @@ let
         };
         "roles" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.ClusterMongoDBRoleSpecRoles")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.ClusterMongoDBRoleSpecRoles"));
         };
       };
 
@@ -245,18 +237,16 @@ let
         "privileges" = mkOverride 1002 null;
         "roles" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.ClusterMongoDBRoleSpecAuthenticationRestrictions" = {
-
       options = {
         "clientSource" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "serverAddress" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -264,38 +254,34 @@ let
         "clientSource" = mkOverride 1002 null;
         "serverAddress" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.ClusterMongoDBRoleSpecPrivileges" = {
-
       options = {
         "actions" = mkOption {
           description = "";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
         "resource" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.ClusterMongoDBRoleSpecPrivilegesResource");
+          type = submoduleOf "mongodb.com.v1.ClusterMongoDBRoleSpecPrivilegesResource";
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.ClusterMongoDBRoleSpecPrivilegesResource" = {
-
       options = {
         "cluster" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "collection" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "db" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -304,10 +290,8 @@ let
         "collection" = mkOverride 1002 null;
         "db" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.ClusterMongoDBRoleSpecRoles" = {
-
       options = {
         "db" = mkOption {
           description = "";
@@ -319,31 +303,29 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDB" = {
-
       options = {
         "apiVersion" = mkOption {
           description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "kind" = mkOption {
           description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "metadata" = mkOption {
           description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
         };
         "spec" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBSpec");
+          type = submoduleOf "mongodb.com.v1.MongoDBSpec";
         };
         "status" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBStatus"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBStatus");
         };
       };
 
@@ -353,30 +335,28 @@ let
         "metadata" = mkOverride 1002 null;
         "status" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiCluster" = {
-
       options = {
         "apiVersion" = mkOption {
           description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "kind" = mkOption {
           description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "metadata" = mkOption {
           description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
         };
         "spec" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpec");
+          type = submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpec";
         };
         "status" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterStatus"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterStatus");
         };
       };
 
@@ -386,30 +366,28 @@ let
         "metadata" = mkOverride 1002 null;
         "status" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpec" = {
-
       options = {
         "additionalMongodConfig" = mkOption {
           description = "AdditionalMongodConfig is additional configuration that can be passed to\neach data-bearing mongod at runtime. Uses the same structure as the mongod\nconfiguration file:\nhttps://docs.mongodb.com/manual/reference/configuration-options/";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "agent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgent");
         };
         "backup" = mkOption {
           description = "Backup contains configuration options for configuring\nbackup for this MongoDB resource";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackup"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackup");
         };
         "cloudManager" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecCloudManager"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecCloudManager");
         };
         "clusterDomain" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "clusterSpecList" = mkOption {
           description = "";
@@ -419,7 +397,7 @@ let
         };
         "connectivity" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecConnectivity"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecConnectivity");
         };
         "credentials" = mkOption {
           description = "Name of the Secret holding credentials information";
@@ -427,43 +405,43 @@ let
         };
         "duplicateServiceObjects" = mkOption {
           description = "In few service mesh options for ex: Istio, by default we would need to duplicate the\nservice objects created per pod in all the clusters to enable DNS resolution. Users can\nhowever configure their ServiceMesh with DNS proxy(https://istio.io/latest/docs/ops/configuration/traffic-management/dns-proxy/)\nenabled in which case the operator doesn't need to create the service objects per cluster. This options tells the operator\nwhether it should create the service objects in all the clusters or not. By default, if not specified the operator would create the duplicate svc objects.";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "externalAccess" = mkOption {
           description = "ExternalAccessConfiguration provides external access configuration.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecExternalAccess"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecExternalAccess");
         };
         "featureCompatibilityVersion" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "opsManager" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecOpsManager"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecOpsManager");
         };
         "persistent" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "prometheus" = mkOption {
           description = "Prometheus configurations.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecPrometheus"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecPrometheus");
         };
         "security" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecSecurity"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecSecurity");
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration provides the statefulset override for each of the cluster's statefulset\nif \"StatefulSetConfiguration\" is specified at cluster level under \"clusterSpecList\" that takes precedence over\nthe global one";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecStatefulSet");
         };
         "topology" = mkOption {
           description = "Topology sets the desired cluster topology of MongoDB resources\nIt defaults (if empty or not set) to SingleCluster. If MultiCluster specified,\nthen clusterSpecList field is mandatory and at least one member cluster has to be specified.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "type" = mkOption {
           description = "";
@@ -494,46 +472,44 @@ let
         "statefulSet" = mkOverride 1002 null;
         "topology" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgent" = {
-
       options = {
         "backupAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentBackupAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentBackupAgent");
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logRotate" = mkOption {
           description = "DEPRECATED please use mongod.logRotate";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentLogRotate");
         };
         "maxLogFileDurationHours" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongod" = mkOption {
           description = "AgentLoggingMongodConfig contain settings for the mongodb processes configured by the agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongod"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongod");
         };
         "monitoringAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentMonitoringAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentMonitoringAgent");
         };
         "readinessProbe" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentReadinessProbe"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentReadinessProbe");
         };
         "startupOptions" = mkOption {
           description = "StartupParameters can be used to configure the startup parameters with which the agent starts. That also contains\nlog rotation settings as defined here:";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "systemLog" = mkOption {
           description = "DEPRECATED please use mongod.systemLog";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentSystemLog");
         };
       };
 
@@ -548,10 +524,8 @@ let
         "startupOptions" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentBackupAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
@@ -564,18 +538,16 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentBackupAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -583,26 +555,24 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -620,10 +590,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongod" = {
-
       options = {
         "auditlogRotate" = mkOption {
           description = "LogRotate configures audit log rotation for the mongodb processes";
@@ -633,11 +601,11 @@ let
         };
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongodLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongodLogRotate");
         };
         "systemLog" = mkOption {
           description = "SystemLog configures system log of mongod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongodSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongodSystemLog");
         };
       };
 
@@ -646,26 +614,24 @@ let
         "logRotate" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongodAuditlogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -683,26 +649,24 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongodLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -720,10 +684,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentMongodSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -739,11 +701,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentMonitoringAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
@@ -756,18 +716,16 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentMonitoringAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -775,24 +733,20 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentReadinessProbe" = {
-
       options = {
         "environmentVariables" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
       config = {
         "environmentVariables" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecAgentSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -808,31 +762,29 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecBackup" = {
-
       options = {
         "assignmentLabels" = mkOption {
           description = "Assignment Labels set in the Ops Manager";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "autoTerminateOnDeletion" = mkOption {
           description = "AutoTerminateOnDeletion indicates if the Operator should stop and terminate the Backup before the cleanup,\nwhen the MongoDB CR is deleted";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "encryption" = mkOption {
           description = "Encryption settings";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryption"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryption");
         };
         "mode" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "snapshotSchedule" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackupSnapshotSchedule"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackupSnapshotSchedule");
         };
       };
 
@@ -843,90 +795,82 @@ let
         "mode" = mkOverride 1002 null;
         "snapshotSchedule" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryption" = {
-
       options = {
         "kmip" = mkOption {
           description = "Kmip corresponds to the KMIP configuration assigned to the Ops Manager Project's configuration.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryptionKmip"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryptionKmip");
         };
       };
 
       config = {
         "kmip" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryptionKmip" = {
-
       options = {
         "client" = mkOption {
           description = "KMIP Client configuration";
-          type = (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryptionKmipClient");
+          type = submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryptionKmipClient";
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecBackupEncryptionKmipClient" = {
-
       options = {
         "clientCertificatePrefix" = mkOption {
           description = "A prefix used to construct KMIP client certificate (and corresponding password) Secret names.\nThe names are generated using the following pattern:\nKMIP Client Certificate (TLS Secret):\n  <clientCertificatePrefix>-<CR Name>-kmip-client\nKMIP Client Certificate Password:\n  <clientCertificatePrefix>-<CR Name>-kmip-client-password\n  The expected key inside is called \"password\".";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "clientCertificatePrefix" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecBackupSnapshotSchedule" = {
-
       options = {
         "clusterCheckpointIntervalMin" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "dailySnapshotRetentionDays" = mkOption {
           description = "Number of days to retain daily snapshots. Setting 0 will disable this rule.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "fullIncrementalDayOfWeek" = mkOption {
           description = "Day of the week when Ops Manager takes a full snapshot. This ensures a recent complete backup. Ops Manager sets the default value to SUNDAY.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "monthlySnapshotRetentionMonths" = mkOption {
           description = "Number of months to retain weekly snapshots. Setting 0 will disable this rule.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "pointInTimeWindowHours" = mkOption {
           description = "Number of hours in the past for which a point-in-time snapshot can be created.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "referenceHourOfDay" = mkOption {
           description = "Hour of the day to schedule snapshots using a 24-hour clock, in UTC.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "referenceMinuteOfHour" = mkOption {
           description = "Minute of the hour to schedule snapshots, in UTC.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "snapshotIntervalHours" = mkOption {
           description = "Number of hours between snapshots.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "snapshotRetentionDays" = mkOption {
           description = "Number of days to keep recent snapshots.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "weeklySnapshotRetentionWeeks" = mkOption {
           description = "Number of weeks to retain weekly snapshots. Setting 0 will disable this rule";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -942,10 +886,8 @@ let
         "snapshotRetentionDays" = mkOverride 1002 null;
         "weeklySnapshotRetentionWeeks" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecCloudManager" = {
-
       options = {
         "configMapRef" = mkOption {
           description = "";
@@ -958,28 +900,24 @@ let
       config = {
         "configMapRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecCloudManagerConfigMapRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "ClusterName is name of the cluster where the MongoDB Statefulset will be scheduled, the\nname should have a one on one mapping with the service-account created in the central cluster\nto talk to the workload clusters.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalAccess" = mkOption {
           description = "ExternalAccessConfiguration provides external access configuration for Multi-Cluster.";
@@ -1001,11 +939,11 @@ let
         };
         "podSpec" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpec");
         };
         "service" = mkOption {
           description = "this is an optional service, it will get the name \"<rsName>-service\" in case not provided";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration holds the optional custom StatefulSet\nthat should be merged into the operator created one.";
@@ -1023,14 +961,12 @@ let
         "service" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListExternalAccess" = {
-
       options = {
         "externalDomain" = mkOption {
           description = "An external domain that is used for exposing MongoDB to the outside world.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalService" = mkOption {
           description = "Provides a way to override the default (NodePort) Service";
@@ -1046,18 +982,16 @@ let
         "externalDomain" = mkOverride 1002 null;
         "externalService" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListExternalAccessExternalService" = {
-
       options = {
         "annotations" = mkOption {
           description = "A map of annotations that shall be added to the externally available Service.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "spec" = mkOption {
           description = "A wrapper for the Service spec object.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -1065,22 +999,20 @@ let
         "annotations" = mkOverride 1002 null;
         "spec" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -1089,10 +1021,8 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
@@ -1102,7 +1032,7 @@ let
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -1110,10 +1040,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -1137,10 +1065,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -1173,22 +1099,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -1197,22 +1121,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -1221,22 +1143,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -1245,22 +1165,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -1269,10 +1187,8 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -1291,18 +1207,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecClusterSpecListStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -1310,28 +1224,24 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecConnectivity" = {
-
       options = {
         "replicaSetHorizons" = mkOption {
           description = "ReplicaSetHorizons holds list of maps of horizons to be configured in each of MongoDB processes.\nHorizons map horizon names to the node addresses for each process in the replicaset, e.g.:\n [\n   {\n     \"internal\": \"my-rs-0.my-internal-domain.com:31843\",\n     \"external\": \"my-rs-0.my-external-domain.com:21467\"\n   },\n   {\n     \"internal\": \"my-rs-1.my-internal-domain.com:31843\",\n     \"external\": \"my-rs-1.my-external-domain.com:21467\"\n   },\n   ...\n ]\nThe key of each item in the map is an arbitrary, user-chosen string that\nrepresents the name of the horizon. The value of the item is the host and,\noptionally, the port that this mongod node will be connected to from.";
-          type = (types.nullOr (types.listOf types.attrs));
+          type = types.nullOr (types.listOf types.attrs);
         };
       };
 
       config = {
         "replicaSetHorizons" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecExternalAccess" = {
-
       options = {
         "externalDomain" = mkOption {
           description = "An external domain that is used for exposing MongoDB to the outside world.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalService" = mkOption {
           description = "Provides a way to override the default (NodePort) Service";
@@ -1345,18 +1255,16 @@ let
         "externalDomain" = mkOverride 1002 null;
         "externalService" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecExternalAccessExternalService" = {
-
       options = {
         "annotations" = mkOption {
           description = "A map of annotations that shall be added to the externally available Service.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "spec" = mkOption {
           description = "A wrapper for the Service spec object.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -1364,50 +1272,44 @@ let
         "annotations" = mkOverride 1002 null;
         "spec" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecOpsManager" = {
-
       options = {
         "configMapRef" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecOpsManagerConfigMapRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecOpsManagerConfigMapRef");
         };
       };
 
       config = {
         "configMapRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecOpsManagerConfigMapRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecPrometheus" = {
-
       options = {
         "metricsPath" = mkOption {
           description = "Indicates path to the metrics endpoint.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "passwordSecretRef" = mkOption {
           description = "Name of a Secret containing a HTTP Basic Auth Password.";
-          type = (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecPrometheusPasswordSecretRef");
+          type = submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecPrometheusPasswordSecretRef";
         };
         "port" = mkOption {
           description = "Port where metrics endpoint will bind to. Defaults to 9216.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "tlsSecretKeyRef" = mkOption {
           description = "Name of a Secret (type kubernetes.io/tls) holding the certificates to use in the\nPrometheus endpoint.";
@@ -1426,14 +1328,12 @@ let
         "port" = mkOverride 1002 null;
         "tlsSecretKeyRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecPrometheusPasswordSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -1444,14 +1344,12 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecPrometheusTlsSecretKeyRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -1462,25 +1360,23 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurity" = {
-
       options = {
         "authentication" = mkOption {
           description = "Authentication holds various authentication related settings that affect\nthis MongoDB resource.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthentication"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthentication");
         };
         "certsSecretPrefix" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "roleRefs" = mkOption {
           description = "";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRoleRefs" "name"
-                [ ]
+              []
             )
           );
           apply = attrsToList;
@@ -1493,7 +1389,7 @@ let
         };
         "tls" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecSecurityTls"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecSecurityTls");
         };
       };
 
@@ -1504,10 +1400,8 @@ let
         "roles" = mkOverride 1002 null;
         "tls" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthentication" = {
-
       options = {
         "agents" = mkOption {
           description = "Agents contains authentication configuration properties for the agents";
@@ -1521,11 +1415,11 @@ let
         };
         "ignoreUnknownUsers" = mkOption {
           description = "IgnoreUnknownUsers maps to the inverse of auth.authoritativeSet";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "internalCluster" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "ldap" = mkOption {
           description = "LDAP Configuration";
@@ -1535,7 +1429,7 @@ let
         };
         "modes" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "oidcProviderConfigs" = mkOption {
           description = "Configuration for OIDC providers";
@@ -1549,7 +1443,7 @@ let
         };
         "requireClientTLSAuthentication" = mkOption {
           description = "Clients should present valid TLS certificates";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -1562,14 +1456,12 @@ let
         "oidcProviderConfigs" = mkOverride 1002 null;
         "requireClientTLSAuthentication" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthenticationAgents" = {
-
       options = {
         "automationLdapGroupDN" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "automationPasswordSecretRef" = mkOption {
           description = "SecretKeySelector selects a key of a Secret.";
@@ -1581,11 +1473,11 @@ let
         };
         "automationUserName" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "clientCertificateSecretRef" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "mode" = mkOption {
           description = "Mode is the desired Authentication mode that the agents will use";
@@ -1599,10 +1491,8 @@ let
         "automationUserName" = mkOverride 1002 null;
         "clientCertificateSecretRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthenticationAgentsAutomationPasswordSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "The key of the secret to select from.  Must be a valid secret key.";
@@ -1610,11 +1500,11 @@ let
         };
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "optional" = mkOption {
           description = "Specify whether the Secret or its key must be defined";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -1622,14 +1512,12 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthenticationLdap" = {
-
       options = {
         "authzQueryTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "bindQueryPasswordSecretRef" = mkOption {
           description = "";
@@ -1641,7 +1529,7 @@ let
         };
         "bindQueryUser" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "caConfigMapRef" = mkOption {
           description = "Allows to point at a ConfigMap/key with a CA file to mount on the Pod";
@@ -1653,27 +1541,27 @@ let
         };
         "servers" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "timeoutMS" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "transportSecurity" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "userCacheInvalidationInterval" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "userToDNMapping" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "validateLDAPServerConfig" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -1689,10 +1577,8 @@ let
         "userToDNMapping" = mkOverride 1002 null;
         "validateLDAPServerConfig" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthenticationLdapBindQueryPasswordSecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -1700,11 +1586,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthenticationLdapCaConfigMapRef" = {
-
       options = {
         "key" = mkOption {
           description = "The key to select.";
@@ -1712,11 +1596,11 @@ let
         };
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "optional" = mkOption {
           description = "Specify whether the ConfigMap or its key must be defined";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -1724,10 +1608,8 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityAuthenticationOidcProviderConfigs" = {
-
       options = {
         "audience" = mkOption {
           description = "Entity that your external identity provider intends the token for.\nEnter the audience value from the app you registered with external Identity Provider.";
@@ -1743,7 +1625,7 @@ let
         };
         "clientId" = mkOption {
           description = "Unique identifier for your registered application. Enter the clientId value from the app you\nregistered with an external Identity Provider.\nRequired when selected Workforce Identity Federation authorization method";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "configurationName" = mkOption {
           description = "Unique label that identifies this configuration. It is case-sensitive and can only contain the following characters:\n - alphanumeric characters (combination of a to z and 0 to 9)\n - hyphens (-)\n - underscores (_)";
@@ -1751,7 +1633,7 @@ let
         };
         "groupsClaim" = mkOption {
           description = "The identifier of the claim that includes the principal's IdP user group membership information.\nRequired when selected GroupMembership as the authorization type, ignored otherwise";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "issuerURI" = mkOption {
           description = "Issuer value provided by your registered IdP application. Using this URI, MongoDB finds an OpenID Connect Provider\nConfiguration Document, which should be available in the /.wellknown/open-id-configuration endpoint.\nFor MongoDB 8.0+, the combination of issuerURI and audience must be unique across OIDC provider configurations.\nFor other MongoDB versions, the issuerURI itself must be unique.";
@@ -1759,7 +1641,7 @@ let
         };
         "requestedScopes" = mkOption {
           description = "Tokens that give users permission to request data from the authorization endpoint.\nOnly used for Workforce Identity Federation authorization method";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "userClaim" = mkOption {
           description = "The identifier of the claim that includes the user principal identity.\nAccept the default value unless your IdP uses a different claim.";
@@ -1772,10 +1654,8 @@ let
         "groupsClaim" = mkOverride 1002 null;
         "requestedScopes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRoleRefs" = {
-
       options = {
         "kind" = mkOption {
           description = "";
@@ -1787,11 +1667,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRoles" = {
-
       options = {
         "authenticationRestrictions" = mkOption {
           description = "";
@@ -1832,18 +1710,16 @@ let
         "privileges" = mkOverride 1002 null;
         "roles" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRolesAuthenticationRestrictions" = {
-
       options = {
         "clientSource" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "serverAddress" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -1851,38 +1727,34 @@ let
         "clientSource" = mkOverride 1002 null;
         "serverAddress" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRolesPrivileges" = {
-
       options = {
         "actions" = mkOption {
           description = "";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
         "resource" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRolesPrivilegesResource");
+          type = submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRolesPrivilegesResource";
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRolesPrivilegesResource" = {
-
       options = {
         "cluster" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "collection" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "db" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -1891,10 +1763,8 @@ let
         "collection" = mkOverride 1002 null;
         "db" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityRolesRoles" = {
-
       options = {
         "db" = mkOption {
           description = "";
@@ -1906,23 +1776,21 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecSecurityTls" = {
-
       options = {
         "additionalCertificateDomains" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "ca" = mkOption {
           description = "CA corresponds to a ConfigMap containing an entry for the CA certificate (ca.pem)\nused to validate the certificates created already.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "enabled" = mkOption {
           description = "DEPRECATED please enable TLS by setting `security.certsSecretPrefix` or `security.tls.secretRef.prefix`.\nEnables TLS for this resource. This will make the operator try to mount a\nSecret with a defined name (<resource-name>-cert).\nThis is only used when enabling TLS on a MongoDB resource, and not on the\nAppDB, where TLS is configured by setting `secretRef.Name`.";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -1931,14 +1799,12 @@ let
         "ca" = mkOverride 1002 null;
         "enabled" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecStatefulSetMetadata"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterSpecStatefulSetMetadata");
         };
         "spec" = mkOption {
           description = "";
@@ -1949,18 +1815,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterSpecStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -1968,38 +1832,36 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterStatus" = {
-
       options = {
         "backup" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterStatusBackup"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterStatusBackup");
         };
         "clusterStatusList" = mkOption {
           description = "ClusterStatusList holds a list of clusterStatuses corresponding to each cluster";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusList"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusList");
         };
         "featureCompatibilityVersion" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "lastTransition" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "link" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "observedGeneration" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "phase" = mkOption {
           description = "";
@@ -2007,15 +1869,15 @@ let
         };
         "pvc" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBMultiClusterStatusPvc")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBMultiClusterStatusPvc"));
         };
         "resourcesNotReady" = mkOption {
           description = "";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBMultiClusterStatusResourcesNotReady"
-                "name"
-                [ ]
+              "name"
+              []
             )
           );
           apply = attrsToList;
@@ -2026,7 +1888,7 @@ let
         };
         "warnings" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -2042,10 +1904,8 @@ let
         "resourcesNotReady" = mkOverride 1002 null;
         "warnings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterStatusBackup" = {
-
       options = {
         "statusName" = mkOption {
           description = "";
@@ -2053,11 +1913,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusList" = {
-
       options = {
         "clusterStatuses" = mkOption {
           description = "";
@@ -2074,30 +1932,28 @@ let
       config = {
         "clusterStatuses" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusListClusterStatuses" = {
-
       options = {
         "clusterName" = mkOption {
           description = "ClusterName is name of the cluster where the MongoDB Statefulset will be scheduled, the\nname should have a one on one mapping with the service-account created in the central cluster\nto talk to the workload clusters.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "lastTransition" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "members" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "observedGeneration" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "phase" = mkOption {
           description = "";
@@ -2118,16 +1974,16 @@ let
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusListClusterStatusesResourcesNotReady"
-                "name"
-                [ ]
+              "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusListClusterStatusesResourcesNotReady"
+              "name"
+              []
             )
           );
           apply = attrsToList;
         };
         "warnings" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -2141,10 +1997,8 @@ let
         "resourcesNotReady" = mkOverride 1002 null;
         "warnings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusListClusterStatusesPvc" = {
-
       options = {
         "phase" = mkOption {
           description = "";
@@ -2156,11 +2010,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusListClusterStatusesResourcesNotReady" = {
-
       options = {
         "errors" = mkOption {
           description = "";
@@ -2178,7 +2030,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -2190,30 +2042,25 @@ let
         "errors" = mkOverride 1002 null;
         "message" = mkOverride 1002 null;
       };
-
     };
-    "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusListClusterStatusesResourcesNotReadyErrors" =
-      {
-
-        options = {
-          "message" = mkOption {
-            description = "";
-            type = (types.nullOr types.str);
-          };
-          "reason" = mkOption {
-            description = "";
-            type = (types.nullOr types.str);
-          };
+    "mongodb.com.v1.MongoDBMultiClusterStatusClusterStatusListClusterStatusesResourcesNotReadyErrors" = {
+      options = {
+        "message" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
         };
-
-        config = {
-          "message" = mkOverride 1002 null;
-          "reason" = mkOverride 1002 null;
+        "reason" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
         };
-
       };
-    "mongodb.com.v1.MongoDBMultiClusterStatusPvc" = {
 
+      config = {
+        "message" = mkOverride 1002 null;
+        "reason" = mkOverride 1002 null;
+      };
+    };
+    "mongodb.com.v1.MongoDBMultiClusterStatusPvc" = {
       options = {
         "phase" = mkOption {
           description = "";
@@ -2225,11 +2072,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBMultiClusterStatusResourcesNotReady" = {
-
       options = {
         "errors" = mkOption {
           description = "";
@@ -2245,7 +2090,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -2257,18 +2102,16 @@ let
         "errors" = mkOverride 1002 null;
         "message" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBMultiClusterStatusResourcesNotReadyErrors" = {
-
       options = {
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "reason" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -2276,30 +2119,28 @@ let
         "message" = mkOverride 1002 null;
         "reason" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManager" = {
-
       options = {
         "apiVersion" = mkOption {
           description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "kind" = mkOption {
           description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "metadata" = mkOption {
           description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
         };
         "spec" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpec");
+          type = submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpec";
         };
         "status" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerStatus"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerStatus");
         };
       };
 
@@ -2309,30 +2150,28 @@ let
         "metadata" = mkOverride 1002 null;
         "status" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpec" = {
-
       options = {
         "adminCredentials" = mkOption {
           description = "AdminSecret is the secret for the first admin user to create\nhas the fields: \"Username\", \"Password\", \"FirstName\", \"LastName\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "applicationDatabase" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabase");
+          type = submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabase";
         };
         "backup" = mkOption {
           description = "Backup";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackup"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackup");
         };
         "clusterDomain" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "clusterName" = mkOption {
           description = "Deprecated: This has been replaced by the ClusterDomain which should be\nused instead";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "clusterSpecList" = mkOption {
           description = "";
@@ -2342,43 +2181,43 @@ let
         };
         "configuration" = mkOption {
           description = "The configuration properties passed to Ops Manager/Backup Daemon";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "externalConnectivity" = mkOption {
           description = "MongoDBOpsManagerExternalConnectivity if sets allows for the creation of a Service for\naccessing this Ops Manager resource from outside the Kubernetes cluster.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecExternalConnectivity"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecExternalConnectivity");
         };
         "internalConnectivity" = mkOption {
           description = "InternalConnectivity if set allows for overriding the settings of the default service\nused for internal connectivity to the OpsManager servers.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecInternalConnectivity"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecInternalConnectivity");
         };
         "jvmParameters" = mkOption {
           description = "Custom JVM parameters passed to the Ops Manager JVM";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "logging" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecLogging"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecLogging");
         };
         "opsManagerURL" = mkOption {
           description = "OpsManagerURL specified the URL with which the operator and AppDB monitoring agent should access Ops Manager instance (or instances).\nWhen not set, the operator is using FQDN of Ops Manager's headless service `{name}-svc.{namespace}.svc.cluster.local` to connect to the instance. If that URL cannot be used, then URL in this field should be provided for the operator to connect to Ops Manager instances.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "replicas" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "security" = mkOption {
           description = "Configure HTTPS.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecSecurity"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecSecurity");
         };
         "statefulSet" = mkOption {
           description = "Configure custom StatefulSet configuration";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecStatefulSet");
         };
         "topology" = mkOption {
           description = "Topology sets the desired cluster topology of Ops Manager deployment.\nIt defaults (and if not set) to SingleCluster. If MultiCluster specified,\nthen clusterSpecList field is mandatory and at least one member cluster has to be specified.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "version" = mkOption {
           description = "";
@@ -2403,18 +2242,16 @@ let
         "statefulSet" = mkOverride 1002 null;
         "topology" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabase" = {
-
       options = {
         "additionalMongodConfig" = mkOption {
           description = "AdditionalMongodConfig are additional configurations that can be passed to\neach data-bearing mongod at runtime. Uses the same structure as the mongod\nconfiguration file:\nhttps://docs.mongodb.com/manual/reference/configuration-options/";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "agent" = mkOption {
           description = "specify configuration like startup flags and automation config settings for the AutomationAgent and MonitoringAgent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgent");
         };
         "automationConfig" = mkOption {
           description = "AutomationConfigOverride holds any fields that will be merged on top of the Automation Config\nthat the operator creates for the AppDB. Currently only the process.disabled and logRotate field is recognized.";
@@ -2430,7 +2267,7 @@ let
         };
         "clusterDomain" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "clusterSpecList" = mkOption {
           description = "";
@@ -2448,7 +2285,7 @@ let
         };
         "credentials" = mkOption {
           description = "Name of the Secret holding credentials information";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalAccess" = mkOption {
           description = "ExternalAccessConfiguration provides external access configuration.";
@@ -2458,7 +2295,7 @@ let
         };
         "featureCompatibilityVersion" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "memberConfig" = mkOption {
           description = "MemberConfig allows to specify votes, priorities and tags for each of the mongodb process.";
@@ -2470,7 +2307,7 @@ let
         };
         "members" = mkOption {
           description = "Amount of members for this MongoDB Replica Set";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "monitoringAgent" = mkOption {
           description = "Specify configuration like startup flags just for the MonitoringAgent.\nThese take precedence over\nthe flags set in AutomationAgent";
@@ -2512,15 +2349,15 @@ let
         };
         "service" = mkOption {
           description = "this is an optional service, it will get the name \"<rsName>-svc\" in case not provided";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "topology" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "type" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "version" = mkOption {
           description = "";
@@ -2551,10 +2388,8 @@ let
         "topology" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgent" = {
-
       options = {
         "backupAgent" = mkOption {
           description = "";
@@ -2564,7 +2399,7 @@ let
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logRotate" = mkOption {
           description = "DEPRECATED please use mongod.logRotate";
@@ -2574,7 +2409,7 @@ let
         };
         "maxLogFileDurationHours" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongod" = mkOption {
           description = "AgentLoggingMongodConfig contain settings for the mongodb processes configured by the agent";
@@ -2600,7 +2435,7 @@ let
         };
         "startupOptions" = mkOption {
           description = "StartupParameters can be used to configure the startup parameters with which the agent starts. That also contains\nlog rotation settings as defined here:";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "systemLog" = mkOption {
           description = "DEPRECATED please use mongod.systemLog";
@@ -2621,10 +2456,8 @@ let
         "startupOptions" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentBackupAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
@@ -2639,18 +2472,16 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentBackupAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -2658,26 +2489,24 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -2695,10 +2524,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentMongod" = {
-
       options = {
         "auditlogRotate" = mkOption {
           description = "LogRotate configures audit log rotation for the mongodb processes";
@@ -2731,26 +2558,24 @@ let
         "logRotate" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentMongodAuditlogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -2768,26 +2593,24 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentMongodLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -2805,10 +2628,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentMongodSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -2824,11 +2645,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentMonitoringAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
@@ -2843,18 +2662,16 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentMonitoringAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -2862,24 +2679,20 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentReadinessProbe" = {
-
       options = {
         "environmentVariables" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
       config = {
         "environmentVariables" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAgentSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -2895,20 +2708,18 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAutomationConfig" = {
-
       options = {
         "processes" = mkOption {
           description = "";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAutomationConfigProcesses"
-                "name"
-                [ ]
+              "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAutomationConfigProcesses"
+              "name"
+              []
             )
           );
           apply = attrsToList;
@@ -2927,10 +2738,8 @@ let
         "processes" = mkOverride 1002 null;
         "replicaSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAutomationConfigProcesses" = {
-
       options = {
         "disabled" = mkOption {
           description = "";
@@ -2953,26 +2762,24 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAutomationConfigProcessesLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -2990,18 +2797,16 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseAutomationConfigReplicaSet" = {
-
       options = {
         "id" = mkOption {
           description = "Id can be used together with additionalMongodConfig.replication.replSetName\nto manage clusters where replSetName differs from the MongoDBCommunity resource name";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "settings" = mkOption {
           description = "MapWrapper is a wrapper for a map to be used by other structs.\nThe CRD generator does not support map[string]interface{}\non the top level and hence we need to work around this with\na wrapping struct.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -3009,10 +2814,8 @@ let
         "id" = mkOverride 1002 null;
         "settings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseCloudManager" = {
-
       options = {
         "configMapRef" = mkOption {
           description = "";
@@ -3027,28 +2830,24 @@ let
       config = {
         "configMapRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseCloudManagerConfigMapRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "ClusterName is name of the cluster where the MongoDB Statefulset will be scheduled, the\nname should have a one on one mapping with the service-account created in the central cluster\nto talk to the workload clusters.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalAccess" = mkOption {
           description = "ExternalAccessConfiguration provides external access configuration for Multi-Cluster.";
@@ -3082,7 +2881,7 @@ let
         };
         "service" = mkOption {
           description = "this is an optional service, it will get the name \"<rsName>-service\" in case not provided";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration holds the optional custom StatefulSet\nthat should be merged into the operator created one.";
@@ -3102,14 +2901,12 @@ let
         "service" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListExternalAccess" = {
-
       options = {
         "externalDomain" = mkOption {
           description = "An external domain that is used for exposing MongoDB to the outside world.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalService" = mkOption {
           description = "Provides a way to override the default (NodePort) Service";
@@ -3125,42 +2922,37 @@ let
         "externalDomain" = mkOverride 1002 null;
         "externalService" = mkOverride 1002 null;
       };
-
     };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListExternalAccessExternalService" =
-      {
-
-        options = {
-          "annotations" = mkOption {
-            description = "A map of annotations that shall be added to the externally available Service.";
-            type = (types.nullOr (types.attrsOf types.str));
-          };
-          "spec" = mkOption {
-            description = "A wrapper for the Service spec object.";
-            type = (types.nullOr types.attrs);
-          };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListExternalAccessExternalService" = {
+      options = {
+        "annotations" = mkOption {
+          description = "A map of annotations that shall be added to the externally available Service.";
+          type = types.nullOr (types.attrsOf types.str);
         };
-
-        config = {
-          "annotations" = mkOverride 1002 null;
-          "spec" = mkOverride 1002 null;
+        "spec" = mkOption {
+          description = "A wrapper for the Service spec object.";
+          type = types.nullOr types.attrs;
         };
-
       };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListMemberConfig" = {
 
+      config = {
+        "annotations" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+      };
+    };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListMemberConfig" = {
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -3169,10 +2961,8 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
@@ -3184,7 +2974,7 @@ let
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -3192,10 +2982,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -3219,134 +3007,54 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultiple" =
-      {
-
-        options = {
-          "data" = mkOption {
-            description = "";
-            type = (
-              types.nullOr (
-                submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleData"
-              )
-            );
-          };
-          "journal" = mkOption {
-            description = "";
-            type = (
-              types.nullOr (
-                submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleJournal"
-              )
-            );
-          };
-          "logs" = mkOption {
-            description = "";
-            type = (
-              types.nullOr (
-                submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleLogs"
-              )
-            );
-          };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultiple" = {
+      options = {
+        "data" = mkOption {
+          description = "";
+          type = (
+            types.nullOr (
+              submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleData"
+            )
+          );
         };
-
-        config = {
-          "data" = mkOverride 1002 null;
-          "journal" = mkOverride 1002 null;
-          "logs" = mkOverride 1002 null;
+        "journal" = mkOption {
+          description = "";
+          type = (
+            types.nullOr (
+              submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleJournal"
+            )
+          );
         };
-
+        "logs" = mkOption {
+          description = "";
+          type = (
+            types.nullOr (
+              submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleLogs"
+            )
+          );
+        };
       };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleData" =
-      {
 
-        options = {
-          "labelSelector" = mkOption {
-            description = "";
-            type = (types.nullOr types.attrs);
-          };
-          "storage" = mkOption {
-            description = "";
-            type = (types.nullOr types.str);
-          };
-          "storageClass" = mkOption {
-            description = "";
-            type = (types.nullOr types.str);
-          };
-        };
-
-        config = {
-          "labelSelector" = mkOverride 1002 null;
-          "storage" = mkOverride 1002 null;
-          "storageClass" = mkOverride 1002 null;
-        };
-
+      config = {
+        "data" = mkOverride 1002 null;
+        "journal" = mkOverride 1002 null;
+        "logs" = mkOverride 1002 null;
       };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleJournal" =
-      {
-
-        options = {
-          "labelSelector" = mkOption {
-            description = "";
-            type = (types.nullOr types.attrs);
-          };
-          "storage" = mkOption {
-            description = "";
-            type = (types.nullOr types.str);
-          };
-          "storageClass" = mkOption {
-            description = "";
-            type = (types.nullOr types.str);
-          };
-        };
-
-        config = {
-          "labelSelector" = mkOverride 1002 null;
-          "storage" = mkOverride 1002 null;
-          "storageClass" = mkOverride 1002 null;
-        };
-
-      };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleLogs" =
-      {
-
-        options = {
-          "labelSelector" = mkOption {
-            description = "";
-            type = (types.nullOr types.attrs);
-          };
-          "storage" = mkOption {
-            description = "";
-            type = (types.nullOr types.str);
-          };
-          "storageClass" = mkOption {
-            description = "";
-            type = (types.nullOr types.str);
-          };
-        };
-
-        config = {
-          "labelSelector" = mkOverride 1002 null;
-          "storage" = mkOverride 1002 null;
-          "storageClass" = mkOverride 1002 null;
-        };
-
-      };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceSingle" = {
-
+    };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleData" = {
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -3355,10 +3063,74 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
+    };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleJournal" = {
+      options = {
+        "labelSelector" = mkOption {
+          description = "";
+          type = types.nullOr types.attrs;
+        };
+        "storage" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
+        };
+        "storageClass" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
+        };
+      };
 
+      config = {
+        "labelSelector" = mkOverride 1002 null;
+        "storage" = mkOverride 1002 null;
+        "storageClass" = mkOverride 1002 null;
+      };
+    };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceMultipleLogs" = {
+      options = {
+        "labelSelector" = mkOption {
+          description = "";
+          type = types.nullOr types.attrs;
+        };
+        "storage" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
+        };
+        "storageClass" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "labelSelector" = mkOverride 1002 null;
+        "storage" = mkOverride 1002 null;
+        "storageClass" = mkOverride 1002 null;
+      };
+    };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListPodSpecPersistenceSingle" = {
+      options = {
+        "labelSelector" = mkOption {
+          description = "";
+          type = types.nullOr types.attrs;
+        };
+        "storage" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
+        };
+        "storageClass" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "labelSelector" = mkOverride 1002 null;
+        "storage" = mkOverride 1002 null;
+        "storageClass" = mkOverride 1002 null;
+      };
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -3377,18 +3149,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseClusterSpecListStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -3396,28 +3166,24 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseConnectivity" = {
-
       options = {
         "replicaSetHorizons" = mkOption {
           description = "ReplicaSetHorizons holds list of maps of horizons to be configured in each of MongoDB processes.\nHorizons map horizon names to the node addresses for each process in the replicaset, e.g.:\n [\n   {\n     \"internal\": \"my-rs-0.my-internal-domain.com:31843\",\n     \"external\": \"my-rs-0.my-external-domain.com:21467\"\n   },\n   {\n     \"internal\": \"my-rs-1.my-internal-domain.com:31843\",\n     \"external\": \"my-rs-1.my-external-domain.com:21467\"\n   },\n   ...\n ]\nThe key of each item in the map is an arbitrary, user-chosen string that\nrepresents the name of the horizon. The value of the item is the host and,\noptionally, the port that this mongod node will be connected to from.";
-          type = (types.nullOr (types.listOf types.attrs));
+          type = types.nullOr (types.listOf types.attrs);
         };
       };
 
       config = {
         "replicaSetHorizons" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseExternalAccess" = {
-
       options = {
         "externalDomain" = mkOption {
           description = "An external domain that is used for exposing MongoDB to the outside world.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalService" = mkOption {
           description = "Provides a way to override the default (NodePort) Service";
@@ -3433,18 +3199,16 @@ let
         "externalDomain" = mkOverride 1002 null;
         "externalService" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseExternalAccessExternalService" = {
-
       options = {
         "annotations" = mkOption {
           description = "A map of annotations that shall be added to the externally available Service.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "spec" = mkOption {
           description = "A wrapper for the Service spec object.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -3452,22 +3216,20 @@ let
         "annotations" = mkOverride 1002 null;
         "spec" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -3476,22 +3238,18 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseMonitoringAgent" = {
-
       options = {
         "startupOptions" = mkOption {
           description = "StartupParameters can be used to configure the startup parameters with which the agent starts. That also contains\nlog rotation settings as defined here:";
-          type = (types.attrsOf types.str);
+          type = types.attrsOf types.str;
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseOpsManager" = {
-
       options = {
         "configMapRef" = mkOption {
           description = "";
@@ -3506,28 +3264,24 @@ let
       config = {
         "configMapRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseOpsManagerConfigMapRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePasswordSecretKeyRef" = {
-
       options = {
         "key" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -3538,10 +3292,8 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
@@ -3553,7 +3305,7 @@ let
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -3561,10 +3313,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -3588,10 +3338,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -3624,22 +3372,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -3648,22 +3394,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -3672,22 +3416,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -3696,22 +3438,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -3720,14 +3460,12 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePrometheus" = {
-
       options = {
         "metricsPath" = mkOption {
           description = "Indicates path to the metrics endpoint.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "passwordSecretRef" = mkOption {
           description = "Name of a Secret containing a HTTP Basic Auth Password.";
@@ -3737,7 +3475,7 @@ let
         };
         "port" = mkOption {
           description = "Port where metrics endpoint will bind to. Defaults to 9216.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "tlsSecretKeyRef" = mkOption {
           description = "Name of a Secret (type kubernetes.io/tls) holding the certificates to use in the\nPrometheus endpoint.";
@@ -3758,14 +3496,12 @@ let
         "port" = mkOverride 1002 null;
         "tlsSecretKeyRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePrometheusPasswordSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -3776,14 +3512,12 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabasePrometheusTlsSecretKeyRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -3794,10 +3528,8 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurity" = {
-
       options = {
         "authentication" = mkOption {
           description = "Authentication holds various authentication related settings that affect\nthis MongoDB resource.";
@@ -3809,16 +3541,16 @@ let
         };
         "certsSecretPrefix" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "roleRefs" = mkOption {
           description = "";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityRoleRefs"
-                "name"
-                [ ]
+              "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityRoleRefs"
+              "name"
+              []
             )
           );
           apply = attrsToList;
@@ -3846,10 +3578,8 @@ let
         "roles" = mkOverride 1002 null;
         "tls" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthentication" = {
-
       options = {
         "agents" = mkOption {
           description = "Agents contains authentication configuration properties for the agents";
@@ -3865,11 +3595,11 @@ let
         };
         "ignoreUnknownUsers" = mkOption {
           description = "IgnoreUnknownUsers maps to the inverse of auth.authoritativeSet";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "internalCluster" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "ldap" = mkOption {
           description = "LDAP Configuration";
@@ -3881,7 +3611,7 @@ let
         };
         "modes" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "oidcProviderConfigs" = mkOption {
           description = "Configuration for OIDC providers";
@@ -3895,7 +3625,7 @@ let
         };
         "requireClientTLSAuthentication" = mkOption {
           description = "Clients should present valid TLS certificates";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -3908,14 +3638,12 @@ let
         "oidcProviderConfigs" = mkOverride 1002 null;
         "requireClientTLSAuthentication" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationAgents" = {
-
       options = {
         "automationLdapGroupDN" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "automationPasswordSecretRef" = mkOption {
           description = "SecretKeySelector selects a key of a Secret.";
@@ -3927,11 +3655,11 @@ let
         };
         "automationUserName" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "clientCertificateSecretRef" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "mode" = mkOption {
           description = "Mode is the desired Authentication mode that the agents will use";
@@ -3945,38 +3673,33 @@ let
         "automationUserName" = mkOverride 1002 null;
         "clientCertificateSecretRef" = mkOverride 1002 null;
       };
-
     };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationAgentsAutomationPasswordSecretRef" =
-      {
-
-        options = {
-          "key" = mkOption {
-            description = "The key of the secret to select from.  Must be a valid secret key.";
-            type = types.str;
-          };
-          "name" = mkOption {
-            description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-            type = (types.nullOr types.str);
-          };
-          "optional" = mkOption {
-            description = "Specify whether the Secret or its key must be defined";
-            type = (types.nullOr types.bool);
-          };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationAgentsAutomationPasswordSecretRef" = {
+      options = {
+        "key" = mkOption {
+          description = "The key of the secret to select from.  Must be a valid secret key.";
+          type = types.str;
         };
-
-        config = {
-          "name" = mkOverride 1002 null;
-          "optional" = mkOverride 1002 null;
+        "name" = mkOption {
+          description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
+          type = types.nullOr types.str;
         };
-
+        "optional" = mkOption {
+          description = "Specify whether the Secret or its key must be defined";
+          type = types.nullOr types.bool;
+        };
       };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationLdap" = {
 
+      config = {
+        "name" = mkOverride 1002 null;
+        "optional" = mkOverride 1002 null;
+      };
+    };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationLdap" = {
       options = {
         "authzQueryTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "bindQueryPasswordSecretRef" = mkOption {
           description = "";
@@ -3988,7 +3711,7 @@ let
         };
         "bindQueryUser" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "caConfigMapRef" = mkOption {
           description = "Allows to point at a ConfigMap/key with a CA file to mount on the Pod";
@@ -4000,27 +3723,27 @@ let
         };
         "servers" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "timeoutMS" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "transportSecurity" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "userCacheInvalidationInterval" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "userToDNMapping" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "validateLDAPServerConfig" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -4036,96 +3759,85 @@ let
         "userToDNMapping" = mkOverride 1002 null;
         "validateLDAPServerConfig" = mkOverride 1002 null;
       };
-
     };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationLdapBindQueryPasswordSecretRef" =
-      {
-
-        options = {
-          "name" = mkOption {
-            description = "";
-            type = types.str;
-          };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationLdapBindQueryPasswordSecretRef" = {
+      options = {
+        "name" = mkOption {
+          description = "";
+          type = types.str;
         };
-
-        config = { };
-
       };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationLdapCaConfigMapRef" =
-      {
 
-        options = {
-          "key" = mkOption {
-            description = "The key to select.";
-            type = types.str;
-          };
-          "name" = mkOption {
-            description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-            type = (types.nullOr types.str);
-          };
-          "optional" = mkOption {
-            description = "Specify whether the ConfigMap or its key must be defined";
-            type = (types.nullOr types.bool);
-          };
+      config = {};
+    };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationLdapCaConfigMapRef" = {
+      options = {
+        "key" = mkOption {
+          description = "The key to select.";
+          type = types.str;
         };
-
-        config = {
-          "name" = mkOverride 1002 null;
-          "optional" = mkOverride 1002 null;
+        "name" = mkOption {
+          description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
+          type = types.nullOr types.str;
         };
-
+        "optional" = mkOption {
+          description = "Specify whether the ConfigMap or its key must be defined";
+          type = types.nullOr types.bool;
+        };
       };
-    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationOidcProviderConfigs" =
-      {
 
-        options = {
-          "audience" = mkOption {
-            description = "Entity that your external identity provider intends the token for.\nEnter the audience value from the app you registered with external Identity Provider.";
-            type = types.str;
-          };
-          "authorizationMethod" = mkOption {
-            description = "Configure single-sign-on for human user access to deployments with Workforce Identity Federation.\nFor programmatic, application access to deployments use Workload Identity Federation.\nOnly one Workforce Identity Federation IdP can be configured per MongoDB resource";
-            type = types.str;
-          };
-          "authorizationType" = mkOption {
-            description = "Select GroupMembership to grant authorization based on IdP user group membership, or select UserID to grant\nan individual user authorization.";
-            type = types.str;
-          };
-          "clientId" = mkOption {
-            description = "Unique identifier for your registered application. Enter the clientId value from the app you\nregistered with an external Identity Provider.\nRequired when selected Workforce Identity Federation authorization method";
-            type = (types.nullOr types.str);
-          };
-          "configurationName" = mkOption {
-            description = "Unique label that identifies this configuration. It is case-sensitive and can only contain the following characters:\n - alphanumeric characters (combination of a to z and 0 to 9)\n - hyphens (-)\n - underscores (_)";
-            type = types.str;
-          };
-          "groupsClaim" = mkOption {
-            description = "The identifier of the claim that includes the principal's IdP user group membership information.\nRequired when selected GroupMembership as the authorization type, ignored otherwise";
-            type = (types.nullOr types.str);
-          };
-          "issuerURI" = mkOption {
-            description = "Issuer value provided by your registered IdP application. Using this URI, MongoDB finds an OpenID Connect Provider\nConfiguration Document, which should be available in the /.wellknown/open-id-configuration endpoint.\nFor MongoDB 8.0+, the combination of issuerURI and audience must be unique across OIDC provider configurations.\nFor other MongoDB versions, the issuerURI itself must be unique.";
-            type = types.str;
-          };
-          "requestedScopes" = mkOption {
-            description = "Tokens that give users permission to request data from the authorization endpoint.\nOnly used for Workforce Identity Federation authorization method";
-            type = (types.nullOr (types.listOf types.str));
-          };
-          "userClaim" = mkOption {
-            description = "The identifier of the claim that includes the user principal identity.\nAccept the default value unless your IdP uses a different claim.";
-            type = types.str;
-          };
-        };
-
-        config = {
-          "clientId" = mkOverride 1002 null;
-          "groupsClaim" = mkOverride 1002 null;
-          "requestedScopes" = mkOverride 1002 null;
-        };
-
+      config = {
+        "name" = mkOverride 1002 null;
+        "optional" = mkOverride 1002 null;
       };
+    };
+    "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityAuthenticationOidcProviderConfigs" = {
+      options = {
+        "audience" = mkOption {
+          description = "Entity that your external identity provider intends the token for.\nEnter the audience value from the app you registered with external Identity Provider.";
+          type = types.str;
+        };
+        "authorizationMethod" = mkOption {
+          description = "Configure single-sign-on for human user access to deployments with Workforce Identity Federation.\nFor programmatic, application access to deployments use Workload Identity Federation.\nOnly one Workforce Identity Federation IdP can be configured per MongoDB resource";
+          type = types.str;
+        };
+        "authorizationType" = mkOption {
+          description = "Select GroupMembership to grant authorization based on IdP user group membership, or select UserID to grant\nan individual user authorization.";
+          type = types.str;
+        };
+        "clientId" = mkOption {
+          description = "Unique identifier for your registered application. Enter the clientId value from the app you\nregistered with an external Identity Provider.\nRequired when selected Workforce Identity Federation authorization method";
+          type = types.nullOr types.str;
+        };
+        "configurationName" = mkOption {
+          description = "Unique label that identifies this configuration. It is case-sensitive and can only contain the following characters:\n - alphanumeric characters (combination of a to z and 0 to 9)\n - hyphens (-)\n - underscores (_)";
+          type = types.str;
+        };
+        "groupsClaim" = mkOption {
+          description = "The identifier of the claim that includes the principal's IdP user group membership information.\nRequired when selected GroupMembership as the authorization type, ignored otherwise";
+          type = types.nullOr types.str;
+        };
+        "issuerURI" = mkOption {
+          description = "Issuer value provided by your registered IdP application. Using this URI, MongoDB finds an OpenID Connect Provider\nConfiguration Document, which should be available in the /.wellknown/open-id-configuration endpoint.\nFor MongoDB 8.0+, the combination of issuerURI and audience must be unique across OIDC provider configurations.\nFor other MongoDB versions, the issuerURI itself must be unique.";
+          type = types.str;
+        };
+        "requestedScopes" = mkOption {
+          description = "Tokens that give users permission to request data from the authorization endpoint.\nOnly used for Workforce Identity Federation authorization method";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "userClaim" = mkOption {
+          description = "The identifier of the claim that includes the user principal identity.\nAccept the default value unless your IdP uses a different claim.";
+          type = types.str;
+        };
+      };
+
+      config = {
+        "clientId" = mkOverride 1002 null;
+        "groupsClaim" = mkOverride 1002 null;
+        "requestedScopes" = mkOverride 1002 null;
+      };
+    };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityRoleRefs" = {
-
       options = {
         "kind" = mkOption {
           description = "";
@@ -4137,11 +3849,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityRoles" = {
-
       options = {
         "authenticationRestrictions" = mkOption {
           description = "";
@@ -4188,18 +3898,16 @@ let
         "privileges" = mkOverride 1002 null;
         "roles" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityRolesAuthenticationRestrictions" = {
-
       options = {
         "clientSource" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "serverAddress" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -4207,14 +3915,12 @@ let
         "clientSource" = mkOverride 1002 null;
         "serverAddress" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityRolesPrivileges" = {
-
       options = {
         "actions" = mkOption {
           description = "";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
         "resource" = mkOption {
           description = "";
@@ -4224,23 +3930,21 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityRolesPrivilegesResource" = {
-
       options = {
         "cluster" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "collection" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "db" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -4249,10 +3953,8 @@ let
         "collection" = mkOverride 1002 null;
         "db" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityRolesRoles" = {
-
       options = {
         "db" = mkOption {
           description = "";
@@ -4264,23 +3966,21 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecApplicationDatabaseSecurityTls" = {
-
       options = {
         "additionalCertificateDomains" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "ca" = mkOption {
           description = "CA corresponds to a ConfigMap containing an entry for the CA certificate (ca.pem)\nused to validate the certificates created already.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "enabled" = mkOption {
           description = "DEPRECATED please enable TLS by setting `security.certsSecretPrefix` or `security.tls.secretRef.prefix`.\nEnables TLS for this resource. This will make the operator try to mount a\nSecret with a defined name (<resource-name>-cert).\nThis is only used when enabling TLS on a MongoDB resource, and not on the\nAppDB, where TLS is configured by setting `secretRef.Name`.";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -4289,21 +3989,19 @@ let
         "ca" = mkOverride 1002 null;
         "enabled" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackup" = {
-
       options = {
         "assignmentLabels" = mkOption {
           description = "Assignment Labels set in the Ops Manager";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "blockStores" = mkOption {
           description = "";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBOpsManagerSpecBackupBlockStores" "name"
-                [ ]
+              []
             )
           );
           apply = attrsToList;
@@ -4314,45 +4012,45 @@ let
         };
         "encryption" = mkOption {
           description = "Encryption settings";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryption"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryption");
         };
         "externalServiceEnabled" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "fileSystemStores" = mkOption {
           description = "";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBOpsManagerSpecBackupFileSystemStores"
-                "name"
-                [ ]
+              "name"
+              []
             )
           );
           apply = attrsToList;
         };
         "headDB" = mkOption {
           description = "HeadDB specifies configuration options for the HeadDB";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupHeadDB"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupHeadDB");
         };
         "jvmParameters" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "logging" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupLogging"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupLogging");
         };
         "members" = mkOption {
           description = "Members indicate the number of backup daemon pods to create.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "opLogStores" = mkOption {
           description = "OplogStoreConfigs describes the list of oplog store configs used for backup";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBOpsManagerSpecBackupOpLogStores" "name"
-                [ ]
+              []
             )
           );
           apply = attrsToList;
@@ -4368,7 +4066,7 @@ let
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3OpLogStores" "name"
-                [ ]
+              []
             )
           );
           apply = attrsToList;
@@ -4377,14 +4075,14 @@ let
           description = "";
           type = (
             types.nullOr (
-              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3Stores" "name" [ ]
+              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3Stores" "name" []
             )
           );
           apply = attrsToList;
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration holds the optional custom StatefulSet\nthat should be merged into the operator created one.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupStatefulSet");
         };
       };
 
@@ -4404,18 +4102,16 @@ let
         "s3Stores" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupBlockStores" = {
-
       options = {
         "assignmentLabels" = mkOption {
           description = "Assignment Labels set in the Ops Manager";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "mongodbResourceRef" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupBlockStoresMongodbResourceRef");
+          type = submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupBlockStoresMongodbResourceRef";
         };
         "mongodbUserRef" = mkOption {
           description = "";
@@ -4433,10 +4129,8 @@ let
         "assignmentLabels" = mkOverride 1002 null;
         "mongodbUserRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupBlockStoresMongodbResourceRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4444,17 +4138,15 @@ let
         };
         "namespace" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "namespace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupBlockStoresMongodbUserRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4462,37 +4154,31 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryption" = {
-
       options = {
         "kmip" = mkOption {
           description = "Kmip corresponds to the KMIP configuration assigned to the Ops Manager Project's configuration.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryptionKmip"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryptionKmip");
         };
       };
 
       config = {
         "kmip" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryptionKmip" = {
-
       options = {
         "server" = mkOption {
           description = "KMIP Server configuration";
-          type = (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryptionKmipServer");
+          type = submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryptionKmipServer";
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupEncryptionKmipServer" = {
-
       options = {
         "ca" = mkOption {
           description = "CA corresponds to a ConfigMap containing an entry for the CA certificate (ca.pem)\nused for KMIP authentication";
@@ -4504,11 +4190,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupFileSystemStores" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4516,23 +4200,21 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupHeadDB" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -4541,10 +4223,8 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupLogging" = {
-
       options = {
         "LogBackAccessRef" = mkOption {
           description = "LogBackAccessRef points at a ConfigMap/key with the logback access configuration file to mount on the Pod";
@@ -4554,7 +4234,7 @@ let
         };
         "LogBackRef" = mkOption {
           description = "LogBackRef points at a ConfigMap/key with the logback configuration file to mount on the Pod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupLoggingLogBackRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupLoggingLogBackRef");
         };
       };
 
@@ -4562,46 +4242,40 @@ let
         "LogBackAccessRef" = mkOverride 1002 null;
         "LogBackRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupLoggingLogBackAccessRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupLoggingLogBackRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupOpLogStores" = {
-
       options = {
         "assignmentLabels" = mkOption {
           description = "Assignment Labels set in the Ops Manager";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "mongodbResourceRef" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupOpLogStoresMongodbResourceRef");
+          type = submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupOpLogStoresMongodbResourceRef";
         };
         "mongodbUserRef" = mkOption {
           description = "";
@@ -4619,10 +4293,8 @@ let
         "assignmentLabels" = mkOverride 1002 null;
         "mongodbUserRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupOpLogStoresMongodbResourceRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4630,17 +4302,15 @@ let
         };
         "namespace" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "namespace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupOpLogStoresMongodbUserRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4648,11 +4318,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupQueryableBackupSecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4660,35 +4328,33 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3OpLogStores" = {
-
       options = {
         "assignmentLabels" = mkOption {
           description = "Assignment Labels set in the Ops Manager";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "customCertificate" = mkOption {
           description = "Set this to \"true\" to use the appDBCa as a CA to access S3.\nDeprecated: This has been replaced by CustomCertificateSecretRefs,\nIn the future all custom certificates, which includes the appDBCa\nfor s3Config should be configured in CustomCertificateSecretRefs instead.";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "customCertificateSecretRefs" = mkOption {
           description = "CustomCertificateSecretRefs is a list of valid Certificate Authority certificate secrets\nthat apply to the associated S3 bucket.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3OpLogStoresCustomCertificateSecretRefs"
-                "name"
-                [ ]
+              "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3OpLogStoresCustomCertificateSecretRefs"
+              "name"
+              []
             )
           );
           apply = attrsToList;
         };
         "irsaEnabled" = mkOption {
           description = "This is only set to \"true\" when a user is running in EKS and is using AWS IRSA to configure\nS3 snapshot store. For more details refer this: https://aws.amazon.com/blogs/opensource/introducing-fine-grained-iam-roles-service-accounts/";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "mongodbResourceRef" = mkOption {
           description = "";
@@ -4722,7 +4388,7 @@ let
         };
         "s3RegionOverride" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "s3SecretRef" = mkOption {
           description = "S3SecretRef is the secret that contains the AWS credentials used to access S3\nIt is optional because the credentials can be provided via AWS IRSA";
@@ -4742,10 +4408,8 @@ let
         "s3RegionOverride" = mkOverride 1002 null;
         "s3SecretRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3OpLogStoresCustomCertificateSecretRefs" = {
-
       options = {
         "key" = mkOption {
           description = "The key of the secret to select from.  Must be a valid secret key.";
@@ -4753,11 +4417,11 @@ let
         };
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "optional" = mkOption {
           description = "Specify whether the Secret or its key must be defined";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -4765,10 +4429,8 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3OpLogStoresMongodbResourceRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4776,17 +4438,15 @@ let
         };
         "namespace" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "namespace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3OpLogStoresMongodbUserRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4794,11 +4454,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3OpLogStoresS3SecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4806,35 +4464,33 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3Stores" = {
-
       options = {
         "assignmentLabels" = mkOption {
           description = "Assignment Labels set in the Ops Manager";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "customCertificate" = mkOption {
           description = "Set this to \"true\" to use the appDBCa as a CA to access S3.\nDeprecated: This has been replaced by CustomCertificateSecretRefs,\nIn the future all custom certificates, which includes the appDBCa\nfor s3Config should be configured in CustomCertificateSecretRefs instead.";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "customCertificateSecretRefs" = mkOption {
           description = "CustomCertificateSecretRefs is a list of valid Certificate Authority certificate secrets\nthat apply to the associated S3 bucket.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3StoresCustomCertificateSecretRefs"
-                "name"
-                [ ]
+              "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3StoresCustomCertificateSecretRefs"
+              "name"
+              []
             )
           );
           apply = attrsToList;
         };
         "irsaEnabled" = mkOption {
           description = "This is only set to \"true\" when a user is running in EKS and is using AWS IRSA to configure\nS3 snapshot store. For more details refer this: https://aws.amazon.com/blogs/opensource/introducing-fine-grained-iam-roles-service-accounts/";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "mongodbResourceRef" = mkOption {
           description = "";
@@ -4866,11 +4522,11 @@ let
         };
         "s3RegionOverride" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "s3SecretRef" = mkOption {
           description = "S3SecretRef is the secret that contains the AWS credentials used to access S3\nIt is optional because the credentials can be provided via AWS IRSA";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3StoresS3SecretRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3StoresS3SecretRef");
         };
       };
 
@@ -4884,10 +4540,8 @@ let
         "s3RegionOverride" = mkOverride 1002 null;
         "s3SecretRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3StoresCustomCertificateSecretRefs" = {
-
       options = {
         "key" = mkOption {
           description = "The key of the secret to select from.  Must be a valid secret key.";
@@ -4895,11 +4549,11 @@ let
         };
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "optional" = mkOption {
           description = "Specify whether the Secret or its key must be defined";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -4907,10 +4561,8 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3StoresMongodbResourceRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4918,17 +4570,15 @@ let
         };
         "namespace" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "namespace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3StoresMongodbUserRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4936,11 +4586,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupS3StoresS3SecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -4948,15 +4596,13 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupStatefulSetMetadata"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecBackupStatefulSetMetadata");
         };
         "spec" = mkOption {
           description = "";
@@ -4967,18 +4613,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecBackupStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -4986,18 +4630,16 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecList" = {
-
       options = {
         "backup" = mkOption {
           description = "Backup contains settings to override from top-level `spec.backup` for this member cluster.\nIf the value is not set here, then the value is taken from `spec.backup`.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListBackup"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListBackup");
         };
         "clusterDomain" = mkOption {
           description = "Cluster domain to override the default *.svc.cluster.local if the default cluster domain has been changed on a cluster level.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "clusterName" = mkOption {
           description = "ClusterName is name of the cluster where the Ops Manager Statefulset will be scheduled.\nThe operator is using ClusterName to find API credentials in `mongodb-kubernetes-operator-member-list` config map to use for this member cluster.\nIf the credentials are not found, then the member cluster is considered unreachable and ignored in the reconcile process.";
@@ -5005,7 +4647,7 @@ let
         };
         "configuration" = mkOption {
           description = "The configuration properties passed to Ops Manager and Backup Daemon in this cluster.\nIf specified (not empty) then this field overrides `spec.configuration` field entirely.\nIf not specified, then `spec.configuration` field is used for the Ops Manager and Backup Daemon instances in this cluster.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "externalConnectivity" = mkOption {
           description = "MongoDBOpsManagerExternalConnectivity if sets allows for the creation of a Service for\naccessing Ops Manager instances in this member cluster from outside the Kubernetes cluster.\nIf specified (even if provided empty) then this field overrides `spec.externalConnectivity` field entirely.\nIf not specified, then `spec.externalConnectivity` field is used for the Ops Manager and Backup Daemon instances in this cluster.";
@@ -5015,7 +4657,7 @@ let
         };
         "jvmParameters" = mkOption {
           description = "JVM parameters to pass to Ops Manager and Backup Daemon instances in this member cluster.\nIf specified (not empty) then this field overrides `spec.jvmParameters` field entirely.\nIf not specified, then `spec.jvmParameters` field is used for the Ops Manager and Backup Daemon instances in this cluster.";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "members" = mkOption {
           description = "Number of Ops Manager instances in this member cluster.";
@@ -5037,14 +4679,12 @@ let
         "jvmParameters" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListBackup" = {
-
       options = {
         "assignmentLabels" = mkOption {
           description = "Assignment Labels set in the Ops Manager";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "headDB" = mkOption {
           description = "HeadDB specifies configuration options for the HeadDB";
@@ -5054,7 +4694,7 @@ let
         };
         "jvmParameters" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "members" = mkOption {
           description = "Members indicate the number of backup daemon pods to create.";
@@ -5074,22 +4714,20 @@ let
         "jvmParameters" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListBackupHeadDB" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -5098,10 +4736,8 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListBackupStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -5120,18 +4756,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListBackupStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -5139,30 +4773,28 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListExternalConnectivity" = {
-
       options = {
         "annotations" = mkOption {
           description = "Annotations is a list of annotations to be directly passed to the Service object.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "clusterIP" = mkOption {
           description = "ClusterIP IP that will be assigned to this Service when creating a ClusterIP type Service";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalTrafficPolicy" = mkOption {
           description = "ExternalTrafficPolicy mechanism to preserve the client source IP.\nOnly supported on GCE and Google Kubernetes Engine.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "loadBalancerIP" = mkOption {
           description = "LoadBalancerIP IP that will be assigned to this LoadBalancer.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "port" = mkOption {
           description = "Port in which this `Service` will listen to, this applies to `NodePort`.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "type" = mkOption {
           description = "Type of the `Service` to be created.";
@@ -5177,10 +4809,8 @@ let
         "loadBalancerIP" = mkOverride 1002 null;
         "port" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -5197,18 +4827,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecClusterSpecListStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -5216,30 +4844,28 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecExternalConnectivity" = {
-
       options = {
         "annotations" = mkOption {
           description = "Annotations is a list of annotations to be directly passed to the Service object.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "clusterIP" = mkOption {
           description = "ClusterIP IP that will be assigned to this Service when creating a ClusterIP type Service";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalTrafficPolicy" = mkOption {
           description = "ExternalTrafficPolicy mechanism to preserve the client source IP.\nOnly supported on GCE and Google Kubernetes Engine.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "loadBalancerIP" = mkOption {
           description = "LoadBalancerIP IP that will be assigned to this LoadBalancer.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "port" = mkOption {
           description = "Port in which this `Service` will listen to, this applies to `NodePort`.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "type" = mkOption {
           description = "Type of the `Service` to be created.";
@@ -5254,30 +4880,28 @@ let
         "loadBalancerIP" = mkOverride 1002 null;
         "port" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecInternalConnectivity" = {
-
       options = {
         "annotations" = mkOption {
           description = "Annotations is a list of annotations to be directly passed to the Service object.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "clusterIP" = mkOption {
           description = "ClusterIP IP that will be assigned to this Service when creating a ClusterIP type Service";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalTrafficPolicy" = mkOption {
           description = "ExternalTrafficPolicy mechanism to preserve the client source IP.\nOnly supported on GCE and Google Kubernetes Engine.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "loadBalancerIP" = mkOption {
           description = "LoadBalancerIP IP that will be assigned to this LoadBalancer.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "port" = mkOption {
           description = "Port in which this `Service` will listen to, this applies to `NodePort`.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "type" = mkOption {
           description = "Type of the `Service` to be created.";
@@ -5292,18 +4916,16 @@ let
         "loadBalancerIP" = mkOverride 1002 null;
         "port" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecLogging" = {
-
       options = {
         "LogBackAccessRef" = mkOption {
           description = "LogBackAccessRef points at a ConfigMap/key with the logback access configuration file to mount on the Pod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecLoggingLogBackAccessRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecLoggingLogBackAccessRef");
         };
         "LogBackRef" = mkOption {
           description = "LogBackRef points at a ConfigMap/key with the logback configuration file to mount on the Pod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecLoggingLogBackRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecLoggingLogBackRef");
         };
       };
 
@@ -5311,46 +4933,40 @@ let
         "LogBackAccessRef" = mkOverride 1002 null;
         "LogBackRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecLoggingLogBackAccessRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecLoggingLogBackRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecSecurity" = {
-
       options = {
         "certsSecretPrefix" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tls" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecSecurityTls"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecSecurityTls");
         };
       };
 
@@ -5358,18 +4974,16 @@ let
         "certsSecretPrefix" = mkOverride 1002 null;
         "tls" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecSecurityTls" = {
-
       options = {
         "ca" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "secretRef" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecSecurityTlsSecretRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecSecurityTlsSecretRef");
         };
       };
 
@@ -5377,10 +4991,8 @@ let
         "ca" = mkOverride 1002 null;
         "secretRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecSecurityTlsSecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -5388,15 +5000,13 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecStatefulSetMetadata"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerSpecStatefulSetMetadata");
         };
         "spec" = mkOption {
           description = "";
@@ -5407,18 +5017,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerSpecStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -5426,22 +5034,20 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatus" = {
-
       options = {
         "applicationDatabase" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabase"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabase");
         };
         "backup" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerStatusBackup"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerStatusBackup");
         };
         "opsManager" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerStatusOpsManager"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBOpsManagerStatusOpsManager");
         };
       };
 
@@ -5450,10 +5056,8 @@ let
         "backup" = mkOverride 1002 null;
         "opsManager" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabase" = {
-
       options = {
         "backup" = mkOption {
           description = "";
@@ -5473,39 +5077,39 @@ let
         };
         "configServerCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "featureCompatibilityVersion" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "lastTransition" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "link" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "members" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "mongodsPerShardCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongosCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "observedGeneration" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "phase" = mkOption {
           description = "";
@@ -5524,16 +5128,16 @@ let
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabaseResourcesNotReady"
-                "name"
-                [ ]
+              "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabaseResourcesNotReady"
+              "name"
+              []
             )
           );
           apply = attrsToList;
         };
         "shardCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "sizeStatusInClusters" = mkOption {
           description = "MongodbShardedSizeStatusInClusters describes the number and sizes of replica sets members deployed across member clusters";
@@ -5549,7 +5153,7 @@ let
         };
         "warnings" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -5571,10 +5175,8 @@ let
         "sizeStatusInClusters" = mkOverride 1002 null;
         "warnings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabaseBackup" = {
-
       options = {
         "statusName" = mkOption {
           description = "";
@@ -5582,19 +5184,17 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabaseClusterStatusList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "members" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -5602,10 +5202,8 @@ let
         "clusterName" = mkOverride 1002 null;
         "members" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabasePvc" = {
-
       options = {
         "phase" = mkOption {
           description = "";
@@ -5617,11 +5215,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabaseResourcesNotReady" = {
-
       options = {
         "errors" = mkOption {
           description = "";
@@ -5639,7 +5235,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -5651,18 +5247,16 @@ let
         "errors" = mkOverride 1002 null;
         "message" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabaseResourcesNotReadyErrors" = {
-
       options = {
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "reason" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -5670,26 +5264,24 @@ let
         "message" = mkOverride 1002 null;
         "reason" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusApplicationDatabaseSizeStatusInClusters" = {
-
       options = {
         "configServerMongodsInClusters" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.int));
+          type = types.nullOr (types.attrsOf types.int);
         };
         "mongosCountInClusters" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.int));
+          type = types.nullOr (types.attrsOf types.int);
         };
         "shardMongodsInClusters" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.int));
+          type = types.nullOr (types.attrsOf types.int);
         };
         "shardOverridesInClusters" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.attrs));
+          type = types.nullOr (types.attrsOf types.attrs);
         };
       };
 
@@ -5699,10 +5291,8 @@ let
         "shardMongodsInClusters" = mkOverride 1002 null;
         "shardOverridesInClusters" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusBackup" = {
-
       options = {
         "clusterStatusList" = mkOption {
           description = "";
@@ -5714,15 +5304,15 @@ let
         };
         "lastTransition" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "observedGeneration" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "phase" = mkOption {
           description = "";
@@ -5739,19 +5329,19 @@ let
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBOpsManagerStatusBackupResourcesNotReady"
-                "name"
-                [ ]
+              "name"
+              []
             )
           );
           apply = attrsToList;
         };
         "version" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "warnings" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -5765,18 +5355,16 @@ let
         "version" = mkOverride 1002 null;
         "warnings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusBackupClusterStatusList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "replicas" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -5784,10 +5372,8 @@ let
         "clusterName" = mkOverride 1002 null;
         "replicas" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusBackupPvc" = {
-
       options = {
         "phase" = mkOption {
           description = "";
@@ -5799,11 +5385,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusBackupResourcesNotReady" = {
-
       options = {
         "errors" = mkOption {
           description = "";
@@ -5819,7 +5403,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -5831,18 +5415,16 @@ let
         "errors" = mkOverride 1002 null;
         "message" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusBackupResourcesNotReadyErrors" = {
-
       options = {
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "reason" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -5850,10 +5432,8 @@ let
         "message" = mkOverride 1002 null;
         "reason" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusOpsManager" = {
-
       options = {
         "clusterStatusList" = mkOption {
           description = "";
@@ -5865,15 +5445,15 @@ let
         };
         "lastTransition" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "observedGeneration" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "phase" = mkOption {
           description = "";
@@ -5887,31 +5467,31 @@ let
         };
         "replicas" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "resourcesNotReady" = mkOption {
           description = "";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodb.com.v1.MongoDBOpsManagerStatusOpsManagerResourcesNotReady"
-                "name"
-                [ ]
+              "mongodb.com.v1.MongoDBOpsManagerStatusOpsManagerResourcesNotReady"
+              "name"
+              []
             )
           );
           apply = attrsToList;
         };
         "url" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "version" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "warnings" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -5927,18 +5507,16 @@ let
         "version" = mkOverride 1002 null;
         "warnings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusOpsManagerClusterStatusList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "replicas" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -5946,10 +5524,8 @@ let
         "clusterName" = mkOverride 1002 null;
         "replicas" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusOpsManagerPvc" = {
-
       options = {
         "phase" = mkOption {
           description = "";
@@ -5961,11 +5537,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusOpsManagerResourcesNotReady" = {
-
       options = {
         "errors" = mkOption {
           description = "";
@@ -5981,7 +5555,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -5993,18 +5567,16 @@ let
         "errors" = mkOverride 1002 null;
         "message" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBOpsManagerStatusOpsManagerResourcesNotReadyErrors" = {
-
       options = {
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "reason" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -6012,30 +5584,28 @@ let
         "message" = mkOverride 1002 null;
         "reason" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearch" = {
-
       options = {
         "apiVersion" = mkOption {
           description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "kind" = mkOption {
           description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "metadata" = mkOption {
           description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
         };
         "spec" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBSearchSpec");
+          type = submoduleOf "mongodb.com.v1.MongoDBSearchSpec";
         };
         "status" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchStatus"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchStatus");
         };
       };
 
@@ -6045,42 +5615,40 @@ let
         "metadata" = mkOverride 1002 null;
         "status" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpec" = {
-
       options = {
         "logLevel" = mkOption {
           description = "Configure verbosity of mongot logs. Defaults to INFO if not set.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "persistence" = mkOption {
           description = "Configure MongoDB Search's persistent volume. If not defined, the operator will request 10GB of storage.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistence"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistence");
         };
         "prometheus" = mkOption {
           description = "Configure prometheus metrics endpoint in mongot. If not set, the metrics endpoint will be disabled.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPrometheus"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPrometheus");
         };
         "resourceRequirements" = mkOption {
           description = "Configure resource requests and limits for the MongoDB Search pods.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecResourceRequirements"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecResourceRequirements");
         };
         "security" = mkOption {
           description = "Configure security settings of the MongoDB Search server that MongoDB database is connecting to when performing search queries.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSecurity"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSecurity");
         };
         "source" = mkOption {
           description = "MongoDB database connection details from which MongoDB Search will synchronize data to build indexes.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSource"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSource");
         };
         "statefulSet" = mkOption {
           description = "StatefulSetSpec which the operator will apply to the MongoDB Search StatefulSet at the end of the reconcile loop. Use to provide necessary customizations,\nwhich aren't exposed as fields in the MongoDBSearch.spec.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecStatefulSet");
         };
         "version" = mkOption {
           description = "Optional version of MongoDB Search component (mongot). If not set, then the operator will set the most appropriate version of MongoDB Search.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -6094,18 +5662,16 @@ let
         "statefulSet" = mkOverride 1002 null;
         "version" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceMultiple"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceMultiple");
         };
         "single" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceSingle"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceSingle");
         };
       };
 
@@ -6113,22 +5679,20 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleData"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleData");
         };
         "journal" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleJournal"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleJournal");
         };
         "logs" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleLogs"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleLogs");
         };
       };
 
@@ -6137,22 +5701,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -6161,22 +5723,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -6185,22 +5745,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -6209,22 +5767,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -6233,43 +5789,39 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecPrometheus" = {
-
       options = {
         "port" = mkOption {
           description = "Port where metrics endpoint will be exposed on. Defaults to 9946.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
       config = {
         "port" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecResourceRequirements" = {
-
       options = {
         "claims" = mkOption {
           description = "Claims lists the names of resources, defined in spec.resourceClaims,\nthat are used by this container.\n\nThis is an alpha field and requires enabling the\nDynamicResourceAllocation feature gate.\n\nThis field is immutable. It can only be set for containers.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBSearchSpecResourceRequirementsClaims"
-                "name"
-                [ "name" ]
+              "name"
+              ["name"]
             )
           );
           apply = attrsToList;
         };
         "limits" = mkOption {
           description = "Limits describes the maximum amount of compute resources allowed.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/";
-          type = (types.nullOr (types.attrsOf (types.either types.int types.str)));
+          type = types.nullOr (types.attrsOf (types.either types.int types.str));
         };
         "requests" = mkOption {
           description = "Requests describes the minimum amount of compute resources required.\nIf Requests is omitted for a container, it defaults to Limits if that is explicitly specified,\notherwise to an implementation-defined value. Requests cannot exceed Limits.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/";
-          type = (types.nullOr (types.attrsOf (types.either types.int types.str)));
+          type = types.nullOr (types.attrsOf (types.either types.int types.str));
         };
       };
 
@@ -6278,10 +5830,8 @@ let
         "limits" = mkOverride 1002 null;
         "requests" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecResourceRequirementsClaims" = {
-
       options = {
         "name" = mkOption {
           description = "Name must match the name of one entry in pod.spec.resourceClaims of\nthe Pod where this field is used. It makes that resource available\ninside a container.";
@@ -6289,73 +5839,65 @@ let
         };
         "request" = mkOption {
           description = "Request is the name chosen for a request in the referenced claim.\nIf empty, everything from the claim is made available, otherwise\nonly the result of this request.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "request" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecSecurity" = {
-
       options = {
         "tls" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSecurityTls"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSecurityTls");
         };
       };
 
       config = {
         "tls" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecSecurityTls" = {
-
       options = {
         "certificateKeySecretRef" = mkOption {
           description = "CertificateKeySecret is a reference to a Secret containing a private key and certificate to use for TLS.\nThe key and cert are expected to be PEM encoded and available at \"tls.key\" and \"tls.crt\".\nThis is the same format used for the standard \"kubernetes.io/tls\" Secret type, but no specific type is required.";
-          type = (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSecurityTlsCertificateKeySecretRef");
+          type = submoduleOf "mongodb.com.v1.MongoDBSearchSpecSecurityTlsCertificateKeySecretRef";
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSearchSpecSecurityTlsCertificateKeySecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecSource" = {
-
       options = {
         "external" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourceExternal"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourceExternal");
         };
         "mongodbResourceRef" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourceMongodbResourceRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourceMongodbResourceRef");
         };
         "passwordSecretRef" = mkOption {
           description = "SecretKeyRef is a reference to a value in a given secret in the same\nnamespace. Based on:\nhttps://kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#secretkeyselector-v1-core";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourcePasswordSecretRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourcePasswordSecretRef");
         };
         "username" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -6365,14 +5907,12 @@ let
         "passwordSecretRef" = mkOverride 1002 null;
         "username" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecSourceExternal" = {
-
       options = {
         "hostAndPorts" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "keyfileSecretRef" = mkOption {
           description = "mongod keyfile used to connect to the external MongoDB deployment";
@@ -6382,7 +5922,7 @@ let
         };
         "tls" = mkOption {
           description = "TLS configuration for the external MongoDB deployment";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourceExternalTls"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourceExternalTls");
         };
       };
 
@@ -6391,14 +5931,12 @@ let
         "keyfileSecretRef" = mkOverride 1002 null;
         "tls" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecSourceExternalKeyfileSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -6409,36 +5947,30 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecSourceExternalTls" = {
-
       options = {
         "ca" = mkOption {
           description = "CA is a reference to a Secret containing the CA certificate that issued mongod's TLS certificate.\nThe CA certificate is expected to be PEM encoded and available at the \"ca.crt\" key.";
-          type = (submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourceExternalTlsCa");
+          type = submoduleOf "mongodb.com.v1.MongoDBSearchSpecSourceExternalTlsCa";
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSearchSpecSourceExternalTlsCa" = {
-
       options = {
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecSourceMongodbResourceRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -6446,21 +5978,19 @@ let
         };
         "namespace" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "namespace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecSourcePasswordSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -6471,14 +6001,12 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecStatefulSetMetadata"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSearchSpecStatefulSetMetadata");
         };
         "spec" = mkOption {
           description = "";
@@ -6489,18 +6017,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchSpecStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -6508,22 +6034,20 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchStatus" = {
-
       options = {
         "lastTransition" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "observedGeneration" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "phase" = mkOption {
           description = "";
@@ -6531,24 +6055,24 @@ let
         };
         "pvc" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSearchStatusPvc")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSearchStatusPvc"));
         };
         "resourcesNotReady" = mkOption {
           description = "";
           type = (
             types.nullOr (
-              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBSearchStatusResourcesNotReady" "name" [ ]
+              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBSearchStatusResourcesNotReady" "name" []
             )
           );
           apply = attrsToList;
         };
         "version" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "warnings" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -6561,10 +6085,8 @@ let
         "version" = mkOverride 1002 null;
         "warnings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchStatusPvc" = {
-
       options = {
         "phase" = mkOption {
           description = "";
@@ -6576,11 +6098,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSearchStatusResourcesNotReady" = {
-
       options = {
         "errors" = mkOption {
           description = "";
@@ -6596,7 +6116,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -6608,18 +6128,16 @@ let
         "errors" = mkOverride 1002 null;
         "message" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSearchStatusResourcesNotReadyErrors" = {
-
       options = {
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "reason" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -6627,46 +6145,44 @@ let
         "message" = mkOverride 1002 null;
         "reason" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpec" = {
-
       options = {
         "additionalMongodConfig" = mkOption {
           description = "AdditionalMongodConfig is additional configuration that can be passed to\neach data-bearing mongod at runtime. Uses the same structure as the mongod\nconfiguration file:\nhttps://docs.mongodb.com/manual/reference/configuration-options/";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "agent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgent");
         };
         "backup" = mkOption {
           description = "Backup contains configuration options for configuring\nbackup for this MongoDB resource";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecBackup"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecBackup");
         };
         "cloudManager" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecCloudManager"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecCloudManager");
         };
         "clusterDomain" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "configServerCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "configSrv" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrv"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrv");
         };
         "configSrvPodSpec" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvPodSpec");
         };
         "connectivity" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConnectivity"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConnectivity");
         };
         "credentials" = mkOption {
           description = "Name of the Secret holding credentials information";
@@ -6674,95 +6190,95 @@ let
         };
         "duplicateServiceObjects" = mkOption {
           description = "In few service mesh options for ex: Istio, by default we would need to duplicate the\nservice objects created per pod in all the clusters to enable DNS resolution. Users can\nhowever configure their ServiceMesh with DNS proxy(https://istio.io/latest/docs/ops/configuration/traffic-management/dns-proxy/)\nenabled in which case the operator doesn't need to create the service objects per cluster. This options tells the operator\nwhether it should create the service objects in all the clusters or not. By default, if not specified the operator would create the duplicate svc objects.";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "externalAccess" = mkOption {
           description = "ExternalAccessConfiguration provides external access configuration.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecExternalAccess"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecExternalAccess");
         };
         "featureCompatibilityVersion" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "memberConfig" = mkOption {
           description = "MemberConfig allows to specify votes, priorities and tags for each of the mongodb process.";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecMemberConfig")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecMemberConfig"));
         };
         "members" = mkOption {
           description = "Amount of members for this MongoDB Replica Set";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongodsPerShardCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongos" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongos"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongos");
         };
         "mongosCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongosPodSpec" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosPodSpec");
         };
         "opsManager" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecOpsManager"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecOpsManager");
         };
         "persistent" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "podSpec" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpec");
         };
         "prometheus" = mkOption {
           description = "Prometheus configurations.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPrometheus"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPrometheus");
         };
         "security" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurity"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurity");
         };
         "service" = mkOption {
           description = "DEPRECATED please use `spec.statefulSet.spec.serviceName` to provide a custom service name.\nthis is an optional service, it will get the name \"<rsName>-service\" in case not provided";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "shard" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShard"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShard");
         };
         "shardCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "shardOverrides" = mkOption {
           description = "ShardOverrides allow for overriding the configuration of a specific shard.\nIt replaces deprecated spec.shard.shardSpecificPodSpec field. When spec.shard.shardSpecificPodSpec is still defined then\nspec.shard.shardSpecificPodSpec is applied first to the particular shard and then spec.shardOverrides is applied on top\nof that (if defined for the same shard).";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverrides")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverrides"));
         };
         "shardPodSpec" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpec");
         };
         "shardSpecificPodSpec" = mkOption {
           description = "ShardSpecificPodSpec allows you to provide a Statefulset override per shard.\nDEPRECATED please use spec.shard.shardOverrides instead";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecShardSpecificPodSpec")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecShardSpecificPodSpec"));
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration provides the statefulset override for each of the cluster's statefulset\nif \"StatefulSetConfiguration\" is specified at cluster level under \"clusterSpecList\" that takes precedence over\nthe global one";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecStatefulSet");
         };
         "topology" = mkOption {
           description = "Topology sets the desired cluster topology of MongoDB resources\nIt defaults (if empty or not set) to SingleCluster. If MultiCluster specified,\nthen clusterSpecList field is mandatory and at least one member cluster has to be specified.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "type" = mkOption {
           description = "";
@@ -6808,46 +6324,44 @@ let
         "statefulSet" = mkOverride 1002 null;
         "topology" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgent" = {
-
       options = {
         "backupAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentBackupAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentBackupAgent");
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logRotate" = mkOption {
           description = "DEPRECATED please use mongod.logRotate";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentLogRotate");
         };
         "maxLogFileDurationHours" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongod" = mkOption {
           description = "AgentLoggingMongodConfig contain settings for the mongodb processes configured by the agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMongod"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMongod");
         };
         "monitoringAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMonitoringAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMonitoringAgent");
         };
         "readinessProbe" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentReadinessProbe"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentReadinessProbe");
         };
         "startupOptions" = mkOption {
           description = "StartupParameters can be used to configure the startup parameters with which the agent starts. That also contains\nlog rotation settings as defined here:";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "systemLog" = mkOption {
           description = "DEPRECATED please use mongod.systemLog";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentSystemLog");
         };
       };
 
@@ -6862,32 +6376,28 @@ let
         "startupOptions" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentBackupAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentBackupAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentBackupAgentLogRotate");
         };
       };
 
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentBackupAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -6895,26 +6405,24 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -6932,22 +6440,20 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentMongod" = {
-
       options = {
         "auditlogRotate" = mkOption {
           description = "LogRotate configures audit log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMongodAuditlogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMongodAuditlogRotate");
         };
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMongodLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMongodLogRotate");
         };
         "systemLog" = mkOption {
           description = "SystemLog configures system log of mongod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMongodSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMongodSystemLog");
         };
       };
 
@@ -6956,26 +6462,24 @@ let
         "logRotate" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentMongodAuditlogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -6993,26 +6497,24 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentMongodLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -7030,10 +6532,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentMongodSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -7049,33 +6549,29 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecAgentMonitoringAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMonitoringAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecAgentMonitoringAgentLogRotate");
         };
       };
 
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentMonitoringAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -7083,24 +6579,20 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentReadinessProbe" = {
-
       options = {
         "environmentVariables" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
       config = {
         "environmentVariables" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecAgentSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -7116,31 +6608,29 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecBackup" = {
-
       options = {
         "assignmentLabels" = mkOption {
           description = "Assignment Labels set in the Ops Manager";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "autoTerminateOnDeletion" = mkOption {
           description = "AutoTerminateOnDeletion indicates if the Operator should stop and terminate the Backup before the cleanup,\nwhen the MongoDB CR is deleted";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "encryption" = mkOption {
           description = "Encryption settings";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecBackupEncryption"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecBackupEncryption");
         };
         "mode" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "snapshotSchedule" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecBackupSnapshotSchedule"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecBackupSnapshotSchedule");
         };
       };
 
@@ -7151,90 +6641,82 @@ let
         "mode" = mkOverride 1002 null;
         "snapshotSchedule" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecBackupEncryption" = {
-
       options = {
         "kmip" = mkOption {
           description = "Kmip corresponds to the KMIP configuration assigned to the Ops Manager Project's configuration.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecBackupEncryptionKmip"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecBackupEncryptionKmip");
         };
       };
 
       config = {
         "kmip" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecBackupEncryptionKmip" = {
-
       options = {
         "client" = mkOption {
           description = "KMIP Client configuration";
-          type = (submoduleOf "mongodb.com.v1.MongoDBSpecBackupEncryptionKmipClient");
+          type = submoduleOf "mongodb.com.v1.MongoDBSpecBackupEncryptionKmipClient";
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecBackupEncryptionKmipClient" = {
-
       options = {
         "clientCertificatePrefix" = mkOption {
           description = "A prefix used to construct KMIP client certificate (and corresponding password) Secret names.\nThe names are generated using the following pattern:\nKMIP Client Certificate (TLS Secret):\n  <clientCertificatePrefix>-<CR Name>-kmip-client\nKMIP Client Certificate Password:\n  <clientCertificatePrefix>-<CR Name>-kmip-client-password\n  The expected key inside is called \"password\".";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "clientCertificatePrefix" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecBackupSnapshotSchedule" = {
-
       options = {
         "clusterCheckpointIntervalMin" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "dailySnapshotRetentionDays" = mkOption {
           description = "Number of days to retain daily snapshots. Setting 0 will disable this rule.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "fullIncrementalDayOfWeek" = mkOption {
           description = "Day of the week when Ops Manager takes a full snapshot. This ensures a recent complete backup. Ops Manager sets the default value to SUNDAY.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "monthlySnapshotRetentionMonths" = mkOption {
           description = "Number of months to retain weekly snapshots. Setting 0 will disable this rule.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "pointInTimeWindowHours" = mkOption {
           description = "Number of hours in the past for which a point-in-time snapshot can be created.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "referenceHourOfDay" = mkOption {
           description = "Hour of the day to schedule snapshots using a 24-hour clock, in UTC.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "referenceMinuteOfHour" = mkOption {
           description = "Minute of the hour to schedule snapshots, in UTC.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "snapshotIntervalHours" = mkOption {
           description = "Number of hours between snapshots.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "snapshotRetentionDays" = mkOption {
           description = "Number of days to keep recent snapshots.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "weeklySnapshotRetentionWeeks" = mkOption {
           description = "Number of weeks to retain weekly snapshots. Setting 0 will disable this rule";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -7250,46 +6732,40 @@ let
         "snapshotRetentionDays" = mkOverride 1002 null;
         "weeklySnapshotRetentionWeeks" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecCloudManager" = {
-
       options = {
         "configMapRef" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecCloudManagerConfigMapRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecCloudManagerConfigMapRef");
         };
       };
 
       config = {
         "configMapRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecCloudManagerConfigMapRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrv" = {
-
       options = {
         "additionalMongodConfig" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "agent" = mkOption {
           description = "Configuring logRotation is not allowed under this section.\nPlease use the most top level resource fields for this; spec.Agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgent");
         };
         "clusterSpecList" = mkOption {
           description = "";
@@ -7304,46 +6780,44 @@ let
         "agent" = mkOverride 1002 null;
         "clusterSpecList" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgent" = {
-
       options = {
         "backupAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentBackupAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentBackupAgent");
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logRotate" = mkOption {
           description = "DEPRECATED please use mongod.logRotate";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentLogRotate");
         };
         "maxLogFileDurationHours" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongod" = mkOption {
           description = "AgentLoggingMongodConfig contain settings for the mongodb processes configured by the agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongod"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongod");
         };
         "monitoringAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMonitoringAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMonitoringAgent");
         };
         "readinessProbe" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentReadinessProbe"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentReadinessProbe");
         };
         "startupOptions" = mkOption {
           description = "StartupParameters can be used to configure the startup parameters with which the agent starts. That also contains\nlog rotation settings as defined here:";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "systemLog" = mkOption {
           description = "DEPRECATED please use mongod.systemLog";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentSystemLog");
         };
       };
 
@@ -7358,32 +6832,28 @@ let
         "startupOptions" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentBackupAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentBackupAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentBackupAgentLogRotate");
         };
       };
 
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentBackupAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -7391,26 +6861,24 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -7428,22 +6896,20 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongod" = {
-
       options = {
         "auditlogRotate" = mkOption {
           description = "LogRotate configures audit log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodAuditlogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodAuditlogRotate");
         };
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodLogRotate");
         };
         "systemLog" = mkOption {
           description = "SystemLog configures system log of mongod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodSystemLog");
         };
       };
 
@@ -7452,26 +6918,24 @@ let
         "logRotate" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodAuditlogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -7489,26 +6953,24 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -7526,10 +6988,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentMongodSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -7545,11 +7005,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentMonitoringAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
@@ -7562,18 +7020,16 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentMonitoringAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -7581,24 +7037,20 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentReadinessProbe" = {
-
       options = {
         "environmentVariables" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
       config = {
         "environmentVariables" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvAgentSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -7614,15 +7066,13 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "ClusterName is name of the cluster where the MongoDB Statefulset will be scheduled, the\nname should have a one on one mapping with the service-account created in the central cluster\nto talk to the workload clusters.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalAccess" = mkOption {
           description = "ExternalAccessConfiguration provides external access configuration for Multi-Cluster.";
@@ -7644,15 +7094,15 @@ let
         };
         "podSpec" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpec");
         };
         "service" = mkOption {
           description = "this is an optional service, it will get the name \"<rsName>-service\" in case not provided";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration holds the optional custom StatefulSet\nthat should be merged into the operator created one.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListStatefulSet");
         };
       };
 
@@ -7664,14 +7114,12 @@ let
         "service" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListExternalAccess" = {
-
       options = {
         "externalDomain" = mkOption {
           description = "An external domain that is used for exposing MongoDB to the outside world.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalService" = mkOption {
           description = "Provides a way to override the default (NodePort) Service";
@@ -7687,18 +7135,16 @@ let
         "externalDomain" = mkOverride 1002 null;
         "externalService" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListExternalAccessExternalService" = {
-
       options = {
         "annotations" = mkOption {
           description = "A map of annotations that shall be added to the externally available Service.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "spec" = mkOption {
           description = "A wrapper for the Service spec object.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -7706,22 +7152,20 @@ let
         "annotations" = mkOverride 1002 null;
         "spec" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -7730,10 +7174,8 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
@@ -7743,7 +7185,7 @@ let
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -7751,10 +7193,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -7778,10 +7218,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -7814,22 +7252,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -7838,22 +7274,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -7862,22 +7296,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -7886,22 +7318,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -7910,10 +7340,8 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -7930,18 +7358,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvClusterSpecListStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -7949,18 +7375,16 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistence"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistence");
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -7968,18 +7392,16 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceMultiple"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceMultiple");
         };
         "single" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceSingle"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceSingle");
         };
       };
 
@@ -7987,10 +7409,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -8017,22 +7437,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8041,22 +7459,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8065,22 +7481,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8089,22 +7503,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConfigSrvPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8113,32 +7525,28 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecConnectivity" = {
-
       options = {
         "replicaSetHorizons" = mkOption {
           description = "ReplicaSetHorizons holds list of maps of horizons to be configured in each of MongoDB processes.\nHorizons map horizon names to the node addresses for each process in the replicaset, e.g.:\n [\n   {\n     \"internal\": \"my-rs-0.my-internal-domain.com:31843\",\n     \"external\": \"my-rs-0.my-external-domain.com:21467\"\n   },\n   {\n     \"internal\": \"my-rs-1.my-internal-domain.com:31843\",\n     \"external\": \"my-rs-1.my-external-domain.com:21467\"\n   },\n   ...\n ]\nThe key of each item in the map is an arbitrary, user-chosen string that\nrepresents the name of the horizon. The value of the item is the host and,\noptionally, the port that this mongod node will be connected to from.";
-          type = (types.nullOr (types.listOf types.attrs));
+          type = types.nullOr (types.listOf types.attrs);
         };
       };
 
       config = {
         "replicaSetHorizons" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecExternalAccess" = {
-
       options = {
         "externalDomain" = mkOption {
           description = "An external domain that is used for exposing MongoDB to the outside world.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalService" = mkOption {
           description = "Provides a way to override the default (NodePort) Service";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecExternalAccessExternalService"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecExternalAccessExternalService");
         };
       };
 
@@ -8146,18 +7554,16 @@ let
         "externalDomain" = mkOverride 1002 null;
         "externalService" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecExternalAccessExternalService" = {
-
       options = {
         "annotations" = mkOption {
           description = "A map of annotations that shall be added to the externally available Service.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "spec" = mkOption {
           description = "A wrapper for the Service spec object.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -8165,22 +7571,20 @@ let
         "annotations" = mkOverride 1002 null;
         "spec" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -8189,18 +7593,16 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongos" = {
-
       options = {
         "additionalMongodConfig" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "agent" = mkOption {
           description = "Configuring logRotation is not allowed under this section.\nPlease use the most top level resource fields for this; spec.Agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgent");
         };
         "clusterSpecList" = mkOption {
           description = "";
@@ -8215,46 +7617,44 @@ let
         "agent" = mkOverride 1002 null;
         "clusterSpecList" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgent" = {
-
       options = {
         "backupAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentBackupAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentBackupAgent");
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logRotate" = mkOption {
           description = "DEPRECATED please use mongod.logRotate";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentLogRotate");
         };
         "maxLogFileDurationHours" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongod" = mkOption {
           description = "AgentLoggingMongodConfig contain settings for the mongodb processes configured by the agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMongod"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMongod");
         };
         "monitoringAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMonitoringAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMonitoringAgent");
         };
         "readinessProbe" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentReadinessProbe"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentReadinessProbe");
         };
         "startupOptions" = mkOption {
           description = "StartupParameters can be used to configure the startup parameters with which the agent starts. That also contains\nlog rotation settings as defined here:";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "systemLog" = mkOption {
           description = "DEPRECATED please use mongod.systemLog";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentSystemLog");
         };
       };
 
@@ -8269,32 +7669,28 @@ let
         "startupOptions" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentBackupAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentBackupAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentBackupAgentLogRotate");
         };
       };
 
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentBackupAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -8302,26 +7698,24 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -8339,22 +7733,20 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentMongod" = {
-
       options = {
         "auditlogRotate" = mkOption {
           description = "LogRotate configures audit log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMongodAuditlogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMongodAuditlogRotate");
         };
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMongodLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMongodLogRotate");
         };
         "systemLog" = mkOption {
           description = "SystemLog configures system log of mongod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMongodSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMongodSystemLog");
         };
       };
 
@@ -8363,26 +7755,24 @@ let
         "logRotate" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentMongodAuditlogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -8400,26 +7790,24 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentMongodLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -8437,10 +7825,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentMongodSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -8456,33 +7842,29 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentMonitoringAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMonitoringAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosAgentMonitoringAgentLogRotate");
         };
       };
 
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentMonitoringAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -8490,24 +7872,20 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentReadinessProbe" = {
-
       options = {
         "environmentVariables" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
       config = {
         "environmentVariables" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosAgentSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -8523,19 +7901,17 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "ClusterName is name of the cluster where the MongoDB Statefulset will be scheduled, the\nname should have a one on one mapping with the service-account created in the central cluster\nto talk to the workload clusters.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalAccess" = mkOption {
           description = "ExternalAccessConfiguration provides external access configuration for Multi-Cluster.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosClusterSpecListExternalAccess"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosClusterSpecListExternalAccess");
         };
         "memberConfig" = mkOption {
           description = "MemberConfig allows to specify votes, priorities and tags for each of the mongodb process.";
@@ -8551,15 +7927,15 @@ let
         };
         "podSpec" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpec");
         };
         "service" = mkOption {
           description = "this is an optional service, it will get the name \"<rsName>-service\" in case not provided";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration holds the optional custom StatefulSet\nthat should be merged into the operator created one.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosClusterSpecListStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosClusterSpecListStatefulSet");
         };
       };
 
@@ -8571,14 +7947,12 @@ let
         "service" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListExternalAccess" = {
-
       options = {
         "externalDomain" = mkOption {
           description = "An external domain that is used for exposing MongoDB to the outside world.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalService" = mkOption {
           description = "Provides a way to override the default (NodePort) Service";
@@ -8594,18 +7968,16 @@ let
         "externalDomain" = mkOverride 1002 null;
         "externalService" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListExternalAccessExternalService" = {
-
       options = {
         "annotations" = mkOption {
           description = "A map of annotations that shall be added to the externally available Service.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "spec" = mkOption {
           description = "A wrapper for the Service spec object.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -8613,22 +7985,20 @@ let
         "annotations" = mkOverride 1002 null;
         "spec" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -8637,10 +8007,8 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
@@ -8650,7 +8018,7 @@ let
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -8658,10 +8026,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -8683,10 +8049,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -8719,22 +8083,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8743,22 +8105,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8767,22 +8127,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8791,22 +8149,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8815,10 +8171,8 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -8835,18 +8189,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosClusterSpecListStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -8854,18 +8206,16 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistence"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistence");
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -8873,18 +8223,16 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceMultiple"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceMultiple");
         };
         "single" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceSingle"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceSingle");
         };
       };
 
@@ -8892,10 +8240,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -8922,22 +8268,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8946,22 +8290,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8970,22 +8312,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -8994,22 +8334,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecMongosPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -9018,46 +8356,40 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecOpsManager" = {
-
       options = {
         "configMapRef" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecOpsManagerConfigMapRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecOpsManagerConfigMapRef");
         };
       };
 
       config = {
         "configMapRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecOpsManagerConfigMapRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistence"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistence");
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -9065,18 +8397,16 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultiple"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultiple");
         };
         "single" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceSingle"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceSingle");
         };
       };
 
@@ -9084,22 +8414,20 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleData"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleData");
         };
         "journal" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleJournal"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleJournal");
         };
         "logs" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleLogs"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleLogs");
         };
       };
 
@@ -9108,22 +8436,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -9132,22 +8458,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -9156,22 +8480,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -9180,22 +8502,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -9204,26 +8524,24 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPrometheus" = {
-
       options = {
         "metricsPath" = mkOption {
           description = "Indicates path to the metrics endpoint.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "passwordSecretRef" = mkOption {
           description = "Name of a Secret containing a HTTP Basic Auth Password.";
-          type = (submoduleOf "mongodb.com.v1.MongoDBSpecPrometheusPasswordSecretRef");
+          type = submoduleOf "mongodb.com.v1.MongoDBSpecPrometheusPasswordSecretRef";
         };
         "port" = mkOption {
           description = "Port where metrics endpoint will bind to. Defaults to 9216.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "tlsSecretKeyRef" = mkOption {
           description = "Name of a Secret (type kubernetes.io/tls) holding the certificates to use in the\nPrometheus endpoint.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPrometheusTlsSecretKeyRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecPrometheusTlsSecretKeyRef");
         };
         "username" = mkOption {
           description = "HTTP Basic Auth Username for metrics endpoint.";
@@ -9236,14 +8554,12 @@ let
         "port" = mkOverride 1002 null;
         "tlsSecretKeyRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPrometheusPasswordSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -9254,14 +8570,12 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecPrometheusTlsSecretKeyRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -9272,35 +8586,33 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurity" = {
-
       options = {
         "authentication" = mkOption {
           description = "Authentication holds various authentication related settings that affect\nthis MongoDB resource.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityAuthentication"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityAuthentication");
         };
         "certsSecretPrefix" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "roleRefs" = mkOption {
           description = "";
           type = (
             types.nullOr (
-              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBSpecSecurityRoleRefs" "name" [ ]
+              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBSpecSecurityRoleRefs" "name" []
             )
           );
           apply = attrsToList;
         };
         "roles" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityRoles")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityRoles"));
         };
         "tls" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityTls"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityTls");
         };
       };
 
@@ -9311,14 +8623,12 @@ let
         "roles" = mkOverride 1002 null;
         "tls" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityAuthentication" = {
-
       options = {
         "agents" = mkOption {
           description = "Agents contains authentication configuration properties for the agents";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityAuthenticationAgents"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityAuthenticationAgents");
         };
         "enabled" = mkOption {
           description = "";
@@ -9326,19 +8636,19 @@ let
         };
         "ignoreUnknownUsers" = mkOption {
           description = "IgnoreUnknownUsers maps to the inverse of auth.authoritativeSet";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "internalCluster" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "ldap" = mkOption {
           description = "LDAP Configuration";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityAuthenticationLdap"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityAuthenticationLdap");
         };
         "modes" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "oidcProviderConfigs" = mkOption {
           description = "Configuration for OIDC providers";
@@ -9350,7 +8660,7 @@ let
         };
         "requireClientTLSAuthentication" = mkOption {
           description = "Clients should present valid TLS certificates";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -9363,14 +8673,12 @@ let
         "oidcProviderConfigs" = mkOverride 1002 null;
         "requireClientTLSAuthentication" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityAuthenticationAgents" = {
-
       options = {
         "automationLdapGroupDN" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "automationPasswordSecretRef" = mkOption {
           description = "SecretKeySelector selects a key of a Secret.";
@@ -9382,11 +8690,11 @@ let
         };
         "automationUserName" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "clientCertificateSecretRef" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "mode" = mkOption {
           description = "Mode is the desired Authentication mode that the agents will use";
@@ -9400,10 +8708,8 @@ let
         "automationUserName" = mkOverride 1002 null;
         "clientCertificateSecretRef" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityAuthenticationAgentsAutomationPasswordSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "The key of the secret to select from.  Must be a valid secret key.";
@@ -9411,11 +8717,11 @@ let
         };
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "optional" = mkOption {
           description = "Specify whether the Secret or its key must be defined";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -9423,14 +8729,12 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityAuthenticationLdap" = {
-
       options = {
         "authzQueryTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "bindQueryPasswordSecretRef" = mkOption {
           description = "";
@@ -9442,7 +8746,7 @@ let
         };
         "bindQueryUser" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "caConfigMapRef" = mkOption {
           description = "Allows to point at a ConfigMap/key with a CA file to mount on the Pod";
@@ -9452,27 +8756,27 @@ let
         };
         "servers" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "timeoutMS" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "transportSecurity" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "userCacheInvalidationInterval" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "userToDNMapping" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "validateLDAPServerConfig" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -9488,10 +8792,8 @@ let
         "userToDNMapping" = mkOverride 1002 null;
         "validateLDAPServerConfig" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityAuthenticationLdapBindQueryPasswordSecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -9499,11 +8801,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecSecurityAuthenticationLdapCaConfigMapRef" = {
-
       options = {
         "key" = mkOption {
           description = "The key to select.";
@@ -9511,11 +8811,11 @@ let
         };
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "optional" = mkOption {
           description = "Specify whether the ConfigMap or its key must be defined";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -9523,10 +8823,8 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityAuthenticationOidcProviderConfigs" = {
-
       options = {
         "audience" = mkOption {
           description = "Entity that your external identity provider intends the token for.\nEnter the audience value from the app you registered with external Identity Provider.";
@@ -9542,7 +8840,7 @@ let
         };
         "clientId" = mkOption {
           description = "Unique identifier for your registered application. Enter the clientId value from the app you\nregistered with an external Identity Provider.\nRequired when selected Workforce Identity Federation authorization method";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "configurationName" = mkOption {
           description = "Unique label that identifies this configuration. It is case-sensitive and can only contain the following characters:\n - alphanumeric characters (combination of a to z and 0 to 9)\n - hyphens (-)\n - underscores (_)";
@@ -9550,7 +8848,7 @@ let
         };
         "groupsClaim" = mkOption {
           description = "The identifier of the claim that includes the principal's IdP user group membership information.\nRequired when selected GroupMembership as the authorization type, ignored otherwise";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "issuerURI" = mkOption {
           description = "Issuer value provided by your registered IdP application. Using this URI, MongoDB finds an OpenID Connect Provider\nConfiguration Document, which should be available in the /.wellknown/open-id-configuration endpoint.\nFor MongoDB 8.0+, the combination of issuerURI and audience must be unique across OIDC provider configurations.\nFor other MongoDB versions, the issuerURI itself must be unique.";
@@ -9558,7 +8856,7 @@ let
         };
         "requestedScopes" = mkOption {
           description = "Tokens that give users permission to request data from the authorization endpoint.\nOnly used for Workforce Identity Federation authorization method";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "userClaim" = mkOption {
           description = "The identifier of the claim that includes the user principal identity.\nAccept the default value unless your IdP uses a different claim.";
@@ -9571,10 +8869,8 @@ let
         "groupsClaim" = mkOverride 1002 null;
         "requestedScopes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityRoleRefs" = {
-
       options = {
         "kind" = mkOption {
           description = "";
@@ -9586,11 +8882,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecSecurityRoles" = {
-
       options = {
         "authenticationRestrictions" = mkOption {
           description = "";
@@ -9616,7 +8910,7 @@ let
         };
         "roles" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityRolesRoles")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityRolesRoles"));
         };
       };
 
@@ -9625,18 +8919,16 @@ let
         "privileges" = mkOverride 1002 null;
         "roles" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityRolesAuthenticationRestrictions" = {
-
       options = {
         "clientSource" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "serverAddress" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -9644,38 +8936,34 @@ let
         "clientSource" = mkOverride 1002 null;
         "serverAddress" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityRolesPrivileges" = {
-
       options = {
         "actions" = mkOption {
           description = "";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
         "resource" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBSpecSecurityRolesPrivilegesResource");
+          type = submoduleOf "mongodb.com.v1.MongoDBSpecSecurityRolesPrivilegesResource";
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecSecurityRolesPrivilegesResource" = {
-
       options = {
         "cluster" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "collection" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "db" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -9684,10 +8972,8 @@ let
         "collection" = mkOverride 1002 null;
         "db" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecSecurityRolesRoles" = {
-
       options = {
         "db" = mkOption {
           description = "";
@@ -9699,23 +8985,21 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecSecurityTls" = {
-
       options = {
         "additionalCertificateDomains" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
         "ca" = mkOption {
           description = "CA corresponds to a ConfigMap containing an entry for the CA certificate (ca.pem)\nused to validate the certificates created already.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "enabled" = mkOption {
           description = "DEPRECATED please enable TLS by setting `security.certsSecretPrefix` or `security.tls.secretRef.prefix`.\nEnables TLS for this resource. This will make the operator try to mount a\nSecret with a defined name (<resource-name>-cert).\nThis is only used when enabling TLS on a MongoDB resource, and not on the\nAppDB, where TLS is configured by setting `secretRef.Name`.";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -9724,22 +9008,20 @@ let
         "ca" = mkOverride 1002 null;
         "enabled" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShard" = {
-
       options = {
         "additionalMongodConfig" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "agent" = mkOption {
           description = "Configuring logRotation is not allowed under this section.\nPlease use the most top level resource fields for this; spec.Agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgent");
         };
         "clusterSpecList" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecShardClusterSpecList")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBSpecShardClusterSpecList"));
         };
       };
 
@@ -9748,46 +9030,44 @@ let
         "agent" = mkOverride 1002 null;
         "clusterSpecList" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgent" = {
-
       options = {
         "backupAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentBackupAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentBackupAgent");
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logRotate" = mkOption {
           description = "DEPRECATED please use mongod.logRotate";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentLogRotate");
         };
         "maxLogFileDurationHours" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongod" = mkOption {
           description = "AgentLoggingMongodConfig contain settings for the mongodb processes configured by the agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMongod"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMongod");
         };
         "monitoringAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMonitoringAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMonitoringAgent");
         };
         "readinessProbe" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentReadinessProbe"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentReadinessProbe");
         };
         "startupOptions" = mkOption {
           description = "StartupParameters can be used to configure the startup parameters with which the agent starts. That also contains\nlog rotation settings as defined here:";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "systemLog" = mkOption {
           description = "DEPRECATED please use mongod.systemLog";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentSystemLog");
         };
       };
 
@@ -9802,32 +9082,28 @@ let
         "startupOptions" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentBackupAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentBackupAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentBackupAgentLogRotate");
         };
       };
 
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentBackupAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -9835,26 +9111,24 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -9872,22 +9146,20 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentMongod" = {
-
       options = {
         "auditlogRotate" = mkOption {
           description = "LogRotate configures audit log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMongodAuditlogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMongodAuditlogRotate");
         };
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMongodLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMongodLogRotate");
         };
         "systemLog" = mkOption {
           description = "SystemLog configures system log of mongod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMongodSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMongodSystemLog");
         };
       };
 
@@ -9896,26 +9168,24 @@ let
         "logRotate" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentMongodAuditlogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -9933,26 +9203,24 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentMongodLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -9970,10 +9238,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentMongodSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -9989,33 +9255,29 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecShardAgentMonitoringAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMonitoringAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardAgentMonitoringAgentLogRotate");
         };
       };
 
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentMonitoringAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -10023,24 +9285,20 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentReadinessProbe" = {
-
       options = {
         "environmentVariables" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
       config = {
         "environmentVariables" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardAgentSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -10056,19 +9314,17 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "ClusterName is name of the cluster where the MongoDB Statefulset will be scheduled, the\nname should have a one on one mapping with the service-account created in the central cluster\nto talk to the workload clusters.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalAccess" = mkOption {
           description = "ExternalAccessConfiguration provides external access configuration for Multi-Cluster.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardClusterSpecListExternalAccess"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardClusterSpecListExternalAccess");
         };
         "memberConfig" = mkOption {
           description = "MemberConfig allows to specify votes, priorities and tags for each of the mongodb process.";
@@ -10084,15 +9340,15 @@ let
         };
         "podSpec" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpec");
         };
         "service" = mkOption {
           description = "this is an optional service, it will get the name \"<rsName>-service\" in case not provided";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration holds the optional custom StatefulSet\nthat should be merged into the operator created one.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardClusterSpecListStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardClusterSpecListStatefulSet");
         };
       };
 
@@ -10104,14 +9360,12 @@ let
         "service" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListExternalAccess" = {
-
       options = {
         "externalDomain" = mkOption {
           description = "An external domain that is used for exposing MongoDB to the outside world.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "externalService" = mkOption {
           description = "Provides a way to override the default (NodePort) Service";
@@ -10127,18 +9381,16 @@ let
         "externalDomain" = mkOverride 1002 null;
         "externalService" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListExternalAccessExternalService" = {
-
       options = {
         "annotations" = mkOption {
           description = "A map of annotations that shall be added to the externally available Service.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "spec" = mkOption {
           description = "A wrapper for the Service spec object.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -10146,22 +9398,20 @@ let
         "annotations" = mkOverride 1002 null;
         "spec" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -10170,10 +9420,8 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
@@ -10183,7 +9431,7 @@ let
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -10191,10 +9439,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -10216,10 +9462,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -10252,22 +9496,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -10276,22 +9518,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -10300,22 +9540,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -10324,22 +9562,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -10348,10 +9584,8 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -10368,18 +9602,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardClusterSpecListStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -10387,18 +9619,16 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverrides" = {
-
       options = {
         "additionalMongodConfig" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "agent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgent");
         };
         "clusterSpecList" = mkOption {
           description = "";
@@ -10414,19 +9644,19 @@ let
         };
         "members" = mkOption {
           description = "Number of member nodes in this shard. Used only in SingleCluster. For MultiCluster the number of members is specified in ShardOverride.ClusterSpecList.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "podSpec" = mkOption {
           description = "The following override fields work for SingleCluster only. For MultiCluster - fields from specific clusters are used.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesPodSpec"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesPodSpec");
         };
         "shardNames" = mkOption {
           description = "";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
         "statefulSet" = mkOption {
           description = "Statefulset override for this particular shard.";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesStatefulSet"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesStatefulSet");
         };
       };
 
@@ -10439,46 +9669,44 @@ let
         "podSpec" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgent" = {
-
       options = {
         "backupAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentBackupAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentBackupAgent");
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logRotate" = mkOption {
           description = "DEPRECATED please use mongod.logRotate";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentLogRotate");
         };
         "maxLogFileDurationHours" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongod" = mkOption {
           description = "AgentLoggingMongodConfig contain settings for the mongodb processes configured by the agent";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongod"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongod");
         };
         "monitoringAgent" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentMonitoringAgent"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentMonitoringAgent");
         };
         "readinessProbe" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentReadinessProbe"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentReadinessProbe");
         };
         "startupOptions" = mkOption {
           description = "StartupParameters can be used to configure the startup parameters with which the agent starts. That also contains\nlog rotation settings as defined here:";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "systemLog" = mkOption {
           description = "DEPRECATED please use mongod.systemLog";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentSystemLog");
         };
       };
 
@@ -10493,10 +9721,8 @@ let
         "startupOptions" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentBackupAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
@@ -10509,18 +9735,16 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentBackupAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -10528,26 +9752,24 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -10565,10 +9787,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongod" = {
-
       options = {
         "auditlogRotate" = mkOption {
           description = "LogRotate configures audit log rotation for the mongodb processes";
@@ -10578,11 +9798,11 @@ let
         };
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the mongodb processes";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongodLogRotate"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongodLogRotate");
         };
         "systemLog" = mkOption {
           description = "SystemLog configures system log of mongod";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongodSystemLog"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongodSystemLog");
         };
       };
 
@@ -10591,26 +9811,24 @@ let
         "logRotate" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongodAuditlogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -10628,26 +9846,24 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongodLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -10665,10 +9881,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentMongodSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -10684,11 +9898,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentMonitoringAgent" = {
-
       options = {
         "logRotate" = mkOption {
           description = "LogRotate configures log rotation for the BackupAgent processes";
@@ -10701,18 +9913,16 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentMonitoringAgentLogRotate" = {
-
       options = {
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nOM only supports ints";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "timeThresholdHrs" = mkOption {
           description = "Number of hours after which this MongoDB Agent rotates the log file.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -10720,24 +9930,20 @@ let
         "sizeThresholdMB" = mkOverride 1002 null;
         "timeThresholdHrs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentReadinessProbe" = {
-
       options = {
         "environmentVariables" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
       config = {
         "environmentVariables" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesAgentSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -10753,15 +9959,13 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecList" = {
-
       options = {
         "clusterName" = mkOption {
           description = "ClusterName is name of the cluster where the MongoDB Statefulset will be scheduled, the\nname should have a one on one mapping with the service-account created in the central cluster\nto talk to the workload clusters.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "memberConfig" = mkOption {
           description = "MemberConfig allows to specify votes, priorities and tags for each of the mongodb process.";
@@ -10773,7 +9977,7 @@ let
         };
         "members" = mkOption {
           description = "Amount of members for this MongoDB Replica Set";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "podSpec" = mkOption {
           description = "";
@@ -10796,22 +10000,20 @@ let
         "podSpec" = mkOverride 1002 null;
         "statefulSet" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -10820,10 +10022,8 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
@@ -10835,7 +10035,7 @@ let
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -10843,10 +10043,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -10870,10 +10068,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -10906,22 +10102,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -10930,22 +10124,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -10954,22 +10146,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -10978,22 +10168,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11002,10 +10190,8 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -11024,18 +10210,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesClusterSpecListStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -11043,22 +10227,20 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -11067,18 +10249,16 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesPodSpecPersistence"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesPodSpecPersistence");
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -11086,10 +10266,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -11109,10 +10287,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -11141,22 +10317,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11165,22 +10339,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11189,22 +10361,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11213,22 +10383,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11237,14 +10405,12 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesStatefulSetMetadata"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardOverridesStatefulSetMetadata");
         };
         "spec" = mkOption {
           description = "";
@@ -11255,18 +10421,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardOverridesStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -11274,18 +10438,16 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistence"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistence");
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -11293,18 +10455,16 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultiple"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultiple");
         };
         "single" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceSingle"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceSingle");
         };
       };
 
@@ -11312,14 +10472,12 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultipleData"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultipleData");
         };
         "journal" = mkOption {
           description = "";
@@ -11329,7 +10487,7 @@ let
         };
         "logs" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultipleLogs"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultipleLogs");
         };
       };
 
@@ -11338,22 +10496,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11362,22 +10518,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11386,22 +10540,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11410,22 +10562,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11434,18 +10584,16 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardSpecificPodSpec" = {
-
       options = {
         "persistence" = mkOption {
           description = "Note, that this field is used by MongoDB resources only, let's keep it here for simplicity";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardSpecificPodSpecPersistence"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecShardSpecificPodSpecPersistence");
         };
         "podTemplate" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -11453,10 +10601,8 @@ let
         "persistence" = mkOverride 1002 null;
         "podTemplate" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardSpecificPodSpecPersistence" = {
-
       options = {
         "multiple" = mkOption {
           description = "";
@@ -11476,10 +10622,8 @@ let
         "multiple" = mkOverride 1002 null;
         "single" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardSpecificPodSpecPersistenceMultiple" = {
-
       options = {
         "data" = mkOption {
           description = "";
@@ -11508,22 +10652,20 @@ let
         "journal" = mkOverride 1002 null;
         "logs" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardSpecificPodSpecPersistenceMultipleData" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11532,22 +10674,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardSpecificPodSpecPersistenceMultipleJournal" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11556,22 +10696,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardSpecificPodSpecPersistenceMultipleLogs" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11580,22 +10718,20 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecShardSpecificPodSpecPersistenceSingle" = {
-
       options = {
         "labelSelector" = mkOption {
           description = "";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "storage" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "storageClass" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11604,14 +10740,12 @@ let
         "storage" = mkOverride 1002 null;
         "storageClass" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecStatefulSetMetadata"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBSpecStatefulSetMetadata");
         };
         "spec" = mkOption {
           description = "";
@@ -11622,18 +10756,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBSpecStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -11641,50 +10773,48 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBStatus" = {
-
       options = {
         "backup" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBStatusBackup"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBStatusBackup");
         };
         "configServerCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "featureCompatibilityVersion" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "lastTransition" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "link" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "members" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "mongodsPerShardCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "mongosCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "observedGeneration" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "phase" = mkOption {
           description = "";
@@ -11692,24 +10822,24 @@ let
         };
         "pvc" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBStatusPvc")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBStatusPvc"));
         };
         "resourcesNotReady" = mkOption {
           description = "";
           type = (
             types.nullOr (
-              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBStatusResourcesNotReady" "name" [ ]
+              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBStatusResourcesNotReady" "name" []
             )
           );
           apply = attrsToList;
         };
         "shardCount" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "sizeStatusInClusters" = mkOption {
           description = "MongodbShardedSizeStatusInClusters describes the number and sizes of replica sets members deployed across member clusters";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBStatusSizeStatusInClusters"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBStatusSizeStatusInClusters");
         };
         "version" = mkOption {
           description = "";
@@ -11717,7 +10847,7 @@ let
         };
         "warnings" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -11738,10 +10868,8 @@ let
         "sizeStatusInClusters" = mkOverride 1002 null;
         "warnings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBStatusBackup" = {
-
       options = {
         "statusName" = mkOption {
           description = "";
@@ -11749,11 +10877,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBStatusPvc" = {
-
       options = {
         "phase" = mkOption {
           description = "";
@@ -11765,11 +10891,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBStatusResourcesNotReady" = {
-
       options = {
         "errors" = mkOption {
           description = "";
@@ -11783,7 +10907,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -11795,18 +10919,16 @@ let
         "errors" = mkOverride 1002 null;
         "message" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBStatusResourcesNotReadyErrors" = {
-
       options = {
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "reason" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -11814,26 +10936,24 @@ let
         "message" = mkOverride 1002 null;
         "reason" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBStatusSizeStatusInClusters" = {
-
       options = {
         "configServerMongodsInClusters" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.int));
+          type = types.nullOr (types.attrsOf types.int);
         };
         "mongosCountInClusters" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.int));
+          type = types.nullOr (types.attrsOf types.int);
         };
         "shardMongodsInClusters" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.int));
+          type = types.nullOr (types.attrsOf types.int);
         };
         "shardOverridesInClusters" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.attrs));
+          type = types.nullOr (types.attrsOf types.attrs);
         };
       };
 
@@ -11843,30 +10963,28 @@ let
         "shardMongodsInClusters" = mkOverride 1002 null;
         "shardOverridesInClusters" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBUser" = {
-
       options = {
         "apiVersion" = mkOption {
           description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "kind" = mkOption {
           description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "metadata" = mkOption {
           description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
         };
         "spec" = mkOption {
           description = "";
-          type = (submoduleOf "mongodb.com.v1.MongoDBUserSpec");
+          type = submoduleOf "mongodb.com.v1.MongoDBUserSpec";
         };
         "status" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBUserStatus"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBUserStatus");
         };
       };
 
@@ -11876,14 +10994,12 @@ let
         "metadata" = mkOverride 1002 null;
         "status" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBUserSpec" = {
-
       options = {
         "connectionStringSecretName" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "db" = mkOption {
           description = "";
@@ -11891,16 +11007,16 @@ let
         };
         "mongodbResourceRef" = mkOption {
           description = "";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBUserSpecMongodbResourceRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBUserSpecMongodbResourceRef");
         };
         "passwordSecretKeyRef" = mkOption {
           description = "SecretKeyRef is a reference to a value in a given secret in the same\nnamespace. Based on:\nhttps://kubernetes.io/docs/reference/generated/kubernetes-api/v1.15/#secretkeyselector-v1-core";
-          type = (types.nullOr (submoduleOf "mongodb.com.v1.MongoDBUserSpecPasswordSecretKeyRef"));
+          type = types.nullOr (submoduleOf "mongodb.com.v1.MongoDBUserSpecPasswordSecretKeyRef");
         };
         "roles" = mkOption {
           description = "";
           type = (
-            types.nullOr (coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBUserSpecRoles" "name" [ ])
+            types.nullOr (coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBUserSpecRoles" "name" [])
           );
           apply = attrsToList;
         };
@@ -11916,10 +11032,8 @@ let
         "passwordSecretKeyRef" = mkOverride 1002 null;
         "roles" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBUserSpecMongodbResourceRef" = {
-
       options = {
         "name" = mkOption {
           description = "";
@@ -11927,21 +11041,19 @@ let
         };
         "namespace" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "namespace" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBUserSpecPasswordSecretKeyRef" = {
-
       options = {
         "key" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -11952,10 +11064,8 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBUserSpecRoles" = {
-
       options = {
         "db" = mkOption {
           description = "";
@@ -11967,11 +11077,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBUserStatus" = {
-
       options = {
         "db" = mkOption {
           description = "";
@@ -11979,15 +11087,15 @@ let
         };
         "lastTransition" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "observedGeneration" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "phase" = mkOption {
           description = "";
@@ -11999,13 +11107,13 @@ let
         };
         "pvc" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBUserStatusPvc")));
+          type = types.nullOr (types.listOf (submoduleOf "mongodb.com.v1.MongoDBUserStatusPvc"));
         };
         "resourcesNotReady" = mkOption {
           description = "";
           type = (
             types.nullOr (
-              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBUserStatusResourcesNotReady" "name" [ ]
+              coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBUserStatusResourcesNotReady" "name" []
             )
           );
           apply = attrsToList;
@@ -12013,7 +11121,7 @@ let
         "roles" = mkOption {
           description = "";
           type = (
-            types.nullOr (coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBUserStatusRoles" "name" [ ])
+            types.nullOr (coerceAttrsOfSubmodulesToListByKey "mongodb.com.v1.MongoDBUserStatusRoles" "name" [])
           );
           apply = attrsToList;
         };
@@ -12023,7 +11131,7 @@ let
         };
         "warnings" = mkOption {
           description = "";
-          type = (types.nullOr (types.listOf types.str));
+          type = types.nullOr (types.listOf types.str);
         };
       };
 
@@ -12036,10 +11144,8 @@ let
         "roles" = mkOverride 1002 null;
         "warnings" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBUserStatusPvc" = {
-
       options = {
         "phase" = mkOption {
           description = "";
@@ -12051,11 +11157,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodb.com.v1.MongoDBUserStatusResourcesNotReady" = {
-
       options = {
         "errors" = mkOption {
           description = "";
@@ -12069,7 +11173,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "";
@@ -12081,18 +11185,16 @@ let
         "errors" = mkOverride 1002 null;
         "message" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBUserStatusResourcesNotReadyErrors" = {
-
       options = {
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "reason" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -12100,10 +11202,8 @@ let
         "message" = mkOverride 1002 null;
         "reason" = mkOverride 1002 null;
       };
-
     };
     "mongodb.com.v1.MongoDBUserStatusRoles" = {
-
       options = {
         "db" = mkOption {
           description = "";
@@ -12115,31 +11215,29 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunity" = {
-
       options = {
         "apiVersion" = mkOption {
           description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "kind" = mkOption {
           description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "metadata" = mkOption {
           description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
         };
         "spec" = mkOption {
           description = "MongoDBCommunitySpec defines the desired state of MongoDB";
-          type = (types.nullOr (submoduleOf "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpec"));
+          type = types.nullOr (submoduleOf "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpec");
         };
         "status" = mkOption {
           description = "MongoDBCommunityStatus defines the observed state of MongoDB";
-          type = (types.nullOr (submoduleOf "mongodbcommunity.mongodb.com.v1.MongoDBCommunityStatus"));
+          type = types.nullOr (submoduleOf "mongodbcommunity.mongodb.com.v1.MongoDBCommunityStatus");
         };
       };
 
@@ -12150,26 +11248,24 @@ let
         "spec" = mkOverride 1002 null;
         "status" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpec" = {
-
       options = {
         "additionalConnectionStringConfig" = mkOption {
           description = "Additional options to be appended to the connection string. These options apply to the entire resource and to each user.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "additionalMongodConfig" = mkOption {
           description = "AdditionalMongodConfig is additional configuration that can be passed to\neach data-bearing mongod at runtime. Uses the same structure as the mongod\nconfiguration file: https://www.mongodb.com/docs/manual/reference/configuration-options/";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "agent" = mkOption {
           description = "AgentConfiguration sets options for the MongoDB automation agent";
-          type = (types.nullOr (submoduleOf "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAgent"));
+          type = types.nullOr (submoduleOf "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAgent");
         };
         "arbiters" = mkOption {
           description = "Arbiters is the number of arbiters to add to the Replica Set.\nIt is not recommended to have more than one arbiter per Replica Set.\nMore info: https://www.mongodb.com/docs/manual/tutorial/add-replica-set-arbiter/";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "automationConfig" = mkOption {
           description = "AutomationConfigOverride is merged on top of the operator created automation config. Processes are merged\nby name. Currently Only the process.disabled field is supported.";
@@ -12179,11 +11275,11 @@ let
         };
         "clusterDomain" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "featureCompatibilityVersion" = mkOption {
           description = "FeatureCompatibilityVersion configures the feature compatibility version that will\nbe set for the deployment";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "memberConfig" = mkOption {
           description = "MemberConfig";
@@ -12195,7 +11291,7 @@ let
         };
         "members" = mkOption {
           description = "Members is the number of members in the replica set";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "prometheus" = mkOption {
           description = "Prometheus configurations.";
@@ -12205,11 +11301,11 @@ let
         };
         "replicaSetHorizons" = mkOption {
           description = "ReplicaSetHorizons Add this parameter and values if you need your database\nto be accessed outside of Kubernetes. This setting allows you to\nprovide different DNS settings within the Kubernetes cluster and\nto the Kubernetes cluster. The Kubernetes Operator uses split horizon\nDNS for replica set members. This feature allows communication both\nwithin the Kubernetes cluster and from outside Kubernetes.";
-          type = (types.nullOr (types.listOf types.attrs));
+          type = types.nullOr (types.listOf types.attrs);
         };
         "security" = mkOption {
           description = "Security configures security features, such as TLS, and authentication settings for a deployment";
-          type = (submoduleOf "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurity");
+          type = submoduleOf "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurity";
         };
         "statefulSet" = mkOption {
           description = "StatefulSetConfiguration holds the optional custom StatefulSet\nthat should be merged into the operator created one.";
@@ -12225,14 +11321,14 @@ let
           description = "Users specifies the MongoDB users that should be configured in your deployment";
           type = (
             coerceAttrsOfSubmodulesToListByKey "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecUsers"
-              "name"
-              [ ]
+            "name"
+            []
           );
           apply = attrsToList;
         };
         "version" = mkOption {
           description = "Version defines which version of MongoDB will be used";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -12251,10 +11347,8 @@ let
         "statefulSet" = mkOverride 1002 null;
         "version" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAgent" = {
-
       options = {
         "auditLogRotate" = mkOption {
           description = "AuditLogRotate if enabled, will enable AuditLogRotate for all processes.";
@@ -12264,11 +11358,11 @@ let
         };
         "logFile" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logLevel" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "logRotate" = mkOption {
           description = "LogRotate if enabled, will enable LogRotate for all processes.";
@@ -12278,7 +11372,7 @@ let
         };
         "maxLogFileDurationHours" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "systemLog" = mkOption {
           description = "SystemLog configures system log of mongod";
@@ -12296,26 +11390,24 @@ let
         "maxLogFileDurationHours" = mkOverride 1002 null;
         "systemLog" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAgentAuditLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -12333,26 +11425,24 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAgentLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -12370,10 +11460,8 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAgentSystemLog" = {
-
       options = {
         "destination" = mkOption {
           description = "";
@@ -12389,20 +11477,18 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAutomationConfig" = {
-
       options = {
         "processes" = mkOption {
           description = "";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAutomationConfigProcesses"
-                "name"
-                [ ]
+              "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAutomationConfigProcesses"
+              "name"
+              []
             )
           );
           apply = attrsToList;
@@ -12421,10 +11507,8 @@ let
         "processes" = mkOverride 1002 null;
         "replicaSet" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAutomationConfigProcesses" = {
-
       options = {
         "disabled" = mkOption {
           description = "";
@@ -12447,26 +11531,24 @@ let
       config = {
         "logRotate" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAutomationConfigProcessesLogRotate" = {
-
       options = {
         "includeAuditLogsWithMongoDBLogs" = mkOption {
           description = "set to 'true' to have the Automation Agent rotate the audit files along\nwith mongodb log files";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "numTotal" = mkOption {
           description = "maximum number of log files to have total";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "numUncompressed" = mkOption {
           description = "maximum number of log files to leave uncompressed";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "percentOfDiskspace" = mkOption {
           description = "Maximum percentage of the total disk space these log files should take up.\nThe string needs to be able to be converted to float64";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "sizeThresholdMB" = mkOption {
           description = "Maximum size for an individual log file before rotation.\nThe string needs to be able to be converted to float64.\nFractional values of MB are supported.";
@@ -12484,18 +11566,16 @@ let
         "numUncompressed" = mkOverride 1002 null;
         "percentOfDiskspace" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecAutomationConfigReplicaSet" = {
-
       options = {
         "id" = mkOption {
           description = "Id can be used together with additionalMongodConfig.replication.replSetName\nto manage clusters where replSetName differs from the MongoDBCommunity resource name";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "settings" = mkOption {
           description = "MapWrapper is a wrapper for a map to be used by other structs.\nThe CRD generator does not support map[string]interface{}\non the top level and hence we need to work around this with\na wrapping struct.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
       };
 
@@ -12503,22 +11583,20 @@ let
         "id" = mkOverride 1002 null;
         "settings" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecMemberConfig" = {
-
       options = {
         "priority" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "tags" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "votes" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
       };
 
@@ -12527,14 +11605,12 @@ let
         "tags" = mkOverride 1002 null;
         "votes" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecPrometheus" = {
-
       options = {
         "metricsPath" = mkOption {
           description = "Indicates path to the metrics endpoint.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "passwordSecretRef" = mkOption {
           description = "Name of a Secret containing a HTTP Basic Auth Password.";
@@ -12544,7 +11620,7 @@ let
         };
         "port" = mkOption {
           description = "Port where metrics endpoint will bind to. Defaults to 9216.";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "tlsSecretKeyRef" = mkOption {
           description = "Name of a Secret (type kubernetes.io/tls) holding the certificates to use in the\nPrometheus endpoint.";
@@ -12565,14 +11641,12 @@ let
         "port" = mkOverride 1002 null;
         "tlsSecretKeyRef" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecPrometheusPasswordSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -12583,14 +11657,12 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecPrometheusTlsSecretKeyRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -12601,10 +11673,8 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurity" = {
-
       options = {
         "authentication" = mkOption {
           description = "";
@@ -12635,10 +11705,8 @@ let
         "roles" = mkOverride 1002 null;
         "tls" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityAuthentication" = {
-
       options = {
         "agentCertificateSecretRef" = mkOption {
           description = "AgentCertificateSecret is a reference to a Secret containing the certificate and the key for the automation agent\nThe secret needs to have available:\n- certificate under key: \"tls.crt\"\n- private key under key: \"tls.key\"\nIf additionally, tls.pem is present, then it needs to be equal to the concatenation of tls.crt and tls.key";
@@ -12650,15 +11718,15 @@ let
         };
         "agentMode" = mkOption {
           description = "AgentMode contains the authentication mode used by the automation agent.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "ignoreUnknownUsers" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "modes" = mkOption {
           description = "Modes is an array specifying which authentication methods should be enabled.";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
       };
 
@@ -12667,25 +11735,20 @@ let
         "agentMode" = mkOverride 1002 null;
         "ignoreUnknownUsers" = mkOverride 1002 null;
       };
-
     };
-    "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityAuthenticationAgentCertificateSecretRef" =
-      {
-
-        options = {
-          "name" = mkOption {
-            description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-            type = (types.nullOr types.str);
-          };
+    "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityAuthenticationAgentCertificateSecretRef" = {
+      options = {
+        "name" = mkOption {
+          description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
+          type = types.nullOr types.str;
         };
-
-        config = {
-          "name" = mkOverride 1002 null;
-        };
-
       };
-    "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityRoles" = {
 
+      config = {
+        "name" = mkOverride 1002 null;
+      };
+    };
+    "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityRoles" = {
       options = {
         "authenticationRestrictions" = mkOption {
           description = "The authentication restrictions the server enforces on the role.";
@@ -12718,9 +11781,9 @@ let
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
-                "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityRolesRoles"
-                "name"
-                [ ]
+              "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityRolesRoles"
+              "name"
+              []
             )
           );
           apply = attrsToList;
@@ -12731,30 +11794,26 @@ let
         "authenticationRestrictions" = mkOverride 1002 null;
         "roles" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityRolesAuthenticationRestrictions" = {
-
       options = {
         "clientSource" = mkOption {
           description = "";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
         "serverAddress" = mkOption {
           description = "";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityRolesPrivileges" = {
-
       options = {
         "actions" = mkOption {
           description = "";
-          type = (types.listOf types.str);
+          type = types.listOf types.str;
         };
         "resource" = mkOption {
           description = "Resource specifies specifies the resources upon which a privilege permits actions.\nSee https://www.mongodb.com/docs/manual/reference/resource-document for more.";
@@ -12764,27 +11823,25 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityRolesPrivilegesResource" = {
-
       options = {
         "anyResource" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "cluster" = mkOption {
           description = "";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
         "collection" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "db" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -12794,10 +11851,8 @@ let
         "collection" = mkOverride 1002 null;
         "db" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityRolesRoles" = {
-
       options = {
         "db" = mkOption {
           description = "DB is the database the role can act on";
@@ -12809,11 +11864,9 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityTls" = {
-
       options = {
         "caCertificateSecretRef" = mkOption {
           description = "CaCertificateSecret is a reference to a Secret containing the certificate for the CA which signed the server certificates\nThe certificate is expected to be available under the key \"ca.crt\"";
@@ -12845,7 +11898,7 @@ let
         };
         "optional" = mkOption {
           description = "Optional configures if TLS should be required or optional for connections";
-          type = (types.nullOr types.bool);
+          type = types.nullOr types.bool;
         };
       };
 
@@ -12855,52 +11908,44 @@ let
         "certificateKeySecretRef" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityTlsCaCertificateSecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityTlsCaConfigMapRef" = {
-
       options = {
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecSecurityTlsCertificateKeySecretRef" = {
-
       options = {
         "name" = mkOption {
           description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
       config = {
         "name" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecStatefulSet" = {
-
       options = {
         "metadata" = mkOption {
           description = "StatefulSetMetadataWrapper is a wrapper around Labels and Annotations";
@@ -12917,18 +11962,16 @@ let
       config = {
         "metadata" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecStatefulSetMetadata" = {
-
       options = {
         "annotations" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "labels" = mkOption {
           description = "";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
       };
 
@@ -12936,30 +11979,28 @@ let
         "annotations" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecUsers" = {
-
       options = {
         "additionalConnectionStringConfig" = mkOption {
           description = "Additional options to be appended to the connection string.\nThese options apply only to this user and will override any existing options in the resource.";
-          type = (types.nullOr types.attrs);
+          type = types.nullOr types.attrs;
         };
         "connectionStringSecretAnnotations" = mkOption {
           description = "ConnectionStringSecretAnnotations is the annotations of the secret object created by the operator which exposes the connection strings for the user.";
-          type = (types.nullOr (types.attrsOf types.str));
+          type = types.nullOr (types.attrsOf types.str);
         };
         "connectionStringSecretName" = mkOption {
           description = "ConnectionStringSecretName is the name of the secret object created by the operator which exposes the connection strings for the user.\nIf provided, this secret must be different for each user in a deployment.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "connectionStringSecretNamespace" = mkOption {
           description = "ConnectionStringSecretNamespace is the namespace of the secret object created by the operator which exposes the connection strings for the user.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "db" = mkOption {
           description = "DB is the database the user is stored in. Defaults to \"admin\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the username of the user";
@@ -12977,14 +12018,14 @@ let
           description = "Roles is an array of roles assigned to this user";
           type = (
             coerceAttrsOfSubmodulesToListByKey "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecUsersRoles"
-              "name"
-              [ ]
+            "name"
+            []
           );
           apply = attrsToList;
         };
         "scramCredentialsSecretName" = mkOption {
           description = "ScramCredentialsSecretName appended by string \"scram-credentials\" is the name of the secret object created by the mongoDB operator for storing SCRAM credentials\nThese secrets names must be different for each user in a deployment.";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -12997,14 +12038,12 @@ let
         "passwordSecretRef" = mkOverride 1002 null;
         "scramCredentialsSecretName" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecUsersPasswordSecretRef" = {
-
       options = {
         "key" = mkOption {
           description = "Key is the key in the secret storing this password. Defaults to \"password\"";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "name" = mkOption {
           description = "Name is the name of the secret storing this user's password";
@@ -13015,10 +12054,8 @@ let
       config = {
         "key" = mkOverride 1002 null;
       };
-
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunitySpecUsersRoles" = {
-
       options = {
         "db" = mkOption {
           description = "DB is the database the role can act on";
@@ -13030,15 +12067,13 @@ let
         };
       };
 
-      config = { };
-
+      config = {};
     };
     "mongodbcommunity.mongodb.com.v1.MongoDBCommunityStatus" = {
-
       options = {
         "currentMongoDBArbiters" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "currentMongoDBMembers" = mkOption {
           description = "";
@@ -13046,7 +12081,7 @@ let
         };
         "currentStatefulSetArbitersReplicas" = mkOption {
           description = "";
-          type = (types.nullOr types.int);
+          type = types.nullOr types.int;
         };
         "currentStatefulSetReplicas" = mkOption {
           description = "";
@@ -13054,7 +12089,7 @@ let
         };
         "message" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
         "mongoUri" = mkOption {
           description = "";
@@ -13066,7 +12101,7 @@ let
         };
         "version" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = types.nullOr types.str;
         };
       };
 
@@ -13076,170 +12111,166 @@ let
         "message" = mkOverride 1002 null;
         "version" = mkOverride 1002 null;
       };
-
     };
-
   };
-in
-{
+in {
   # all resource versions
   options = {
-    resources = {
-      "mongodb.com"."v1"."ClusterMongoDBRole" = mkOption {
-        description = "ClusterMongoDBRole is the Schema for the clustermongodbroles API.";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.ClusterMongoDBRole" "clustermongodbroles"
+    resources =
+      {
+        "mongodb.com"."v1"."ClusterMongoDBRole" = mkOption {
+          description = "ClusterMongoDBRole is the Schema for the clustermongodbroles API.";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.ClusterMongoDBRole" "clustermongodbroles"
               "ClusterMongoDBRole"
               "mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-      "mongodb.com"."v1"."MongoDB" = mkOption {
-        description = "";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDB" "mongodb" "MongoDB" "mongodb.com" "v1"
-          )
-        );
-        default = { };
-      };
-      "mongodb.com"."v1"."MongoDBMultiCluster" = mkOption {
-        description = "";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDBMultiCluster" "mongodbmulticluster"
+            )
+          );
+          default = {};
+        };
+        "mongodb.com"."v1"."MongoDB" = mkOption {
+          description = "";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDB" "mongodb" "MongoDB" "mongodb.com" "v1"
+            )
+          );
+          default = {};
+        };
+        "mongodb.com"."v1"."MongoDBMultiCluster" = mkOption {
+          description = "";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDBMultiCluster" "mongodbmulticluster"
               "MongoDBMultiCluster"
               "mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-      "mongodb.com"."v1"."MongoDBOpsManager" = mkOption {
-        description = "The MongoDBOpsManager resource allows you to deploy Ops Manager within your Kubernetes cluster";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDBOpsManager" "opsmanagers" "MongoDBOpsManager"
+            )
+          );
+          default = {};
+        };
+        "mongodb.com"."v1"."MongoDBOpsManager" = mkOption {
+          description = "The MongoDBOpsManager resource allows you to deploy Ops Manager within your Kubernetes cluster";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDBOpsManager" "opsmanagers" "MongoDBOpsManager"
               "mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-      "mongodb.com"."v1"."MongoDBSearch" = mkOption {
-        description = "";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDBSearch" "mongodbsearch" "MongoDBSearch" "mongodb.com"
+            )
+          );
+          default = {};
+        };
+        "mongodb.com"."v1"."MongoDBSearch" = mkOption {
+          description = "";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDBSearch" "mongodbsearch" "MongoDBSearch" "mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-      "mongodb.com"."v1"."MongoDBUser" = mkOption {
-        description = "";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDBUser" "mongodbusers" "MongoDBUser" "mongodb.com" "v1"
-          )
-        );
-        default = { };
-      };
-      "mongodbcommunity.mongodb.com"."v1"."MongoDBCommunity" = mkOption {
-        description = "MongoDBCommunity is the Schema for the mongodbs API";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodbcommunity.mongodb.com.v1.MongoDBCommunity" "mongodbcommunity"
+            )
+          );
+          default = {};
+        };
+        "mongodb.com"."v1"."MongoDBUser" = mkOption {
+          description = "";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDBUser" "mongodbusers" "MongoDBUser" "mongodb.com" "v1"
+            )
+          );
+          default = {};
+        };
+        "mongodbcommunity.mongodb.com"."v1"."MongoDBCommunity" = mkOption {
+          description = "MongoDBCommunity is the Schema for the mongodbs API";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodbcommunity.mongodb.com.v1.MongoDBCommunity" "mongodbcommunity"
               "MongoDBCommunity"
               "mongodbcommunity.mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-
-    }
-    // {
-      "clusterMongoDBRoles" = mkOption {
-        description = "ClusterMongoDBRole is the Schema for the clustermongodbroles API.";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.ClusterMongoDBRole" "clustermongodbroles"
+            )
+          );
+          default = {};
+        };
+      }
+      // {
+        "clusterMongoDBRoles" = mkOption {
+          description = "ClusterMongoDBRole is the Schema for the clustermongodbroles API.";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.ClusterMongoDBRole" "clustermongodbroles"
               "ClusterMongoDBRole"
               "mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-      "mongoDB" = mkOption {
-        description = "";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDB" "mongodb" "MongoDB" "mongodb.com" "v1"
-          )
-        );
-        default = { };
-      };
-      "mongoDBCommunity" = mkOption {
-        description = "MongoDBCommunity is the Schema for the mongodbs API";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodbcommunity.mongodb.com.v1.MongoDBCommunity" "mongodbcommunity"
+            )
+          );
+          default = {};
+        };
+        "mongoDB" = mkOption {
+          description = "";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDB" "mongodb" "MongoDB" "mongodb.com" "v1"
+            )
+          );
+          default = {};
+        };
+        "mongoDBCommunity" = mkOption {
+          description = "MongoDBCommunity is the Schema for the mongodbs API";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodbcommunity.mongodb.com.v1.MongoDBCommunity" "mongodbcommunity"
               "MongoDBCommunity"
               "mongodbcommunity.mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-      "mongoDBMultiCluster" = mkOption {
-        description = "";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDBMultiCluster" "mongodbmulticluster"
+            )
+          );
+          default = {};
+        };
+        "mongoDBMultiCluster" = mkOption {
+          description = "";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDBMultiCluster" "mongodbmulticluster"
               "MongoDBMultiCluster"
               "mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-      "mopsmanagers" = mkOption {
-        description = "The MongoDBOpsManager resource allows you to deploy Ops Manager within your Kubernetes cluster";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDBOpsManager" "opsmanagers" "MongoDBOpsManager"
+            )
+          );
+          default = {};
+        };
+        "mopsmanagers" = mkOption {
+          description = "The MongoDBOpsManager resource allows you to deploy Ops Manager within your Kubernetes cluster";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDBOpsManager" "opsmanagers" "MongoDBOpsManager"
               "mongodb.com"
               "v1"
-          )
-        );
-        default = { };
-      };
-      "mongoDBSearch" = mkOption {
-        description = "";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDBSearch" "mongodbsearch" "MongoDBSearch" "mongodb.com"
+            )
+          );
+          default = {};
+        };
+        "mongoDBSearch" = mkOption {
+          description = "";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDBSearch" "mongodbsearch" "MongoDBSearch" "mongodb.com"
               "v1"
-          )
-        );
-        default = { };
+            )
+          );
+          default = {};
+        };
+        "mongoDBUsers" = mkOption {
+          description = "";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "mongodb.com.v1.MongoDBUser" "mongodbusers" "MongoDBUser" "mongodb.com" "v1"
+            )
+          );
+          default = {};
+        };
       };
-      "mongoDBUsers" = mkOption {
-        description = "";
-        type = (
-          types.attrsOf (
-            submoduleForDefinition "mongodb.com.v1.MongoDBUser" "mongodbusers" "MongoDBUser" "mongodb.com" "v1"
-          )
-        );
-        default = { };
-      };
-
-    };
   };
 
   config = {
@@ -13302,18 +12333,17 @@ in
     resources = {
       "mongodb.com"."v1"."ClusterMongoDBRole" =
         mkAliasDefinitions
-          options.resources."clusterMongoDBRoles";
+        options.resources."clusterMongoDBRoles";
       "mongodb.com"."v1"."MongoDB" = mkAliasDefinitions options.resources."mongoDB";
       "mongodbcommunity.mongodb.com"."v1"."MongoDBCommunity" =
         mkAliasDefinitions
-          options.resources."mongoDBCommunity";
+        options.resources."mongoDBCommunity";
       "mongodb.com"."v1"."MongoDBMultiCluster" =
         mkAliasDefinitions
-          options.resources."mongoDBMultiCluster";
+        options.resources."mongoDBMultiCluster";
       "mongodb.com"."v1"."MongoDBOpsManager" = mkAliasDefinitions options.resources."mopsmanagers";
       "mongodb.com"."v1"."MongoDBSearch" = mkAliasDefinitions options.resources."mongoDBSearch";
       "mongodb.com"."v1"."MongoDBUser" = mkAliasDefinitions options.resources."mongoDBUsers";
-
     };
 
     # make all namespaced resources default to the
