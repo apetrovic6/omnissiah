@@ -29,6 +29,7 @@ in {
     ./apps/reflector
     ./apps/keycloak-operator
     ./apps/forgejo
+    ./apps/mongodb-kubernetes
   ];
 
   # CRD imports are now auto-discovered by the flake-module
