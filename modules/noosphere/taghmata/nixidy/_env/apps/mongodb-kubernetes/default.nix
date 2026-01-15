@@ -3,17 +3,16 @@
   pkgs,
   ...
 }: let
-    namespace = "mongodb";
+  namespace = "mongodb";
 in {
-  applications.mongodb-kubernetes-operator= 
-  {
+  applications.mongodb-kubernetes-operator = {
     inherit namespace;
     createNamespace = true;
 
-    helm.releases.mongodb-kubernetes-operator= {
+    helm.releases.mongodb-kubernetes-operator = {
       chart = charts.mongodb.mongodb-kubernetes;
 
-      values = { };
+      values = {};
     };
   };
 }

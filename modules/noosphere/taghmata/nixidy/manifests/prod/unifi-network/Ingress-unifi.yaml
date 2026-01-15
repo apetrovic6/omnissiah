@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    category: infrastructure
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Network Controller
+    glance/icon: di:unifi
+    glance/id: unifi
+    glance/name: UniFi
+    glance/parent: unifi
+    glance/url: https://unifi.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+  name: unifi
+  namespace: unifi
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: unifi.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: unifi
+                port:
+                  number: 8443
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - unifi.noosphere.uk
+      secretName: unifi-tls
