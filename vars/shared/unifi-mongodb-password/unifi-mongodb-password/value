@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: unifi-mongodb-password
+    namespace: unifi
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:LVYtjc9SuAAJamOC2k3gzKn+1zSb/g==,iv:PTdEJprFNtCVfPstjlqWzzhsz3vf7gQwsMs7bw01g1A=,tag:mwucYfDO9rXAMLdgYTkc3Q==,type:str]
+          type: ENC[AES256_GCM,data:gVy5kDSJ,iv:cs6Q/VKNXq7ce5UtPyI+MTNUj4vcMi4wOqBalDwdZnY=,tag:+azv5mVlz8RsVH7k6ic5Kg==,type:str]
+          stringData:
+            password: ENC[AES256_GCM,data:reO3oQQw3xlFYAtMK1yAtmCFFv5/0jr2/SdWMYgJl2zh1c9EsnVpZhSDHQ8=,iv:vdQ7od9Ha4ludluJvByOEd4srUDQCNBqELjokL/1Mn0=,tag:OYEdi1wCsCjqLC4cG0iXFg==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBwSnIrZkI0ZU83UEdrRnZX
+            UXVSamRuaTR4TmlOTjhzRDBwT2JvUkhsMjBNCi9FcTNrVTVvY0VPL2hHNS9aaU9Y
+            S2VZaFFqTVYwMkViT21relpZUjFGcVUKLS0tIFZZdXRoNDBKUlozYkt1VHdTbHVJ
+            c1R6NnYvS3c2UGREK2hDUXc2WFFSTncKW83JpRkm2ICM/VRNOkPpjlGIn8u6rcD5
+            DXav9WjeeV+VmYVbLVdbaJ40T3OuB9Y64TMS3VTRd5zTGq4NxTenug==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-15T17:31:43Z"
+    mac: ENC[AES256_GCM,data:PpN8IrDfhwONrkIne51zr/GdITahCkkQWekSumaElCJq38MHP/1M+luRj9F3vFLjq0P/HCWHQEv+DXQtrJ0n3FBysvlFGwKbU7y57q61w/4T2l71ZR5miGuKqrwMsadau7ln94wuuKj9HDHxin/paxC4G7/pdA0XCc2Nu8duwZg=,iv:XhiPh6Na1w26GBfX+F+T2q1TlwEwfLMy1/PEGsabDuo=,tag:q5MBEXlHduErBxsZRlRFGQ==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
