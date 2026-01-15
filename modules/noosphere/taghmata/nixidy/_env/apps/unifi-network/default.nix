@@ -51,6 +51,14 @@ in {
               enabled = false;
             };
 
+            # nonvoting = {
+            #   enabled = false;
+            # };
+
+            # arbiter = {
+            #   enabled = false;
+            # };
+
             resources = {
               limits = {
                 cpu = "1000m";
@@ -81,39 +89,39 @@ in {
         };
 
         # Automated backups to Garage S3
-        backup = {
-          enabled = true;
-          image = "percona/percona-backup-mongodb:2.7.0";
-          serviceAccountName = "percona-server-mongodb-operator";
+        # backup = {
+        #   enabled = true;
+        #   image = "percona/percona-backup-mongodb:2.7.0";
+        #   serviceAccountName = "percona-server-mongodb-operator";
 
-          storages = {
-            garage-s3 = {
-              type = "s3";
-              s3 = {
-                bucket = "mongo-backup-bucket";
-                region = "garage";
-                credentialsSecret = "unifi-s3-secret-key";
-                endpointUrl = "http://garage.garage.svc.cluster.local:3900";
-              };
-            };
-          };
+        #   storages = {
+        #     garage-s3 = {
+        #       type = "s3";
+        #       s3 = {
+        #         bucket = "mongo-backup-bucket";
+        #         region = "garage";
+        #         credentialsSecret = "unifi-s3-secret-key";
+        #         endpointUrl = "http://garage.garage.svc.cluster.local:3900";
+        #       };
+        #     };
+        #   };
 
-          pitr = {
-            enabled = true;
-            oplogSpanMin = 10;
-          };
+        #   pitr = {
+        #     enabled = true;
+        #     oplogSpanMin = 10;
+        #   };
 
-          tasks = [
-            {
-              name = "daily-backup";
-              enabled = true;
-              schedule = "0 2 * * *"; # 2 AM daily
-              keep = 7;
-              storageName = "garage-s3";
-              compressionType = "gzip";
-            }
-          ];
-        };
+        #   tasks = [
+        #     {
+        #       name = "daily-backup";
+        #       enabled = true;
+        #       schedule = "0 2 * * *"; # 2 AM daily
+        #       keep = 7;
+        #       storageName = "garage-s3";
+        #       compressionType = "gzip";
+        #     }
+        #   ];
+        # };
       };
     };
 

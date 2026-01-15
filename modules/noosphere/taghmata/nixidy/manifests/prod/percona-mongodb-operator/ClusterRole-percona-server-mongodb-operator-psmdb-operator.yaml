@@ -1,5 +1,5 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/instance: percona-server-mongodb-operator
@@ -8,7 +8,6 @@ metadata:
     app.kubernetes.io/version: 1.21.2
     helm.sh/chart: psmdb-operator-1.21.3
   name: percona-server-mongodb-operator-psmdb-operator
-  namespace: percona-mongodb
 rules:
   - apiGroups:
       - psmdb.percona.com
@@ -30,6 +29,26 @@ rules:
       - update
       - patch
       - delete
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
   - apiGroups:
       - ""
     resources:
