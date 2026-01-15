@@ -29,7 +29,7 @@ in {
     ./apps/reflector
     ./apps/keycloak-operator
     ./apps/forgejo
-    ./apps/mongodb-kubernetes
+    ./apps/percona-mongodb
     ./apps/unifi-network
   ];
 

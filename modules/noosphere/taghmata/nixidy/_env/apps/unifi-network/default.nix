@@ -1,98 +1,118 @@
-{
-  config,
-  charts,
-  ...
-}: let
+{config, ...}: let
   namespace = "unifi";
   domain = config.noosphere.domain;
   mongoDBName = "unifi-mongodb";
+  objectStoreName = "unifi-object-store";
 in {
+  # imports = [
+  #   ../../../../_modules/templates/garage-object-store.nix
+  # ];
+
   applications.unifi-network = {
     inherit namespace;
     createNamespace = true;
 
-    # MongoDB cluster password secret (you'll need to generate this)
+    # Secrets: MongoDB password and S3 credentials
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/unifi-mongodb-password/unifi-mongodb-password/value)
+      (builtins.readFile ../../../../../../../vars/shared/unifi-s3-secret-key/unifi-s3-secret-key/value)
     ];
 
-    # MongoDB Community cluster
-    resources."mongodbcommunity.mongodb.com".v1.MongoDBCommunity.${mongoDBName} = {
+    # # Garage Object Store for backups
+    # templates.garageObjectStore.${objectStoreName} = {
+    #   inherit namespace;
+    # };
+
+    # Percona MongoDB cluster
+    resources."psmdb.percona.com".v1.PerconaServerMongoDB.${mongoDBName} = {
       metadata = {
         inherit namespace;
       };
 
       spec = {
-        members = 3; # Single node for unifi
-        type = "ReplicaSet";
-        version = "7.0.12"; # Or your preferred version
+        crVersion = "1.18.0";
+        image = "percona/percona-server-mongodb:7.0.14-8";
 
-        security = {
-          authentication = {
-            modes = ["SCRAM"];
-          };
-        };
-
-        users = [
+        # UniFi works best with 3 replicas for durability
+        replsets = [
           {
-            name = "unifi";
-            db = "unifi";
-            passwordSecretRef = {
-              name = "unifi-mongodb-password";
-              key = "password";
+            name = "rs0";
+            size = 3;
+
+            affinity = {
+              antiAffinityTopologyKey = "kubernetes.io/hostname";
             };
-            roles = [
-              {
-                name = "dbOwner";
-                db = "unifi";
-              }
-              {
-                name = "clusterMonitor";
-                db = "admin";
-              }
-            ];
-            scramCredentialsSecretName = "unifi-mongodb-scram";
+
+            podDisruptionBudget = {
+              maxUnavailable = 1;
+            };
+
+            expose = {
+              enabled = false;
+            };
+
+            resources = {
+              limits = {
+                cpu = "1000m";
+                memory = "2Gi";
+              };
+              requests = {
+                cpu = "100m";
+                memory = "512Mi";
+              };
+            };
+
+            volumeSpec = {
+              persistentVolumeClaim = {
+                storageClassName = "longhorn";
+                accessModes = ["ReadWriteOnce"];
+                resources = {
+                  requests = {
+                    storage = "10Gi";
+                  };
+                };
+              };
+            };
           }
         ];
 
-        additionalMongodConfig = {
-          "storage.wiredTiger.engineConfig.journalCompressor" = "snappy";
-          "net.tls.mode" = "disabled";
+        secrets = {
+          users = "unifi-mongodb-password";
         };
 
-        statefulSet = {
-          spec = {
-            volumeClaimTemplates = [
-              {
-                metadata = {
-                  name = "data-volume";
-                };
-                spec = {
-                  storageClassName = "longhorn";
-                  accessModes = ["ReadWriteOnce"];
-                  resources = {
-                    requests = {
-                      storage = "10Gi";
-                    };
-                  };
-                };
-              }
-              {
-                metadata = {
-                  name = "logs-volume";
-                };
-                spec = {
-                  storageClassName = "longhorn";
-                  accessModes = ["ReadWriteOnce"];
-                  resources = {
-                    requests = {
-                      storage = "2Gi";
-                    };
-                  };
-                };
-              }
-            ];
+        # Automated backups to Garage S3
+        backup = {
+          enabled = true;
+          image = "percona/percona-backup-mongodb:2.7.0";
+          serviceAccountName = "percona-server-mongodb-operator";
+
+          storages = {
+            garage-s3 = {
+              type = "s3";
+              s3 = {
+                bucket = "mongo-backup-bucket";
+                region = "garage";
+                credentialsSecret = "unifi-s3-secret-key";
+                endpointUrl = "http://garage.garage.svc.cluster.local:3900";
+              };
+            };
           };
+
+          pitr = {
+            enabled = true;
+            oplogSpanMin = 10;
+          };
+
+          tasks = [
+            {
+              name = "daily-backup";
+              enabled = true;
+              schedule = "0 2 * * *"; # 2 AM daily
+              keep = 7;
+              storageName = "garage-s3";
+              compressionType = "gzip";
+            }
+          ];
         };
       };
     };
@@ -107,7 +127,7 @@ in {
       };
 
       spec = {
-        replicas = 3;
+        replicas = 1; # UniFi can only run 1 replica
         strategy = {
           type = "Recreate";
         };
@@ -159,7 +179,7 @@ in {
                   }
                   {
                     name = "MONGO_HOST";
-                    value = "${mongoDBName}-svc";
+                    value = "${mongoDBName}-rs0";
                   }
                   {
                     name = "MONGO_PORT";
@@ -214,6 +234,17 @@ in {
                     mountPath = "/config";
                   }
                 ];
+
+                resources = {
+                  limits = {
+                    cpu = "2000m";
+                    memory = "2Gi";
+                  };
+                  requests = {
+                    cpu = "500m";
+                    memory = "1Gi";
+                  };
+                };
               }
             ];
 

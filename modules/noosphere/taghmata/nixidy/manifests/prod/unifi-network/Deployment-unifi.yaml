@@ -33,7 +33,7 @@ spec:
                   key: password
                   name: unifi-mongodb-password
             - name: MONGO_HOST
-              value: unifi-mongodb-svc
+              value: unifi-mongodb-rs0
             - name: MONGO_PORT
               value: "27017"
             - name: MONGO_DBNAME
@@ -61,6 +61,13 @@ spec:
             - containerPort: 8880
               name: device-comms
               protocol: TCP
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
           volumeMounts:
             - mountPath: /config
               name: config

@@ -1,0 +1,56 @@
+apiVersion: psmdb.percona.com/v1
+kind: PerconaServerMongoDB
+metadata:
+  name: unifi-mongodb
+  namespace: unifi
+spec:
+  backup:
+    enabled: true
+    image: percona/percona-backup-mongodb:2.7.0
+    pitr:
+      enabled: true
+      oplogSpanMin: 10
+    serviceAccountName: percona-server-mongodb-operator
+    storages:
+      garage-s3:
+        s3:
+          bucket: mongo-backup-bucket
+          credentialsSecret: unifi-s3-secret-key
+          endpointUrl: http://garage.garage.svc.cluster.local:3900
+          region: garage
+        type: s3
+    tasks:
+      - compressionType: gzip
+        enabled: true
+        keep: 7
+        name: daily-backup
+        schedule: 0 2 * * *
+        storageName: garage-s3
+  crVersion: 1.18.0
+  image: percona/percona-server-mongodb:7.0.14-8
+  replsets:
+    - affinity:
+        antiAffinityTopologyKey: kubernetes.io/hostname
+      expose:
+        enabled: false
+      name: rs0
+      podDisruptionBudget:
+        maxUnavailable: 1
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 100m
+          memory: 512Mi
+      size: 3
+      volumeSpec:
+        persistentVolumeClaim:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+          storageClassName: longhorn
+  secrets:
+    users: unifi-mongodb-password
