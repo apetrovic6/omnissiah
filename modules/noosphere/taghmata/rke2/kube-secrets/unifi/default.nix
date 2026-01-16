@@ -34,16 +34,17 @@ in {
               type: Opaque
               stringData:
                 password: "$password"
-                MONGODB_DATABASE_ADMIN_PASSWORD: "$password"
-                MONGODB_CLUSTER_ADMIN_PASSWORD: "$password"
-                MONGODB_CLUSTER_MONITOR_PASSWORD: "$password"
-                MONGODB_BACKUP_PASSWORD: "$password"
-                MONGODB_USER_ADMIN_PASSWORD: "$password"
-                MONGODB_DATABASE_ADMIN_USER: databaseAdmin
-                MONGODB_CLUSTER_ADMIN_USER: clusterAdmin
-                MONGODB_CLUSTER_MONITOR_USER: clusterMonitor
+                unifi: "$password"
                 MONGODB_BACKUP_USER: backup
+                MONGODB_BACKUP_PASSWORD: "$password"
+                MONGODB_DATABASE_ADMIN_USER: databaseAdmin
+                MONGODB_DATABASE_ADMIN_PASSWORD: "$password"
+                MONGODB_CLUSTER_ADMIN_USER: clusterAdmin
+                MONGODB_CLUSTER_ADMIN_PASSWORD: "$password"
+                MONGODB_CLUSTER_MONITOR_USER: clusterMonitor
+                MONGODB_CLUSTER_MONITOR_PASSWORD: "$password"
                 MONGODB_USER_ADMIN_USER: userAdmin
+                MONGODB_USER_ADMIN_PASSWORD: "$password"
         EOF
       '';
     };

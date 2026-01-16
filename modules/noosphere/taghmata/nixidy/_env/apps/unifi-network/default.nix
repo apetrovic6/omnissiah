@@ -31,9 +31,12 @@ in {
 
       spec = {
         crVersion = "1.18.0";
-        image = "percona/percona-server-mongodb:7.0.14-8";
+        image = "percona/percona-server-mongodb:8.0.17-6";
 
-        # UniFi works best with 3 replicas for durability
+        enableVolumeExpansion = true;
+
+        tls.mode = "allowTLS";
+
         replsets = [
           {
             name = "rs0";
@@ -47,9 +50,9 @@ in {
               maxUnavailable = 1;
             };
 
-            expose = {
-              enabled = false;
-            };
+            # expose = {
+            # enabled = false;
+            # };
 
             # nonvoting = {
             #   enabled = false;
@@ -84,8 +87,41 @@ in {
           }
         ];
 
-        secrets = {
-          users = "unifi-mongodb-password";
+        secrets.users = "unifi-mongodb-password";
+
+        users.unifi = {
+          name = "unifi";
+          db = "admin";
+          passwordSecretRef = {
+            name = "unifi-mongodb-password";
+            key = "unifi";
+          };
+          roles = {
+            readWrite-unifi = {
+              name = "readWrite";
+              db = "unifi";
+            };
+            dbAdmin-unifi = {
+              name = "dbAdmin";
+              db = "unifi";
+            };
+            readWrite-unifi_stat = {
+              name = "readWrite";
+              db = "unifi_stat";
+            };
+            dbAdmin-unifi_stat = {
+              name = "dbAdmin";
+              db = "unifi_stat";
+            };
+            readWrite-unifi_audit = {
+              name = "readWrite";
+              db = "unifi_audit";
+            };
+            dbAdmin-unifi_audit = {
+              name = "dbAdmin";
+              db = "unifi_audit";
+            };
+          };
         };
 
         # Automated backups to Garage S3
@@ -181,13 +217,13 @@ in {
                     valueFrom = {
                       secretKeyRef = {
                         name = "unifi-mongodb-password";
-                        key = "password";
+                        key = "unifi";
                       };
                     };
                   }
                   {
                     name = "MONGO_HOST";
-                    value = "${mongoDBName}-rs0";
+                    value = "${mongoDBName}-rs0.${namespace}.svc.cluster.local";
                   }
                   {
                     name = "MONGO_PORT";
@@ -200,6 +236,10 @@ in {
                   {
                     name = "MONGO_AUTHSOURCE";
                     value = "admin";
+                  }
+                  {
+                    name = "MONGO_REPLICA_SET";
+                    value = "rs0";
                   }
                 ];
 
@@ -289,7 +329,10 @@ in {
     resources.services.unifi-web = {
       metadata = {
         inherit namespace;
-        name = "unifi";
+        annotations = {
+          "traefik.ingress.kubernetes.io/service.serversscheme" = "https";
+          "traefik.ingress.kubernetes.io/service.serverstransport" = "unifi-unifi-web@kubernetescrd";
+        };
       };
       spec = {
         type = "ClusterIP";
@@ -320,6 +363,7 @@ in {
     };
 
     # Service for UniFi device communication (LoadBalancer for direct access)
+
     resources.services.unifi-devices = {
       metadata = {
         inherit namespace;
@@ -353,6 +397,16 @@ in {
       };
     };
 
+    # ServersTransport for insecure TLS
+    resources."traefik.io"."v1alpha1".ServersTransport.unifi-web = {
+      metadata = {
+        inherit namespace;
+      };
+      spec = {
+        insecureSkipVerify = true;
+      };
+    };
+
     # Ingress for web UI
     resources.ingresses.unifi = {
       metadata = {
@@ -363,6 +417,7 @@ in {
           "traefik.ingress.kubernetes.io/router.tls" = "true";
           # UniFi uses self-signed certs internally
           "traefik.ingress.kubernetes.io/service.serversscheme" = "https";
+          "traefik.ingress.kubernetes.io/service.serverstransport" = "unifi-insecure@kubernetescrd";
           "glance/name" = "UniFi";
           "glance/icon" = "di:unifi";
           "glance/url" = "https://unifi.${domain}";
@@ -391,7 +446,7 @@ in {
                 path = "/";
                 pathType = "Prefix";
                 backend.service = {
-                  name = "unifi";
+                  name = "unifi-web";
                   port.number = 8443;
                 };
               }

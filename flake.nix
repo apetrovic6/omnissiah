@@ -57,8 +57,8 @@
     };
 
     nixhelm = {
-      # url = "path:/home/apetrovic/clan/nixhelm";
-      url = "github:apetrovic6/nixhelm";
+      url = "path:/home/apetrovic/clan/nixhelm";
+      # url = "github:apetrovic6/nixhelm";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -163,6 +163,10 @@
             kube-prometheus-stack.chart = nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
             prometheus.chart = nixhelm.chartsDerivations.${system}.prometheus-community.prometheus;
             csi-driver-nfs.chart = nixhelm.chartsDerivations.${system}.kubernetes-csi.csi-driver-nfs;
+            percona-server-mongodb-operator = {
+              chart = nixhelm.chartsDerivations.${system}.percona.psmdb-operator;
+              outputName = "psmdb-crd.nix";
+            };
             barman-cloud = {
               src = pkgs.fetchFromGitHub {
                 owner = "cloudnative-pg";

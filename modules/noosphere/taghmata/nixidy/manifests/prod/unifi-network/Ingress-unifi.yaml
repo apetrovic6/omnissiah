@@ -13,6 +13,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: unifi-insecure@kubernetescrd
   name: unifi
   namespace: unifi
 spec:
@@ -23,7 +24,7 @@ spec:
         paths:
           - backend:
               service:
-                name: unifi
+                name: unifi-web
                 port:
                   number: 8443
             path: /

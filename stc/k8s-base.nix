@@ -114,7 +114,6 @@
                 '';
               };
             }
-            ../vars/shared/zitadel-argocd-secret/zitadel-argocd-secret/value
           ];
         };
       };

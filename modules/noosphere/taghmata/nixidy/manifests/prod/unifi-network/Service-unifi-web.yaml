@@ -1,7 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: unifi
+  annotations:
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: unifi-unifi-web@kubernetescrd
+  name: unifi-web
   namespace: unifi
 spec:
   ports:
