@@ -57,7 +57,7 @@
           enable = true;
           name = "argo-cd";
           repo = "https://argoproj.github.io/argo-helm";
-          version = "9.1.9";
+          version = "9.3.4";
           hash = "sha256-7HpAvR4N6mtkVSG9EDTGY4acVIBrhYkGUNicXBe83SQ=";
           createNamespace = true;
           targetNamespace = "argocd";
