@@ -25,6 +25,7 @@
             "com.thincast.client"
             "org.remmina.Remmina"
             "net.waterfox.waterfox"
+            "com.valvesoftware.Steam"
             "com.github.IsmaelMartinez.teams_for_linux"
             "com.github.tchx84.Flatseal" #Manage flatpak permissions - should always have this
             #"com.rtosta.zapzap"              # WhatsApp client
