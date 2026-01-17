@@ -113,6 +113,10 @@
         extraFlags = cfg.extraFlags;
 
         manifests = cfg.manifests;
+        gracefulNodeShutdown = {
+          enable = true;
+          shutdownGracePeriod = "1m30s";
+        };
       };
 
       networking.firewall = mkIf cfg.openFirewall {
