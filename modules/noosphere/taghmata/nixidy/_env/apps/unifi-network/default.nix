@@ -363,7 +363,6 @@ in {
     };
 
     # Service for UniFi device communication (LoadBalancer for direct access)
-
     resources.services.unifi-devices = {
       metadata = {
         inherit namespace;
@@ -415,16 +414,13 @@ in {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
           "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
           "traefik.ingress.kubernetes.io/router.tls" = "true";
-          # UniFi uses self-signed certs internally
-          "traefik.ingress.kubernetes.io/service.serversscheme" = "https";
-          "traefik.ingress.kubernetes.io/service.serverstransport" = "unifi-insecure@kubernetescrd";
           "glance/name" = "UniFi";
           "glance/icon" = "di:unifi";
           "glance/url" = "https://unifi.${domain}";
           "glance/description" = "Network Controller";
           "glance/id" = "unifi";
           "glance/parent" = "unifi";
-          "category" = "infrastructure";
+          "category" = "monitoring";
         };
       };
 

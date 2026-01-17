@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
-    category: infrastructure
+    category: monitoring
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: Network Controller
     glance/icon: di:unifi
@@ -12,8 +12,6 @@ metadata:
     glance/url: https://unifi.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/service.serversscheme: https
-    traefik.ingress.kubernetes.io/service.serverstransport: unifi-insecure@kubernetescrd
   name: unifi
   namespace: unifi
 spec:
