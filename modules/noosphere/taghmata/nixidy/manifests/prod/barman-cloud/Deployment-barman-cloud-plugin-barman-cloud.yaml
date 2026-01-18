@@ -2,20 +2,26 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: barman-cloud
-  name: barman-cloud
+    app.kubernetes.io/instance: barman-cloud
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: plugin-barman-cloud
+    app.kubernetes.io/version: v0.10.0
+    helm.sh/chart: plugin-barman-cloud-0.4.0
+  name: barman-cloud-plugin-barman-cloud
   namespace: cnpg-system
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: barman-cloud
+      app.kubernetes.io/instance: barman-cloud
+      app.kubernetes.io/name: plugin-barman-cloud
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: barman-cloud
+        app.kubernetes.io/instance: barman-cloud
+        app.kubernetes.io/name: plugin-barman-cloud
     spec:
       containers:
         - args:
@@ -29,9 +35,9 @@ spec:
           env:
             - name: SIDECAR_IMAGE
               valueFrom:
-                secretKeyRef:
+                configMapKeyRef:
                   key: SIDECAR_IMAGE
-                  name: plugin-barman-cloud-t5844mh4gf
+                  name: plugin-barman-cloud-config
           image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.10.0
           name: barman-cloud
           ports:
@@ -62,7 +68,7 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
-      serviceAccountName: plugin-barman-cloud
+      serviceAccountName: barman-cloud-plugin-barman-cloud
       volumes:
         - name: server
           secret:

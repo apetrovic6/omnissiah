@@ -10,7 +10,9 @@ spec:
   issuerRef:
     group: cert-manager.io
     kind: Issuer
-    name: selfsigned-issuer
+    name: barman-cloud-plugin-barman-cloud-selfsigned-issuer
+  privateKey:
+    rotationPolicy: Always
   renewBefore: 360h
   secretName: barman-cloud-client-tls
   usages:

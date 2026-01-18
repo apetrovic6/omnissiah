@@ -2,20 +2,13 @@
   charts,
   pkgs,
   ...
-}: let
-  barmanVersion = "0.10.0";
-  barmanManifest = pkgs.fetchurl {
-    url = "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v${barmanVersion}/manifest.yaml";
-    hash = "sha256-9yjeqQqt490v60xLOTX6dLyHQwdjU8lwY1kbHQrUuKQ=";
-  };
-in {
-  # TODO: Replace with the helm chart
-  # https://artifacthub.io/packages/helm/cloudnative-pg/plugin-barman-cloud
+}: {
   applications.barman-cloud = {
     namespace = "cnpg-system";
-    yamls = [
-      (builtins.readFile barmanManifest)
-    ];
+
+    helm.releases.barman-cloud = {
+      chart = charts.cloudnative-pg.plugin-barman-cloud;
+    };
   };
 
   applications.cloudnativepg = let
