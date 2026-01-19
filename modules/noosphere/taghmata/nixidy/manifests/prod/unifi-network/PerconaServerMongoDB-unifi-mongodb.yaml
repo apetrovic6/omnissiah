@@ -2,7 +2,7 @@ apiVersion: psmdb.percona.com/v1
 kind: PerconaServerMongoDB
 metadata:
   name: unifi-mongodb
-  namespace: unifi
+  namespace: unifi-controller
 spec:
   crVersion: 1.18.0
   enableVolumeExpansion: true

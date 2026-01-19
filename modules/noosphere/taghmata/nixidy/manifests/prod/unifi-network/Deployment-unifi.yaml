@@ -2,20 +2,24 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: unifi
+    app: unifi-controller
+    app.kubernetes.io/instance: unifi-controller
   name: unifi
-  namespace: unifi
+  namespace: unifi-controller
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: unifi
+      app: unifi-controller
   strategy:
-    type: Recreate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
   template:
     metadata:
       labels:
-        app: unifi
+        app: unifi-controller
     spec:
       containers:
         - env:
@@ -33,7 +37,7 @@ spec:
                   key: unifi
                   name: unifi-mongodb-password
             - name: MONGO_HOST
-              value: unifi-mongodb-rs0.unifi.svc.cluster.local
+              value: unifi-mongodb-rs0.unifi-controller.svc.cluster.local
             - name: MONGO_PORT
               value: "27017"
             - name: MONGO_DBNAME
@@ -42,26 +46,20 @@ spec:
               value: admin
             - name: MONGO_REPLICA_SET
               value: rs0
-          image: lscr.io/linuxserver/unifi-network-application:latest
+          image: lscr.io/linuxserver/unifi-network-application:20.10.25
           name: unifi
           ports:
             - containerPort: 8443
               name: web-ui
               protocol: TCP
-            - containerPort: 8080
-              name: controller
-              protocol: TCP
-            - containerPort: 6789
-              name: speedtest
-              protocol: TCP
             - containerPort: 3478
               name: stun
               protocol: UDP
             - containerPort: 10001
-              name: ap-discovery
+              name: discovery
               protocol: UDP
-            - containerPort: 8880
-              name: device-comms
+            - containerPort: 8080
+              name: communication
               protocol: TCP
           resources:
             limits:

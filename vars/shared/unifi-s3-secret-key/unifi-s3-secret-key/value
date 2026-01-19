@@ -2,7 +2,7 @@ apiVersion: isindir.github.com/v1alpha3
 kind: SopsSecret
 metadata:
     name: unifi-s3-secret-key
-    namespace: unifi
+    namespace: unifi-controller
 spec:
     secretTemplates:
         - name: ENC[AES256_GCM,data:MWYOCaxrQ5g9p0OJek7iyHRn1A==,iv:9B6hnjEgq0wdKFS+KLGSUB22S5cW526ZAUFKrNn2Ckk=,tag:1U/14lMedwLEBJ2W0rRVCQ==,type:str]

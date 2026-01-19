@@ -27,7 +27,7 @@ in {
         kind: SopsSecret
         metadata:
           name: ${unifiMongoPassword}
-          namespace: unifi
+          namespace: unifi-controller
         spec:
           secretTemplates:
             - name: ${unifiMongoPassword}
@@ -84,7 +84,7 @@ in {
         kind: SopsSecret
         metadata:
           name: ${unifiS3SecretKey}
-          namespace: unifi
+          namespace: unifi-controller
         spec:
           secretTemplates:
             - name: ${unifiS3SecretKey}
