@@ -1,37 +1,37 @@
 apiVersion: isindir.github.com/v1alpha3
 kind: SopsSecret
 metadata:
-    name: unifi-mongodb-password
+    name: unifi-mongodb-pass
     namespace: unifi-controller
 spec:
     secretTemplates:
-        - name: ENC[AES256_GCM,data:FdN/wXrLl5J6z7IrSAMMx75p+PYF2g==,iv:QC9Es/RdsofTpCjju9bZ3NX40HKHeAfVsDou3gk61o8=,tag:bRiABmp9rR9Po4n6iMXFXA==,type:str]
-          type: ENC[AES256_GCM,data:hiUUqVjg,iv:ZkjPq96561REKyn7wRsDt9EVrL4fWkwb3xOk2L2xvD0=,tag:yERCaRTsyUUhYYaO57OCrQ==,type:str]
+        - name: ENC[AES256_GCM,data:bPPvS63fhhb4TmFrxx6xYw3wiRSHNA==,iv:RN7ckeePEn2Q+v9Aygsh7+2h8Q0yrX8lekeJ3li6fXQ=,tag:lOdJjyVvox804z8kLJuoxw==,type:str]
+          type: ENC[AES256_GCM,data:+V8CESM/,iv:eb8u6epQPi/ly+4lVWzeKh+eu9+/8r9ZAsZVVxb/CzU=,tag:lj3MIENHe4URUVekjzgIZQ==,type:str]
           stringData:
-            password: ENC[AES256_GCM,data:4BaDa9mEWT1qqGbeNlRGRPRxCCc9MT1/1K127bei/pGdhvidmepm2yqVwDE=,iv:qGTGdvbvy8JCBof2vtxQ8DMQdyE7pcXvQReYnkVrawM=,tag:ZJyvwtyC3mDVTJgOJUaHwQ==,type:str]
-            unifi: ENC[AES256_GCM,data:Ezxvz21SoIzQd3TRYBhXII0pG7xz+hoSELjFFtI4c5jHq/ZgpOwhx/ICtX0=,iv:eF2msivYhijY1sHAaQNhGV0wetDY92QAvHRomtsyqcc=,tag:wfgKlwM+bMIZ1r8vuFZatA==,type:str]
-            MONGODB_BACKUP_USER: ENC[AES256_GCM,data:kGs0tO3d,iv:pL2Q0//5Hlr/JuS3blkwurjFrS/bsJRSj8VyalfF7Qs=,tag:qv/TnTBwCKOnRtSWevQOZw==,type:str]
-            MONGODB_BACKUP_PASSWORD: ENC[AES256_GCM,data:teXZ45tk4VnM+YZ3BgstJqPcBW/Y4omgAfNbM6BqHzQq6UIfAMDNuGQuHTk=,iv:yjdsjnzJwP5wcothM50gHM1waXIHFfI08tos3jr4ahg=,tag:E3qiq1Rt5xQmEJ+Nj84vHw==,type:str]
-            MONGODB_DATABASE_ADMIN_USER: ENC[AES256_GCM,data:UEl/ehaZKH60xHJSkg==,iv:5qqTz2sETakBwLzRNbPF71WeCAOcyRAVI3ky4K5m9gI=,tag:OUoZgsDy6Tv4vuj1jldbuA==,type:str]
-            MONGODB_DATABASE_ADMIN_PASSWORD: ENC[AES256_GCM,data:phjKj39/932qhQNfQ2C/sjEm8XZXOhUf6kghkhMmMbcMO1DuAMRA5tAS1lA=,iv:CUyID0QMGYfrlz/bl3OfvzZA3vNqyaNiMS4MNOPSjT0=,tag:HHgzjohM9FYj4gp60hBFaw==,type:str]
-            MONGODB_CLUSTER_ADMIN_USER: ENC[AES256_GCM,data:YvCm6cocHXn23f0V,iv:4F/azWI6DesnnN96/5POCuyw684DUmz+Ks2dm/bC7kU=,tag:G23X9tEe3JER6ShB6z+7wA==,type:str]
-            MONGODB_CLUSTER_ADMIN_PASSWORD: ENC[AES256_GCM,data:N9cdNz7zQ8Alik83s2pvrvL9w0Y8l1HUlPkif6ladMFAZdJYe87b5r5qdA0=,iv:0yB1IaExWY8vxDF5KArphUeYc5hZf2ttt+fXmvFaZw4=,tag:mkT340FP9YEgDqsBXtmHiw==,type:str]
-            MONGODB_CLUSTER_MONITOR_USER: ENC[AES256_GCM,data:8zrHZdFq1hktz+9d5n8=,iv:UfzcIuhROKbYuHCwUOicI2HO3/sIIFl/YC/2+D8DrZA=,tag:gtzpuFYivXZoloQG/4CyZw==,type:str]
-            MONGODB_CLUSTER_MONITOR_PASSWORD: ENC[AES256_GCM,data:xVscMF5yLCDhHJu3trA4KW9dAwFTHt6TB7muiVTxiCry0rYMD0+NGZRRwRQ=,iv:qQNNrk8EZze5feU5OnICMZn4hUDKeDjDrlYkV/rWy/U=,tag:xwVwqmulxMul0d4D/W0yVg==,type:str]
-            MONGODB_USER_ADMIN_USER: ENC[AES256_GCM,data:12Flw7A3cTxz,iv:EBwO8wU+cWfY36ytOweZKrklq8T+uCIhoYEbiZ94loE=,tag:p9my2QmxXc+6EZxF+FP9EA==,type:str]
-            MONGODB_USER_ADMIN_PASSWORD: ENC[AES256_GCM,data:UuEm3U/lXAHZ2H7e2xWCJMEFGaeKF76+pYQD5+5JZqpEl14x17W47rMnReg=,iv:YQv7bDI4ROE+lo3WF4LsUqyOMcrVWU743mcIz09Swu0=,tag:rrGs9aOBGpGbhcBBYwgLEw==,type:str]
+            password: ENC[AES256_GCM,data:xI+nWuBnqsulMXrJmNqn7GtBn+ONly/Nit0LK9fHp3v+8ZQWOM98S/8+Bqg=,iv:nSM0AGtgKfgstW8wtdpDwLwjHFroipkzPKWm7EMtVvc=,tag:p9zbWvIWkz6U/KakyqEeGw==,type:str]
+            unifi: ENC[AES256_GCM,data:ONVYNpdKMzI9TKTvK2uEf4YqrRBgr+wrow6c/SQW5oiFHW2G9BmeEkSDDis=,iv:A3pdItOCR/xv8h4/3s4S3muf5FzKRnZLfbYN6apS8E8=,tag:Q4Z16NOFm61wSGzPSiLjhA==,type:str]
+            MONGODB_BACKUP_USER: ENC[AES256_GCM,data:FhkCOt2P,iv:oxaNr/suUCqYDAx4WzRzFJrxnLxOKAZeoa6zuRv4EW4=,tag:fH+8Qhk+EMQ9Kgsjn6eIGw==,type:str]
+            MONGODB_BACKUP_PASSWORD: ENC[AES256_GCM,data://GrzcLXksU6mgyfmByf1OayJsenquy6+4XCouFv7mMk97d07LvGJPVc2oI=,iv:O4CUnjhs7T28V1BVqGOPq+lqZhcRaKdsxSC+OB5DEQY=,tag:foWpcjcpnleIo9gph19Y1g==,type:str]
+            MONGODB_DATABASE_ADMIN_USER: ENC[AES256_GCM,data:2NvKtHjx1OxvHErWhA==,iv:ktdkj8V9NnriiuKuMwCy44a3A1kewskmTIiYjIyAInI=,tag:zISDZ4hfvOpy0MvXKBdqcw==,type:str]
+            MONGODB_DATABASE_ADMIN_PASSWORD: ENC[AES256_GCM,data:9NzrukdbuUoJGtDPWRwvzjs/KEuv6z/3tczcrXvLk4gz1tMOMTH738uNspo=,iv:z54yC5t+2R/GNPp5IyigaC/d6+8LNA5GqXzCCvffXp0=,tag:f89d7rxydHRLZ8CtlmMpow==,type:str]
+            MONGODB_CLUSTER_ADMIN_USER: ENC[AES256_GCM,data:uFZAIWkbfQVFDRqr,iv:+pFIUA8bw9C4VXadU0p5V9ZoNqTCPh/bYhw8nC4RnDI=,tag:AUO8LiLkbJvqJgByH0BEZQ==,type:str]
+            MONGODB_CLUSTER_ADMIN_PASSWORD: ENC[AES256_GCM,data:woY/qMYEAQ8MxdIi9AuxCezaVDdYpyN+4z+9tCRnWsxB/mwgLuyjFSuMIAU=,iv:HzsSVho/1yzdTNjVQQcxA2baRXSRW0slXcl9IBXASFQ=,tag:i5082BSexR2FjsxdAJ2f6g==,type:str]
+            MONGODB_CLUSTER_MONITOR_USER: ENC[AES256_GCM,data:oYsVkerocURa5xG4BMI=,iv:Yzio9LYnkGBtVjDgiXf4V8BTK6gg9ZneTIDmMK8CiR0=,tag:/EM6Y1ubbf95AEBzWpKZyg==,type:str]
+            MONGODB_CLUSTER_MONITOR_PASSWORD: ENC[AES256_GCM,data:LvJjx5X0HskTmSblDPT7eZxx1Md1imAqVnmq4405qJNoNln1cHqIIwq79UY=,iv:4Zpzdvdvv7GmYXE5kdK+DhgfR3wfMDh2A9loS+88YYw=,tag:gyDaSzOplfuxxNLW/HemWg==,type:str]
+            MONGODB_USER_ADMIN_USER: ENC[AES256_GCM,data:QTZtUt8c+lJn,iv:TODeHS81XsNQrpq7WnPYhceardI4g0o0fQLmbEh6NvY=,tag:6V9KiUMhW2aNxEj24pB69A==,type:str]
+            MONGODB_USER_ADMIN_PASSWORD: ENC[AES256_GCM,data:Xs7/nHwxYTgfY3Ny5AdBydmVELLQY+xiIUTpxuk+v/VjXeSUl8mLuemKPYY=,iv:3ut6cMcRZaIAQHO0wpS6Vkop0xdtcLg2WsBtwPgRdhQ=,tag:wNPnWVok8Awv4wTr4veFBw==,type:str]
 sops:
     age:
         - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBCYnBZNDFIRmFJTFVjc0Jl
-            cTBycW5VaEtvTTZ3eHROYjdGQkZIdFUrUENzCldyMWJoUGFERHNtcmUzbHdtSWpD
-            RCs2M2lha2w3UkdDeDNIWmpEOGs4UHcKLS0tIGR6blA0OVNxdmdIK2ZUWXdJNXNT
-            WTB6ckd4S0Q5SXFWM1AvWEgzUWd0ZFUK6gYPEYk2BDZvZyaHDHzCd5bSRQCh67Ib
-            hWzbaK896Er70B2qwff+b9oS63Ql31g4NEad8B1w49OvrxdE3MdxHQ==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAyRUhWRkpJME5KalJWWk4v
+            UGYza3VqTVQzajBCalNaSmRmdmt4c2l2dDJRCkpxWk1VcU8xUDBDVDRxaCtQYmw5
+            ZXlvMUUxR2JvQm4wQUcyNXpvK3EyNDAKLS0tIEppLzRyQTIyU3U3K1FmbVJhWXJX
+            VU1wL2pNaGo0cDhqeElXUzBFY0QzSDQKUukHmS3Mocg0JVTthX7gqgM2HB7eN6dm
+            bjyu1O/847QiM5L5IXTvdt6CmZPTmum/+fBhq7/DG3c6myOwRb8uVA==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2026-01-20T16:30:53Z"
-    mac: ENC[AES256_GCM,data:2B1rt/yc+tUj9zBxxp2qvgWDKODgQP137lQloEeZSn2+6i3MM84CLPnXrAbFWes/gKvH3csySwwhjJhL/NpKSDNv8B7o19rQ8c984PIZGaHRwMzEQpA+mtB51G8F8lEvxHYgQzZyVQG9teLv+49ecAxiX/07Jxl1sAXbEr7mQ4A=,iv:2fL/u+gH3oNyGBg9USgqQXubUoOkF+1+7B1ykrR8KVE=,tag:WpykCtPmMlAebkAgjlbTHQ==,type:str]
+    lastmodified: "2026-01-16T18:31:40Z"
+    mac: ENC[AES256_GCM,data:Ykr+hC8N+ng2Adzj4oW5aTus62MnO3osLhRlw8ipgZbkwuMnBG0ufYvVjpEKxGl6D0/TBd46APEqZCk/9wA6LfscRuMi7Xktwd7rYawXoE2TaPdyTnabdfHy7S4DQfqzjpqxUedIwhkMQ84HrLv+o46D3VbT54NeWwWQqbrNTLs=,iv:12BZ1fN+WMn5Mw0pFnudxqEMslcOSbbDxbMG9JZgZ8k=,tag:eFVfJ1WkP/6Cxoqs2oJCPQ==,type:str]
     encrypted_suffix: Templates
     version: 3.11.0

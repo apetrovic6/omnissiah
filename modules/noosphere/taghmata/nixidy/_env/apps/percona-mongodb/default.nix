@@ -10,7 +10,7 @@ in {
 
       values = {
         # Watch all namespaces
-        watchNamespace = "unifi";
+        watchNamespace = "unifi-controller";
 
         # Enable debug logging if needed
         logLevel = "INFO";

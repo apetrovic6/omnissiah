@@ -1,8 +1,13 @@
 {config, ...}: let
-  namespace = "unifi";
+  namespace = "unifi-controller";
   domain = config.noosphere.domain;
   mongoDBName = "unifi-mongodb";
   objectStoreName = "unifi-object-store";
+
+  labels = {
+    app = "unifi-controller";
+    "app.kubernetes.io/instance" = "unifi-controller";
+  };
 in {
   # imports = [
   #   ../../../../_modules/templates/garage-object-store.nix
@@ -165,27 +170,29 @@ in {
     resources.deployments.unifi = {
       metadata = {
         inherit namespace;
-        labels = {
-          app = "unifi";
-        };
+        inherit labels;
       };
 
       spec = {
         replicas = 1; # UniFi can only run 1 replica
         strategy = {
-          type = "Recreate";
+          type = "RollingUpdate";
+          rollingUpdate = {
+            maxSurge = 1;
+            maxUnavailable = 1;
+          };
         };
 
         selector = {
           matchLabels = {
-            app = "unifi";
+            app = "unifi-controller";
           };
         };
 
         template = {
           metadata = {
             labels = {
-              app = "unifi";
+              app = "unifi-controller";
             };
           };
 
@@ -193,7 +200,7 @@ in {
             containers = [
               {
                 name = "unifi";
-                image = "lscr.io/linuxserver/unifi-network-application:latest";
+                image = "lscr.io/linuxserver/unifi-network-application:20.10.25";
 
                 env = [
                   {
@@ -249,29 +256,22 @@ in {
                     containerPort = 8443;
                     protocol = "TCP";
                   }
-                  {
-                    name = "controller";
-                    containerPort = 8080;
-                    protocol = "TCP";
-                  }
-                  {
-                    name = "speedtest";
-                    containerPort = 6789;
-                    protocol = "TCP";
-                  }
+
                   {
                     name = "stun";
                     containerPort = 3478;
                     protocol = "UDP";
                   }
+
                   {
-                    name = "ap-discovery";
+                    name = "discovery";
                     containerPort = 10001;
                     protocol = "UDP";
                   }
+
                   {
-                    name = "device-comms";
-                    containerPort = 8880;
+                    name = "communication";
+                    containerPort = 8080;
                     protocol = "TCP";
                   }
                 ];
@@ -330,32 +330,28 @@ in {
       metadata = {
         inherit namespace;
         annotations = {
-          "traefik.ingress.kubernetes.io/service.serversscheme" = "https";
-          "traefik.ingress.kubernetes.io/service.serverstransport" = "unifi-unifi-web@kubernetescrd";
+          # "traefik.ingress.kubernetes.io/service.serversscheme" = "https";
+          # "traefik.ingress.kubernetes.io/service.serverstransport" = "unifi-unifi-web@kubernetescrd";
+          "metallb.universe.tf/allow-shared-ip" = "noosphere";
         };
       };
       spec = {
-        type = "ClusterIP";
+        type = "LoadBalancer";
+        loadBalancerIP = "192.168.1.240";
         selector = {
-          app = "unifi";
+          app = "unifi-controller";
         };
         ports = [
           {
-            name = "web-ui";
+            name = "web";
             port = 8443;
             targetPort = 8443;
             protocol = "TCP";
           }
           {
-            name = "controller";
+            name = "communication";
             port = 8080;
             targetPort = 8080;
-            protocol = "TCP";
-          }
-          {
-            name = "speedtest";
-            port = 6789;
-            targetPort = 6789;
             protocol = "TCP";
           }
         ];
@@ -366,12 +362,15 @@ in {
     resources.services.unifi-devices = {
       metadata = {
         inherit namespace;
-        name = "unifi-devices";
+        annotations = {
+          "metallb.universe.tf/allow-shared-ip" = "unifi-controller";
+        };
       };
       spec = {
         type = "LoadBalancer";
+        loadBalancerIP = "192.168.1.240";
         selector = {
-          app = "unifi";
+          app = "unifi-controller";
         };
         ports = [
           {
@@ -381,75 +380,105 @@ in {
             protocol = "UDP";
           }
           {
-            name = "ap-discovery";
+            name = "discovery";
             port = 10001;
             targetPort = 10001;
             protocol = "UDP";
           }
-          {
-            name = "device-comms";
-            port = 8880;
-            targetPort = 8880;
-            protocol = "TCP";
-          }
         ];
       };
     };
 
-    # ServersTransport for insecure TLS
-    resources."traefik.io"."v1alpha1".ServersTransport.unifi-web = {
-      metadata = {
-        inherit namespace;
-      };
+    resources.middlewares.unifi-default-headers = {
+      metadata.namespace = namespace;
+
       spec = {
-        insecureSkipVerify = true;
+        headers = {
+          browserXssFilter = true;
+          contentTypeNosniff = true;
+          forceSTSHeader = true;
+          stsIncludeSubdomains = true;
+          stsPreload = true;
+          stsSeconds = 15552000;
+          customFrameOptionsValue = "SAMEORIGIN";
+          customRequestHeaders."X-Forwarded-Proto" = "https";
+        };
       };
     };
 
-    # Ingress for web UI
-    resources.ingresses.unifi = {
+    resources.ingressRoutes.unifi-controller = {
       metadata = {
         inherit namespace;
         annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "traefik.ingress.kubernetes.io/router.tls" = "true";
-          "glance/name" = "UniFi";
-          "glance/icon" = "di:unifi";
-          "glance/url" = "https://unifi.${domain}";
-          "glance/description" = "Network Controller";
-          "glance/id" = "unifi";
-          "glance/parent" = "unifi";
-          "category" = "monitoring";
+          "kubernetes.io/ingress.class" = "traefik-external";
         };
       };
 
       spec = {
-        ingressClassName = "traefik";
-
-        tls = [
+        entryPoints = ["websecure"];
+        routes = [
           {
-            secretName = "unifi-tls";
-            hosts = ["unifi.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "unifi.${domain}";
-            http.paths = [
+            match = "Host(`unifi.${domain}`)";
+            kind = "Rule";
+            services = [
               {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "unifi-web";
-                  port.number = 8443;
-                };
+                name = "unifi-tcp";
+                port = 8443;
+                scheme = "https";
               }
             ];
+
+                middlewares= [{name = "default-headers";}];
           }
         ];
+        tls.secretName = "unifi-tls";
       };
     };
+
+    # Ingress for web UI
+    # resources.ingresses.unifi = {
+    #   metadata = {
+    #     inherit namespace;
+    #     annotations = {
+    #       "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+    #       "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+    #       "traefik.ingress.kubernetes.io/router.tls" = "true";
+    #       "glance/name" = "UniFi";
+    #       "glance/icon" = "di:unifi";
+    #       "glance/url" = "https://unifi.${domain}";
+    #       "glance/description" = "Network Controller";
+    #       "glance/id" = "unifi";
+    #       "glance/parent" = "unifi";
+    #       "category" = "monitoring";
+    #     };
+    #   };
+
+    #   spec = {
+    #     ingressClassName = "traefik";
+
+    #     tls = [
+    #       {
+    #         secretName = "unifi-tls";
+    #         hosts = ["unifi.${domain}"];
+    #       }
+    #     ];
+
+    #     rules = [
+    #       {
+    #         host = "unifi.${domain}";
+    #         http.paths = [
+    #           {
+    #             path = "/";
+    #             pathType = "Prefix";
+    #             backend.service = {
+    #               name = "unifi-web";
+    #               port.number = 8443;
+    #             };
+    #           }
+    #         ];
+    #       }
+    #     ];
+    #   };
+    # };
   };
 }

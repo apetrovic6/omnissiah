@@ -29,8 +29,8 @@ in {
     ./apps/reflector
     ./apps/keycloak-operator
     ./apps/forgejo
-    ./apps/percona-mongodb
-    ./apps/unifi-network
+    # ./apps/percona-mongodb
+    # ./apps/unifi-network
   ];
 
   # CRD imports are now auto-discovered by the flake-module
