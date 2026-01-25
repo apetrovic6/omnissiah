@@ -29,25 +29,6 @@ in {
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
     };
-    # resources.ingressRouteTCPs."forgejo-ssh" = {
-    #   kind = "IngressRouteTCP";
-    #   metadata.namespace = namespace;
-    #   spec = {
-    #     entryPoints = ["ssh"];
-    #     routes = [
-    #       {
-    #         match = "HostSNI(`forge.noosphere.uk)";
-    #         services = [
-    #           {
-    #             name = "forgejo-ssh";
-    #             port = 22;
-    #           }
-    #         ];
-    #       }
-    #     ];
-    #   };
-    # };
-
     helm.releases.${name} = {
       chart = charts.forgejo-helm.forgejo;
       values = {
@@ -205,6 +186,8 @@ in {
         };
 
         spec = {
+          storage.size = "5Gi";
+          walStorage.size = "5Gi";
           plugins = [
             {
               isWALArchiver = true;
