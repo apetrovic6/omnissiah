@@ -62,6 +62,7 @@
             ".claude"
             ".local/share"
             ".librewolf"
+            ".var/app"
             ".mozilla"
             ".kube"
             "rdp"
