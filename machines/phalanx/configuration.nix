@@ -41,7 +41,7 @@ in {
   virtualisation.libvirt = let
     nixvirt = self.inputs.nixvirt;
   in {
-    enable = true;
+    enable = false;
     connections."qemu:///system" = {
       networks = [
         {
