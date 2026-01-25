@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: searxng
+  name: searxng
+  namespace: searxng
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: searxng
+  template:
+    metadata:
+      labels:
+        app: searxng
+    spec:
+      containers:
+        - env:
+            - name: SEARXNG_BASE_URL
+              value: https://searx.noosphere.uk
+          image: docker.io/searxng/searxng:2026.1.24-eea189286
+          name: searxng
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - mountPath: /etc/searxng
+              name: searxng
+            - mountPath: /var/cache/searxng
+              name: searxng
+      volumes:
+        - name: searxng
+          persistentVolumeClaim:
+            claimName: searxng-pvc

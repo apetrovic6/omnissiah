@@ -29,6 +29,7 @@ in {
     ./apps/reflector
     ./apps/keycloak-operator
     ./apps/forgejo
+    ./apps/searxng
     # ./apps/percona-mongodb
     # ./apps/unifi-network
   ];

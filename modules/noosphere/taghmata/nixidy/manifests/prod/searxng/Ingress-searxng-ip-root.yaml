@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    argocd.proj.io/sync-options: Prune=false,Delete=false
+    category: utils
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Private Meta Search Engine
+    glance/icon: di:searxng
+    glance/id: searxng
+    glance/name: Searxng
+    glance/parent: searxng
+    glance/url: https://searx.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: searxng-ip-root
+  namespace: searxng
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: seerr.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: seerr
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - seerr.noosphere.uk
+      secretName: seerr-tls

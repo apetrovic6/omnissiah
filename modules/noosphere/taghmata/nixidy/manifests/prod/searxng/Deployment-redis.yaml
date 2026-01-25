@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: searxng-valkey
+  name: redis
+  namespace: searxng
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: searxng-valkey
+  template:
+    metadata:
+      labels:
+        app: searxng-valkey
+    spec:
+      containers:
+        - args:
+            - --save
+            - "30"
+            - "1"
+          command:
+            - valkey-server
+          image: docker.io/valkey/valkey:9-alpine
+          name: valkey
+          ports:
+            - containerPort: 6379
+      volumes:
+        - name: valkey
+          persistentVolumeClaim:
+            claimName: valkey-pvc

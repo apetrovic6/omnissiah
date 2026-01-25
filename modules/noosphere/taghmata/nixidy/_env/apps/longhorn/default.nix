@@ -62,9 +62,20 @@ in {
       values = {
         longhorn.preUpgradeChecker.jobEnabled = false;
         persistence = {
-          defaultClassReplicaCount = 3;
+          defaultClassReplicaCount = 2;
           reclaimPolicy = "Retain";
         };
+      };
+    };
+
+    resources.storageClasses.longhorn-rec-1= {
+      provisioner = "driver.longhorn.io";
+      allowVolumeExpansion = true;
+      reclaimPolicy = "Delete";
+      parameters = {
+        numberOfReplicas = "1";
+        staleReplicaTimeout = "2880"; # 48h
+        fsType = "ext4";
       };
     };
 
