@@ -33,6 +33,10 @@
       # NFS helper name can vary by distro; these two paths cover common expectations
       "L+ /sbin/mount.nfs - - - - ${pkgs.nfs-utils}/bin/mount.nfs"
       "L+ /usr/sbin/mount.nfs - - - - ${pkgs.nfs-utils}/bin/mount.nfs"
+
+      # iSCSI tools for Longhorn volume attachment
+      "L+ /sbin/iscsiadm - - - - ${pkgs.openiscsi}/bin/iscsiadm"
+      "L+ /usr/bin/iscsiadm - - - - ${pkgs.openiscsi}/bin/iscsiadm"
     ];
 
     environment.systemPackages = with pkgs; [nfs-utils util-linux openiscsi cryptsetup];
@@ -96,25 +100,6 @@
             };
           };
 
-          extraDeploy = [
-            {
-              apiVersion = "v1";
-              kind = "ConfigMap";
-              metadata = {
-                name = "coredns-custom";
-                namespace = "kube-system";
-              };
-              data = {
-                "noosphere.server" = ''
-                  noosphere.uk:53 {
-                    errors
-                    cache 30
-                    forward . 192.168.1.81
-                  }
-                '';
-              };
-            }
-          ];
         };
       };
     };
