@@ -12,6 +12,8 @@ let
 in
 {
   applications.searxng = {
+    inherit namespace;
+    createNamespace = true;
 
     resources.persistentVolumeClaims.searxng-pvc = {
       metadata = {
@@ -48,76 +50,127 @@ in
         inherit namespace labels;
       };
 
-      template = {
-        metadata = { inherit labels; };
-        spec = {
-          replicas = 1;
-          selector.matchLabels = labels;
-          volumes = [
-            {
-              name = "searxng";
-              persistentVolumeClaim.claimName = "searxng-pvc";
-            }
-          ];
-          containers = [
-            {
-              name = "searxng";
-              image = "docker.io/searxng/searxng:2026.1.24-eea189286";
-              ports = [ { containerPort = 8080; } ];
-              volumeMounts = [
-                {
-                  name = "searxng";
-                  mountPath = "/etc/searxng";
-                }
+      spec = {
+        replicas = 1;
+        selector.matchLabels = labels;
 
-                {
-                  name = "searxng";
-                  mountPath = "/var/cache/searxng";
-                }
+        template = {
+          metadata = { inherit labels; };
+          spec = {
+            volumes = [
+              {
+                name = "searxng";
+                persistentVolumeClaim.claimName = "searxng-pvc";
+              }
+            ];
 
-              ];
+            containers = [
+              {
+                name = "searxng";
+                image = "docker.io/searxng/searxng:2026.1.24-eea189286";
+                ports = [ { containerPort = 8080; } ];
+                volumeMounts = [
+                  {
+                    name = "searxng";
+                    mountPath = "/etc/searxng";
+                  }
 
-              env = [
-                {
-                  name = "SEARXNG_BASE_URL";
-                  value = "https://searx.${domain}";
-                }
+                  {
+                    name = "searxng";
+                    mountPath = "/var/cache/searxng";
+                  }
 
-              ];
+                ];
 
-            }
-          ];
+                env = [
+                  {
+                    name = "SEARXNG_BASE_URL";
+                    value = "https://searx.${domain}";
+                  }
+
+                ];
+
+              }
+            ];
+          };
         };
       };
     };
 
-    resources.deployments.valkey = {
-      medatada = { inherit namespace valkeyLabels; };
-      template = {
-        metadata.labels = valkeyLabels;
-        spec = {
-          volumes = [
-            {
-              name = "valkey";
-              persistentVolumeClaim.claimName = "valkey-pvc";
-            }
-          ];
+    resources.services.searxng = {
+      metadata = {
+        inherit namespace;
+      };
+      spec = {
+        type = "ClusterIP";
+        selector = labels;
+        ports = [
+          {
+            protocol = "TCP";
+            port = 80;
+            targetPort = 8080;
+          }
+        ];
+      };
+    };
 
-          containers = [
-            {
-              name = "valkey";
-              image = "docker.io/valkey/valkey:9-alpine";
-              command = [ "valkey-server" ];
-              args = [
-                "--save"
-                "30"
-                "1"
-              ];
+    resources.services.valkey = {
+      metadata = {
+        inherit namespace;
+      };
+      spec = {
+        type = "ClusterIP";
+        selector = valkeyLabels;
+        ports = [
+          {
+            protocol = "TCP";
+            port = 6379;
+            targetPort = 6379;
+          }
+        ];
+      };
+    };
 
-            }
+    resources.deployments.redis = {
+      metadata = {
+        inherit namespace;
+        labels = valkeyLabels;
+      };
 
-          ];
+      spec = {
+        replicas = 1;
+        selector.matchLabels = valkeyLabels;
 
+        template = {
+          metadata.labels = valkeyLabels;
+          spec = {
+            volumes = [
+              {
+                name = "valkey";
+                persistentVolumeClaim.claimName = "valkey-pvc";
+              }
+            ];
+
+            containers = [
+              {
+                name = "valkey";
+                image = "docker.io/valkey/valkey:9-alpine";
+                command = [ "valkey-server" ];
+                ports = [ { containerPort = 6379; } ];
+                args = [
+                  "--save"
+                  "30"
+                  "1"
+                ];
+                volumeMounts = [
+                  {
+                    name = "valkey";
+                    mountPath = "/data";
+                  }
+                ];
+              }
+            ];
+          };
         };
       };
     };
@@ -145,20 +198,20 @@ in
 
         tls = [
           {
-            secretName = "seerr-tls";
-            hosts = ["seerr.${domain}"];
+            secretName = "searxng-tls";
+            hosts = [ "searx.${domain}" ];
           }
         ];
 
         rules = [
           {
-            host = "seerr.${domain}";
+            host = "searx.${domain}";
             http.paths = [
               {
                 path = "/";
                 pathType = "Prefix";
                 backend.service = {
-                  name = "seerr";
+                  name = "searxng";
                   port.number = 80;
                 };
               }
@@ -166,6 +219,6 @@ in
           }
         ];
       };
-    };    
+    };
   };
 }

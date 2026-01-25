@@ -26,6 +26,9 @@ spec:
           name: valkey
           ports:
             - containerPort: 6379
+          volumeMounts:
+            - mountPath: /data
+              name: valkey
       volumes:
         - name: valkey
           persistentVolumeClaim:

@@ -17,17 +17,17 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: seerr.noosphere.uk
+    - host: searx.noosphere.uk
       http:
         paths:
           - backend:
               service:
-                name: seerr
+                name: searxng
                 port:
                   number: 80
             path: /
             pathType: Prefix
   tls:
     - hosts:
-        - seerr.noosphere.uk
-      secretName: seerr-tls
+        - searx.noosphere.uk
+      secretName: searxng-tls
