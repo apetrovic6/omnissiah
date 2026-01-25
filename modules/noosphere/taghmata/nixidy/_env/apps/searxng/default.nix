@@ -25,7 +25,7 @@ in
       };
       spec = {
         accessModes = [ "ReadWriteOnce" ];
-        storageClassName = "longhorn-rec-1";
+        storageClassName = "longhorn";
         resources.requests.storage = "1Gi";
       };
     };
@@ -40,7 +40,7 @@ in
       };
       spec = {
         accessModes = [ "ReadWriteOnce" ];
-        storageClassName = "longhorn-rec-1";
+        storageClassName = "longhorn";
         resources.requests.storage = "2Gi";
       };
     };
@@ -189,7 +189,7 @@ in
           "glance/description" = "Private Meta Search Engine";
           "glance/id" = "searxng";
           "glance/parent" = "searxng";
-          "category" = "utils";
+          "category" = "search";
         };
       };
 

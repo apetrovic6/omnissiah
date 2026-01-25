@@ -67,6 +67,57 @@ in {
   #   };
   # };
 
+  applications.coredns-config = {
+    namespace = "kube-system";
+    output.path = "./coredns";
+
+    yamls = [
+      ''
+        apiVersion: helm.cattle.io/v1
+        kind: HelmChartConfig
+        metadata:
+          name: rke2-coredns
+          namespace: kube-system
+        spec:
+          valuesContent: |-
+            servers:
+            - zones:
+              - zone: .
+              port: 53
+              plugins:
+              - name: errors
+              - name: health
+                configBlock: |-
+                  lameduck 10s
+              - name: ready
+              - name: kubernetes
+                parameters: cluster.local cluster.local in-addr.arpa ip6.arpa
+                configBlock: |-
+                  pods insecure
+                  fallthrough in-addr.arpa ip6.arpa
+                  ttl 30
+              - name: prometheus
+                parameters: 0.0.0.0:9153
+              - name: forward
+                parameters: . /etc/resolv.conf
+              - name: cache
+                parameters: 30
+              - name: loop
+              - name: reload
+              - name: loadbalance
+            - zones:
+              - zone: noosphere.uk
+              port: 53
+              plugins:
+              - name: errors
+              - name: cache
+                parameters: 30
+              - name: forward
+                parameters: . 192.168.1.81
+      ''
+    ];
+  };
+
   applications.ingress-traefik-load-balancer-config = {
     namespace = "kube-system";
     output.path = "./traefik";

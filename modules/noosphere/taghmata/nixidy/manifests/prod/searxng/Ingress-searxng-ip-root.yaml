@@ -3,7 +3,7 @@ kind: Ingress
 metadata:
   annotations:
     argocd.proj.io/sync-options: Prune=false,Delete=false
-    category: utils
+    category: search
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: Private Meta Search Engine
     glance/icon: di:searxng

@@ -122,6 +122,22 @@ in {
                 '';
               };
             }
+
+            {
+              type = "extension";
+              title = "Search";
+              url = "http://glance-k8s/extension/apps";
+              allow-potentially-dangerous-html = true;
+              inherit cache;
+
+              parameters = {
+                show-if = ''
+                  namespace != "kube-system" and
+                  "glance/name" in annotations and
+                   ("category" in annotations && annotations["category"] == "search")
+                '';
+              };
+            }
             {
               type = "extension";
               title = "Utils";
