@@ -25,7 +25,7 @@ in
       };
       spec = {
         accessModes = [ "ReadWriteOnce" ];
-        storageClassName = "longhorn";
+        storageClassName = "longhorn-rec-1";
         resources.requests.storage = "1Gi";
       };
     };
@@ -40,7 +40,7 @@ in
       };
       spec = {
         accessModes = [ "ReadWriteOnce" ];
-        storageClassName = "longhorn";
+        storageClassName = "longhorn-rec-1";
         resources.requests.storage = "2Gi";
       };
     };
