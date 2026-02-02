@@ -1,7 +1,7 @@
 {config, ...}: let
   namespace = "yarr";
   domain = config.noosphere.domain;
-  db-cluster-name = "pg-yarr-restored";
+  db-cluster-name = "pg-yarr-1";
   objectStoreName = "yarr-object-store";
 in {
   imports = [
@@ -188,7 +188,7 @@ in {
       (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
     ];
 
-    templates.cnpg-database-cluster.yarr-restored = {
+    templates.cnpg-database-cluster.yarr-1 = {
       inherit namespace;
       overrideObjectStore = objectStoreName;
       cluster = {
@@ -218,7 +218,7 @@ in {
               plugin = {
                 parameters = {
                   barmanObjectName = objectStoreName;
-                  serverName = "pg-yarr";
+                  serverName = "pg-yarr-restored";
                 };
               };
             }

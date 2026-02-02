@@ -6,7 +6,7 @@ metadata:
     argocd.proj.io/sync-options: Prune=false,Delete=false
   labels:
     release: kube-prometheus-stack
-  name: pg-yarr-restored
+  name: pg-yarr-1
   namespace: yarr
 spec:
   backup:
@@ -21,7 +21,7 @@ spec:
         name: barman-cloud.cloudnative-pg.io
         parameters:
           barmanObjectName: yarr-object-store
-          serverName: pg-yarr
+          serverName: pg-yarr-restored
   instances: 3
   managed:
     roles:
