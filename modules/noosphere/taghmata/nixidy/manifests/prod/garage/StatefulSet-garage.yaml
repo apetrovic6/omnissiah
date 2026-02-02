@@ -20,7 +20,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 7fb3ad04f6f8f3a733ae1a7000ccdb12c240a470c7491f598182d0c01ecd8ef5
+        checksum/config: d0eb3c4a38fc90b8ec14384fff35d2d4874cab7b6e4bf92f0e4f7c50b20084d3
       labels:
         app.kubernetes.io/instance: garage
         app.kubernetes.io/managed-by: Helm
