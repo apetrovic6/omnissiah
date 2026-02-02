@@ -71,6 +71,7 @@ in {
     image = ../../wallpapers/everforest/1.png; # optional
     # image = ../../wallpapers/everforest/1.png; # optional
     polarity = "dark";
+    base16Scheme = "everforest-dark-soft";
 
     targets.firefox.profileNames = ["apetrovic"];
   };
@@ -102,7 +103,7 @@ in {
   programs.yazi = {
     enable = true;
     enableBashIntegration = true;
-    enableZshIntegration = true;
+    # enableZshIntegration = true;
   };
 
   # This value determines the Home Manager release that your

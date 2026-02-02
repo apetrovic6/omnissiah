@@ -66,6 +66,7 @@
 
     magos.stylix = {
       image = ../wallpapers/everforest/3.jpg;
+      base16Scheme = "everforest-dark-soft";
     };
 
     boot.plymouth = {

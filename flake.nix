@@ -32,6 +32,7 @@
 
     omnishell = {
       url = "github:apetrovic6/omnishell";
+      # url = "path:/home/apetrovic/clan/omnishell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
