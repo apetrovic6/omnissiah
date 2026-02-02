@@ -6,9 +6,9 @@ metadata:
     app.kubernetes.io/instance: forgejo
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: forgejo
-    app.kubernetes.io/version: 14.0.1
-    helm.sh/chart: forgejo-16.0.1
-    version: 14.0.1
+    app.kubernetes.io/version: 14.0.2
+    helm.sh/chart: forgejo-16.0.2
+    version: 14.0.2
   name: forgejo
   namespace: forgejo
 spec:
@@ -22,16 +22,16 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a28f880a1e86966d804d77db387da97401f6c0b7222df52e97d91b9d8a91686c
+        checksum/config: b44d9c5b33f6a1f4765ee08ce75972a6105f901522079dbf3636bf79ec0a7487
         checksum/oauth_0: 77644db45f286d011f857014d1ead5a52273a99d55902c3cdd352b6e1380fa55
       labels:
         app: forgejo
         app.kubernetes.io/instance: forgejo
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: forgejo
-        app.kubernetes.io/version: 14.0.1
-        helm.sh/chart: forgejo-16.0.1
-        version: 14.0.1
+        app.kubernetes.io/version: 14.0.2
+        helm.sh/chart: forgejo-16.0.2
+        version: 14.0.2
     spec:
       containers:
         - env:
@@ -51,7 +51,7 @@ spec:
               value: /tmp/gitea
             - name: HOME
               value: /data/gitea/git
-          image: code.forgejo.org/forgejo/forgejo:14.0.1-rootless
+          image: code.forgejo.org/forgejo/forgejo:14.0.2-rootless
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 10
@@ -106,7 +106,7 @@ spec:
               value: /data
             - name: GITEA_TEMP
               value: /tmp/gitea
-          image: code.forgejo.org/forgejo/forgejo:14.0.1-rootless
+          image: code.forgejo.org/forgejo/forgejo:14.0.2-rootless
           imagePullPolicy: IfNotPresent
           name: init-directories
           resources:
@@ -163,7 +163,7 @@ spec:
                 secretKeyRef:
                   key: password
                   name: pg-forgejo-app
-          image: code.forgejo.org/forgejo/forgejo:14.0.1-rootless
+          image: code.forgejo.org/forgejo/forgejo:14.0.2-rootless
           imagePullPolicy: IfNotPresent
           name: init-app-ini
           resources:
@@ -227,7 +227,7 @@ spec:
                   name: forgejo-admin-secret
             - name: GITEA_ADMIN_PASSWORD_MODE
               value: keepUpdated
-          image: code.forgejo.org/forgejo/forgejo:14.0.1-rootless
+          image: code.forgejo.org/forgejo/forgejo:14.0.2-rootless
           imagePullPolicy: IfNotPresent
           name: configure-gitea
           resources:
