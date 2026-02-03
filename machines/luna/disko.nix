@@ -1,12 +1,7 @@
-# ---
-# schema = "single-disk"
-# [placeholders]
-# mainDisk = "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF56C" 
-# ---
-# This file was automatically generated!
-# CHANGING this configuration requires wiping and reinstalling the machine
-{
-
+let
+  bootDiskId = "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF56C";
+  storageDiskId = "/dev/disk/by-id/nvme-WD_Red_SN700_2000GB_25421G801582";
+in {
   boot.loader.grub.efiSupport = true;
   boot.loader.grub.efiInstallAsRemovable = true;
   boot.loader.grub.enable = true;
@@ -14,7 +9,7 @@
     disk = {
       main = {
         name = "main-d793965c3c5a47b7965d963fafcb8203";
-        device = "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF56C";
+        device = bootDiskId;
         type = "disk";
         content = {
           type = "gpt";
@@ -31,7 +26,7 @@
                 type = "filesystem";
                 format = "vfat";
                 mountpoint = "/boot";
-                mountOptions = [ "umask=0077" ];
+                mountOptions = ["umask=0077"];
               };
             };
             root = {
@@ -45,6 +40,25 @@
           };
         };
       };
+
+      storage = {
+        type = "disk";
+        device = storageDiskId;
+        content = {
+          type = "gpt";
+          partitions = {
+            storage = {
+              size = "100%";
+              content = {
+                type = "filesystem";
+                format = "ext4";
+                mountpoint = "/mnt/storage";
+              };
+            };
+          };
+        };
+      };
+      
     };
   };
 }

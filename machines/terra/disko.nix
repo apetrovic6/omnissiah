@@ -1,10 +1,7 @@
-# ---
-# schema = "single-disk"
-# [placeholders]
-# mainDisk = "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF4BA" 
-# ---
-# This file was automatically generated!
-# CHANGING this configuration requires wiping and reinstalling the machine
+let
+  bootDiskId = "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF4BA";
+  storageDiskId = "/dev/disk/by-id/nvme-WD_Red_SN700_2000GB_25514W800552";
+in 
 {
 
   boot.loader.grub.efiSupport = true;
@@ -14,7 +11,7 @@
     disk = {
       main = {
         name = "main-5f508a0b659a48d2974f87dad887b180";
-        device = "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF4BA";
+        device = bootDiskId;
         type = "disk";
         content = {
           type = "gpt";
@@ -45,6 +42,26 @@
           };
         };
       };
+
+
+      storage = {
+        type = "disk";
+        device = storageDiskId;
+        content = {
+          type = "gpt";
+          partitions = {
+            storage = {
+              size = "100%";
+              content = {
+                type = "filesystem";
+                format = "ext4";
+                mountpoint = "/mnt/storage";
+              };
+            };
+          };
+        };
+      };
+      
     };
   };
 }
