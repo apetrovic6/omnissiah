@@ -1,19 +1,20 @@
 # ---
 # schema = "single-disk"
 # [placeholders]
-# mainDisk = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198F3CF"
+# mainDisk = "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF4B8" 
 # ---
 # This file was automatically generated!
 # CHANGING this configuration requires wiping and reinstalling the machine
 {
+
   boot.loader.grub.efiSupport = true;
   boot.loader.grub.efiInstallAsRemovable = true;
   boot.loader.grub.enable = true;
   disko.devices = {
     disk = {
       main = {
-        name = "main-b474d158397349fda9275032df02f85c";
-        device = "/dev/disk/by-id/nvme-CT500P310SSD8_25295198F3CF";
+        name = "main-2d04b2e06dd7486b982cad99cadf6a82";
+        device = "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF4B8";
         type = "disk";
         content = {
           type = "gpt";
@@ -30,7 +31,7 @@
                 type = "filesystem";
                 format = "vfat";
                 mountpoint = "/boot";
-                mountOptions = ["umask=0077"];
+                mountOptions = [ "umask=0077" ];
               };
             };
             root = {
