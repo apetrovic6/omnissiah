@@ -23,8 +23,8 @@
     },
     "bluetooth": [
       {
-        "index": 34,
-        "attached_to": 33,
+        "index": 37,
+        "attached_to": 36,
         "class_list": [
           "usb",
           "bluetooth"
@@ -107,8 +107,8 @@
         "module_alias": "usb:v8087p0026d0002dcE0dsc01dp01icE0isc01ip01in00"
       },
       {
-        "index": 38,
-        "attached_to": 33,
+        "index": 41,
+        "attached_to": 36,
         "class_list": [
           "usb",
           "bluetooth"
@@ -508,7 +508,7 @@
           "function": 0,
           "command": 1031,
           "header_type": 1,
-          "secondary_bus": 3,
+          "secondary_bus": 4,
           "prog_if": 0
         },
         "driver": "pcieport",
@@ -520,6 +520,75 @@
           "pcieportdrv"
         ],
         "module_alias": "pci:v00008086d000054B0sv00008086sd00007270bc06sc04i00"
+      },
+      {
+        "index": 24,
+        "attached_to": 0,
+        "class_list": [
+          "pci",
+          "bridge"
+        ],
+        "bus_type": {
+          "hex": "0004",
+          "name": "PCI",
+          "value": 4
+        },
+        "slot": {
+          "bus": 0,
+          "number": 28
+        },
+        "base_class": {
+          "hex": "0006",
+          "name": "Bridge",
+          "value": 6
+        },
+        "sub_class": {
+          "hex": "0004",
+          "name": "PCI bridge",
+          "value": 4
+        },
+        "pci_interface": {
+          "hex": "0000",
+          "name": "Normal decode",
+          "value": 0
+        },
+        "vendor": {
+          "hex": "8086",
+          "name": "Intel Corporation",
+          "value": 32902
+        },
+        "sub_vendor": {
+          "hex": "8086",
+          "name": "Intel Corporation",
+          "value": 32902
+        },
+        "device": {
+          "hex": "54be",
+          "value": 21694
+        },
+        "sub_device": {
+          "hex": "7270",
+          "value": 29296
+        },
+        "model": "Intel PCI bridge",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1c.6",
+        "sysfs_bus_id": "0000:00:1c.6",
+        "detail": {
+          "function": 6,
+          "command": 1031,
+          "header_type": 1,
+          "secondary_bus": 3,
+          "prog_if": 0
+        },
+        "driver": "pcieport",
+        "driver_module": "pcieportdrv",
+        "drivers": [
+          "pcieport"
+        ],
+        "driver_modules": [
+          "pcieportdrv"
+        ],
+        "module_alias": "pci:v00008086d000054BEsv00008086sd00007270bc06sc04i00"
       }
     ],
     "cpu": [
@@ -691,7 +760,7 @@
         "fpu_exception": true,
         "cpuid_level": 32,
         "write_protect": false,
-        "tlb_size": 32665,
+        "tlb_size": 32764,
         "clflush_size": 64,
         "cache_alignment": 64,
         "address_sizes": {
@@ -702,8 +771,8 @@
     ],
     "disk": [
       {
-        "index": 31,
-        "attached_to": 8,
+        "index": 33,
+        "attached_to": 27,
         "class_list": [
           "disk",
           "block_device",
@@ -729,38 +798,38 @@
           "value": 0
         },
         "vendor": {
-          "hex": "c0a9",
-          "value": 49321
+          "hex": "2646",
+          "value": 9798
         },
         "sub_vendor": {
-          "hex": "c0a9",
-          "value": 49321
+          "hex": "2646",
+          "value": 9798
         },
         "device": {
-          "hex": "5427",
-          "name": "CT500P310SSD8",
-          "value": 21543
+          "hex": "501f",
+          "name": "KINGSTON SFYRD2000G",
+          "value": 20511
         },
         "sub_device": {
-          "hex": "1100",
-          "value": 4352
+          "hex": "501f",
+          "value": 20511
         },
-        "serial": "25295198F3BE",
-        "model": "CT500P310SSD8",
+        "serial": "50026B7383CCF56C",
+        "model": "KINGSTON SFYRD2000G",
         "sysfs_id": "/class/block/nvme0n1",
         "sysfs_bus_id": "nvme0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:1d.0/0000:03:00.0/nvme/nvme0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:1d.0/0000:04:00.0/nvme/nvme0",
         "unix_device_names": [
-          "/dev/disk/by-id/nvme-CT500P310SSD8_25295198F3BE",
-          "/dev/disk/by-id/nvme-CT500P310SSD8_25295198F3BE_1",
-          "/dev/disk/by-id/nvme-eui.00a075015198f3be",
-          "/dev/disk/by-path/pci-0000:03:00.0-nvme-1",
+          "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF56C",
+          "/dev/disk/by-id/nvme-KINGSTON_SFYRD2000G_50026B7383CCF56C_1",
+          "/dev/disk/by-id/nvme-eui.00000000000000000026b7383ccf56c5",
+          "/dev/disk/by-path/pci-0000:04:00.0-nvme-1",
           "/dev/nvme0n1"
         ],
         "resources": [
           {
             "type": "disk_geo",
-            "cylinders": 476940,
+            "cylinders": 1907729,
             "heads": 64,
             "sectors": 32,
             "size": "0x0",
@@ -769,7 +838,7 @@
           {
             "type": "size",
             "unit": "sectors",
-            "value_1": 976773168,
+            "value_1": 3907029168,
             "value_2": 512
           }
         ],
@@ -783,8 +852,89 @@
         ]
       },
       {
-        "index": 32,
-        "attached_to": 27,
+        "index": 34,
+        "attached_to": 8,
+        "class_list": [
+          "disk",
+          "block_device",
+          "nvme"
+        ],
+        "bus_type": {
+          "hex": "0096",
+          "name": "NVME",
+          "value": 150
+        },
+        "slot": {
+          "bus": 0,
+          "number": 1
+        },
+        "base_class": {
+          "hex": "0106",
+          "name": "Mass Storage Device",
+          "value": 262
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Disk",
+          "value": 0
+        },
+        "vendor": {
+          "hex": "15b7",
+          "value": 5559
+        },
+        "sub_vendor": {
+          "hex": "15b7",
+          "value": 5559
+        },
+        "device": {
+          "hex": "5006",
+          "name": "WD Red SN700 2000GB",
+          "value": 20486
+        },
+        "sub_device": {
+          "hex": "5006",
+          "value": 20486
+        },
+        "serial": "25421G801582",
+        "model": "WD Red SN700 2000GB",
+        "sysfs_id": "/class/block/nvme1n1",
+        "sysfs_bus_id": "nvme1",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:1c.6/0000:03:00.0/nvme/nvme1",
+        "unix_device_names": [
+          "/dev/disk/by-id/nvme-WD_Red_SN700_2000GB_25421G801582",
+          "/dev/disk/by-id/nvme-WD_Red_SN700_2000GB_25421G801582_1",
+          "/dev/disk/by-id/nvme-eui.e8238fa6bf530001001b448b4f889829",
+          "/dev/disk/by-path/pci-0000:03:00.0-nvme-1",
+          "/dev/nvme1n1"
+        ],
+        "resources": [
+          {
+            "type": "disk_geo",
+            "cylinders": 1907729,
+            "heads": 64,
+            "sectors": 32,
+            "size": "0x0",
+            "geo_type": "logical"
+          },
+          {
+            "type": "size",
+            "unit": "sectors",
+            "value_1": 3907029168,
+            "value_2": 512
+          }
+        ],
+        "driver": "nvme",
+        "driver_module": "nvme",
+        "drivers": [
+          "nvme"
+        ],
+        "driver_modules": [
+          "nvme"
+        ]
+      },
+      {
+        "index": 35,
+        "attached_to": 29,
         "class_list": [
           "disk",
           "usb",
@@ -876,7 +1026,7 @@
     ],
     "graphics_card": [
       {
-        "index": 26,
+        "index": 28,
         "attached_to": 0,
         "class_list": [
           "graphics_card",
@@ -957,8 +1107,8 @@
     ],
     "hub": [
       {
-        "index": 33,
-        "attached_to": 27,
+        "index": 36,
+        "attached_to": 29,
         "class_list": [
           "usb",
           "hub"
@@ -1044,8 +1194,8 @@
         "module_alias": "usb:v1D6Bp0002d0617dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 36,
-        "attached_to": 27,
+        "index": 39,
+        "attached_to": 29,
         "class_list": [
           "usb",
           "hub"
@@ -1121,7 +1271,7 @@
         "module_alias": "usb:v1D6Bp0003d0617dc09dsc00dp03ic09isc00ip00in00"
       },
       {
-        "index": 37,
+        "index": 40,
         "attached_to": 10,
         "class_list": [
           "usb",
@@ -1208,7 +1358,7 @@
         "module_alias": "usb:v1D6Bp0002d0617dc09dsc00dp01ic09isc00ip00in00"
       },
       {
-        "index": 39,
+        "index": 42,
         "attached_to": 10,
         "class_list": [
           "usb",
@@ -1313,8 +1463,8 @@
     ],
     "monitor": [
       {
-        "index": 29,
-        "attached_to": 26,
+        "index": 31,
+        "attached_to": 28,
         "class_list": [
           "monitor"
         ],
@@ -1665,7 +1815,7 @@
         "resources": [
           {
             "type": "hwaddr",
-            "address": 98
+            "address": 55
           },
           {
             "type": "phwaddr",
@@ -1857,8 +2007,8 @@
     ],
     "network_interface": [
       {
-        "index": 40,
-        "attached_to": 14,
+        "index": 43,
+        "attached_to": 0,
         "class_list": [
           "network_interface"
         ],
@@ -1868,37 +2018,18 @@
           "value": 263
         },
         "sub_class": {
-          "hex": "000a",
-          "name": "WLAN",
-          "value": 10
+          "hex": "0000",
+          "name": "Loopback",
+          "value": 0
         },
-        "model": "WLAN network interface",
-        "sysfs_id": "/class/net/wlan0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:14.3",
+        "model": "Loopback network interface",
+        "sysfs_id": "/class/net/lo",
         "unix_device_names": [
-          "wlan0"
-        ],
-        "resources": [
-          {
-            "type": "hwaddr",
-            "address": 98
-          },
-          {
-            "type": "phwaddr",
-            "address": 57
-          }
-        ],
-        "driver": "iwlwifi",
-        "driver_module": "iwlwifi",
-        "drivers": [
-          "iwlwifi"
-        ],
-        "driver_modules": [
-          "iwlwifi"
+          "lo"
         ]
       },
       {
-        "index": 41,
+        "index": 44,
         "attached_to": 13,
         "class_list": [
           "network_interface"
@@ -1939,29 +2070,7 @@
         ]
       },
       {
-        "index": 42,
-        "attached_to": 0,
-        "class_list": [
-          "network_interface"
-        ],
-        "base_class": {
-          "hex": "0107",
-          "name": "Network Interface",
-          "value": 263
-        },
-        "sub_class": {
-          "hex": "0000",
-          "name": "Loopback",
-          "value": 0
-        },
-        "model": "Loopback network interface",
-        "sysfs_id": "/class/net/lo",
-        "unix_device_names": [
-          "lo"
-        ]
-      },
-      {
-        "index": 43,
+        "index": 45,
         "attached_to": 16,
         "class_list": [
           "network_interface"
@@ -1999,6 +2108,47 @@
         ],
         "driver_modules": [
           "igc"
+        ]
+      },
+      {
+        "index": 46,
+        "attached_to": 14,
+        "class_list": [
+          "network_interface"
+        ],
+        "base_class": {
+          "hex": "0107",
+          "name": "Network Interface",
+          "value": 263
+        },
+        "sub_class": {
+          "hex": "000a",
+          "name": "WLAN",
+          "value": 10
+        },
+        "model": "WLAN network interface",
+        "sysfs_id": "/class/net/wlan0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:14.3",
+        "unix_device_names": [
+          "wlan0"
+        ],
+        "resources": [
+          {
+            "type": "hwaddr",
+            "address": 55
+          },
+          {
+            "type": "phwaddr",
+            "address": 57
+          }
+        ],
+        "driver": "iwlwifi",
+        "driver_module": "iwlwifi",
+        "drivers": [
+          "iwlwifi"
+        ],
+        "driver_modules": [
+          "iwlwifi"
         ]
       }
     ],
@@ -2326,7 +2476,7 @@
         "label": "Onboard - Other"
       },
       {
-        "index": 24,
+        "index": 25,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -2390,7 +2540,7 @@
         "label": "Onboard - Other"
       },
       {
-        "index": 25,
+        "index": 26,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -2447,7 +2597,7 @@
         "label": "Onboard - Other"
       },
       {
-        "index": 28,
+        "index": 30,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -2590,7 +2740,7 @@
     "storage_controller": [
       {
         "index": 8,
-        "attached_to": 23,
+        "attached_to": 24,
         "class_list": [
           "storage_controller",
           "pci"
@@ -2618,28 +2768,93 @@
           "value": 2
         },
         "vendor": {
-          "hex": "c0a9",
-          "value": 49321
+          "hex": "15b7",
+          "value": 5559
         },
         "sub_vendor": {
-          "hex": "c0a9",
-          "value": 49321
+          "hex": "15b7",
+          "value": 5559
         },
         "device": {
-          "hex": "5427",
-          "value": 21543
+          "hex": "5006",
+          "value": 20486
         },
         "sub_device": {
-          "hex": "1100",
-          "value": 4352
+          "hex": "5006",
+          "value": 20486
+        },
+        "model": "Mass storage controller",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1c.6/0000:03:00.0",
+        "sysfs_bus_id": "0000:03:00.0",
+        "detail": {
+          "function": 0,
+          "command": 1031,
+          "header_type": 0,
+          "secondary_bus": 0,
+          "prog_if": 2
+        },
+        "driver": "nvme",
+        "driver_module": "nvme",
+        "drivers": [
+          "nvme"
+        ],
+        "driver_modules": [
+          "nvme"
+        ],
+        "module_alias": "pci:v000015B7d00005006sv000015B7sd00005006bc01sc08i02"
+      },
+      {
+        "index": 27,
+        "attached_to": 23,
+        "class_list": [
+          "storage_controller",
+          "pci"
+        ],
+        "bus_type": {
+          "hex": "0004",
+          "name": "PCI",
+          "value": 4
+        },
+        "slot": {
+          "bus": 4,
+          "number": 0
+        },
+        "base_class": {
+          "hex": "0001",
+          "name": "Mass storage controller",
+          "value": 1
+        },
+        "sub_class": {
+          "hex": "0008",
+          "value": 8
+        },
+        "pci_interface": {
+          "hex": "0002",
+          "value": 2
+        },
+        "vendor": {
+          "hex": "2646",
+          "value": 9798
+        },
+        "sub_vendor": {
+          "hex": "2646",
+          "value": 9798
+        },
+        "device": {
+          "hex": "501f",
+          "value": 20511
+        },
+        "sub_device": {
+          "hex": "501f",
+          "value": 20511
         },
         "revision": {
           "hex": "0001",
           "value": 1
         },
         "model": "Mass storage controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1d.0/0000:03:00.0",
-        "sysfs_bus_id": "0000:03:00.0",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1d.0/0000:04:00.0",
+        "sysfs_bus_id": "0000:04:00.0",
         "detail": {
           "function": 0,
           "command": 1030,
@@ -2655,7 +2870,7 @@
         "driver_modules": [
           "nvme"
         ],
-        "module_alias": "pci:v0000C0A9d00005427sv0000C0A9sd00001100bc01sc08i02"
+        "module_alias": "pci:v00002646d0000501Fsv00002646sd0000501Fbc01sc08i02"
       }
     ],
     "system": {
@@ -2663,7 +2878,7 @@
     },
     "unknown": [
       {
-        "index": 30,
+        "index": 32,
         "attached_to": 0,
         "class_list": [
           "unknown"
@@ -2774,7 +2989,7 @@
         "label": "Onboard - Other"
       },
       {
-        "index": 27,
+        "index": 29,
         "attached_to": 0,
         "class_list": [
           "usb_controller",
@@ -3115,7 +3330,7 @@
           206158430255,
           210453397552,
           304942678065,
-          365072220231
+          210453397575
         ]
       }
     ],
