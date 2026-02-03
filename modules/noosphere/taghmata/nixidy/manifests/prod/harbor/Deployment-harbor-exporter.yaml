@@ -26,7 +26,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: e64bdf9da220e8c89cd5aebee8bee1dc7fea7cb0cef38d55a723417fbeee03d0
+        checksum/configmap: b1c66502b09a495edfb623b86bf3a10597f03b3b079c02e4d7dfe04ef3a2d943
         checksum/secret: 8905c1701a3ab4bcddb0c66b5428b18255fa8d3f4d1ff790897c401abd04485f
       labels:
         app: harbor

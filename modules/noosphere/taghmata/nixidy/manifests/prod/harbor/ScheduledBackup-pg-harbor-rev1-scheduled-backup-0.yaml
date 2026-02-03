@@ -1,12 +1,12 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
-  name: pg-harbor-scheduled-backup-0
+  name: pg-harbor-rev1-scheduled-backup-0
   namespace: harbor
 spec:
   backupOwnerReference: self
   cluster:
-    name: pg-harbor
+    name: pg-harbor-rev1
   immediate: true
   method: plugin
   pluginConfiguration:

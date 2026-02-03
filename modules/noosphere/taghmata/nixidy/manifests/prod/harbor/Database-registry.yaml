@@ -9,6 +9,6 @@ metadata:
   namespace: harbor
 spec:
   cluster:
-    name: pg-harbor
+    name: pg-harbor-rev1
   name: registry
   owner: harbor

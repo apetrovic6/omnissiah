@@ -5,7 +5,7 @@
 }: let
   namespace = "harbor";
   domain = config.noosphere.domain;
-  db-cluster-name = "pg-harbor";
+  db-cluster-name = "pg-harbor-rev1";
   objectStoreName = "harbor-object-store";
 in {
   imports = [
@@ -272,7 +272,7 @@ in {
             host = "${db-cluster-name}-rw";
             port = "5432";
             username = "harbor";
-            existingSecret = "${db-cluster-name}-postgres-secret";
+            existingSecret = "pg-harbor-postgres-secret";
             coreDatabase = "registry";
           };
         };
@@ -286,7 +286,7 @@ in {
 
     templates.garageObjectStore.${objectStoreName} = {inherit namespace;};
 
-    templates.cnpg-database-cluster.harbor = {
+    templates.cnpg-database-cluster.harbor-rev1 = {
       inherit namespace;
       overrideObjectStore = objectStoreName;
 
@@ -313,6 +313,19 @@ in {
             }
           ];
 
+          # bootstrap.recovery.source = "origin";
+
+          # externalClusters = [
+          #   {
+          #     plugin = {
+          #       parameters = {
+          #         barmanObjectName = objectStoreName;
+          #         serverName = "pg-harbor";
+          #       };
+          #     };
+          #   }
+          # ];
+
           managed.roles = [
             {
               name = "harbor";
@@ -320,7 +333,7 @@ in {
               comment = "Harbor User";
               login = true;
               superuser = false;
-              passwordSecret.name = "${db-cluster-name}-postgres-secret";
+              passwordSecret.name = "pg-harbor-postgres-secret";
             }
           ];
         };

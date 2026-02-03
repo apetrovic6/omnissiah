@@ -1,11 +1,11 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Backup
 metadata:
-  name: pg-harbor-on-demand-backup-0
+  name: pg-harbor-rev1-on-demand-backup-0
   namespace: harbor
 spec:
   cluster:
-    name: pg-harbor
+    name: pg-harbor-rev1
   method: plugin
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
