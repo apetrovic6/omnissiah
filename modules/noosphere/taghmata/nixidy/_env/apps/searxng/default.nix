@@ -1,5 +1,4 @@
-{ config, ... }:
-let
+{config, ...}: let
   namespace = "searxng";
   domain = config.noosphere.domain;
   labels = {
@@ -9,8 +8,7 @@ let
   valkeyLabels = {
     app = "searxng-valkey";
   };
-in
-{
+in {
   applications.searxng = {
     inherit namespace;
     createNamespace = true;
@@ -24,7 +22,7 @@ in
         };
       };
       spec = {
-        accessModes = [ "ReadWriteOnce" ];
+        accessModes = ["ReadWriteOnce"];
         storageClassName = "longhorn-rec-1";
         resources.requests.storage = "1Gi";
       };
@@ -39,7 +37,7 @@ in
         };
       };
       spec = {
-        accessModes = [ "ReadWriteOnce" ];
+        accessModes = ["ReadWriteOnce"];
         storageClassName = "longhorn-rec-1";
         resources.requests.storage = "2Gi";
       };
@@ -55,7 +53,7 @@ in
         selector.matchLabels = labels;
 
         template = {
-          metadata = { inherit labels; };
+          metadata = {inherit labels;};
           spec = {
             volumes = [
               {
@@ -68,7 +66,7 @@ in
               {
                 name = "searxng";
                 image = "docker.io/searxng/searxng:2026.1.24-eea189286";
-                ports = [ { containerPort = 8080; } ];
+                ports = [{containerPort = 8080;}];
                 volumeMounts = [
                   {
                     name = "searxng";
@@ -79,7 +77,6 @@ in
                     name = "searxng";
                     mountPath = "/var/cache/searxng";
                   }
-
                 ];
 
                 env = [
@@ -87,9 +84,7 @@ in
                     name = "SEARXNG_BASE_URL";
                     value = "https://searx.${domain}";
                   }
-
                 ];
-
               }
             ];
           };
@@ -155,8 +150,8 @@ in
               {
                 name = "valkey";
                 image = "docker.io/valkey/valkey:9-alpine";
-                command = [ "valkey-server" ];
-                ports = [ { containerPort = 6379; } ];
+                command = ["valkey-server"];
+                ports = [{containerPort = 6379;}];
                 args = [
                   "--save"
                   "30"
@@ -199,7 +194,7 @@ in
         tls = [
           {
             secretName = "searxng-tls";
-            hosts = [ "searx.${domain}" ];
+            hosts = ["searx.${domain}"];
           }
         ];
 

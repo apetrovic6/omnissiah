@@ -68,7 +68,7 @@ in {
       };
     };
 
-    resources.storageClasses.longhorn-rec-1= {
+    resources.storageClasses.longhorn-rec-1 = {
       provisioner = "driver.longhorn.io";
       allowVolumeExpansion = true;
       reclaimPolicy = "Delete";

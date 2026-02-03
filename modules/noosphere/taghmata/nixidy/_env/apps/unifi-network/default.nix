@@ -428,7 +428,7 @@ in {
               }
             ];
 
-                middlewares= [{name = "default-headers";}];
+            middlewares = [{name = "default-headers";}];
           }
         ];
         tls.secretName = "unifi-tls";
