@@ -1,15 +1,19 @@
-{ref, ...}: {
+{ref, ...}: let
+  # Resolve to absolute path at Nix evaluation time
+  secretsFile = toString ../../../../vars/shared/tofunix-harbor-secrets/tofunix-harbor-secrets/value;
+in {
 
   provider.sops.default = {};
 
   data.sops_file.secrets = {
-    source_file = "sops/vars/shared/tofunix-secrets/tofunix-secrets";
+    source_file = secretsFile;
+    input_type = "yaml";
   };
 
   provider.harbor.default = {
     url = "https://harbor.noosphere.uk";
-    username = ref.data.sops_file.secrets.data.harbor_username;
-    password = ref.data.sops_file.secrets.data.harbor_password;
+    username = "\${data.sops_file.secrets.data[\"harbor_username\"]}";
+    password = "\${data.sops_file.secrets.data[\"harbor_password\"]}";
   };
 
   resource.harbor_project.docker_cache = {

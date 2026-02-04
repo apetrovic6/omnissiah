@@ -1,6 +1,14 @@
 # This file is maintained automatically by "tofu init".
 # Manual edits may be lost in future updates.
 
+provider "registry.opentofu.org/carlpett/sops" {
+  version     = "1.3.0"
+  constraints = "1.3.0"
+  hashes = [
+    "h1:JvCBdVoNto0nrUF1LhvGrWfiHfmQfBf48FbXWE9K0HE=",
+  ]
+}
+
 provider "registry.opentofu.org/goharbor/harbor" {
   version     = "3.11.3"
   constraints = "3.11.3"
