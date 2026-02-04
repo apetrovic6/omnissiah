@@ -1,9 +1,6 @@
-{ref, ...}:
-let
+{ref, ...}: let
   secretsFile = toString ../../../../../vars/shared/tofunix-harbor-secrets/tofunix-harbor-secrets/value;
-in
-{
-
+in {
   data.sops_file.secrets = {
     source_file = secretsFile;
     input_type = "yaml";
@@ -29,7 +26,6 @@ in
     endpoint_url = "https://hub.docker.com";
   };
 
-
   resource.harbor_project.ghcr_cache = {
     name = "ghcr_cache";
     registry_id = ref.harbor_registry.ghcr.registry_id;
@@ -43,5 +39,4 @@ in
     name = "github_cache";
     endpoint_url = "https://ghcr.io";
   };
-
 }
