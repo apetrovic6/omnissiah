@@ -55,7 +55,7 @@
     };
 
     services.rke2 = {
-      package = pkgs.rke2_1_34;
+      package = pkgs.rke2_1_35;
       autoDeployCharts = {
         argo-cd = {
           enable = true;
