@@ -1,0 +1,17 @@
+harbor_username: ENC[AES256_GCM,data:KKbkSy1ofX39u57biqE=,iv:0wu+0mLv892qOufx3l2jG8zOJPgwedGHkI6Tuy+VvN4=,tag:jVe4xByWqthFSJP8z4Ek3Q==,type:str]
+harbor_password: ENC[AES256_GCM,data:muAjwRJgaYUW112dxjEyqFIHNR712s7Es4D94VVKk2c=,iv:fLfft3xla++AlFCOu3yGhyjhASZnjBkfcw7Q2FjJll8=,tag:Wk5BhdfC4ZozkutNnjPMwQ==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB3ZFlWVHkxTVV6VzF5MG9X
+            U2lDVFNsVEt4U1ZybWpBdHZnRFJHbWs1VkdzCkpnRFJJcm4waFhHVjlNcCttTmdG
+            UG9ia29nSGhwUUJ3WDRoZlhRU2dWZkUKLS0tIEp6dDkvd3FZVzBlVkMvdVZTUzAz
+            bUJGeTQxeWhWa2ptelZTelRPMzk1U1UKTgF1aq+fOK36G4LAkr4f2l/B3/zpRvmY
+            fM7PgNPZzxjCVZBBJPG9I5+HOyMSXYj54WXO6cox62d6BBxiYE87Qw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-02-04T15:49:24Z"
+    mac: ENC[AES256_GCM,data:CJYXKtIzN7/fNGQQyTxxrJ4hYgIOAhISr4CeLJiLTsNj6xTMTw3k7tP1/pBcVMyQ2k82yPaeSQrsFyzj05i5RQ6CET12ngfD/FWYjpsyR1laV4VrezsJw45pZvXFj7+tfqHesRh0F8KPZ2M/4DVbgdQPf6WYOGsAjVIsQsh2LCs=,iv:4LDKaLuT8isomLfiFJcSt2RZlInys9AFoVJHj8j6mDY=,tag:GPUZ+vVbPwLy3pMoyrOM5A==,type:str]
+    unencrypted_suffix: _unencrypted
+    version: 3.11.0
