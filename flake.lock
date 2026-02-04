@@ -1913,6 +1913,7 @@
         "nixvirt": "nixvirt",
         "nvf": "nvf",
         "omnishell": "omnishell",
+        "tofunix": "tofunix",
         "treefmt-nix": "treefmt-nix_5",
         "woodpecker-ci": "woodpecker-ci"
       }
@@ -2193,6 +2194,23 @@
         "owner": "tinted-theming",
         "repo": "base16-zed",
         "type": "github"
+      }
+    },
+    "tofunix": {
+      "locked": {
+        "dir": "lib",
+        "lastModified": 1767286328,
+        "narHash": "sha256-uwPjl/XMg6VUuEvllBV6ADQT8DJvGa2gVOOkGHeNH90=",
+        "owner": "TECHNOFAB",
+        "repo": "tofunix",
+        "rev": "de16dc4ed0f0307e6cf66b041c6a8deb2d9c43fe",
+        "type": "gitlab"
+      },
+      "original": {
+        "dir": "lib",
+        "owner": "TECHNOFAB",
+        "repo": "tofunix",
+        "type": "gitlab"
       }
     },
     "treefmt": {
