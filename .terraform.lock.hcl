@@ -8,3 +8,11 @@ provider "registry.opentofu.org/goharbor/harbor" {
     "h1:/xyrYvl6nnW3TO6RlnpLpNrWpyc5YV1b7eDQsiCAZ4E=",
   ]
 }
+
+provider "registry.opentofu.org/hashicorp/local" {
+  version     = "2.6.2"
+  constraints = "2.6.2"
+  hashes = [
+    "h1:ffo8IET+O6g7ElezGLXZdx2YA39WhkdP5ARyiesAyVg=",
+  ]
+}
