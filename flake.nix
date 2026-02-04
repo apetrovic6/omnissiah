@@ -237,6 +237,13 @@
               #   version = "5.6.0";
               #   hash = "sha256-NhXKDH82YHPHdP7pA+0VC61Sv5hCIkXjcvapqJjzhEI=";
               # })
+              
+              (tofu.mkOpentofuProvider {
+                owner = "svalabs";
+                repo = "forgejo";
+                version = "1.1.0";
+                hash = "sha256-68tzbTdmD7LSEIvUMUGFKtSEFSRUIjjm6DPiCYWtCoc=";
+              })
 
               (tofu.mkOpentofuProvider {
                 owner = "carlpett";
