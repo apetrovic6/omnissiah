@@ -33,7 +33,7 @@ spec:
             - --leader-election
             - --leader-election-namespace=csi-nfs
             - --extra-create-metadata=true
-            - --feature-gates=HonorPVReclaimPolicy=true
+            - --feature-gates=HonorPVReclaimPolicy=true,VolumeAttributesClass=false
             - --timeout=1200s
             - --retry-interval-max=30m
           env:
@@ -62,6 +62,7 @@ spec:
             - -leader-election
             - --leader-election-namespace=csi-nfs
             - -handle-volume-inuse-error=false
+            - -feature-gates=VolumeAttributesClass=false
           env:
             - name: ADDRESS
               value: /csi/csi.sock
@@ -138,6 +139,7 @@ spec:
             - --working-mount-dir=/tmp
             - --default-ondelete-policy=delete
             - --use-tar-command-in-snapshot=false
+            - --enable-snapshot-compression=true
           env:
             - name: NODE_ID
               valueFrom:
