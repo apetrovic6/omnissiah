@@ -35,7 +35,6 @@ in {
     remote_address = "https://github.com/apetrovic6/zellij";
     sync_on_commit = true;
     use_ssh = true;
-
   };
 
   resource.forgejo_repository_push_mirror.zellij-codeberg = {

@@ -4,7 +4,6 @@
   noosphere = import ../../../../vars/_noosphere-values.nix;
   inherit (noosphere) domain;
 in {
-
   data.sops_file.secrets = {
     source_file = secretsFile;
     input_type = "yaml";
@@ -57,8 +56,14 @@ in {
     permissions = [
       {
         access = [
-          {action = "push"; resource = "repository";}
-          {action = "pull"; resource = "repository";}
+          {
+            action = "push";
+            resource = "repository";
+          }
+          {
+            action = "pull";
+            resource = "repository";
+          }
         ];
         kind = "project";
         namespace = "*";
