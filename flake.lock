@@ -1392,11 +1392,11 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1770165609,
-        "narHash": "sha256-aBY/RBmHqqUn5BveFfM9MLvPScm9C4lfS1YCKi+dnCE=",
+        "lastModified": 1770302581,
+        "narHash": "sha256-DcjkgFZJE3bXjGYG+kr7RB8JpkPutSHvK660PwLlwLY=",
         "owner": "apetrovic6",
         "repo": "nixhelm",
-        "rev": "216e1f91a5aa1c969eea0179f17b3052acfa8faf",
+        "rev": "8daf0002164ab536955c46b4cc75089e9c6b9f2a",
         "type": "github"
       },
       "original": {
@@ -2199,15 +2199,18 @@
     "tofunix": {
       "locked": {
         "dir": "lib",
-        "lastModified": 1770219311,
-        "narHash": "sha256-y9gypvlgzaRx0Qb9PcucNKbl8+Kzz4xP8+5UV3LGp4g=",
-        "path": "/home/apetrovic/clan/tofunix",
-        "type": "path"
+        "lastModified": 1770312500,
+        "narHash": "sha256-8+AAyKQ8yesRD+JsJPj3FZlWSwmQlNGBsLn4nxDChiE=",
+        "owner": "TECHNOFAB",
+        "repo": "tofunix",
+        "rev": "add81cbba50e657dda6abb0c394b76c5cac4da41",
+        "type": "gitlab"
       },
       "original": {
         "dir": "lib",
-        "path": "/home/apetrovic/clan/tofunix",
-        "type": "path"
+        "owner": "TECHNOFAB",
+        "repo": "tofunix",
+        "type": "gitlab"
       }
     },
     "treefmt": {

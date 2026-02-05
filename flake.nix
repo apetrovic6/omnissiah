@@ -64,8 +64,8 @@
     };
 
     tofunix = {
-      url = "/home/apetrovic/clan/tofunix?dir=lib";
-      # url = "gitlab:TECHNOFAB/tofunix?dir=lib";
+      # url = "/home/apetrovic/clan/tofunix?dir=lib";
+      url = "gitlab:TECHNOFAB/tofunix?dir=lib";
     };
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
@@ -224,7 +224,7 @@
               #   version = "5.6.0";
               #   hash = "sha256-NhXKDH82YHPHdP7pA+0VC61Sv5hCIkXjcvapqJjzhEI=";
               # })
-              
+
               (tofu.mkOpentofuProvider {
                 owner = "adyxax";
                 repo = "forgejo";
