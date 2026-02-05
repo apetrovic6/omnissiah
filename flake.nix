@@ -120,12 +120,7 @@
         (import-tree ./modules)
       ];
 
-      noosphere = {
-        agePublicKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
-        domain = "noosphere.uk";
-        sso.provider = "Keycloak";
-        sso.wellKnownUrl = "https://keycloak.noosphere.uk/realms/adeptus-terra/.well-known/openid-configuration";
-      };
+      noosphere = import ./modules/vars/_noosphere-values.nix;
 
       # https://docs.clan.lol/guides/flake-parts
       clan = {
@@ -174,16 +169,8 @@
               chart = nixhelm.chartsDerivations.${system}.percona.psmdb-operator;
               outputName = "psmdb-crd.nix";
             };
-            barman-cloud = {
-              src = pkgs.fetchFromGitHub {
-                owner = "cloudnative-pg";
-                repo = "plugin-barman-cloud";
-                rev = "v0.10.0";
-                hash = "sha256-JB0ia2qpkoJYE6GsdmQwvb6wlteCJHpIf/N16ibicgc=";
-              };
-              crds = ["config/crd/bases/barmancloud.cnpg.io_objectstores.yaml"];
-              outputName = "barman-cloud.nix";
-            };
+
+            barman-cloud.chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.plugin-barman-cloud;
           };
 
           # Extra charts beyond nixhelm
@@ -239,11 +226,18 @@
               # })
               
               (tofu.mkOpentofuProvider {
-                owner = "svalabs";
+                owner = "adyxax";
                 repo = "forgejo";
-                version = "1.1.0";
-                hash = "sha256-68tzbTdmD7LSEIvUMUGFKtSEFSRUIjjm6DPiCYWtCoc=";
+                version = "1.5.0";
+                hash = "sha256-dCK3Po8Tk+UKo2Ey4ewVdkP6l4LdCNdX8aQe+NuS824=";
               })
+
+              # (tofu.mkOpentofuProvider {
+              #   owner = "kichiyaki";
+              #   repo = "woodpecker";
+              #   version = "0.5.0";
+              #   hash = "";
+              # })
 
               (tofu.mkOpentofuProvider {
                 owner = "carlpett";

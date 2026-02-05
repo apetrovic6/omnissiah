@@ -1,13 +1,22 @@
 {ref, ...}: let
   secretsFile = toString ../../../../../vars/shared/tofunix-harbor-secrets/tofunix-harbor-secrets/value;
+  woodpeckerSecretsFile = toString ../../../../../vars/shared/tofunix-harbor-woodpecker-secret/tofunix-harbor-woodpecker-secret/value;
+  noosphere = import ../../../../vars/_noosphere-values.nix;
+  inherit (noosphere) domain;
 in {
+
   data.sops_file.secrets = {
     source_file = secretsFile;
     input_type = "yaml";
   };
 
+  data.sops_file.woodpecker_secrets = {
+    source_file = woodpeckerSecretsFile;
+    input_type = "yaml";
+  };
+
   provider.harbor.default = {
-    url = "https://harbor.noosphere.uk";
+    url = "https://harbor.${domain}";
     username = "\${data.sops_file.secrets.data[\"harbor_username\"]}";
     password = "\${data.sops_file.secrets.data[\"harbor_password\"]}";
   };
@@ -38,5 +47,22 @@ in {
     provider_name = "github";
     name = "github_cache";
     endpoint_url = "https://ghcr.io";
+  };
+
+  resource.harbor_robot_account.woodpecker = {
+    name = "woodpecker";
+    description = "Robot account for Woodpecker CI";
+    level = "system";
+    secret = "\${data.sops_file.woodpecker_secrets.data[\"woodpecker_password\"]}";
+    permissions = [
+      {
+        access = [
+          {action = "push"; resource = "repository";}
+          {action = "pull"; resource = "repository";}
+        ];
+        kind = "project";
+        namespace = "*";
+      }
+    ];
   };
 }

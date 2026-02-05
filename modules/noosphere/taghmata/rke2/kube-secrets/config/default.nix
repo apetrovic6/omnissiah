@@ -4,19 +4,15 @@
   ...
 }: let
   flakeCfg = config;
-
-  # Import shared noosphere options (prefixed with _ to avoid import-tree)
-  noosphereOptions = import ../../../../../vars/_noosphere-options.nix {inherit lib;};
+  inherit (lib) mkIf mkMerge mkDefault;
 in {
-  # flake-parts options
-  options.noosphere = noosphereOptions;
+  # flake-parts options (import shared module)
+  imports = [../../../../../vars/_noosphere-options.nix];
 
   # exported NixOS module
-  config.flake.nixosModules.noosphere = {lib, ...}: let
-    inherit (lib) mkIf mkMerge mkDefault;
-  in {
-    # NixOS options (same definitions, reused)
-    options.noosphere = noosphereOptions;
+  config.flake.nixosModules.noosphere = {lib, ...}: {
+    # Import shared noosphere options module
+    imports = [../../../../../vars/_noosphere-options.nix];
 
     # propagate flake values into NixOS config as defaults
     config = mkMerge [
@@ -34,12 +30,7 @@ in {
         noosphere.sso.url = mkDefault flakeCfg.noosphere.sso.url;
       })
 
-      # otherwise derive url from provider + domain
-      (mkIf (flakeCfg.noosphere.sso.url == "" && flakeCfg.noosphere.sso.provider != "" && flakeCfg.noosphere.domain != "") {
-        noosphere.sso.url = mkDefault "${lib.toLower flakeCfg.noosphere.sso.provider}.${flakeCfg.noosphere.domain}";
-      })
-
-      # wellKnownUrl pass-through (or you can derive it similarly if you want)
+      # wellKnownUrl pass-through
       (mkIf (flakeCfg.noosphere.sso.wellKnownUrl != "") {
         noosphere.sso.wellKnownUrl = mkDefault flakeCfg.noosphere.sso.wellKnownUrl;
       })

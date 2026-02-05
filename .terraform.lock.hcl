@@ -1,6 +1,14 @@
 # This file is maintained automatically by "tofu init".
 # Manual edits may be lost in future updates.
 
+provider "registry.opentofu.org/adyxax/forgejo" {
+  version     = "1.5.0"
+  constraints = "1.5.0"
+  hashes = [
+    "h1:kMNIZO7JzjOfOvu/o2oLKi7tSXKDq3vg9yloa4H/qb0=",
+  ]
+}
+
 provider "registry.opentofu.org/carlpett/sops" {
   version     = "1.3.0"
   constraints = "1.3.0"
