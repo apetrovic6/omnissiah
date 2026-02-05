@@ -1,5 +1,8 @@
 {ref, ...}: {
-  imports = [./harbor];
+  imports = [
+    ./harbor
+    ./forgejo
+  ];
 
   provider.sops.default = {};
 }
