@@ -14,6 +14,13 @@
   }: {
     imports = [];
 
+    swapDevices = [
+      {
+        size = 50 * 1024;
+        device = "/mnt/storage/swapFile";
+      }
+    ];
+
     systemd.services.iscsid.serviceConfig = {
       PrivateMounts = "yes";
       BindPaths = "/run/current-system/sw/bin:/bin";
