@@ -82,6 +82,7 @@ data:
           - nix-community/nixhelm
           - cloudnative-pg/cloudnative-pg
           - kubernetes-csi/csi-driver-nfs
+          - gitlab:TECHNOFAB/tofunix
           show-source-icon: true
           type: releases
       name: Home

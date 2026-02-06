@@ -71,6 +71,7 @@
     "nix-community/nixhelm"
     "cloudnative-pg/cloudnative-pg"
     "kubernetes-csi/csi-driver-nfs"
+    "gitlab:TECHNOFAB/tofunix"
   ];
 
   releases = {
