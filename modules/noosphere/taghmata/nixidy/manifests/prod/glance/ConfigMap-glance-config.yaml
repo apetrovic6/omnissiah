@@ -85,6 +85,13 @@ data:
           - gitlab:TECHNOFAB/tofunix
           show-source-icon: true
           type: releases
+        - cache: 1d
+          repositories:
+          - adyxax/terraform-provider-forgejo
+          - carlpett/terraform-provider-sops
+          - goharbor/terraform-provider-harbor
+          show-source-icon: true
+          type: releases
       name: Home
   services.yml: |
     - center-vertically: true

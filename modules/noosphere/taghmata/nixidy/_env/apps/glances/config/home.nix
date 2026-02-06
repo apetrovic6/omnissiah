@@ -74,12 +74,26 @@
     "gitlab:TECHNOFAB/tofunix"
   ];
 
+  repositoriesOpenTofu = [
+    "adyxax/terraform-provider-forgejo"
+    "carlpett/terraform-provider-sops"
+    "goharbor/terraform-provider-harbor"
+  ];
+
   releases = {
     type = "releases";
     cache = "1d";
     show-source-icon = true;
     inherit repositories;
   };
+
+  releasesOpenTofu = {
+    type = "releases";
+    cache = "1d";
+    show-source-icon = true;
+    repositories = repositoriesOpenTofu;
+  };
+
 in {
   home = [
     {
@@ -109,7 +123,7 @@ in {
         {
           size = "small";
 
-          widgets = [releases];
+          widgets = [releases releasesOpenTofu ];
         }
       ];
     }
