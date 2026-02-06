@@ -30,6 +30,7 @@ in {
     ./apps/keycloak-operator
     ./apps/forgejo
     ./apps/searxng
+    ./apps/garage-operator
     # ./apps/percona-mongodb
     # ./apps/unifi-network
   ];
