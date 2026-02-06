@@ -9,9 +9,7 @@ in
 
     helm.releases.garage-operator = {
       chart = charts.rajsinghtech.garage-operator;
-      values = {
-        replicaCount = 3;
-      };
+      values.replicaCount = 3;
     };
   };
 }

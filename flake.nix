@@ -16,6 +16,11 @@
       flake = false;
     };
 
+    garage-operator = {
+      url = "github:rajsinghtech/garage-operator";
+      flake = false;
+    };
+
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
 
     nixpkgs.follows = "nixpkgs-unstable";
@@ -178,6 +183,7 @@
             "deuxfleurs/garage" = "${self.inputs.garage}/script/helm/garage";
             "lukasdietrich/glance-k8s" = "${self.inputs.glance-k8s}/charts/glance-k8s";
             "woodpecker-ci/woodpecker" = "${self.inputs.woodpecker-ci}/charts/woodpecker";
+            "rajsinghtech/garage-operator" = "${self.inputs.garage-operator}/charts/garage-operator";
           };
 
           # Environments

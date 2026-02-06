@@ -544,6 +544,22 @@
         "url": "https://git.deuxfleurs.fr/Deuxfleurs/garage"
       }
     },
+    "garage-operator": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1770348649,
+        "narHash": "sha256-b7OisnG0G9Rt1p033zMVWsoH/KTIy3jAS79fNH1V4YQ=",
+        "owner": "rajsinghtech",
+        "repo": "garage-operator",
+        "rev": "af980b3b1027be20d97bbf4acf0b2fe6bed1ce4b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rajsinghtech",
+        "repo": "garage-operator",
+        "type": "github"
+      }
+    },
     "gitignore": {
       "inputs": {
         "nixpkgs": [
@@ -1392,11 +1408,11 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1770302581,
-        "narHash": "sha256-DcjkgFZJE3bXjGYG+kr7RB8JpkPutSHvK660PwLlwLY=",
+        "lastModified": 1770338406,
+        "narHash": "sha256-VhVOCEJutknQ8PK4aOAoP3lSH/p4rvcqXcy/3bJezZU=",
         "owner": "apetrovic6",
         "repo": "nixhelm",
-        "rev": "8daf0002164ab536955c46b4cc75089e9c6b9f2a",
+        "rev": "029bdfe46332c1e573e0d6b48dbbf6fca49ec7c2",
         "type": "github"
       },
       "original": {
@@ -1893,6 +1909,7 @@
         "darwin": "darwin",
         "flake-parts": "flake-parts_2",
         "garage": "garage",
+        "garage-operator": "garage-operator",
         "glance-k8s": "glance-k8s",
         "home-manager": "home-manager",
         "homebrew-cask": "homebrew-cask",
