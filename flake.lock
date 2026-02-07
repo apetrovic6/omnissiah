@@ -135,11 +135,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1770402478,
-        "narHash": "sha256-i7hlohrxSRobQ4N0wXwVzdQiP2ArcaMbmJd5Tlc0zvY=",
-        "rev": "e29b67a0e26b293aa93b0d0233357da16a0d3d30",
+        "lastModified": 1770408336,
+        "narHash": "sha256-eZkaL1hBk656D0jJWjee/vWMMfR/3XlliWvz+cY6b20=",
+        "rev": "0ad6430177ef6842d535705e6374099e081e3c26",
         "type": "tarball",
-        "url": "https://git.clan.lol/api/v1/repos/clan/clan-core/archive/e29b67a0e26b293aa93b0d0233357da16a0d3d30.tar.gz"
+        "url": "https://git.clan.lol/api/v1/repos/clan/clan-core/archive/0ad6430177ef6842d535705e6374099e081e3c26.tar.gz"
       },
       "original": {
         "type": "tarball",
@@ -768,11 +768,11 @@
     "homebrew-cask": {
       "flake": false,
       "locked": {
-        "lastModified": 1770400387,
-        "narHash": "sha256-mAibVVcdLDvqESNGZW2+xHPFErtyj5s9Cer/4f2KA4w=",
+        "lastModified": 1770429086,
+        "narHash": "sha256-RJRYXtG3j4qaM/zt5uDvK3y7moyQHmh5udrOuJEtGPo=",
         "owner": "homebrew",
         "repo": "homebrew-cask",
-        "rev": "2314204d42a8a45fc443e21ba5999337e6629b7d",
+        "rev": "428cb2a5a91beb5cd90dd0d0d848cf6ec2b4f1e8",
         "type": "github"
       },
       "original": {
@@ -784,11 +784,11 @@
     "homebrew-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1770401515,
-        "narHash": "sha256-yG+0WgpjFiRRrrLYsEFeXMWpwOpA+pK8PrnvrGxBenw=",
+        "lastModified": 1770423441,
+        "narHash": "sha256-KMH5sGSg9+gFLcHRDLKu2V+28qi9ntjLW8hr+t9mul4=",
         "owner": "homebrew",
         "repo": "homebrew-core",
-        "rev": "bf122635876263fa66a737534d68d5cda62ffb6f",
+        "rev": "af3cd472a0dd9f418ad3aca982f8ee90fe3dbed5",
         "type": "github"
       },
       "original": {
@@ -1408,11 +1408,11 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1770338406,
-        "narHash": "sha256-VhVOCEJutknQ8PK4aOAoP3lSH/p4rvcqXcy/3bJezZU=",
+        "lastModified": 1770424858,
+        "narHash": "sha256-G6ZKndC0WIY1pC1qcD2pnEkF7hs2rzcVu9Uh10hNmhQ=",
         "owner": "apetrovic6",
         "repo": "nixhelm",
-        "rev": "029bdfe46332c1e573e0d6b48dbbf6fca49ec7c2",
+        "rev": "40d9a00c848bb25ad20ca2d86567c3432a435f37",
         "type": "github"
       },
       "original": {
