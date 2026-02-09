@@ -20,6 +20,10 @@
       self.nixosModules.virtualisation
     ];
 
+    services.gnome.gnome-keyring.enable = true;
+security.pam.services.login.enableGnomeKeyring = true;
+services.passSecretService.enable = true;
+
     services.xserver = {
       xkb = {
         layout = "us";
