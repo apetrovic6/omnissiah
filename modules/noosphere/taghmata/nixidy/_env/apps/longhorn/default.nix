@@ -60,7 +60,14 @@ in {
     helm.releases.longhorn = {
       chart = charts.longhorn.longhorn;
       values = {
-        longhorn.preUpgradeChecker.jobEnabled = false;
+        longhorn.preUpgradeChecker = {
+          jobEnabled = false;
+          };
+          preUpgradeChecker.upgradeVersionCheck = false;        
+        image.longhorn = {
+          instanceManager.tag = "v1.11.0-hotfix-1";
+          manager.tag = "v1.11.0-hotfix-1";
+        };
         persistence = {
           defaultClassReplicaCount = 2;
           reclaimPolicy = "Retain";

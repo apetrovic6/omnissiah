@@ -32,7 +32,7 @@ spec:
             - --engine-image
             - docker.io/longhornio/longhorn-engine:v1.11.0
             - --instance-manager-image
-            - docker.io/longhornio/longhorn-instance-manager:v1.11.0
+            - docker.io/longhornio/longhorn-instance-manager:v1.11.0-hotfix-1
             - --share-manager-image
             - docker.io/longhornio/longhorn-share-manager:v1.11.0
             - --backing-image-manager-image
@@ -40,10 +40,9 @@ spec:
             - --support-bundle-manager-image
             - docker.io/longhornio/support-bundle-kit:v0.0.79
             - --manager-image
-            - docker.io/longhornio/longhorn-manager:v1.11.0
+            - docker.io/longhornio/longhorn-manager:v1.11.0-hotfix-1
             - --service-account
             - longhorn-service-account
-            - --upgrade-version-check
           env:
             - name: POD_NAME
               valueFrom:
@@ -61,7 +60,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-          image: docker.io/longhornio/longhorn-manager:v1.11.0
+          image: docker.io/longhornio/longhorn-manager:v1.11.0-hotfix-1
           imagePullPolicy: IfNotPresent
           name: longhorn-manager
           ports:
