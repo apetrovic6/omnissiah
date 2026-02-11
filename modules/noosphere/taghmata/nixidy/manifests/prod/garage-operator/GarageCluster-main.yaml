@@ -1,0 +1,38 @@
+apiVersion: garage.rajsingh.info/v1alpha1
+kind: GarageCluster
+metadata:
+  name: main
+  namespace: garage-operator
+spec:
+  admin:
+    adminTokenSecretRef:
+      key: admin-token
+      name: garage-operator-admin-token
+    enabled: true
+  database:
+    engine: sqlite
+  discovery:
+    kubernetes:
+      enabled: true
+  layoutManagement:
+    autoApply: true
+    minNodesHealthy: 2
+  layoutPolicy: auto
+  network:
+    rpcSecretRef:
+      key: rpc-secret
+      name: garage-operator-rpc-secret
+  replicas: 3
+  replication:
+    factor: 3
+  s3Api:
+    region: main
+    rootDomain: .s3.garage-main.noosphere.uk
+  storage:
+    data:
+      size: 200Gi
+      storageClassName: local-path
+    metadata:
+      size: 10Gi
+      storageClassName: local-path
+  zone: main
