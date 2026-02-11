@@ -10,7 +10,7 @@
   };
 
   resource.forgejo_repository_push_mirror.sabnzbd-tui-github = {
-        owner = "manjo";
+    owner = "manjo";
     repository = "sabnzbd-tui";
     remote_address = "https://github.com/apetrovic6/sabnzbd-tui";
     sync_on_commit = true;

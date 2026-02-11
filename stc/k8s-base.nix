@@ -34,6 +34,7 @@
 
     # Make mount helpers visible in FHS-ish locations Longhorn expects via nsenter
     systemd.tmpfiles.rules = [
+      "d /mnt/storage/garage 0755 root root -"
       "L+ /bin/mount - - - - ${pkgs.util-linux}/bin/mount"
       "L+ /usr/bin/mount - - - - ${pkgs.util-linux}/bin/mount"
 
@@ -127,6 +128,7 @@
       # nodeTaints = [ "node-role.kubernetes.io/control-plane=:NoSchedule" ];
 
       openFirewall = true;
+
     };
   };
 }

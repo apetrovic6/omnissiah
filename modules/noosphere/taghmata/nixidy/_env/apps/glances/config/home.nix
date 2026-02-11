@@ -93,7 +93,6 @@
     show-source-icon = true;
     repositories = repositoriesOpenTofu;
   };
-
 in {
   home = [
     {
@@ -123,7 +122,7 @@ in {
         {
           size = "small";
 
-          widgets = [releases releasesOpenTofu ];
+          widgets = [releases releasesOpenTofu];
         }
       ];
     }
