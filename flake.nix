@@ -271,6 +271,7 @@
           packages = with pkgs; [
             inputs'.clan-core.packages.clan-cli
             inputs'.nixidy.packages.default
+            sops
             argocd
             nil
             nixd

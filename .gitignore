@@ -2,3 +2,4 @@ result
 .direnv/
 # OpenTofu/Terraform
 .terraform/
+terraform.tfstate
