@@ -1,7 +1,7 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
-  fileNameRpc = "garage-operator-rpc-secret";
-  fileNameAdmin = "garage-operator-admin-token";
+  fileNameRpc = "garage-main-rpc-secret";
+  fileNameAdmin = "garage-main-admin-token";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${fileNameRpc} = {
