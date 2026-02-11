@@ -16,6 +16,29 @@ in {
     ];
 
 
+    resources.garageKeys.opentofu = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "main";
+      };
+    };
+
+    resources.garageBuckets.opentofu = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "main";
+        keyPermissions = [
+          {
+            keyRef = "opentofu";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+      };
+    };
+
+
     resources.garageClusters.main = {
       metadata = {inherit namespace;};
       spec = {
