@@ -176,6 +176,9 @@
             };
 
             barman-cloud.chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.plugin-barman-cloud;
+            garage-operator.chart = pkgs.runCommand "garage-operator-chart" {} ''
+              cp -r ${self.inputs.garage-operator}/charts/garage-operator $out
+            '';
           };
 
           # Extra charts beyond nixhelm
