@@ -1,0 +1,95 @@
+apiVersion: v1
+data:
+  config.yaml: |
+    auth:
+      admin:
+        enabled: false
+        existingSecret:
+          key: admin-password
+          name: ""
+        username: admin
+      oidc:
+        admin_role: admin
+        auth_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/auth
+        client_id: garage-main-ui
+        cookie_http_only: true
+        cookie_name: garage_main_session
+        cookie_same_site: lax
+        cookie_secure: true
+        email_attribute: email
+        enabled: true
+        existingSecret:
+          key: client-secret
+          name: garage-main-ui-oidc-secret
+        issuer_url: https://keycloak.noosphere.uk/realms/adeptus-terra
+        name_attribute: name
+        provider_name: Keycloak
+        role_attribute_path: resource_access.garage-main-ui.roles
+        scopes:
+        - openid
+        - email
+        - profile
+        session_max_age: 86400
+        skip_expiry_check: false
+        skip_issuer_check: false
+        tls_skip_verify: false
+        token_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/token
+        userinfo_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/userinfo
+        username_attribute: preferred_username
+    cors:
+      allow_credentials: false
+      allowed_headers:
+      - Origin
+      - Content-Type
+      - Accept
+      - Authorization
+      allowed_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      allowed_origins:
+      - https://ui.main.garage.noosphere.uk
+      enabled: true
+      max_age: 3600
+    existingSecret:
+      key: admin-token
+      name: garage-main-admin-token
+    garage:
+      admin_endpoint: http://garage-main-admin:3903
+      endpoint: http://garage-s3-api:3900
+      existingSecret:
+        key: admin-token
+        name: ""
+      region: main
+    logging:
+      format: json
+      level: info
+    server:
+      domain: ui.main.garage.noosphere.uk
+      environment: production
+      host: 0.0.0.0
+      max_body_size: 314572800
+      max_header_size: 1048576
+      port: 8080
+      protocol: http
+      read_buffer_size: 4096
+      root_url: https://ui.main.garage.noosphere.uk
+      write_buffer_size: 4096
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      labels:
+        prometheus: kube-prometheus
+      path: /api/v1/monitoring/metrics
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: garage-main-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: garage-ui
+    app.kubernetes.io/version: v0.1.2
+    helm.sh/chart: garage-ui-0.1.13
+  name: garage-main-ui-config
+  namespace: garage-operator

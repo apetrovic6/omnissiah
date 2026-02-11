@@ -12,7 +12,7 @@ in {
     inherit namespace;
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/garage-main-admin-token/garage-main-admin-token/value)
+      (builtins.readFile ../../../../../../../vars/shared/garage-main-ui-admin-token/garage-main-ui-admin-token/value)
       (builtins.readFile ../../../../../../../vars/shared/garage-main-ui-jwt-token-secret/garage-main-ui-jwt-token-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/garage-main-ui-oidc-secret/garage-main-ui-oidc-secret/value)
     ];
@@ -66,6 +66,8 @@ in {
       chart = charts.noooste.garage-ui;
 
       values = {
+        fullnameOverride = "garage-main-ui";
+
         config = {
           garage = {
             endpoint = "http://garage-s3-api:3900";

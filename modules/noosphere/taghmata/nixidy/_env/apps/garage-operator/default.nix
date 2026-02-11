@@ -96,7 +96,7 @@ in {
         type = "ClusterIP";
         selector = {
           "app.kubernetes.io/name" = "garage";
-          "app.kubernetes.io/instance" = "main";
+          "app.kubernetes.io/instance" = "garage-main";
         };
         ports = [
           {
@@ -114,7 +114,7 @@ in {
         type = "ClusterIP";
         selector = {
           "app.kubernetes.io/name" = "garage";
-          "app.kubernetes.io/instance" = "main";
+          "app.kubernetes.io/instance" = "garage-main";
         };
         ports = [
           {

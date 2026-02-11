@@ -9,6 +9,6 @@ spec:
       port: 3900
       targetPort: 3900
   selector:
-    app.kubernetes.io/instance: main
+    app.kubernetes.io/instance: garage-main
     app.kubernetes.io/name: garage
   type: ClusterIP
