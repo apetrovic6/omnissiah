@@ -17,7 +17,7 @@ spec:
   layoutManagement:
     autoApply: true
     minNodesHealthy: 2
-  layoutPolicy: auto
+  layoutPolicy: Auto
   network:
     rpcSecretRef:
       key: rpc-secret

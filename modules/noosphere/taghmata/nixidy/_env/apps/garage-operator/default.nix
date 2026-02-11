@@ -57,7 +57,7 @@ in {
           autoApply = true;
           minNodesHealthy = 2;
         };
-        layoutPolicy = "auto";
+        layoutPolicy = "Auto";
 
         s3Api = {
           region = "main";
