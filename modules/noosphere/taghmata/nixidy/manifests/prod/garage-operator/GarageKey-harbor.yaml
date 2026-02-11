@@ -1,0 +1,8 @@
+apiVersion: garage.rajsingh.info/v1alpha1
+kind: GarageKey
+metadata:
+  name: harbor
+  namespace: garage-operator
+spec:
+  clusterRef:
+    name: garage-main

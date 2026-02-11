@@ -38,6 +38,52 @@ in {
       };
     };
 
+    
+    resources.garageKeys.forgejo = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-main";
+      };
+    };
+
+    resources.garageBuckets.forgejo = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-main";
+        keyPermissions = [
+          {
+            keyRef = "forgejo";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+      };
+    };
+
+    
+    resources.garageKeys.harbor = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-main";
+      };
+    };
+
+    resources.garageBuckets.harbor = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-main";
+        keyPermissions = [
+          {
+            keyRef = "harbor";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+      };
+    };
+
 
     resources.garageClusters.garage-main = {
       metadata = {inherit namespace;};
