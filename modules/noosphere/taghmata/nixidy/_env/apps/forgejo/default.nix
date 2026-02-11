@@ -11,6 +11,7 @@
   objectStoreName = "${name}-object-store";
   forgejo-admin-secret = "forgejo-admin-secret";
   forgejo-keycloak-oauth-secret = "forgejo-keycloak-oauth-secret";
+  forgejo-s3-secret-key = "forgejo-s3-secret-key";
 in {
   imports = [
     ../../../_modules/templates/garage-object-store.nix
@@ -24,6 +25,7 @@ in {
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/${forgejo-admin-secret}/${forgejo-admin-secret}/value)
       (builtins.readFile ../../../../../../../vars/shared/${forgejo-keycloak-oauth-secret}/${forgejo-keycloak-oauth-secret}/value)
+      (builtins.readFile ../../../../../../../vars/shared/${forgejo-s3-secret-key}/${forgejo-s3-secret-key}/value)
     ];
 
     templates.garageObjectStore."${objectStoreName}" = {
@@ -138,6 +140,22 @@ in {
                 key = "password";
               };
             }
+
+            {
+              name = "FORGEJO__storage__MINIO_ACCESS_KEY_ID";
+              valueFrom.secretKeyRef = {
+                name = forgejo-s3-secret-key;
+                key = "MINIO_ACCESS_KEY_ID";
+              };
+            }
+
+            {
+              name = "FORGEJO__storage__MINIO_SECRET_ACCESS_KEY";
+              valueFrom.secretKeyRef = {
+                name = forgejo-s3-secret-key;
+                key = "MINIO_SECRET_ACCESS_KEY";
+              };
+            }
           ];
 
           config = {
@@ -145,6 +163,18 @@ in {
             database = {
               DB_TYPE = "postgres";
               HOST = "${db-cluster-name}-rw";
+            };
+
+            storage= {
+              STORAGE_TYPE = "minio";
+              SERVE_DIRECT = false;
+              MINIO_ENDPOINT = "garage-s3-api.garage-operator.svc.cluster.local:3900";
+              MINIO_BUCKET = "forgejo";
+              MINIO_BUCKET_LOOKUP = "auto";
+              MINIO_LOCATION = "main";
+              MINIO_USE_SSL = false;
+              MINIO_INSECURE_SKIP_VERIFY = false;
+              MINIO_CHECKSUM_ALGORITHM = "default";
             };
 
             oauth2 = {

@@ -22,7 +22,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: b44d9c5b33f6a1f4765ee08ce75972a6105f901522079dbf3636bf79ec0a7487
+        checksum/config: d6ff1d08503693636f4fcc4c3fcc58e19ce627b655f8a8c39ee2b2cf972a0ea7
         checksum/oauth_0: 77644db45f286d011f857014d1ead5a52273a99d55902c3cdd352b6e1380fa55
       labels:
         app: forgejo
@@ -163,6 +163,16 @@ spec:
                 secretKeyRef:
                   key: password
                   name: pg-forgejo-app
+            - name: FORGEJO__storage__MINIO_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: MINIO_ACCESS_KEY_ID
+                  name: forgejo-s3-secret-key
+            - name: FORGEJO__storage__MINIO_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: MINIO_SECRET_ACCESS_KEY
+                  name: forgejo-s3-secret-key
           image: code.forgejo.org/forgejo/forgejo:14.0.2-rootless
           imagePullPolicy: IfNotPresent
           name: init-app-ini
