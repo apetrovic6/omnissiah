@@ -5,28 +5,29 @@
 }: let
   namespace = "garage-operator";
   domain = config.noosphere.domain;
+  sso = config.noosphere.sso;
 in {
   applications.garage-operator = {
     inherit namespace;
     createNamespace = true;
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/garage-operator-rpc-secret/garage-operator-rpc-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/garage-operator-admin-token/garage-operator-admin-token/value)
+      (builtins.readFile ../../../../../../../vars/shared/garage-main-rpc-secret/garage-main-rpc-secret/value)
+      (builtins.readFile ../../../../../../../vars/shared/garage-main-admin-token/garage-main-admin-token/value)
     ];
 
 
     resources.garageKeys.opentofu = {
       metadata = {inherit namespace;};
       spec = {
-        clusterRef.name = "main";
+        clusterRef.name = "garage-main";
       };
     };
 
     resources.garageBuckets.opentofu = {
       metadata = {inherit namespace;};
       spec = {
-        clusterRef.name = "main";
+        clusterRef.name = "garage-main";
         keyPermissions = [
           {
             keyRef = "opentofu";
@@ -39,7 +40,7 @@ in {
     };
 
 
-    resources.garageClusters.main = {
+    resources.garageClusters.garage-main = {
       metadata = {inherit namespace;};
       spec = {
         replicas = 3;
@@ -62,14 +63,14 @@ in {
         admin = {
           enabled = true;
           adminTokenSecretRef = {
-            name = "garage-operator-admin-token";
+            name = "garage-main-admin-token";
             key = "admin-token";
           };
         };
 
         network = {
           rpcSecretRef = {
-            name = "garage-operator-rpc-secret";
+            name = "garage-main-rpc-secret";
             key = "rpc-secret";
           };
         };
@@ -85,7 +86,7 @@ in {
         s3Api = {
           bindPort = 3900;
           region = "main";
-          rootDomain = ".s3.garage-main.${domain}";
+          rootDomain = ".s3.main.garage.${domain}";
         };
       };
     };
@@ -150,7 +151,7 @@ in {
             ];
           }
           {
-            host = "*.s3.garage-main.${domain}";
+            host = "*.s3.main.garage.${domain}";
             http.paths = [
               {
                 path = "/";
@@ -166,7 +167,7 @@ in {
         tls = [
           {
             secretName = "garage-operator-s3-tls";
-            hosts = ["s3.garage-main.${domain}" "*.s3.garage-main.${domain}"];
+            hosts = ["s3.main.garage.${domain}" "*.s3.main.garage.${domain}"];
           }
         ];
       };

@@ -18,7 +18,7 @@ spec:
                   number: 3900
             path: /
             pathType: Prefix
-    - host: '*.s3.garage-main.noosphere.uk'
+    - host: '*.s3.main.garage.noosphere.uk'
       http:
         paths:
           - backend:
@@ -30,6 +30,6 @@ spec:
             pathType: Prefix
   tls:
     - hosts:
-        - s3.garage-main.noosphere.uk
-        - '*.s3.garage-main.noosphere.uk'
+        - s3.main.garage.noosphere.uk
+        - '*.s3.main.garage.noosphere.uk'
       secretName: garage-operator-s3-tls

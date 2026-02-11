@@ -5,4 +5,4 @@ metadata:
   namespace: garage-operator
 spec:
   clusterRef:
-    name: main
+    name: garage-main
