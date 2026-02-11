@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: garage-main-ui-jwt-token-secret
+    namespace: garage-operator
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:zn7NhuqsNmtABeBbnUpy+hCNvNOXyiyXer7cceS5Wg==,iv:YsuaA+lkmCX8uA1BnIu9dN5hMTAnoZIekc4MsuLswg4=,tag:zqXiKzFuG2v5ZuaaF0xylg==,type:str]
+          type: ENC[AES256_GCM,data:pIF8dUH7,iv:2eQRl/UNrgV/T85dxR0KDASWPVgFdBQCI5X1veND7Cg=,tag:XdkDOTHnhaPB9hsBJjxnxQ==,type:str]
+          stringData:
+            jwt-key.pem: ""
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBndkxnR1N4YXJpMmxrV0lC
+            UmhvTGRQeE5qSlV6d2NEVHhKWGVSVjdRTTBrCk16Ti9hd1oxaEF5WDhjUk10bmFV
+            SjN2emx2UUhkcEpUdHloL21SSy9WMlUKLS0tIDczVWgvdmJleTFxSmVjdHpqSHdw
+            WE5hbHhGMUtjQUVkY1NtYk9UcGFrcWsK+uoeGSqODODjNMK9xWOVwtlf0QlEoOgS
+            HsJZ2jKsQ50SOZdw3mDHLoolr4M4Uay0HrcZViPW/z7o1sNrombj0A==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-02-11T14:58:27Z"
+    mac: ENC[AES256_GCM,data:XPvVQ++VBHxSCtAon5vfVg84W6lzr8U+rDlguph34KLUOyOsbr2mihve+O51lc+GqPnCrTMEF8smK6TA1noJUD3bHMqM5paaX+zVd8GcVHiaX3/IesAHjfYmBRUA8jOTBjW/r7ia8R9XeTMcZOna7jVpQV6FDm3b/uVnc63dW8w=,iv:B9L4VHBqgLaO6v9eFuEM47cvF2YN9iWn7ucGqXnkQkY=,tag:Aco5v388s4RZvpPtNrPYGg==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
