@@ -108,6 +108,24 @@ in {
       };
     };
 
+    resources.services.garage-main-admin= {
+      metadata = {inherit namespace;};
+      spec = {
+        type = "ClusterIP";
+        selector = {
+          "app.kubernetes.io/name" = "garage";
+          "app.kubernetes.io/instance" = "main";
+        };
+        ports = [
+          {
+            name = "admin";
+            port = 3903;
+            targetPort = 3903;
+          }
+        ];
+      };
+    };
+
     resources.ingresses.garage-s3-api = {
       metadata = {
         inherit namespace;
