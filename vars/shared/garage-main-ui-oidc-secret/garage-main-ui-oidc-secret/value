@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: garage-main-ui-oidc-secret
+    namespace: garage-operator
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:3GuhfhZ5gYa+3rA6t6VTbfh9D3oAg1/7HKU=,iv:IOibLV6ONcUqUwBTWPd6bjJvnzjW+HyGmQdxOpW3Oo4=,tag:S+dgC4u+9cPxAe4LbU+4rQ==,type:str]
+          type: ENC[AES256_GCM,data:3CP0efLG,iv:T0jAobV7WtyMuXZHaR+905a+b7frBsfqVXiRwS6wGEc=,tag:h0oGPu4/t0kncHgQJ5mH3Q==,type:str]
+          stringData:
+            client-secret: ENC[AES256_GCM,data:/IGngZAhNaWwShrchEAQSDULLAQ1eYZfQF07FaK5QNo=,iv:R9efuj3xLLPrpncpGE7jN0LEH5t7YlBeNuMO39t5M9Y=,tag:JqdMXulAPkK0vOrNpzPR4A==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBrcjNPQmhyV2RseERuYXVm
+            YjlXeTZjblNkY1V1N094VUxlWFdIK3FrUUZRCk91VFMzN0ZXRjdtNXlzcUN0SjZx
+            ZWp2Mi9lQ2pEWExnWnVlQTR6Z2QrNEkKLS0tIFRsVzNaUXUyYzBHR1IvZVpDeE5x
+            YllqUnphS3pZR1lhajFBd2JreGpYRGsKUyH7V4HOdoASyWOVaJfYoMyHDc4D1+vJ
+            /MzUoBkQKsELlsvIC/9cagirTt0pOR5nAjAgHiVb/jGThq4n2ZVb7Q==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-02-11T14:58:27Z"
+    mac: ENC[AES256_GCM,data:Ol8DUorNsneCCBm6puWn/Na3+Xr/obRFzEI2tFAIN7FY5Ftw1fNUvZDEwRmVt5OY5aubLOx8SyvKt4m2YbBizTlDkPIQulllXWAU7WB0ckRkKCjwd5IqqMASfuSIS6VOVFpRuezKeXOx7JR/fTyna1V7Rp2bsy0PRNZAMZjX198=,iv:gCGG95SyXtsnqSMflItnB69XDOtOUTph+etZRk5aWcs=,tag:ymUxHEhDHvLqTBvKHFSMgA==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
