@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: garage-operator-rpc-secret
+    namespace: garage-operator
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:10852c6xruFJEJNJMSH96zqL551A4BZ5HO0=,iv:cQux5qYdsWtuMjp7QxD9CRD6Kk9+LdKzeGk2M+1fEXI=,tag:2cob/QD33fh4f1QwJlprrQ==,type:str]
+          type: ENC[AES256_GCM,data:yq9+0J4d,iv:Wsjul4qyUUsbFMObbudMiG8BaovPnDiNFDwOO3B5HWY=,tag:EsMX5zJLGU1fgd1evhhm5A==,type:str]
+          stringData:
+            rpc-secret: ENC[AES256_GCM,data:fOHEGOtHA7h1WrXsu6L3cEQHwJBY3Q67c0V0sNkRZ7OGyqTRbX4pwoi41Qa6xnNik/GGnaj1dGtML3Q+/JK3/A==,iv:fRKexpx1pAZWQqycFBk0fwUloGUp8QUs5938BLgKMfg=,tag:TCYkm42cNPmvmqR/vWiHTQ==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBaemFHbGtHeVlzcE5FYTNT
+            VDA0dmc3eXVmVUp6N2hmTklLWVZ4bnRlYUdrCnFxSDlrNjdOTnd0Zk1od1pJcUpN
+            N0JlZERueXJCQ1NDOExGWGVIbTFBNFEKLS0tIGdpc3JUQTJzZW5nWUxoVVpuRzJk
+            bHpET3l6QmY2enVlTnp0TEdWajBRdGMK4KsMWlr0XD2OY/CLIQQtQT6NGEwW3CaS
+            ASBdC2Q5J5EXUHdxdKpp9Cl2Jf9lF7bqYyv2IEuVPk+duxgi56xD8g==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-02-11T08:48:25Z"
+    mac: ENC[AES256_GCM,data:xXRRrov0QhfsPAYJbA8ZgjM6BD0wTIgX3HadbsVEuj8RyxwFBi9HZUOqngsT0WSFpiQml9K2Q6r2EPlYPCRbxubUhZCmdpBEAQVGcOtDsvvNi+5VEL9WlKIqLEpWO2h287xc+71stziLmBfxAu2EF/A8b1KN4tmzM5aeia+wWDI=,iv:8ez9UqpP3waSROW/cEn0C5FRR8Evm1JvMylP/LED/sM=,tag:kiT+8Hx7+IbyG4GrxJuYAA==,type:str]
+    encrypted_suffix: Templates
+    version: 3.11.0
