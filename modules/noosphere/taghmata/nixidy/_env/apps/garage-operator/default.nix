@@ -60,6 +60,7 @@ in {
         layoutPolicy = "Auto";
 
         s3Api = {
+          bindPort = 3900;
           region = "main";
           rootDomain = ".s3.garage-main.${domain}";
         };

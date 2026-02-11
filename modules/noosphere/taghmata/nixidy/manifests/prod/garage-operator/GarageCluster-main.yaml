@@ -26,6 +26,7 @@ spec:
   replication:
     factor: 3
   s3Api:
+    bindPort: 3900
     region: main
     rootDomain: .s3.garage-main.noosphere.uk
   storage:
