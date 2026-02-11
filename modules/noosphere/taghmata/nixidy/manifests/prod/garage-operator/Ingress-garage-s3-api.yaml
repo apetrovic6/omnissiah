@@ -8,7 +8,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: s3.garage-main.noosphere.uk
+    - host: s3.main.garage.noosphere.uk
       http:
         paths:
           - backend:

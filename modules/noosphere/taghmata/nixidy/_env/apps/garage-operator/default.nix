@@ -137,7 +137,7 @@ in {
         ingressClassName = "traefik";
         rules = [
           {
-            host = "s3.garage-main.${domain}";
+            host = "s3.main.garage.${domain}";
             http.paths = [
               {
                 path = "/";
