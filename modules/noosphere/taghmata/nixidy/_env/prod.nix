@@ -31,6 +31,7 @@ in {
     ./apps/forgejo
     ./apps/searxng
     ./apps/garage-operator
+    ./apps/garage-main-ui
     ./apps/local-path-provisioner
     # ./apps/percona-mongodb
     # ./apps/unifi-network

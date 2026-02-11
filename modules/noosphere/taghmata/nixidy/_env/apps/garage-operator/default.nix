@@ -5,7 +5,6 @@
 }: let
   namespace = "garage-operator";
   domain = config.noosphere.domain;
-  sso = config.noosphere.sso;
 in {
   applications.garage-operator = {
     inherit namespace;
