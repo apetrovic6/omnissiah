@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app.kubernetes.io/instance: dagger
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: dagger-helm
+    app.kubernetes.io/part-of: dagger-helm
+    app.kubernetes.io/version: v0.19.11
+    helm.sh/chart: dagger-helm-0.19.11
+  name: dagger-dagger-helm-engine
+  namespace: dagger
+spec:
+  selector:
+    matchLabels:
+      name: dagger-dagger-helm-engine
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: dagger
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: dagger-helm
+        app.kubernetes.io/part-of: dagger-helm
+        app.kubernetes.io/version: v0.19.11
+        helm.sh/chart: dagger-helm-0.19.11
+        name: dagger-dagger-helm-engine
+    spec:
+      containers:
+        - image: registry.dagger.io/engine:v0.19.11
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -exc
+                - dagger core version
+            failureThreshold: 20
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            successThreshold: 1
+            terminationGracePeriodSeconds: 30
+            timeoutSeconds: 29
+          name: dagger-engine
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -exc
+                - dagger core version
+            failureThreshold: 10
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            successThreshold: 1
+            timeoutSeconds: 14
+          resources:
+            limits: {}
+            requests: {}
+          securityContext:
+            capabilities:
+              add:
+                - ALL
+            privileged: true
+          volumeMounts:
+            - mountPath: /var/lib/dagger
+              name: varlibdagger
+            - mountPath: /run/dagger
+              name: varrundagger
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1001
+        runAsUser: 0
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 300
+      volumes:
+        - hostPath:
+            path: /var/lib/dagger-dagger-dagger-helm
+          name: varlibdagger
+        - hostPath:
+            path: /run/dagger-dagger-dagger-helm
+          name: varrundagger
