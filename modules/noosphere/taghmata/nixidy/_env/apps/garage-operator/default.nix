@@ -43,6 +43,18 @@ in {
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
+        secretTemplate = {
+          name = "forgejo-s3-secret-key";
+          namespace = "reflector";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "forgejo";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "forgejo";
+          };
+        };
       };
     };
 

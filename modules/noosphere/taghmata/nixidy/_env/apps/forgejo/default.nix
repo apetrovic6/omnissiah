@@ -11,7 +11,6 @@
   objectStoreName = "${name}-object-store";
   forgejo-admin-secret = "forgejo-admin-secret";
   forgejo-keycloak-oauth-secret = "forgejo-keycloak-oauth-secret";
-  forgejo-s3-secret-key = "forgejo-s3-secret-key";
 in {
   imports = [
     ../../../_modules/templates/garage-object-store.nix
@@ -25,7 +24,6 @@ in {
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/${forgejo-admin-secret}/${forgejo-admin-secret}/value)
       (builtins.readFile ../../../../../../../vars/shared/${forgejo-keycloak-oauth-secret}/${forgejo-keycloak-oauth-secret}/value)
-      (builtins.readFile ../../../../../../../vars/shared/${forgejo-s3-secret-key}/${forgejo-s3-secret-key}/value)
     ];
 
     templates.garageObjectStore."${objectStoreName}" = {
@@ -144,7 +142,7 @@ in {
             {
               name = "FORGEJO__storage__MINIO_ACCESS_KEY_ID";
               valueFrom.secretKeyRef = {
-                name = forgejo-s3-secret-key;
+                name = "forgejo-s3-secret-key";
                 key = "MINIO_ACCESS_KEY_ID";
               };
             }
@@ -152,7 +150,7 @@ in {
             {
               name = "FORGEJO__storage__MINIO_SECRET_ACCESS_KEY";
               valueFrom.secretKeyRef = {
-                name = forgejo-s3-secret-key;
+                name = "forgejo-s3-secret-key";
                 key = "MINIO_SECRET_ACCESS_KEY";
               };
             }
