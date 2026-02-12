@@ -40,7 +40,7 @@ in {
             "glance/description" = "Bookmark Management";
             "glance/id" = "karakeep";
             "glance/parent" = "karakeep";
-            "category" = "utils";
+            "category" = "productivity";
           };
 
           karakeep.tls = [

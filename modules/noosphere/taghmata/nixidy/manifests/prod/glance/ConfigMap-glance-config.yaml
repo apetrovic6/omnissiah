@@ -84,6 +84,7 @@ data:
           - kubernetes-csi/csi-driver-nfs
           - gitlab:TECHNOFAB/tofunix
           show-source-icon: true
+          title: Git
           type: releases
         - cache: 1d
           repositories:
@@ -91,6 +92,7 @@ data:
           - carlpett/terraform-provider-sops
           - goharbor/terraform-provider-harbor
           show-source-icon: true
+          title: Open Tofu Providers
           type: releases
       name: Home
   services.yml: |
@@ -161,6 +163,15 @@ data:
               \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
               search\")\n"
           title: Search
+          type: extension
+          url: http://glance-k8s/extension/apps
+        - allow-potentially-dangerous-html: true
+          cache: 1m
+          parameters:
+            show-if: "namespace != \"kube-system\" and\n\"glance/name\" in annotations\
+              \ and\n (\"category\" in annotations && annotations[\"category\"] == \"\
+              productivity\")\n"
+          title: Productivity
           type: extension
           url: http://glance-k8s/extension/apps
         - allow-potentially-dangerous-html: true

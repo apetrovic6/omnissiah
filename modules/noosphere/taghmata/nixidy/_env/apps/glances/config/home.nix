@@ -81,6 +81,7 @@
   ];
 
   releases = {
+    title = "Git";
     type = "releases";
     cache = "1d";
     show-source-icon = true;
@@ -88,6 +89,7 @@
   };
 
   releasesOpenTofu = {
+    title = "Open Tofu Providers";
     type = "releases";
     cache = "1d";
     show-source-icon = true;

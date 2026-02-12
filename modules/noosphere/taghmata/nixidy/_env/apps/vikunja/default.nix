@@ -86,12 +86,12 @@ in {
               "glance/description" = "Project Planning";
               "glance/id" = "vikunja";
               "glance/parent" = "vikunja";
-              "category" = "utils";
+              "category" = "productivity";
             };
 
             hosts = [
               {
-                host = "https://vikunja.${domain}";
+                host = "vikunja.${domain}";
                 paths = [{path = "/";}];
               }
             ];
@@ -128,12 +128,14 @@ in {
               key = "host";
             };
 
+          };
             VIKUNJA_DATABASE_USER = {
               valueFrom.secretKeyRef = {
                 name = "${db-cluster-name}-app";
                 key = "user";
               };
 
+            };
               VIKUNJA_DATABASE_PASSWORD = {
                 valueFrom.secretKeyRef = {
                   name = "${db-cluster-name}-app";
@@ -142,8 +144,6 @@ in {
               };
 
               VIKUNJA_DATABASE_DATABASE = "app";
-            };
-          };
         };
       };
     };
