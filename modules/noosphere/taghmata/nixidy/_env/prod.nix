@@ -34,6 +34,7 @@ in {
     ./apps/garage-main-ui
     ./apps/local-path-provisioner
     ./apps/dagger
+    ./apps/vikunja
     # ./apps/percona-mongodb
     # ./apps/unifi-network
   ];
