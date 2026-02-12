@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: vikunja
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: vikunja
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: vikunja-2.0.0
+  name: vikunja
+  namespace: vikunja
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: vikunja
+      app.kubernetes.io/name: vikunja
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        checksum/config: e8e525bc19174ae3680a05c7410a30a6245c02f39e7098fe941a30a58316ae05
+      labels:
+        app.kubernetes.io/instance: vikunja
+        app.kubernetes.io/name: vikunja
+    spec:
+      automountServiceAccountToken: true
+      containers:
+        - env:
+            - name: VIKUNJA_DATABASE_DATABASE
+              value: app
+            - name: VIKUNJA_DATABASE_HOST
+              valueFrom:
+                secretKeyRef:
+                  key: host
+                  name: pg-vikunja-app
+            - name: VIKUNJA_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-vikunja-app
+            - name: VIKUNJA_DATABASE_TYPE
+              value: postgres
+            - name: VIKUNJA_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  key: user
+                  name: pg-vikunja-app
+          image: vikunja/vikunja:1.0.0
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /api/v1/info
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 1
+          name: vikunja
+          ports:
+            - containerPort: 3456
+              name: http
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /api/v1/info
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 1
+          volumeMounts:
+            - mountPath: /etc/vikunja/config.yml
+              name: config
+              subPath: config.yml
+            - mountPath: /app/vikunja/files
+              name: data
+      dnsPolicy: ClusterFirst
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 1000
+      serviceAccountName: default
+      volumes:
+        - configMap:
+            name: vikunja-config
+          name: config
+        - name: data
+          persistentVolumeClaim:
+            claimName: vikunja-data

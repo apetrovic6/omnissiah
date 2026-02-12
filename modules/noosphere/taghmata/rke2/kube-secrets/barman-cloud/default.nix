@@ -1,7 +1,7 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
   barmanS3Storage = "barman-s3-secret-key";
-  namespacesToReplicate = "yarr,zitadel,harbor,keycloak,woodpecker,forgejo";
+  namespacesToReplicate = "yarr,zitadel,harbor,keycloak,woodpecker,forgejo,vikunja";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${barmanS3Storage} = {

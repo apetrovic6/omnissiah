@@ -1,0 +1,38 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    category: utils
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Project Planning
+    glance/icon: di:vikunja
+    glance/id: vikunja
+    glance/name: Vikunja
+    glance/parent: vikunja
+    glance/url: https://vikunja.noosphere.uk
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  labels:
+    app.kubernetes.io/instance: vikunja
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: vikunja
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: vikunja-2.0.0
+  name: vikunja
+  namespace: vikunja
+spec:
+  rules:
+    - host: vikunja.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: vikunja
+                port:
+                  number: 3456
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - vikunja.noosphere.uk
+      secretName: vikunja-tls

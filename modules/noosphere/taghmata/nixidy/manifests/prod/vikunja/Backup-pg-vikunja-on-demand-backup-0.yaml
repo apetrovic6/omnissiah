@@ -1,0 +1,11 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: pg-vikunja-on-demand-backup-0
+  namespace: vikunja
+spec:
+  cluster:
+    name: pg-vikunja
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

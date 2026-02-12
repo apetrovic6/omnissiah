@@ -1,0 +1,15 @@
+apiVersion: v1
+data:
+  config.yml: |
+    service:
+      publicurl: "https://vikunja.noosphere.uk"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: vikunja
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: vikunja
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: vikunja-2.0.0
+  name: vikunja-config
+  namespace: vikunja

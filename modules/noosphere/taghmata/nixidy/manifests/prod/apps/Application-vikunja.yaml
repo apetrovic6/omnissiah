@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vikunja
+  namespace: argocd
+spec:
+  destination:
+    namespace: vikunja
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: ./modules/noosphere/taghmata/nixidy/manifests/prod/vikunja
+    repoURL: https://github.com/apetrovic6/omnissiah.git
+    targetRevision: master
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
