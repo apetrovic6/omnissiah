@@ -8,6 +8,7 @@ spec:
     adminTokenSecretRef:
       key: admin-token
       name: garage-main-admin-token
+    bindPort: 3903
     enabled: true
   database:
     engine: sqlite
@@ -19,9 +20,12 @@ spec:
     minNodesHealthy: 2
   layoutPolicy: Auto
   network:
+    rpcBindPort: 3901
     rpcSecretRef:
       key: rpc-secret
       name: garage-main-rpc-secret
+    service:
+      type: ClusterIP
   replicas: 3
   replication:
     factor: 3

@@ -40,7 +40,7 @@ in {
 
     
     resources.garageKeys.forgejo = {
-      metadata = {inherit namespace;};
+      metadata = { inherit namespace; };
       spec = {
         clusterRef.name = "garage-main";
         secretTemplate = {
@@ -119,6 +119,7 @@ in {
 
         admin = {
           enabled = true;
+          bindPort = 3903;
           adminTokenSecretRef = {
             name = "garage-main-admin-token";
             key = "admin-token";
@@ -126,6 +127,8 @@ in {
         };
 
         network = {
+          rpcBindPort = 3901;
+          service.type = "ClusterIP";
           rpcSecretRef = {
             name = "garage-main-rpc-secret";
             key = "rpc-secret";
