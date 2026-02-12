@@ -33,6 +33,7 @@ in {
     ./apps/garage-operator
     ./apps/garage-main-ui
     ./apps/local-path-provisioner
+    ./apps/dagger
     # ./apps/percona-mongodb
     # ./apps/unifi-network
   ];
