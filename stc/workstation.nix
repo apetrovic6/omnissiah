@@ -135,7 +135,17 @@
       claude-monitor
 
       exercism
+
+      (self.inputs.dagger-cli.packages.${system}.dagger)
+
+      neomutt
+      proton-vpn-cli
     ];
+
+    services.protonmail-bridge = {
+      enable = true;
+      path = with pkgs; [pass gnome-keyring];
+    };
 
     programs.localsend = {
       enable = true;

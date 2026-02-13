@@ -1,4 +1,3 @@
 {...}: {
-imports = [./sabnzbd-tui];
-
+  imports = [./sabnzbd-tui];
 }
