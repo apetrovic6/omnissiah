@@ -2,7 +2,10 @@
   imports = [
     ./harbor
     ./forgejo
+    ./kubernetes
     ./projects
+    ./pocket-id
+    
   ];
 
   terraform.backend = {

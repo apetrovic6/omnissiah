@@ -25,10 +25,26 @@ provider "registry.opentofu.org/goharbor/harbor" {
   ]
 }
 
+provider "registry.opentofu.org/hashicorp/kubernetes" {
+  version     = "3.0.1"
+  constraints = "3.0.1"
+  hashes = [
+    "h1:oVFcAUJnuqvcobFoC6C7xaYq0GwzeMRQNLq9JckfJDA=",
+  ]
+}
+
 provider "registry.opentofu.org/hashicorp/local" {
   version     = "2.6.2"
   constraints = "2.6.2"
   hashes = [
     "h1:ffo8IET+O6g7ElezGLXZdx2YA39WhkdP5ARyiesAyVg=",
+  ]
+}
+
+provider "registry.opentofu.org/trozz/pocketid" {
+  version     = "0.1.7"
+  constraints = "0.1.7"
+  hashes = [
+    "h1:JNhfj6cSHiJwb3rnQ8v4r/Kx06bcS6E3LRXrINImkew=",
   ]
 }
