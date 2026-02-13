@@ -128,7 +128,6 @@
       # nodeTaints = [ "node-role.kubernetes.io/control-plane=:NoSchedule" ];
 
       openFirewall = true;
-
     };
   };
 }

@@ -21,6 +21,11 @@
       flake = false;
     };
 
+    go-vikunja = {
+      url = "github:go-vikunja/helm-chart";
+      flake = false;
+    };
+
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
 
     nixpkgs.follows = "nixpkgs-unstable";
@@ -102,6 +107,10 @@
       url = "github:lukasdietrich/glance-k8s";
       flake = false;
     };
+
+    dagger-cli = {
+      url = "github:dagger/nix";
+    };
   };
 
   outputs = inputs @ {
@@ -182,11 +191,20 @@
           };
 
           # Extra charts beyond nixhelm
-          extraCharts = {
-            "deuxfleurs/garage" = "${self.inputs.garage}/script/helm/garage";
-            "lukasdietrich/glance-k8s" = "${self.inputs.glance-k8s}/charts/glance-k8s";
-            "woodpecker-ci/woodpecker" = "${self.inputs.woodpecker-ci}/charts/woodpecker";
-            "rajsinghtech/garage-operator" = "${self.inputs.garage-operator}/charts/garage-operator";
+          extraCharts = with self.inputs; {
+            "deuxfleurs/garage" = "${garage}/script/helm/garage";
+            "lukasdietrich/glance-k8s" = "${glance-k8s}/charts/glance-k8s";
+            "woodpecker-ci/woodpecker" = "${woodpecker-ci}/charts/woodpecker";
+            "rajsinghtech/garage-operator" = "${garage-operator}/charts/garage-operator";
+            "go-vikunja/vikunja" = pkgs.runCommand "vikunja-chart" {} ''
+              cp -r ${go-vikunja} $out
+              chmod -R u+w $out
+              mkdir -p $out/charts
+              tar -xzf ${pkgs.fetchurl {
+                url = "https://bjw-s-labs.github.io/helm-charts/library/common-1.5.1.tgz";
+                hash = "sha256-9kUXJmThPvJijV6YhhJQi2s428qkJd6WaWcstz1uNCY=";
+              }} -C $out/charts
+            '';
           };
 
           # Environments

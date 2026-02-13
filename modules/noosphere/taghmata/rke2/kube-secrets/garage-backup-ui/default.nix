@@ -1,48 +1,9 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
-  fileNameAdminToken = "garage-backup-ui-admin-token";
   fileNameJwtSecret = "garage-backup-ui-jwt-token-secret";
   fileNameOidcSecret = "garage-backup-ui-oidc-secret";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
-    clan.core.vars.generators.${fileNameAdminToken} = {
-      share = true;
-
-      prompts.admin-token = {
-        description = "Garage Backup admin token (same token used by garage-backup cluster)";
-        type = "hidden";
-        persist = false;
-      };
-
-      files.${fileNameAdminToken}.secret = false;
-
-      runtimeInputs = [pkgs.coreutils pkgs.sops];
-
-      script = ''
-               set -euo pipefail
-
-                secret="$(tr -d '\r\n' < "$prompts/admin-token")"
-
-        sops encrypt \
-          --age "${ageKey}" \
-          --encrypted-suffix "Templates" \
-          --input-type yaml --output-type yaml \
-          /dev/stdin > "$out/${fileNameAdminToken}" <<EOF
-        apiVersion: isindir.github.com/v1alpha3
-        kind: SopsSecret
-        metadata:
-          name: ${fileNameAdminToken}
-          namespace: garage-operator
-        spec:
-          secretTemplates:
-            - name: ${fileNameAdminToken}
-              type: Opaque
-              stringData:
-                admin-token: "$secret"
-        EOF
-      '';
-    };
-
     clan.core.vars.generators.${fileNameJwtSecret} = {
       share = true;
 

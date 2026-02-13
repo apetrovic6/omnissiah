@@ -163,7 +163,7 @@ in {
               HOST = "${db-cluster-name}-rw";
             };
 
-            storage= {
+            storage = {
               STORAGE_TYPE = "minio";
               SERVE_DIRECT = false;
               MINIO_ENDPOINT = "garage-s3-api.garage-operator.svc.cluster.local:3900";
