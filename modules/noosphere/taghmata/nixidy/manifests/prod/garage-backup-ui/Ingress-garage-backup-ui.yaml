@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    category: storage
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Distributed S3 Storage (Backup)
+    glance/icon: di:garage
+    glance/id: garage-backup
+    glance/name: Garage Backup
+    glance/parent: garage
+    glance/url: https://ui.backup.garage.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: garage-backup-ui
+  namespace: garage-operator
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ui.backup.garage.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: garage-backup-ui
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - ui.backup.garage.noosphere.uk
+      secretName: garage-backup-ui-tls

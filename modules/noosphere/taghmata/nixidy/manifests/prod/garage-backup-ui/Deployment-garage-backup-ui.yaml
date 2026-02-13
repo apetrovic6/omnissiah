@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: garage-backup-ui
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: garage-ui
+    app.kubernetes.io/version: v0.1.2
+    helm.sh/chart: garage-ui-0.1.13
+  name: garage-backup-ui
+  namespace: garage-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: garage-backup-ui
+      app.kubernetes.io/name: garage-ui
+  template:
+    metadata:
+      annotations:
+        checksum/config: ba28d31689a3737bc5bf08674a556ff8bb2ae1274b085577a4f35f3946320294
+      labels:
+        app.kubernetes.io/instance: garage-backup-ui
+        app.kubernetes.io/name: garage-ui
+    spec:
+      containers:
+        - env:
+            - name: GARAGE_UI_GARAGE_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: admin-token
+                  name: garage-backup-admin-token
+            - name: GARAGE_UI_AUTH_JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: jwt-key.pem
+                  name: garage-backup-ui-jwt-token-secret
+            - name: GARAGE_UI_AUTH_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: client-secret
+                  name: garage-backup-ui-oidc-secret
+          image: noooste/garage-ui:v0.1.2
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          name: garage-ui
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - mountPath: /app/config.yaml
+              name: config
+              readOnly: true
+              subPath: config.yaml
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      volumes:
+        - configMap:
+            name: garage-backup-ui-config
+          name: config

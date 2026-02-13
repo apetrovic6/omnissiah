@@ -32,6 +32,7 @@ in {
     ./apps/searxng
     ./apps/garage-operator
     ./apps/garage-main-ui
+    ./apps/garage-backup-ui
     ./apps/local-path-provisioner
     ./apps/dagger
     ./apps/vikunja

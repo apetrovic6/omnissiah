@@ -12,7 +12,6 @@ in {
     inherit namespace;
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/garage-backup-ui-admin-token/garage-backup-ui-admin-token/value)
       (builtins.readFile ../../../../../../../vars/shared/garage-backup-ui-jwt-token-secret/garage-backup-ui-jwt-token-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/garage-backup-ui-oidc-secret/garage-backup-ui-oidc-secret/value)
     ];
@@ -73,11 +72,11 @@ in {
             endpoint = "http://garage-backup-s3-api:3900";
             admin_endpoint = "http://garage-backup-admin:3903";
             region = "backup";
-          };
 
-          existingSecret = {
-            name = "garage-backup-admin-token";
-            key = "admin-token";
+            existingSecret = {
+              name = "garage-backup-admin-token";
+              key = "admin-token";
+            };
           };
 
           cors = {
