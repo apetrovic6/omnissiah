@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pocket-id
+  namespace: argocd
+spec:
+  destination:
+    namespace: pocket-id
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: ./modules/noosphere/taghmata/nixidy/manifests/prod/pocket-id
+    repoURL: https://github.com/apetrovic6/omnissiah.git
+    targetRevision: master
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false

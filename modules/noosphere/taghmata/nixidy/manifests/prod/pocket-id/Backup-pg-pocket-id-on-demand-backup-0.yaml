@@ -1,0 +1,11 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: pg-pocket-id-on-demand-backup-0
+  namespace: pocket-id
+spec:
+  cluster:
+    name: pg-pocket-id
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

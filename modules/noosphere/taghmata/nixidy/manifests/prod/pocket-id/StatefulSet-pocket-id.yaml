@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/instance: pocket-id
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: pocket-id
+    helm.sh/chart: pocket-id-1.7.4
+  name: pocket-id
+  namespace: pocket-id
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: pocket-id
+      app.kubernetes.io/name: pocket-id
+  serviceName: pocket-id
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: pocket-id
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: pocket-id
+        helm.sh/chart: pocket-id-1.7.4
+    spec:
+      containers:
+        - env:
+            - name: DB_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  key: uri
+                  name: pg-pocket-id-app
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: encryption-key
+                  name: pocket-id-encryption-key
+          envFrom:
+            - secretRef:
+                name: pg-pocket-id-app
+            - configMapRef:
+                name: pocket-id
+          image: ghcr.io/pocket-id/pocket-id:v2.2.0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          name: pocket-id
+          ports:
+            - containerPort: 1411
+              name: http
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources: {}
+          securityContext: {}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          volumeMounts:
+            - mountPath: /app/data
+              name: pocket-id-data
+      securityContext: {}
+      serviceAccountName: pocket-id
+      volumes:
+        - emptyDir: {}
+          name: pocket-id-data
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 100%
+      partition: 0
+    type: RollingUpdate

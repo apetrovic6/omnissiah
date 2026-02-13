@@ -1,0 +1,38 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    argocd.proj.io/sync-options: Prune=false,Delete=false
+    category: security
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Identity Provider
+    glance/icon: di:pocket-id
+    glance/id: pocket-id
+    glance/name: Pocket ID
+    glance/parent: pocket-id
+    glance/url: https://id.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  labels:
+    app.kubernetes.io/instance: pocket-id
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: pocket-id
+    helm.sh/chart: pocket-id-1.7.4
+  name: pocket-id
+  namespace: pocket-id
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: id.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: pocket-id
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - id.noosphere.uk
+      secretName: pocket-id-tls

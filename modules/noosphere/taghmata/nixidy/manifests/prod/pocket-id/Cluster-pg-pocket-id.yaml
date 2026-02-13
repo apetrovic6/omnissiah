@@ -1,0 +1,47 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  annotations:
+    argocd.proj.io/sync-hook: PreSync
+    argocd.proj.io/sync-options: Prune=false,Delete=false
+  labels:
+    release: kube-prometheus-stack
+  name: pg-pocket-id
+  namespace: pocket-id
+spec:
+  backup:
+    retentionPolicy: 30d
+    target: prefer-standby
+  instances: 3
+  monitoring:
+    customQueriesConfigMap:
+      - key: queries
+        name: cnpg-default-monitoring
+    enablePodMonitor: true
+    podMonitorMetricRelabelings:
+      - action: replace
+        sourceLabels:
+          - cluster
+        targetLabel: cnpg_cluster
+    podMonitorRelabelings:
+      - action: replace
+        sourceLabels:
+          - __meta_kubernetes_pod_name
+        targetLabel: pod
+  plugins:
+    - isWALArchiver: true
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: pocket-id-object-store
+  postgresql:
+    parameters:
+      log_statement: ddl
+      max_connections: "200"
+      shared_buffers: 1GB
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: 5Gi
+    storageClass: longhorn-cnpg-strict-local
+  walStorage:
+    size: 5Gi
+    storageClass: longhorn-cnpg-strict-local
