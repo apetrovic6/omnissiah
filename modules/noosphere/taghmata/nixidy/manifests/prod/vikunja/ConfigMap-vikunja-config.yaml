@@ -3,6 +3,12 @@ data:
   config.yml: |
     service:
       publicurl: "https://vikunja.noosphere.uk"
+    auth:
+      openid:
+        providers:
+          pocketid:
+            usernamefallback: true
+            emailfallback: true
 kind: ConfigMap
 metadata:
   labels:

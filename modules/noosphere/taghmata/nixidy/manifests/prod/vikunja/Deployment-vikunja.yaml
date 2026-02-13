@@ -21,7 +21,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: e8e525bc19174ae3680a05c7410a30a6245c02f39e7098fe941a30a58316ae05
+        checksum/config: d712def1dc6bc16ef932c3e2581798d7078da1a807b96e885ddb5897ec1acd8b
       labels:
         app.kubernetes.io/instance: vikunja
         app.kubernetes.io/name: vikunja
@@ -29,6 +29,24 @@ spec:
       automountServiceAccountToken: true
       containers:
         - env:
+            - name: VIKUNJA_AUTH_OPENID_ENABLED
+              value: "true"
+            - name: VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_AUTHURL
+              value: https://id.noosphere.uk
+            - name: VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_CLIENTID
+              valueFrom:
+                secretKeyRef:
+                  key: client-id
+                  name: vikunja-oidc
+            - name: VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_CLIENTSECRET
+              valueFrom:
+                secretKeyRef:
+                  key: client-secret
+                  name: vikunja-oidc
+            - name: VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_NAME
+              value: PocketID
+            - name: VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_SCOPE
+              value: openid profile email
             - name: VIKUNJA_DATABASE_DATABASE
               value: app
             - name: VIKUNJA_DATABASE_HOST
