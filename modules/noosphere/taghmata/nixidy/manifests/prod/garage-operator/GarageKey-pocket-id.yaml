@@ -1,0 +1,18 @@
+apiVersion: garage.rajsingh.info/v1alpha1
+kind: GarageKey
+metadata:
+  name: pocket-id
+  namespace: garage-operator
+spec:
+  clusterRef:
+    name: garage-backup
+  secretTemplate:
+    accessKeyIdKey: MINIO_ACCESS_KEY_ID
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: pocket-id
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: pocket-id
+    name: pocket-id-s3-secret-key
+    namespace: reflector
+    secretAccessKeyKey: MINIO_SECRET_ACCESS_KEY

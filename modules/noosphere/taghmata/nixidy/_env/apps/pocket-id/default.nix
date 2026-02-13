@@ -24,14 +24,14 @@ in {
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
     };
-    
+
     helm.releases.pocket-id = {
       chart = charts.anza-labs.pocket-id;
       values = {
         replicaCount = 1;
         host = "id.${domain}";
 
-        image = {
+        pocketID.image = {
           tag = "v2.2.0";
         };
 
@@ -54,28 +54,37 @@ in {
         ingress = {
           enabled = true;
           annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Pocket ID";
-          "glance/icon" = "di:pocket-id";
-          "glance/url" = "https://id.${domain}";
-          "glance/description" = "Identity Provider";
-          "glance/id" = "pocket-id";
-          "glance/parent" = "pocket-id";
-          "category" = "security";
+            "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+            "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
+            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+            "glance/name" = "Pocket ID";
+            "glance/icon" = "di:pocket-id";
+            "glance/url" = "https://id.${domain}";
+            "glance/description" = "Identity Provider";
+            "glance/id" = "pocket-id";
+            "glance/parent" = "pocket-id";
+            "category" = "security";
           };
 
           className = "traefik";
           host = "id.${domain}";
-          paths = [ {path = "/"; pathType = "Prefix";} ];
-          tls = [ { secretName = "pocket-id-tls"; hosts = [ "id.${domain}" ]; }];
+          paths = [
+            {
+              path = "/";
+              pathType = "Prefix";
+            }
+          ];
+          tls = [
+            {
+              secretName = "pocket-id-tls";
+              hosts = ["id.${domain}"];
+            }
+          ];
         };
 
         timeZone = "Europe/Zagreb";
       };
     };
-
 
     resources.statefulSets.pocket-id.spec.template.spec.containers.pocket-id.env = {
       DB_CONNECTION_STRING.valueFrom.secretKeyRef = {
@@ -132,6 +141,5 @@ in {
         ];
       };
     };
-    
   };
 }

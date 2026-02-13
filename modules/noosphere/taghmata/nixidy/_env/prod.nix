@@ -36,6 +36,7 @@ in {
     ./apps/local-path-provisioner
     ./apps/dagger
     ./apps/vikunja
+    ./apps/pocket-id
     # ./apps/percona-mongodb
     # ./apps/unifi-network
   ];

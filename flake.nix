@@ -272,6 +272,20 @@
                 version = "1.3.0";
                 hash = "sha256-fs+RFt8afdzv8wyMUl+zxgGSxKOdGEerL3k3TTjio/g=";
               })
+
+              (tofu.mkOpentofuProvider {
+                owner = "trozz";
+                repo = "pocketid";
+                version = "0.1.7";
+                hash = "sha256-3mz7sig4GJZyI4hdnt4QaYnuPM/IbhdA1Wh7Ww1raCE=";
+              })
+
+              (tofu.mkOpentofuProvider {
+                owner = "hashicorp";
+                repo = "kubernetes";
+                version = "3.0.1";
+                hash = "sha256-0276D/0RxbMLcwXF8sl/j1BDk8NEv6Orm/Y/98EhK2o=";
+              })
             ];
             moduleConfig = ./modules/noosphere/taghmata/_tofunix/default.nix;
           };

@@ -21,7 +21,6 @@ in {
       (builtins.readFile ../../../../../../../vars/shared/garage-backup-admin-token/garage-backup-admin-token/value)
     ];
 
-
     helm.releases.garage-operator = {
       chart = charts.rajsinghtech.garage-operator;
       values = {

@@ -1,11 +1,9 @@
 {
-domain,
-namespace,
+  domain,
+  namespace,
   ...
-}:
-  {
+}: {
   applications.garage-operator = {
-
     resources.garageClusters.garage-backup = {
       metadata = {inherit namespace;};
       spec = {
@@ -142,8 +140,38 @@ namespace,
       };
     };
 
+    resources.garageKeys.pocket-id = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+        secretTemplate = {
+          name = "pocket-id-s3-secret-key";
+          namespace = "reflector";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "pocket-id";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "pocket-id";
+          };
+        };
+      };
+    };
 
-
+    resources.garageBuckets.pocket-id = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+        keyPermissions = [
+          {
+            keyRef = "pocket-id";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+      };
+    };
   };
-
-  }
+}

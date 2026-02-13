@@ -5,7 +5,6 @@
     ./kubernetes
     ./projects
     ./pocket-id
-    
   ];
 
   terraform.backend = {
