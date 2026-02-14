@@ -36,6 +36,12 @@ in {
         description = "SSO provider name (e.g., Keycloak)";
       };
 
+      providerFull = mkOption {
+        type = types.str;
+        default = "";
+        description = "SSO full provider name (e.g., Keycloak)";
+      };
+
       url = mkOption {
         type = types.str;
         default = "";

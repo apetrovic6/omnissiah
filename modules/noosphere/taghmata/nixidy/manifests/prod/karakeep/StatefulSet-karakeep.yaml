@@ -40,16 +40,16 @@ spec:
             - name: OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING
               value: "true"
             - name: OAUTH_PROVIDER_NAME
-              value: Keycloak
+              value: Pocket ID
             - name: OAUTH_SCOPE
               value: openid email profile
             - name: OAUTH_WELLKNOWN_URL
-              value: https://keycloak.noosphere.uk/realms/adeptus-terra/.well-known/openid-configuration
+              value: https://id.noosphere.uk/.well-known/openid-configuration
           envFrom:
             - secretRef:
                 name: karakeep-secret
             - secretRef:
-                name: karakeep-sso-secret
+                name: karakeep-oidc
             - secretRef:
                 name: karakeep-meilisearch-secret
           image: ghcr.io/karakeep-app/karakeep:0.27.0

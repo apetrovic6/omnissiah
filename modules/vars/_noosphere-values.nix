@@ -11,7 +11,9 @@
   agePublicKey = "age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g";
   domain = "noosphere.uk";
   sso = {
-    provider = "Keycloak";
-    wellKnownUrl = "https://keycloak.noosphere.uk/realms/adeptus-terra/.well-known/openid-configuration";
+    provider = "id";
+    providerFull = "Pocket ID";
+    # wellKnownUrl = "https://keycloak.noosphere.uk/realms/adeptus-terra/.well-known/openid-configuration";
+    wellKnownUrl = "https://id.noosphere.uk/.well-known/openid-configuration";
   };
 }

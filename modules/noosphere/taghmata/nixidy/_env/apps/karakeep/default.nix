@@ -70,13 +70,13 @@ in {
                   NEXTAUTH_URL = "https://karakeep.${domain}";
                   OAUTH_WELLKNOWN_URL = sso.wellKnownUrl;
                   OAUTH_SCOPE = "openid email profile";
-                  OAUTH_PROVIDER_NAME = sso.provider;
+                  OAUTH_PROVIDER_NAME = "Pocket ID";
                   OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING = true;
                 };
 
                 envFrom = [
                   {secretRef = {name = "karakeep-secret";};}
-                  {secretRef = {name = "karakeep-sso-secret";};}
+                  {secretRef = {name = "karakeep-oidc";};}
                   {secretRef = {name = meiliSecret;};}
                 ];
               };

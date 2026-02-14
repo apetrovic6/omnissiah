@@ -23,8 +23,8 @@ in {
     };
 
     data = {
-      client-id = ref.pocketid_client.karakeep.id;
-      client-secret = ref.pocketid_client.karakeep.client_secret;
+      OAUTH_CLIENT_ID = ref.pocketid_client.karakeep.id;
+      OAUTH_CLIENT_SECRET = ref.pocketid_client.karakeep.client_secret;
     };
   };
 

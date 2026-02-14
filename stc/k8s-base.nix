@@ -79,17 +79,17 @@
               cm = {
                 url = "https://argocd.${config.noosphere.domain}";
                 "oidc.config" = ''
-                  name: Zitadel
-                  url: https
-                  issuer: https://${config.noosphere.sso.url}/realms/adeptus-terra
-                  clientID: argocd
-                  enablePKCEAuthentication: true
+                  name: PocketID
+                  issuer: https://${config.noosphere.sso.url}
+                  clientID: $argo-oidc:client-id
+                  clientSecret: $argo-oidc:client-secret
+                  enablePKCEAuthentication: false
                   requestedScopes:
                     - openid
                     - profile
                     - email
                     - groups
-                  logoutURL: https://${config.noosphere.sso.url}/oidc/v1/end_session
+                  logoutURL: https://${config.noosphere.sso.url}/api/oidc/end-session
                 '';
               };
 
