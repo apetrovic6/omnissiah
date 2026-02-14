@@ -4,6 +4,9 @@
   noosphere = import ../../../../vars/_noosphere-values.nix;
   inherit (noosphere) domain;
 in {
+
+  import = [ ./karakeep ];
+  
   data.sops_file.pocket_api_key = {
     source_file = secretsFile;
     input_type = "yaml";
@@ -24,6 +27,11 @@ in {
     friendly_name = "Administrators";
   };
 
+  resource.pocketid_group.argocd_admins = {
+    name = "ArgoCDAdmins";
+    friendly_name = "ArgoCD Admins";
+  };
+
   resource.pocketid_group.users = {
     name = "users";
     friendly_name = "Users";
@@ -42,13 +50,20 @@ in {
     groups = [ref.pocketid_group.users.id ref.pocketid_group.developers.id];
   };
 
-  resource.pocketid_client.vikunja = {
+  resource.pocketid_client.vikunja = let
+    baseUrl = "https://vikunja.${domain}";
+  in {
     name = "Vikunja";
     callback_urls = [
       "https://vikunja.${domain}/auth/openid/pocketid"
     ];
 
+    logout_callback_urls = [
+      baseUrl
+    ];
+
     pkce_enabled = false;
+    launch_url = baseUrl;
   };
 
   resource.kubernetes_secret_v1.vikunja-oidc = {
@@ -62,4 +77,41 @@ in {
       client-secret = ref.pocketid_client.vikunja.client_secret;
     };
   };
+
+  resource.pocketid_client.argocd = let
+    baseUrl = "https://argocd.${domain}";
+  in {
+    name = "ArgoCD";
+    callback_urls = [
+      "${baseUrl}/auth/callback"
+    ];
+
+    logout_callback_urls = [
+      baseUrl
+    ];
+
+    allowed_user_groups = [
+      ref.pocketid_group.argocd_admins.id
+    ];
+
+    pkce_enabled = false;
+    launch_url = baseUrl;
+  };
+
+  resource.kubernetes_secret_v1.argo-oidc = {
+    metadata = {
+      name = "argo-oidc";
+      namespace = "argocd";
+      labels = {
+        "app.kubernetes.io/part-of" = "argocd";
+      };
+    };
+
+    data = {
+      client-id = ref.pocketid_client.argocd.id;
+      client-secret = ref.pocketid_client.argocd.client_secret;
+    };
+  };
+
+  
 }
