@@ -5,7 +5,7 @@
   inherit (noosphere) domain;
 in {
 
-  import = [ ./karakeep ];
+  imports = [ ./karakeep ];
   
   data.sops_file.pocket_api_key = {
     source_file = secretsFile;
