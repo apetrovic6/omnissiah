@@ -193,8 +193,8 @@ in {
 
           oauth = [
             {
-              name = "Keycloak";
-              existingSecret = forgejo-keycloak-oauth-secret;
+              name = "Pocket ID";
+              existingSecret = "forgejo-oidc";
               autoDiscoverUrl = config.noosphere.sso.wellKnownUrl;
               provider = "openidConnect";
             }

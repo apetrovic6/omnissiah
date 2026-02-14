@@ -23,7 +23,7 @@ spec:
     metadata:
       annotations:
         checksum/config: 02b4aa204a309d5583a3408123d787c4f85584193c7d481a22fcab3aa9110d1c
-        checksum/oauth_0: 77644db45f286d011f857014d1ead5a52273a99d55902c3cdd352b6e1380fa55
+        checksum/oauth_0: 1235cb8d117ff073769a438f8fde36b2d6934e6741e53db04212479b8a555022
       labels:
         app: forgejo
         app.kubernetes.io/instance: forgejo
@@ -219,12 +219,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: key
-                  name: forgejo-keycloak-oauth-secret
+                  name: forgejo-oidc
             - name: GITEA_OAUTH_SECRET_0
               valueFrom:
                 secretKeyRef:
                   key: secret
-                  name: forgejo-keycloak-oauth-secret
+                  name: forgejo-oidc
             - name: GITEA_ADMIN_USERNAME
               valueFrom:
                 secretKeyRef:

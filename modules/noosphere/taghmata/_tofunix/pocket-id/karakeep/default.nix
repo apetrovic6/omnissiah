@@ -1,7 +1,5 @@
-{ref, ...}: let
-  noosphere = import ../../../../../vars/_noosphere-values.nix;
-  inherit (noosphere) domain;
-in {
+{ref,  domain,...}: 
+{
   resource.pocketid_client.karakeep = let
     baseUrl = "https://karakeep.${domain}";
   in {

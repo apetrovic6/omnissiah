@@ -3,9 +3,13 @@
   lu-user = toString ../../../../../vars/shared/tofunix-pocketid-lu/tofunix-pocketid-secret/value;
   noosphere = import ../../../../vars/_noosphere-values.nix;
   inherit (noosphere) domain;
+  
 in {
 
-  imports = [ ./karakeep ];
+  imports = [
+             (import ./karakeep { inherit ref ; domain = domain; })
+             (import ./forgejo { inherit ref ; domain = domain; })
+           ];
   
   data.sops_file.pocket_api_key = {
     source_file = secretsFile;
