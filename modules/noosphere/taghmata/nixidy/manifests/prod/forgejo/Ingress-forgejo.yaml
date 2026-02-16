@@ -10,6 +10,7 @@ metadata:
     glance/name: Forgejo
     glance/parent: forgejo
     glance/url: https://forge.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
   labels:
     app: forgejo
     app.kubernetes.io/instance: forgejo
