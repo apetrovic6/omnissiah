@@ -11,7 +11,7 @@ metadata:
     glance/name: Pocket ID
     glance/parent: pocket-id
     glance/url: https://id.noosphere.uk
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
   labels:
     app.kubernetes.io/instance: pocket-id
     app.kubernetes.io/managed-by: Helm
