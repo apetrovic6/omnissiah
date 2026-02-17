@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/instance: pocket-id
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: pocket-id
-    helm.sh/chart: pocket-id-1.7.4
+    helm.sh/chart: pocket-id-1.7.5
   name: pocket-id
   namespace: pocket-id
 spec:
@@ -21,7 +21,7 @@ spec:
         app.kubernetes.io/instance: pocket-id
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: pocket-id
-        helm.sh/chart: pocket-id-1.7.4
+        helm.sh/chart: pocket-id-1.7.5
     spec:
       containers:
         - env:
