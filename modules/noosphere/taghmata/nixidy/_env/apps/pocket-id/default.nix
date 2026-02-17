@@ -54,7 +54,7 @@ in {
         ingress = {
           enabled = true;
           annotations = {
-            "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
+            "traefik.ingress.kubernetes.io/router.entrypoints" = "web,websecure";
             "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
             "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
             "glance/name" = "Pocket ID";

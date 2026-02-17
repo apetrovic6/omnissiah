@@ -56,6 +56,7 @@ in {
           className = "traefik";
           annotations = {
             "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
+            "traefik.ingress.kubernetes.io/router.entrypoints" = "web,websecure";
             "glance/name" = "Forgejo";
             "glance/icon" = "di:forgejo";
             "glance/url" = "https://${url}";

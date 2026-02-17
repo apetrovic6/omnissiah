@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: forgejo
     app.kubernetes.io/version: 14.0.2
-    helm.sh/chart: forgejo-16.1.0
+    helm.sh/chart: forgejo-16.2.0
     version: 14.0.2
   name: forgejo
   namespace: forgejo
@@ -22,7 +22,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 02b4aa204a309d5583a3408123d787c4f85584193c7d481a22fcab3aa9110d1c
+        checksum/config: 5c9f314aa27736803cd815c543ccf841fa10209d08e2c8287763bff3f5ac6a34
         checksum/oauth_0: 1235cb8d117ff073769a438f8fde36b2d6934e6741e53db04212479b8a555022
       labels:
         app: forgejo
@@ -30,7 +30,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: forgejo
         app.kubernetes.io/version: 14.0.2
-        helm.sh/chart: forgejo-16.1.0
+        helm.sh/chart: forgejo-16.2.0
         version: 14.0.2
     spec:
       containers:
