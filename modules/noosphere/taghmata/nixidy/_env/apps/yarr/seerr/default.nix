@@ -3,10 +3,14 @@
   domain = config.noosphere.domain;
   db-cluster-name = "pg-yarr-1";
   objectStoreName = "yarr-object-store";
+
+  prowlarr = import ../prowlarr { inherit domain namespace db-cluster-name; };
+  
 in {
   imports = [
     ../../../../_modules/templates/garage-object-store.nix
     ../../../../_modules/templates/database-template.nix
+    prowlarr
   ];
 
   applications.seerr = {
@@ -211,6 +215,15 @@ in {
               superuser = false;
               passwordSecret.name = "pg-seerr-password";
             }
+
+            {
+              name = "prowlarr";
+              ensure = "present";
+              comment = "Prowlarr User";
+              login = true;
+              superuser = false;
+              passwordSecret.name = "pg-prowlarr-password";
+            }
           ];
 
           externalClusters = [
@@ -238,6 +251,36 @@ in {
           spec = {
             name = "seerr";
             owner = "seerr";
+            cluster.name = "${db-cluster-name}";
+          };
+        }
+
+        {
+          name = "db-prowlarr";
+
+          metadata = {
+            annotations = {
+              "argocd.proj.io/sync-options" = "Prune=false";
+            };
+          };
+          spec = {
+            name = "prowlarr";
+            owner = "prowlarr";
+            cluster.name = "${db-cluster-name}";
+          };
+        }
+
+        {
+          name = "db-prowlarr-logs";
+
+          metadata = {
+            annotations = {
+              "argocd.proj.io/sync-options" = "Prune=false";
+            };
+          };
+          spec = {
+            name = "prowlarr-logs";
+            owner = "prowlarr";
             cluster.name = "${db-cluster-name}";
           };
         }

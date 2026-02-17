@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: prowlarr
+  name: prowlarr
+  namespace: yarr
+spec:
+  selector:
+    matchLabels:
+      app: prowlarr
+  template:
+    metadata:
+      labels:
+        app: prowlarr
+    spec:
+      containers:
+        - env:
+            - name: PROWLARR__POSTGRES__HOST
+              value: pg-yarr-1-rw
+            - name: PROWLARR__POSTGRES__PORT
+              value: "5432"
+            - name: PROWLARR__POSTGRES__USER
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: pg-prowlarr-password
+            - name: PROWLARR__POSTGRES__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-prowlarr-password
+            - name: PROWLARR__POSTGRES__MAINDB
+              value: prowlarr
+            - name: PROWLARR__POSTGRES__LOGDB
+              value: prowlarr-logs
+            - name: PROWLARR__SERVER__PORT
+              value: "9696"
+          image: lscr.io/linuxserver/prowlarr:latest
+          name: prowlarr
+          ports:
+            - containerPort: 9696
+          volumeMounts:
+            - mountPath: /config
+              name: config
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: prowlarr-pvc

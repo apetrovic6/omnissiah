@@ -3,14 +3,18 @@
   lu-user = toString ../../../../../vars/shared/tofunix-pocketid-lu/tofunix-pocketid-secret/value;
   noosphere = import ../../../../vars/_noosphere-values.nix;
   inherit (noosphere) domain;
-  
 in {
-
   imports = [
-             (import ./karakeep { inherit ref ; domain = domain; })
-             (import ./forgejo { inherit ref ; domain = domain; })
-           ];
-  
+    (import ./karakeep {
+      inherit ref;
+      domain = domain;
+    })
+    (import ./forgejo {
+      inherit ref;
+      domain = domain;
+    })
+  ];
+
   data.sops_file.pocket_api_key = {
     source_file = secretsFile;
     input_type = "yaml";
@@ -27,7 +31,7 @@ in {
   };
 
   resource.pocketid_group.admin = {
-    name = "admins";
+    name = "Admin";
     friendly_name = "Administrators";
   };
 
@@ -37,7 +41,7 @@ in {
   };
 
   resource.pocketid_group.users = {
-    name = "users";
+    name = "User";
     friendly_name = "Users";
   };
 
@@ -60,6 +64,22 @@ in {
     name = "Vikunja";
     callback_urls = [
       "https://vikunja.${domain}/auth/openid/pocketid"
+    ];
+
+    logout_callback_urls = [
+      baseUrl
+    ];
+
+    pkce_enabled = false;
+    launch_url = baseUrl;
+  };
+
+  resource.pocketid_client.pangolin = let
+    baseUrl = "https://pangolinije.ugalabugala.org";
+  in {
+    name = "pangolin";
+    callback_urls = [
+      "https://pangolinije.ugalabugala.org/auth/idp/1/oidc/callback"
     ];
 
     logout_callback_urls = [
@@ -116,6 +136,4 @@ in {
       client-secret = ref.pocketid_client.argocd.client_secret;
     };
   };
-
-  
 }

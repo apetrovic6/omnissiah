@@ -32,6 +32,13 @@ spec:
         passwordSecret:
           name: pg-seerr-password
         superuser: false
+      - comment: Prowlarr User
+        ensure: present
+        login: true
+        name: prowlarr
+        passwordSecret:
+          name: pg-prowlarr-password
+        superuser: false
   monitoring:
     customQueriesConfigMap:
       - key: queries
