@@ -4,12 +4,14 @@
   db-cluster-name,
   ...
 }: {
+
   imports = [
     ../../../../_modules/templates/database-template.nix
   ];
 
-  applications.prowlarr = {
-    resources.persistentVolumeClaims.prowlarr-pvc = {
+    applications.sonarr = {
+
+    resources.persistentVolumeClaims.sonarr-pvc = {
       metadata = {
         inherit namespace;
 
@@ -26,81 +28,97 @@
       };
     };
 
-    resources.deployments.prowlarr = {
+
+    resources.deployments.sonarr = {
       metadata = {
         inherit namespace;
-        labels.app = "prowlarr";
+        labels.app = "sonarr";
       };
 
       spec = {
         selector = {
           matchLabels = {
-            app = "prowlarr";
+            app = "sonarr";
           };
         };
       };
 
       spec.template = {
-        metadata.labels.app = "prowlarr";
+        metadata.labels.app = "sonarr";
         spec.volumes = [
           {
             name = "config";
-            persistentVolumeClaim.claimName = "prowlarr-pvc";
+            persistentVolumeClaim.claimName = "sonarr-pvc";
+          }
+
+          {
+            name = "data";
+            nfs = {
+              server = "192.168.1.61";
+              path = "/volume1/data/";
+            };
           }
         ];
 
         spec.containers = [
           {
-            name = "prowlarr";
+            name = "sonarr";
 
-            image = "lscr.io/linuxserver/prowlarr:latest";
+            image = "lscr.io/linuxserver/sonarr:latest";
             volumeMounts = [
               {
                 name = "config";
                 mountPath = "/config";
               }
+
+              {
+                name = "data";
+                mountPath = "/data";
+              }
             ];
 
             env = [
+              { name = "PUID"; value = "1031";}
+              { name = "PGID"; value = "65537";}
               {
-                name = "PROWLARR__POSTGRES__HOST";
+                name = "SONARR__POSTGRES__HOST";
                 value = "${db-cluster-name}-rw";
               }
               {
-                name = "PROWLARR__POSTGRES__PORT";
+                name = "SONARR__POSTGRES__PORT";
                 value = "5432";
               }
               {
-                name = "PROWLARR__POSTGRES__USER";
+                name = "SONARR__POSTGRES__USER";
                 valueFrom.secretKeyRef = {
-                  name = "pg-prowlarr-password";
+                  name = "pg-sonarr-password";
                   key = "username";
                 };
               }
 
               {
-                name = "PROWLARR__POSTGRES__PASSWORD";
+                name = "SONARR__POSTGRES__PASSWORD";
 
                 valueFrom.secretKeyRef = {
-                  name = "pg-prowlarr-password";
+                  name = "pg-sonarr-password";
                   key = "password";
                 };
               }
 
               {
-                name = "PROWLARR__POSTGRES__MAINDB";
-                value = "prowlarr";
+                name = "SONARR__POSTGRES__MAINDB";
+                value = "sonarr";
               }
 
               {
-                name = "PROWLARR__POSTGRES__LOGDB";
-                value = "prowlarr-logs";
+                name = "SONARR__POSTGRES__LOGDB";
+                value = "sonarr-logs";
               }
               {
-                name = "PROWLARR__SERVER__PORT";
-                value = "9696";
+                name = "SONARR__SERVER__PORT";
+                value = "8989";
               }
-              # { name = "PROWLARR__SERVER__URLBASE"; value = "";}
+              # { name = "SONARR__SERVER__URLBASE"; value = "";}
             ];
 
             ports = [{containerPort = 9696;}];
@@ -109,26 +127,33 @@
       };
     };
 
-    resources.services.prowlarr = {
+
+
+
+
+
+    resources.services.sonarr = {
       metadata = {
         inherit namespace;
       };
 
       spec = {
         type = "ClusterIP";
-        selector = {app = "prowlarr";};
+        selector = {app = "sonarr";};
 
         ports = [
           {
             protocol = "TCP";
             port = 80;
-            targetPort = 9696;
+            targetPort = 8989;
           }
         ];
       };
     };
 
-    resources.ingresses.prowlarr-ip-root = {
+
+
+ resources.ingresses.sonarr-ip-root = {
       metadata = {
         inherit namespace;
 
@@ -136,12 +161,12 @@
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
           "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
           "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Prowlarr";
-          "glance/icon" = "di:prowlarr";
-          "glance/url" = "https://prowlarr.${domain}";
-          "glance/description" = "Indexer Management";
-          "glance/id" = "prowlarr";
-          "glance/parent" = "prowlarr";
+          "glance/name" = "Sonarr";
+          "glance/icon" = "di:sonarr";
+          "glance/url" = "https://sonarr.${domain}";
+          "glance/description" = "Pvr";
+          "glance/id" = "sonarr";
+          "glance/parent" = "sonarr";
           "category" = "yarr";
         };
       };
@@ -151,20 +176,20 @@
 
         tls = [
           {
-            secretName = "prowlarr-tls";
-            hosts = ["prowlarr.${domain}"];
+            secretName = "sonarr-tls";
+            hosts = ["sonarr.${domain}"];
           }
         ];
 
         rules = [
           {
-            host = "prowlarr.${domain}";
+            host = "sonarr.${domain}";
             http.paths = [
               {
                 path = "/";
                 pathType = "Prefix";
                 backend.service = {
-                  name = "prowlarr";
+                  name = "sonarr";
                   port.number = 80;
                 };
               }
@@ -174,8 +199,24 @@
       };
     };
 
+
+
+
     yamls = [
-      (builtins.readFile ../../../../../../../../vars/shared/pg-prowlarr-sopssecret/pg-prowlarr-sopssecret/value)
+      (builtins.readFile ../../../../../../../../vars/shared/pg-sonarr-sopssecret/pg-sonarr-sopssecret/value)
     ];
-  };
-}
+
+
+
+
+
+
+
+   
+
+
+    
+
+    };
+    
+  }

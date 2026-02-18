@@ -5,12 +5,14 @@
   objectStoreName = "yarr-object-store";
 
   prowlarr = import ../prowlarr { inherit domain namespace db-cluster-name; };
+  sonarr = import ../sonarr { inherit domain namespace db-cluster-name; };
   
 in {
   imports = [
     ../../../../_modules/templates/garage-object-store.nix
     ../../../../_modules/templates/database-template.nix
     prowlarr
+    sonarr
   ];
 
   applications.seerr = {
@@ -224,6 +226,15 @@ in {
               superuser = false;
               passwordSecret.name = "pg-prowlarr-password";
             }
+            {
+              name = "sonarr";
+              ensure = "present";
+              comment = "Sonarr User";
+              login = true;
+              superuser = false;
+              passwordSecret.name = "pg-sonarr-password";
+            }
+
           ];
 
           externalClusters = [
@@ -284,6 +295,39 @@ in {
             cluster.name = "${db-cluster-name}";
           };
         }
+
+
+
+        {
+          name = "db-sonarr";
+
+          metadata = {
+            annotations = {
+              "argocd.proj.io/sync-options" = "Prune=false";
+            };
+          };
+          spec = {
+            name = "sonarr";
+            owner = "sonarr";
+            cluster.name = "${db-cluster-name}";
+          };
+        }
+
+{
+          name = "db-sonarr-logs";
+
+          metadata = {
+            annotations = {
+              "argocd.proj.io/sync-options" = "Prune=false";
+            };
+          };
+          spec = {
+            name = "sonarr-logs";
+            owner = "sonarr";
+            cluster.name = "${db-cluster-name}";
+          };
+        }
+
       ];
 
       backups = {

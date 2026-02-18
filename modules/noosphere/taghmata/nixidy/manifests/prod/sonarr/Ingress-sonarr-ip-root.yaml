@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    argocd.proj.io/sync-options: Prune=false,Delete=false
+    category: yarr
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Pvr
+    glance/icon: di:sonarr
+    glance/id: sonarr
+    glance/name: Sonarr
+    glance/parent: sonarr
+    glance/url: https://sonarr.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: sonarr-ip-root
+  namespace: yarr
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: sonarr.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: sonarr
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - sonarr.noosphere.uk
+      secretName: sonarr-tls
