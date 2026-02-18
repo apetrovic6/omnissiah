@@ -140,6 +140,9 @@
 
       neomutt
       proton-vpn-cli
+      pangolin-cli
+
+      alacritty
     ];
 
     services.protonmail-bridge = {

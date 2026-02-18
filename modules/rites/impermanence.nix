@@ -52,6 +52,7 @@
             ".config/attic"
             ".config/Bitwarden"
             ".config/noctalia"
+            ".config/sabnzbd-tui"
             ".config/remmina"
             ".config/rog"
             ".config/Vencord"
