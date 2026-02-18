@@ -5,10 +5,10 @@ metadata:
     argocd.proj.io/sync-options: Prune=false,Delete=false
     category: yarr
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
-    glance/description: Media Management
+    glance/description: Indexer Management
     glance/icon: di:prowlarr
     glance/id: prowlarr
-    glance/name: Seerr
+    glance/name: Prowlarr
     glance/parent: prowlarr
     glance/url: https://prowlarr.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure

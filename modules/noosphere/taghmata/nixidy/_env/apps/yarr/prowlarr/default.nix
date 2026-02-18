@@ -137,10 +137,10 @@
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
           "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
           "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Seerr";
+          "glance/name" = "Prowlarr";
           "glance/icon" = "di:prowlarr";
           "glance/url" = "https://prowlarr.${domain}";
-          "glance/description" = "Media Management";
+          "glance/description" = "Indexer Management";
           "glance/id" = "prowlarr";
           "glance/parent" = "prowlarr";
           "category" = "yarr";
