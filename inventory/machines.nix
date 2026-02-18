@@ -20,6 +20,10 @@
       deploy.targetHost = "root@192.168.71.146";
     };
 
+    alfrost = {
+      tags = [];
+    };
+
     terra = {
       tags = ["base" "k8s-base"];
       deploy.targetHost = "root@192.168.1.48";
