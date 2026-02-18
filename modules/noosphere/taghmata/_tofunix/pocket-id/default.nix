@@ -13,6 +13,10 @@ in {
       inherit ref;
       domain = domain;
     })
+    (import ./garage-ui {
+      inherit ref;
+      domain = domain;
+    })
   ];
 
   data.sops_file.pocket_api_key = {

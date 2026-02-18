@@ -18,23 +18,28 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 4bf77b58a7734c71f99bc343639d79edc58bb51936ff0fd52d80c7fab2920725
+        checksum/config: 098234f7264151dfe7f7faec36b892f30f97fa7056fe449cefb2c92fa7a74178
       labels:
         app.kubernetes.io/instance: garage-main-ui
         app.kubernetes.io/name: garage-ui
     spec:
       containers:
         - env:
-            - name: GARAGE_UI_GARAGE_ADMIN_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  key: admin-token
-                  name: garage-main-ui-admin-token
             - name: GARAGE_UI_AUTH_JWT_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
                   key: jwt-key.pem
                   name: garage-main-ui-jwt-token-secret
+            - name: GARAGE_UI_AUTH_OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  key: client-id
+                  name: garage-main-ui-oidc-secret
+            - name: GARAGE_UI_GARAGE_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: admin-token
+                  name: garage-main-ui-admin-token
             - name: GARAGE_UI_AUTH_OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:

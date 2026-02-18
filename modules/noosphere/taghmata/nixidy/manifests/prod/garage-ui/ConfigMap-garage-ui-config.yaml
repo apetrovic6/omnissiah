@@ -9,8 +9,8 @@ data:
           name: ""
         username: admin
       oidc:
-        admin_role: admin
-        auth_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/auth
+        admin_role: Admin
+        auth_url: https://id.noosphere.uk/authorize
         client_id: garage-ui
         cookie_http_only: true
         cookie_name: garage_session
@@ -21,20 +21,21 @@ data:
         existingSecret:
           key: client-secret
           name: garage-ui-oidc-secret
-        issuer_url: https://keycloak.noosphere.uk/realms/adeptus-terra
+        issuer_url: https://id.noosphere.uk
         name_attribute: name
-        provider_name: Keycloak
-        role_attribute_path: resource_access.garage-ui.roles
+        provider_name: id
+        role_attribute_path: groups
         scopes:
         - openid
         - email
         - profile
+        - groups
         session_max_age: 86400
         skip_expiry_check: false
         skip_issuer_check: false
         tls_skip_verify: false
-        token_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/token
-        userinfo_url: https://keycloak.noosphere.uk/realms/adeptus-terra/protocol/openid-connect/userinfo
+        token_url: https://id.noosphere.uk/api/oidc/token
+        userinfo_url: https://id.noosphere.uk/api/oidc/userinfo
         username_attribute: preferred_username
     cors:
       allow_credentials: false

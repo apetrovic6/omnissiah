@@ -14,7 +14,6 @@ in {
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-ui-admin-token/garage-ui-admin-token/value)
       (builtins.readFile ../../../../../../../vars/shared/garage-ui-jwt-token-secret/garage-ui-jwt-token-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/garage-ui-oidc-secret/garage-ui-oidc-secret/value)
     ];
 
     resources.ingresses.garage-ui-ip-root = {
@@ -59,6 +58,13 @@ in {
             ];
           }
         ];
+      };
+    };
+
+    resources.deployments.garage-ui.spec.template.spec.containers.garage-ui.env = {
+      GARAGE_UI_AUTH_OIDC_CLIENT_ID.valueFrom.secretKeyRef = {
+        name = "garage-ui-oidc-secret";
+        key = "client-id";
       };
     };
 
@@ -109,22 +115,22 @@ in {
               provider = lib.toLower sso.provider;
             in {
               enabled = true;
-              provider_name = sso.provider;
-              issuer_url = "https://${provider}.${domain}/realms/adeptus-terra";
-              auth_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/auth";
-              token_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/token";
-              userinfo_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/userinfo";
-              client_id = "garage-ui";
+              provider_name = lib.toLower sso.provider;
+              issuer_url = "https://${provider}.${domain}";
+              auth_url = "https://${provider}.${domain}/authorize";
+              token_url = "https://${provider}.${domain}/api/oidc/token";
+              userinfo_url = "https://${provider}.${domain}/api/oidc/userinfo";
+              # client_id = "garage-ui";
               existingSecret = {
                 name = "garage-ui-oidc-secret";
                 key = "client-secret";
               };
-              scopes = ["openid" "email" "profile"];
+              scopes = ["openid" "email" "profile" "groups"];
               username_attribute = "preferred_username";
               email_attribute = "email";
               name_attribute = "name";
-              admin_role = "admin";
-              role_attribute_path = "resource_access.garage-ui.roles";
+              admin_role = "Admin";
+              role_attribute_path = "groups";
               cookie_secure = true;
               cookie_http_only = true;
               cookie_same_site = "lax";

@@ -13,7 +13,6 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-backup-ui-jwt-token-secret/garage-backup-ui-jwt-token-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/garage-backup-ui-oidc-secret/garage-backup-ui-oidc-secret/value)
     ];
 
     resources.ingresses.garage-backup-ui = {
@@ -58,6 +57,13 @@ in {
             ];
           }
         ];
+      };
+    };
+
+    resources.deployments.garage-backup-ui.spec.template.spec.containers.garage-ui.env = {
+      GARAGE_UI_AUTH_OIDC_CLIENT_ID.valueFrom.secretKeyRef = {
+        name = "garage-backup-ui-oidc-secret";
+        key = "client-id";
       };
     };
 
@@ -111,21 +117,21 @@ in {
             in {
               enabled = true;
               provider_name = sso.provider;
-              issuer_url = "https://${provider}.${domain}/realms/adeptus-terra";
-              auth_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/auth";
-              token_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/token";
-              userinfo_url = "https://${provider}.${domain}/realms/adeptus-terra/protocol/openid-connect/userinfo";
+              issuer_url = "https://${provider}.${domain}";
+              auth_url = "https://${provider}.${domain}/authorize";
+              token_url = "https://${provider}.${domain}/api/oidc/token";
+              userinfo_url = "https://${provider}.${domain}/api/oidc/userinfo";
               client_id = "garage-backup-ui";
               existingSecret = {
                 name = "garage-backup-ui-oidc-secret";
                 key = "client-secret";
               };
-              scopes = ["openid" "email" "profile"];
+              scopes = ["openid" "email" "profile" "groups"];
               username_attribute = "preferred_username";
               email_attribute = "email";
               name_attribute = "name";
-              admin_role = "admin";
-              role_attribute_path = "resource_access.garage-backup-ui.roles";
+              admin_role = "Admin";
+              role_attribute_path = "groups";
               cookie_secure = true;
               cookie_http_only = true;
               cookie_same_site = "lax";
