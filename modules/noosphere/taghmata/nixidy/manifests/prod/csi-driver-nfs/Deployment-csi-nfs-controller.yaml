@@ -39,7 +39,7 @@ spec:
           env:
             - name: ADDRESS
               value: /csi/csi.sock
-          image: registry.k8s.io/sig-storage/csi-provisioner:v6.1.0
+          image: registry.k8s.io/sig-storage/csi-provisioner:v6.1.1
           imagePullPolicy: IfNotPresent
           name: csi-provisioner
           resources:
@@ -66,7 +66,7 @@ spec:
           env:
             - name: ADDRESS
               value: /csi/csi.sock
-          image: registry.k8s.io/sig-storage/csi-resizer:v2.0.0
+          image: registry.k8s.io/sig-storage/csi-resizer:v2.1.0
           imagePullPolicy: IfNotPresent
           name: csi-resizer
           resources:
@@ -92,7 +92,7 @@ spec:
           env:
             - name: ADDRESS
               value: /csi/csi.sock
-          image: registry.k8s.io/sig-storage/csi-snapshotter:v8.4.0
+          image: registry.k8s.io/sig-storage/csi-snapshotter:v8.5.0
           imagePullPolicy: IfNotPresent
           name: csi-snapshotter
           resources:
@@ -113,7 +113,7 @@ spec:
             - --probe-timeout=3s
             - --http-endpoint=localhost:29652
             - --v=2
-          image: registry.k8s.io/sig-storage/livenessprobe:v2.17.0
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.18.0
           imagePullPolicy: IfNotPresent
           name: liveness-probe
           resources:
