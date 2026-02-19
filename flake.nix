@@ -1,6 +1,9 @@
 {
   inputs = {
     nixpkgs-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+
+    nixpkgs-crowdsec.url = "github:TornaxO7/nixpkgs?ref=crowdsec";
+    
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v0.4.3";
       inputs.nixpkgs.follows = "nixpkgs";

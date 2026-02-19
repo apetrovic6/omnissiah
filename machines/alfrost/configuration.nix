@@ -5,10 +5,18 @@
   pkgs,
   ...
 }: {
+  disabledModules = [
+    "services/security/crowdsec.nix"
+    "services/security/crowdsec-firewall-bouncer.nix"
+  ];
+
   imports = [
+    "${self.inputs.nixpkgs-crowdsec}/nixos/modules/services/security/crowdsec.nix"
+    "${self.inputs.nixpkgs-crowdsec}/nixos/modules/services/security/crowdsec-firewall-bouncer.nix"
     self.inputs.omnishell.nixosModules.helix
     self.nixosModules.pharos
   ];
+
   disko.devices.disk.main.imageSize = "3500M"; # adjust as needed
   disko.imageBuilder.imageFormat = "qcow2"; # or "raw" (default)
 
@@ -39,6 +47,81 @@
           cert_resolver = "letsencrypt";
         };
       };
+    };
+  };
+
+  services.crowdsec = {
+    enable = true;
+    package = self.inputs.nixpkgs-crowdsec.legacyPackages.${pkgs.system}.crowdsec;
+
+    name = "alfrost";
+
+    autoUpdateService = true;
+    hub = {
+      scenarios = [];
+      collections = [
+        "crowdsecurity/linux"
+        "crowdsecurity/traefik"
+        "crowdsecurity/appsec-virtual-patching"
+        "crowdsecurity/appsec-generic-rules"
+        "crowdsecurity/iptables"
+        "crowdsecurity/sshd"];
+
+      parsers = [
+        "crowdsecurity/sshd-success-logs" # Detect successful SSH logins
+        "crowdsecurity/whitelists" # Prevent banning self (e.g., private IPs)
+      ];
+    };
+
+    settings = {
+      console.enrollKeyFile = config.clan.core.vars.generators.crowdsec-enroll.files."enroll-key".path;
+
+      config.api.server.online_client.credentials_path = "/var/lib/crowdsec/online_api_credentials.yaml";
+
+      acquisitions = [
+        {
+          journalctl_filter = ["_SYSTEMD_UNIT=sshd.service"];
+          labels = {type = "syslog";};
+          source = "journalctl";
+        }
+
+        {
+          journalctl_filter = ["_SYSTEMD_UNIT=traefik.service"];
+          labels = {type = "traefik";};
+          source = "journalctl";
+        }
+      ];
+    };
+  };
+
+  clan.core.vars.generators.crowdsec-enroll = {
+    files."enroll-key" = {
+      secret = true;
+      mode = "0400";
+      owner = "crowdsec";
+      group = "crowdsec";
+    };
+
+    prompts.enrollment-key = {
+      description = "CrowdSec console enrollment key from app.crowdsec.net";
+      type = "hidden";
+      persist = true;
+    };
+
+    script = ''
+      cp "$prompts/enrollment-key" "$out/enroll-key"
+    '';
+  };
+
+  users.users.crowdsec.extraGroups = ["systemd-journal"];
+
+  services.crowdsec-firewall-bouncer = {
+    enable = true;
+    package = self.inputs.nixpkgs-crowdsec.legacyPackages.${pkgs.system}.crowdsec-firewall-bouncer;
+
+    settings.mode = "iptables";
+    registerBouncer = {
+      enable = true;
     };
   };
 

@@ -1503,6 +1503,22 @@
         "url": "https://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz"
       }
     },
+    "nixpkgs-crowdsec": {
+      "locked": {
+        "lastModified": 1771447778,
+        "narHash": "sha256-+VCHrszwgry8S46tSyjI4BjxgatTY0vkKU/OSXc4uTg=",
+        "owner": "TornaxO7",
+        "repo": "nixpkgs",
+        "rev": "ba5275501956fbe963a73e9a567e2f8d7c341aa3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "TornaxO7",
+        "ref": "crowdsec",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-lib": {
       "locked": {
         "lastModified": 1765674936,
@@ -1975,6 +1991,7 @@
         "nixpkgs": [
           "nixpkgs-unstable"
         ],
+        "nixpkgs-crowdsec": "nixpkgs-crowdsec",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nixvirt": "nixvirt",
         "nvf": "nvf",
