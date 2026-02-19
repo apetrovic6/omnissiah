@@ -3,6 +3,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
+    helm.sh/resource-policy: keep
+  labels:
+    app.kubernetes.io/instance: garage-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: garage-operator
+    app.kubernetes.io/version: 0.0.14
+    control-plane: controller-manager
+    helm.sh/chart: garage-operator-0.1.0
   name: garageclusters.garage.rajsingh.info
 spec:
   group: garage.rajsingh.info
@@ -1656,6 +1664,12 @@ spec:
                       items:
                         type: string
                       type: array
+                    rpcBindAddress:
+                      description: |-
+                        RPCBindAddress is a custom bind address for the RPC server.
+                        Can be a TCP address (e.g., "0.0.0.0:3901", "[::]:3901").
+                        If set, this overrides RPCBindPort.
+                      type: string
                     rpcBindOutgoing:
                       description: RPCBindOutgoing pre-binds outgoing sockets to same IP
                       type: boolean
