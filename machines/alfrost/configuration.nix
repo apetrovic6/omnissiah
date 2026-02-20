@@ -24,6 +24,8 @@
 
   networking.nameservers = ["1.1.1.1"];
 
+  services.traefik.staticConfigOptions.accesslog.filepath = {};
+
   services.pangolin = {
     enable = true;
 
@@ -65,7 +67,8 @@
         "crowdsecurity/appsec-virtual-patching"
         "crowdsecurity/appsec-generic-rules"
         "crowdsecurity/iptables"
-        "crowdsecurity/sshd"];
+        "crowdsecurity/sshd"
+      ];
 
       parsers = [
         "crowdsecurity/sshd-success-logs" # Detect successful SSH logins
@@ -125,7 +128,6 @@
     };
   };
 
-  # Pass Cloudflare DNS API token to Traefik for ACME DNS-01 challenge
   systemd.services.traefik.serviceConfig.EnvironmentFile = [
     config.clan.core.vars.generators.cloudflare-dns.files."cloudflare-dns.env".path
   ];
