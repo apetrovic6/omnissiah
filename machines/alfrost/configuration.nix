@@ -1,18 +1,58 @@
 {
   self,
-  lib,
   config,
   pkgs,
   ...
-}: {
-  disabledModules = [
-    "services/security/crowdsec.nix"
-    "services/security/crowdsec-firewall-bouncer.nix"
-  ];
+}:
+let
+  pangolinOverride = pkgs.fosrl-pangolin.overrideAttrs (old: {
+    version = "1.15.4";
+    src = pkgs.fetchFromGitHub {
+      owner = "fosrl";
+      repo = "pangolin";
+      rev = "1.15.4";
+      hash = "sha256-HayJqkLp2/+V+TufsINK4uVeQ2vAdvQnvT7Fz57gAyU=";
+    };
+
+    preBuild = ''
+      npm run set:oss
+      npm run set:sqlite
+      npm run db:generate
+    '';
+
+    buildPhase = ''
+      runHook preBuild
+      npm run build
+      npm run build:cli
+      runHook postBuild
+    '';
+
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/{bin,share/pangolin}
+
+      cp -r node_modules $out/share/pangolin
+
+      cp -r .next/standalone/.next $out/share/pangolin
+      cp .next/standalone/package.json $out/share/pangolin
+
+      cp -r .next/static $out/share/pangolin/.next/static
+      cp -r public $out/share/pangolin/public
+
+      cp -r dist $out/share/pangolin/dist
+
+      cp server/db/names.json $out/share/pangolin/dist/names.json
+      cp server/db/ios_models.json $out/share/pangolin/dist/ios_models.json
+      cp server/db/mac_models.json $out/share/pangolin/dist/mac_models.json
+
+      runHook postInstall
+    '';
+  });
+
+in
+ {
 
   imports = [
-    "${self.inputs.nixpkgs-crowdsec}/nixos/modules/services/security/crowdsec.nix"
-    "${self.inputs.nixpkgs-crowdsec}/nixos/modules/services/security/crowdsec-firewall-bouncer.nix"
     self.inputs.omnishell.nixosModules.helix
     self.nixosModules.pharos
   ];
@@ -29,6 +69,7 @@
   services.pangolin = {
     enable = true;
 
+    package = pangolinOverride;
     openFirewall = true;
     letsEncryptEmail = "cloudflare.fervor993@simplelogin.com";
     dashboardDomain = "pangolinije.ugalabugala.org";
@@ -52,81 +93,8 @@
     };
   };
 
-  services.crowdsec = {
-    enable = true;
-    package = self.inputs.nixpkgs-crowdsec.legacyPackages.${pkgs.system}.crowdsec;
+  services.imperium.crowdsec.enable = true;
 
-    name = "alfrost";
-
-    autoUpdateService = true;
-    hub = {
-      scenarios = [];
-      collections = [
-        "crowdsecurity/linux"
-        "crowdsecurity/traefik"
-        "crowdsecurity/appsec-virtual-patching"
-        "crowdsecurity/appsec-generic-rules"
-        "crowdsecurity/iptables"
-        "crowdsecurity/sshd"
-      ];
-
-      parsers = [
-        "crowdsecurity/sshd-success-logs" # Detect successful SSH logins
-        "crowdsecurity/whitelists" # Prevent banning self (e.g., private IPs)
-      ];
-    };
-
-    settings = {
-      console.enrollKeyFile = config.clan.core.vars.generators.crowdsec-enroll.files."enroll-key".path;
-
-      config.api.server.online_client.credentials_path = "/var/lib/crowdsec/online_api_credentials.yaml";
-
-      acquisitions = [
-        {
-          journalctl_filter = ["_SYSTEMD_UNIT=sshd.service"];
-          labels = {type = "syslog";};
-          source = "journalctl";
-        }
-
-        {
-          journalctl_filter = ["_SYSTEMD_UNIT=traefik.service"];
-          labels = {type = "traefik";};
-          source = "journalctl";
-        }
-      ];
-    };
-  };
-
-  clan.core.vars.generators.crowdsec-enroll = {
-    files."enroll-key" = {
-      secret = true;
-      mode = "0400";
-      owner = "crowdsec";
-      group = "crowdsec";
-    };
-
-    prompts.enrollment-key = {
-      description = "CrowdSec console enrollment key from app.crowdsec.net";
-      type = "hidden";
-      persist = true;
-    };
-
-    script = ''
-      cp "$prompts/enrollment-key" "$out/enroll-key"
-    '';
-  };
-
-  users.users.crowdsec.extraGroups = ["systemd-journal"];
-
-  services.crowdsec-firewall-bouncer = {
-    enable = true;
-    package = self.inputs.nixpkgs-crowdsec.legacyPackages.${pkgs.system}.crowdsec-firewall-bouncer;
-
-    settings.mode = "iptables";
-    registerBouncer = {
-      enable = true;
-    };
-  };
 
   systemd.services.traefik.serviceConfig.EnvironmentFile = [
     config.clan.core.vars.generators.cloudflare-dns.files."cloudflare-dns.env".path
