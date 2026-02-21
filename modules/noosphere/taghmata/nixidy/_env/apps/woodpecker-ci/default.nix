@@ -7,7 +7,7 @@
   domain = config.noosphere.domain;
   url = "${name}.${domain}";
   namespace = "${name}";
-  db-cluster-name = "pg-${name}";
+  db-cluster-name = "pg-${name}-rev-1";
   objectStoreName = "${name}-object-store";
   barmanPluginName = "barman-cloud.cloudnative-pg.io";
   volumeSize = "2Gi";
@@ -164,20 +164,20 @@ in {
           size = "15Gi";
         };
 
-        # bootstrap.recovery.source = "origin";
+        bootstrap.recovery.source = "origin";
 
-        # externalClusters = [
-        #   {
-        #     name = "origin";
-        #     plugin = {
-        #       name = "barman-cloud.cloudnative-pg.io";
-        #       parameters = {
-        #         barmanObjectName = objectStoreName;
-        #         serverName = "pg-yarr";
-        #       };
-        #     };
-        #   }
-        # ];
+        externalClusters = [
+          {
+            name = "origin";
+            plugin = {
+              name = "barman-cloud.cloudnative-pg.io";
+              parameters = {
+                barmanObjectName = objectStoreName;
+                serverName = "pg-woodpecker";
+              };
+            };
+          }
+        ];
 
         walStorage = {
           storageClass = "longhorn-cnpg-strict-local";

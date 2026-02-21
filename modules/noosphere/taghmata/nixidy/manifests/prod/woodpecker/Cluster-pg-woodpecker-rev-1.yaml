@@ -4,9 +4,20 @@ metadata:
   annotations:
     argocd.proj.io/sync-hook: PreSync
     argocd.proj.io/sync-options: Prune=false,Delete=false
-  name: pg-woodpecker
+  name: pg-woodpecker-rev-1
   namespace: woodpecker
 spec:
+  bootstrap:
+    recovery:
+      source: origin
+  externalClusters:
+    - name: origin
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: woodpecker-object-store
+          serverName: pg-woodpecker
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
   instances: 3
   monitoring:
     enablePodMonitor: true
