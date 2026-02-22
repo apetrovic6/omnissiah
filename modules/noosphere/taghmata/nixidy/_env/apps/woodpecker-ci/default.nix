@@ -157,6 +157,7 @@ in {
       };
 
       spec = {
+        imageName = "ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie";
         primaryUpdateStrategy = "unsupervised";
         instances = 3;
         storage = {

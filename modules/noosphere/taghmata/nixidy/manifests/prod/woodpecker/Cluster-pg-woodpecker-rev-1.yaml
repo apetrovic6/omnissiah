@@ -9,6 +9,8 @@ metadata:
 spec:
   bootstrap:
     recovery:
+      recoveryTarget:
+        targetTime: "2026-02-16T00:00:00Z"
       source: origin
   externalClusters:
     - name: origin
@@ -17,7 +19,7 @@ spec:
         parameters:
           barmanObjectName: woodpecker-object-store
           serverName: pg-woodpecker
-  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie
   instances: 3
   monitoring:
     enablePodMonitor: true

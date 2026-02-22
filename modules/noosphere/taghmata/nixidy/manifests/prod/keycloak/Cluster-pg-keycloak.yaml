@@ -12,6 +12,7 @@ spec:
   backup:
     retentionPolicy: 30d
     target: prefer-standby
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie
   instances: 3
   monitoring:
     customQueriesConfigMap:

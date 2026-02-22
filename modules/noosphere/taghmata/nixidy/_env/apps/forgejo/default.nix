@@ -215,6 +215,7 @@ in {
         };
 
         spec = {
+          imageName = "ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie";
           storage.size = "5Gi";
           walStorage.size = "5Gi";
           plugins = [

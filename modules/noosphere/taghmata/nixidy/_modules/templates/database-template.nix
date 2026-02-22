@@ -23,6 +23,12 @@ in {
         };
 
         spec = {
+          imageName = mkOption {
+            type = types.str;
+            default = "ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie";
+            description = "PostgreSQL image to use for the cluster.";
+          };
+
           primaryUpdateStrategy = mkOption {
             type = types.str;
             default = "unsupervised";
