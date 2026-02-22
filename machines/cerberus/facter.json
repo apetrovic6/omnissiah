@@ -728,10 +728,11 @@
         "unix_device_names": [
           "/dev/cdrom",
           "/dev/disk/by-id/ata-QEMU_DVD-ROM_QM00003",
-          "/dev/disk/by-label/cidata",
+          "/dev/disk/by-label/nixos-minimal-25.11-x86_64",
           "/dev/disk/by-path/pci-0000:00:1f.2-ata-2",
           "/dev/disk/by-path/pci-0000:00:1f.2-ata-2.0",
-          "/dev/disk/by-uuid/2026-02-22-17-47-58-00",
+          "/dev/disk/by-uuid/1980-01-01-00-00-00-00",
+          "/dev/root",
           "/dev/sr0"
         ],
         "unix_device_name2": "/dev/sg0",
@@ -787,13 +788,8 @@
           "cpuid",
           "tsc_known_freq",
           "pni",
-          "ssse3",
           "cx16",
-          "sse4_1",
-          "sse4_2",
           "x2apic",
-          "popcnt",
-          "aes",
           "hypervisor",
           "lahf_lm",
           "cpuid_fault",
@@ -826,7 +822,7 @@
         "fpu_exception": false,
         "cpuid_level": 13,
         "write_protect": false,
-        "tlb_size": 32587,
+        "tlb_size": 32766,
         "clflush_size": 64,
         "cache_alignment": 128,
         "address_sizes": {
@@ -858,17 +854,15 @@
         "sysfs_bus_id": "virtio0",
         "sysfs_device_link": "/devices/pci0000:00/0000:00:1e.0/0000:05:01.0/0000:06:0a.0/virtio0",
         "unix_device_names": [
-          "/dev/disk/by-label/nixos-minimal-25.11-x86_64",
           "/dev/disk/by-path/pci-0000:06:0a.0",
           "/dev/disk/by-path/virtio-pci-0000:06:0a.0",
-          "/dev/disk/by-uuid/1980-01-01-00-00-00-00",
           "/dev/vda"
         ],
         "rom_id": "0x80",
         "resources": [
           {
             "type": "disk_geo",
-            "cylinders": 532610,
+            "cylinders": 266305,
             "heads": 16,
             "sectors": 63,
             "size": "0x0",
@@ -877,7 +871,7 @@
           {
             "type": "size",
             "unit": "sectors",
-            "value_1": 536870912,
+            "value_1": 268435456,
             "value_2": 512
           }
         ],
@@ -969,7 +963,7 @@
     "hub": [
       {
         "index": 38,
-        "attached_to": 31,
+        "attached_to": 28,
         "class_list": [
           "usb",
           "hub"
@@ -990,27 +984,27 @@
         },
         "vendor": {
           "hex": "1d6b",
-          "name": "Linux 6.12.74 ehci_hcd",
+          "name": "Linux 6.12.74 uhci_hcd",
           "value": 7531
         },
         "device": {
-          "hex": "0002",
-          "name": "EHCI Host Controller",
-          "value": 2
+          "hex": "0001",
+          "name": "UHCI Host Controller",
+          "value": 1
         },
         "revision": {
           "hex": "0000",
           "name": "6.12",
           "value": 0
         },
-        "serial": "0000:00:1d.7",
-        "model": "Linux 6.12.74 ehci_hcd EHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1d.7/usb6/6-0:1.0",
+        "serial": "0000:00:1d.0",
+        "model": "Linux 6.12.74 uhci_hcd UHCI Host Controller",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1d.0/usb6/6-0:1.0",
         "sysfs_bus_id": "6-0:1.0",
         "resources": [
           {
             "type": "baud",
-            "speed": 480000000,
+            "speed": 12000000,
             "bits": 0,
             "stop_bits": 0,
             "parity": 0,
@@ -1052,11 +1046,11 @@
         "driver_modules": [
           "usbcore"
         ],
-        "module_alias": "usb:v1D6Bp0002d0612dc09dsc00dp00ic09isc00ip00in00"
+        "module_alias": "usb:v1D6Bp0001d0612dc09dsc00dp00ic09isc00ip00in00"
       },
       {
-        "index": 39,
-        "attached_to": 24,
+        "index": 40,
+        "attached_to": 27,
         "class_list": [
           "usb",
           "hub"
@@ -1090,9 +1084,9 @@
           "name": "6.12",
           "value": 0
         },
-        "serial": "0000:00:1a.2",
+        "serial": "0000:00:1a.0",
         "model": "Linux 6.12.74 uhci_hcd UHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1a.2/usb3/3-0:1.0",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1a.0/usb3/3-0:1.0",
         "sysfs_bus_id": "3-0:1.0",
         "resources": [
           {
@@ -1143,7 +1137,7 @@
       },
       {
         "index": 41,
-        "attached_to": 30,
+        "attached_to": 15,
         "class_list": [
           "usb",
           "hub"
@@ -1164,27 +1158,27 @@
         },
         "vendor": {
           "hex": "1d6b",
-          "name": "Linux 6.12.74 ehci_hcd",
+          "name": "Linux 6.12.74 uhci_hcd",
           "value": 7531
         },
         "device": {
-          "hex": "0002",
-          "name": "EHCI Host Controller",
-          "value": 2
+          "hex": "0001",
+          "name": "UHCI Host Controller",
+          "value": 1
         },
         "revision": {
           "hex": "0000",
           "name": "6.12",
           "value": 0
         },
-        "serial": "0000:00:1a.7",
-        "model": "Linux 6.12.74 ehci_hcd EHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1a.7/usb7/7-0:1.0",
+        "serial": "0000:00:1d.1",
+        "model": "Linux 6.12.74 uhci_hcd UHCI Host Controller",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1d.1/usb7/7-0:1.0",
         "sysfs_bus_id": "7-0:1.0",
         "resources": [
           {
             "type": "baud",
-            "speed": 480000000,
+            "speed": 12000000,
             "bits": 0,
             "stop_bits": 0,
             "parity": 0,
@@ -1226,11 +1220,11 @@
         "driver_modules": [
           "usbcore"
         ],
-        "module_alias": "usb:v1D6Bp0002d0612dc09dsc00dp00ic09isc00ip00in00"
+        "module_alias": "usb:v1D6Bp0001d0612dc09dsc00dp00ic09isc00ip00in00"
       },
       {
         "index": 42,
-        "attached_to": 28,
+        "attached_to": 12,
         "class_list": [
           "usb",
           "hub"
@@ -1264,9 +1258,9 @@
           "name": "6.12",
           "value": 0
         },
-        "serial": "0000:00:1d.0",
+        "serial": "0000:00:1a.1",
         "model": "Linux 6.12.74 uhci_hcd UHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1d.0/usb4/4-0:1.0",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1a.1/usb4/4-0:1.0",
         "sysfs_bus_id": "4-0:1.0",
         "resources": [
           {
@@ -1404,7 +1398,7 @@
       },
       {
         "index": 44,
-        "attached_to": 27,
+        "attached_to": 30,
         "class_list": [
           "usb",
           "hub"
@@ -1425,27 +1419,27 @@
         },
         "vendor": {
           "hex": "1d6b",
-          "name": "Linux 6.12.74 uhci_hcd",
+          "name": "Linux 6.12.74 ehci_hcd",
           "value": 7531
         },
         "device": {
-          "hex": "0001",
-          "name": "UHCI Host Controller",
-          "value": 1
+          "hex": "0002",
+          "name": "EHCI Host Controller",
+          "value": 2
         },
         "revision": {
           "hex": "0000",
           "name": "6.12",
           "value": 0
         },
-        "serial": "0000:00:1a.0",
-        "model": "Linux 6.12.74 uhci_hcd UHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1a.0/usb1/1-0:1.0",
+        "serial": "0000:00:1a.7",
+        "model": "Linux 6.12.74 ehci_hcd EHCI Host Controller",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1a.7/usb1/1-0:1.0",
         "sysfs_bus_id": "1-0:1.0",
         "resources": [
           {
             "type": "baud",
-            "speed": 12000000,
+            "speed": 480000000,
             "bits": 0,
             "stop_bits": 0,
             "parity": 0,
@@ -1487,11 +1481,11 @@
         "driver_modules": [
           "usbcore"
         ],
-        "module_alias": "usb:v1D6Bp0001d0612dc09dsc00dp00ic09isc00ip00in00"
+        "module_alias": "usb:v1D6Bp0002d0612dc09dsc00dp00ic09isc00ip00in00"
       },
       {
         "index": 45,
-        "attached_to": 15,
+        "attached_to": 24,
         "class_list": [
           "usb",
           "hub"
@@ -1525,9 +1519,9 @@
           "name": "6.12",
           "value": 0
         },
-        "serial": "0000:00:1d.1",
+        "serial": "0000:00:1a.2",
         "model": "Linux 6.12.74 uhci_hcd UHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1d.1/usb5/5-0:1.0",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1a.2/usb5/5-0:1.0",
         "sysfs_bus_id": "5-0:1.0",
         "resources": [
           {
@@ -1578,7 +1572,7 @@
       },
       {
         "index": 46,
-        "attached_to": 12,
+        "attached_to": 31,
         "class_list": [
           "usb",
           "hub"
@@ -1599,27 +1593,27 @@
         },
         "vendor": {
           "hex": "1d6b",
-          "name": "Linux 6.12.74 uhci_hcd",
+          "name": "Linux 6.12.74 ehci_hcd",
           "value": 7531
         },
         "device": {
-          "hex": "0001",
-          "name": "UHCI Host Controller",
-          "value": 1
+          "hex": "0002",
+          "name": "EHCI Host Controller",
+          "value": 2
         },
         "revision": {
           "hex": "0000",
           "name": "6.12",
           "value": 0
         },
-        "serial": "0000:00:1a.1",
-        "model": "Linux 6.12.74 uhci_hcd UHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1a.1/usb2/2-0:1.0",
+        "serial": "0000:00:1d.7",
+        "model": "Linux 6.12.74 ehci_hcd EHCI Host Controller",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1d.7/usb2/2-0:1.0",
         "sysfs_bus_id": "2-0:1.0",
         "resources": [
           {
             "type": "baud",
-            "speed": 12000000,
+            "speed": 480000000,
             "bits": 0,
             "stop_bits": 0,
             "parity": 0,
@@ -1661,7 +1655,7 @@
         "driver_modules": [
           "usbcore"
         ],
-        "module_alias": "usb:v1D6Bp0001d0612dc09dsc00dp00ic09isc00ip00in00"
+        "module_alias": "usb:v1D6Bp0002d0612dc09dsc00dp00ic09isc00ip00in00"
       }
     ],
     "memory": [
@@ -1685,7 +1679,7 @@
         "resources": [
           {
             "type": "phys_mem",
-            "range": 17179869184
+            "range": 4026531840
           }
         ]
       }
@@ -1840,8 +1834,8 @@
     ],
     "mouse": [
       {
-        "index": 40,
-        "attached_to": 38,
+        "index": 39,
+        "attached_to": 46,
         "class_list": [
           "mouse",
           "usb"
@@ -1879,8 +1873,8 @@
         "compat_vendor": "Unknown",
         "compat_device": "Generic USB Mouse",
         "model": "QEMU USB Tablet",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1d.7/usb6/6-1/6-1:1.0",
-        "sysfs_bus_id": "6-1:1.0",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1d.7/usb2/2-1/2-1:1.0",
+        "sysfs_bus_id": "2-1:1.0",
         "unix_device_names": [
           "/dev/input/mice"
         ],
@@ -2002,28 +1996,6 @@
     "network_interface": [
       {
         "index": 47,
-        "attached_to": 0,
-        "class_list": [
-          "network_interface"
-        ],
-        "base_class": {
-          "hex": "0107",
-          "name": "Network Interface",
-          "value": 263
-        },
-        "sub_class": {
-          "hex": "0000",
-          "name": "Loopback",
-          "value": 0
-        },
-        "model": "Loopback network interface",
-        "sysfs_id": "/class/net/lo",
-        "unix_device_names": [
-          "lo"
-        ]
-      },
-      {
-        "index": 48,
         "attached_to": 33,
         "class_list": [
           "network_interface"
@@ -2061,6 +2033,28 @@
         ],
         "driver_modules": [
           "virtio_net"
+        ]
+      },
+      {
+        "index": 48,
+        "attached_to": 0,
+        "class_list": [
+          "network_interface"
+        ],
+        "base_class": {
+          "hex": "0107",
+          "name": "Network Interface",
+          "value": 263
+        },
+        "sub_class": {
+          "hex": "0000",
+          "name": "Loopback",
+          "value": 0
+        },
+        "model": "Loopback network interface",
+        "sysfs_id": "/class/net/lo",
+        "unix_device_names": [
+          "lo"
         ]
       }
     ],
@@ -3291,7 +3285,7 @@
           "name": "Multi-bit",
           "value": 6
         },
-        "max_size": "0x1000000",
+        "max_size": "0x400000",
         "error_handle": 65534,
         "slots": 1
       }
@@ -3308,7 +3302,7 @@
         "handle": 4865,
         "array_handle": 4096,
         "start_address": "0x100000000",
-        "end_address": "0x480000000",
+        "end_address": "0x180000000",
         "part_width": 1
       }
     ],
@@ -3323,7 +3317,7 @@
         "error_handle": 65534,
         "width": 0,
         "ecc_bits": 0,
-        "size": 16777216,
+        "size": 4194304,
         "form_factor": {
           "hex": "0009",
           "name": "DIMM",
