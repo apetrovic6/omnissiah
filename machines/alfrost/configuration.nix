@@ -3,8 +3,7 @@
   config,
   pkgs,
   ...
-}:
-let
+}: let
   pangolinOverride = pkgs.fosrl-pangolin.overrideAttrs (old: {
     version = "1.15.4";
     src = pkgs.fetchFromGitHub {
@@ -48,10 +47,7 @@ let
       runHook postInstall
     '';
   });
-
-in
- {
-
+in {
   imports = [
     self.inputs.omnishell.nixosModules.helix
     self.nixosModules.pharos
@@ -95,7 +91,6 @@ in
 
   services.imperium.crowdsec.enable = true;
 
-
   systemd.services.traefik.serviceConfig.EnvironmentFile = [
     config.clan.core.vars.generators.cloudflare-dns.files."cloudflare-dns.env".path
   ];
@@ -108,7 +103,7 @@ in
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [22 80 443];
-    allowedUDPPorts = [22 80 21820 443];
+    allowedUDPPorts = [21820 51820];
   };
 
   services.openssh = {
