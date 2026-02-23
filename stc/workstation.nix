@@ -11,7 +11,15 @@
     lib,
     pkgs,
     ...
-  }: {
+  }: let
+    pangolin-cli-04 = pkgs.pangolin-cli.overrideAttrs (old: {
+      version = "0.4.0";
+      src = old.src.override {
+        hash = "sha256-qScyiCl2K7JyNZ6736XMbTv8ca5TRyW3MdWKyY8NMUE=";
+      };
+      vendorHash = "sha256-HGXKfTmBuS889As8n+A5rTTK6YOd5LfdovcqADY9To4=";
+    });
+  in {
     imports = [
       self.nixosModules.flatpak
       self.inputs.magos.nixosModules.default
@@ -140,9 +148,10 @@
 
       neomutt
       proton-vpn-cli
-      pangolin-cli
+      pangolin-cli-04
 
       alacritty
+      nfs-utils
     ];
 
     services.protonmail-bridge = {
