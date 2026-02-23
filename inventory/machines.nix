@@ -17,7 +17,7 @@
     cerberus = {
       tags = ["base" "server"];
       # deploy.targetHost = "root@192.168.1.81";
-      deploy.targetHost = "root@192.168.71.146";
+      deploy.targetHost = "root@192.168.1.191";
     };
 
     alfrost = {

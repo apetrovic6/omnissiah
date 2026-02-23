@@ -8,6 +8,7 @@
 in {
   imports = [
     self.nixosModules.smb
+    self.nixosModules.postgresql
     self.nixosModules.impermanence
     self.inputs.magos.nixosModules.stylix
     # self.inputs.impermanence.nixosModules.impermanence
@@ -15,10 +16,7 @@ in {
     # self.inputs.magos.nixosModules.default
   ];
 
-  magos.stylix = {
-    enable = true;
-    image = ../../wallpapers/lofi/17.png;
-  };
+  services.qemuGuest.enable = true;
 
   # nix = {
   #   extraOptions = ''
@@ -78,9 +76,29 @@ in {
     #   mountPoint = "/mnt/nas/docker";
     # };
 
-    # shares.selfhosted = {
-    #   mountPoint = "/mnt/nas/selfhosted";
-    # };
+    shares.selfhosted = {
+      mountPoint = "/mnt/nas/selfhosted";
+    };
+  };
+
+  nix = {
+    gc = {
+      automatic = true;
+      dates = "daily";
+      options = "--delete-older-than 10d";
+    };
+    settings = {
+      trusted-users = ["apetrovic"];
+      auto-optimise-store = true;
+    };
+  };
+
+  services.openssh = {
+    enable = true;
+    ports = [22];
+    settings = {
+      PasswordAuthentication = false;
+    };
   };
 
   services.dbus.enable = true;

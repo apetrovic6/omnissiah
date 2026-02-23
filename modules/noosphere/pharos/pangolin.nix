@@ -29,7 +29,6 @@ in {
         SERVER_SECRET=$secret
         EOF
       '';
-
     };
 
     clan.core.vars.generators.cloudflare-dns = {
