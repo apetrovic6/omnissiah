@@ -165,7 +165,10 @@ in {
           size = "15Gi";
         };
 
-        bootstrap.recovery.source = "origin";
+        bootstrap.recovery = {
+          source = "origin";
+          recoveryTarget.targetTime = "2026-02-16T00:00:00Z";
+        };
 
         externalClusters = [
           {
