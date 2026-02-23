@@ -1,5 +1,8 @@
-{ref, domain, ...}:
 {
+  ref,
+  domain,
+  ...
+}: {
   resource.pocketid_client.garage_ui = let
     baseUrl = "https://ui.garage.${domain}";
   in {

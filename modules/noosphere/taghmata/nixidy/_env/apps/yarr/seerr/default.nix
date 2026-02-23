@@ -4,9 +4,8 @@
   db-cluster-name = "pg-yarr-1";
   objectStoreName = "yarr-object-store";
 
-  prowlarr = import ../prowlarr { inherit domain namespace db-cluster-name; };
-  sonarr = import ../sonarr { inherit domain namespace db-cluster-name; };
-  
+  prowlarr = import ../prowlarr {inherit domain namespace db-cluster-name;};
+  sonarr = import ../sonarr {inherit domain namespace db-cluster-name;};
 in {
   imports = [
     ../../../../_modules/templates/garage-object-store.nix
@@ -234,7 +233,6 @@ in {
               superuser = false;
               passwordSecret.name = "pg-sonarr-password";
             }
-
           ];
 
           externalClusters = [
@@ -296,8 +294,6 @@ in {
           };
         }
 
-
-
         {
           name = "db-sonarr";
 
@@ -313,7 +309,7 @@ in {
           };
         }
 
-{
+        {
           name = "db-sonarr-logs";
 
           metadata = {
@@ -327,7 +323,6 @@ in {
             cluster.name = "${db-cluster-name}";
           };
         }
-
       ];
 
       backups = {

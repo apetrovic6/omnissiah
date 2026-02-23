@@ -1,5 +1,8 @@
-{ref,  domain,...}: 
 {
+  ref,
+  domain,
+  ...
+}: {
   resource.pocketid_client.karakeep = let
     baseUrl = "https://karakeep.${domain}";
   in {
@@ -25,5 +28,4 @@
       OAUTH_CLIENT_SECRET = ref.pocketid_client.karakeep.client_secret;
     };
   };
-
 }

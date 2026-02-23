@@ -1,5 +1,8 @@
-{ref, domain, ...}: 
 {
+  ref,
+  domain,
+  ...
+}: {
   resource.pocketid_client.forgejo = let
     baseUrl = "https://forgejo.${domain}";
   in {
@@ -21,9 +24,8 @@
     };
 
     data = {
-      key= ref.pocketid_client.forgejo.id;
+      key = ref.pocketid_client.forgejo.id;
       secret = ref.pocketid_client.forgejo.client_secret;
     };
   };
-
 }

@@ -4,13 +4,11 @@
   db-cluster-name,
   ...
 }: {
-
   imports = [
     ../../../../_modules/templates/database-template.nix
   ];
 
-    applications.sonarr = {
-
+  applications.sonarr = {
     resources.persistentVolumeClaims.sonarr-pvc = {
       metadata = {
         inherit namespace;
@@ -27,7 +25,6 @@
         resources.requests.storage = "2Gi";
       };
     };
-
 
     resources.deployments.sonarr = {
       metadata = {
@@ -78,8 +75,14 @@
             ];
 
             env = [
-              { name = "PUID"; value = "1031";}
-              { name = "PGID"; value = "65537";}
+              {
+                name = "PUID";
+                value = "1031";
+              }
+              {
+                name = "PGID";
+                value = "65537";
+              }
               {
                 name = "SONARR__POSTGRES__HOST";
                 value = "${db-cluster-name}-rw";
@@ -127,11 +130,6 @@
       };
     };
 
-
-
-
-
-
     resources.services.sonarr = {
       metadata = {
         inherit namespace;
@@ -151,9 +149,7 @@
       };
     };
 
-
-
- resources.ingresses.sonarr-ip-root = {
+    resources.ingresses.sonarr-ip-root = {
       metadata = {
         inherit namespace;
 
@@ -199,24 +195,8 @@
       };
     };
 
-
-
-
     yamls = [
       (builtins.readFile ../../../../../../../../vars/shared/pg-sonarr-sopssecret/pg-sonarr-sopssecret/value)
     ];
-
-
-
-
-
-
-
-   
-
-
-    
-
-    };
-    
-  }
+  };
+}
