@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: let
-    inherit (lib) mkOption mkIf mkMerge types mapAttrsToList mapAttrs' nameValuePair concatMapAttrs flatten;
+    inherit (lib) mkOption mkIf mkForce types mapAttrsToList mapAttrs' nameValuePair flatten;
     cfg = config.services.imperium.postgresql;
   in {
     options.services.imperium.postgresql = {
@@ -98,7 +98,7 @@
 
         settings = {
           inherit (cfg) port;
-          listen_addresses = cfg.listenAddresses;
+          listen_addresses = mkForce cfg.listenAddresses;
           log_connections = true;
         };
 
@@ -144,8 +144,8 @@
       # Single systemd service that sets all user passwords from sops secrets
       systemd.services.postgresql-password-init = {
         description = "Set PostgreSQL user passwords from sops secrets";
-        after = ["postgresql.service"];
-        requires = ["postgresql.service"];
+        after = ["postgresql.service" "postgresql-setup.service"];
+        requires = ["postgresql.service" "postgresql-setup.service"];
         wantedBy = ["multi-user.target"];
         serviceConfig = {
           Type = "oneshot";

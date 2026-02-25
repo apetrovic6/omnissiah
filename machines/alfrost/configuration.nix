@@ -47,6 +47,8 @@
       runHook postInstall
     '';
   });
+
+  domain = "ugalabugala.org";
 in {
   imports = [
     self.inputs.omnishell.nixosModules.helix
@@ -68,8 +70,8 @@ in {
     package = pangolinOverride;
     openFirewall = true;
     letsEncryptEmail = "cloudflare.fervor993@simplelogin.com";
-    dashboardDomain = "pangolinije.ugalabugala.org";
-    baseDomain = "ugalabugala.org";
+    dashboardDomain = domain;
+    baseDomain = domain;
     dnsProvider = "cloudflare";
 
     environmentFile = config.clan.core.vars.generators.pangolin.files."pangolin.env".path;
@@ -78,6 +80,10 @@ in {
       flags = {
         disable_signup_without_invite = true;
         disable_user_create_org = true;
+      };
+
+      gerbil = {
+        base_endpoint = "172.245.55.111";
       };
 
       domains = {
@@ -103,7 +109,7 @@ in {
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [22 80 443];
-    allowedUDPPorts = [21820 51820];
+    allowedUDPPorts = [22 80 443 21820 ];
   };
 
   services.openssh = {

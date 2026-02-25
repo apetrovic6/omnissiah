@@ -87,7 +87,8 @@
         enable = true;
         configurePostgres = false;
         configureNginx = false;
-        backupDir = cfg.backupDir;
+        dbBackend = cfg.dbBackend;
+        backupDir = lib.mkIf (cfg.dbBackend == "sqlite") cfg.backupDir;
         config =
           cfg.config
           // {
@@ -156,7 +157,6 @@
 
         files.vaultwarden-env= {
           secret = true;
-          # owner =
           mode = "0400";
         };
 

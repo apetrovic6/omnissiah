@@ -28,6 +28,8 @@
       self.nixosModules.virtualisation
     ];
 
+    # networking.nameservers = [ "192.168.1.191" ];
+
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.login.enableGnomeKeyring = true;
     services.passSecretService.enable = true;

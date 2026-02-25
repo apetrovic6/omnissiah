@@ -79,11 +79,11 @@ in {
   };
 
   resource.pocketid_client.pangolin = let
-    baseUrl = "https://pangolinije.ugalabugala.org";
+    baseUrl = "https://ugalabugala.org";
   in {
     name = "pangolin";
     callback_urls = [
-      "https://pangolinije.ugalabugala.org/auth/idp/1/oidc/callback"
+      "https://ugalabugala.org/auth/idp/1/oidc/callback"
     ];
 
     logout_callback_urls = [

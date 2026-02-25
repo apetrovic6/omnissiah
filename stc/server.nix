@@ -33,8 +33,8 @@
     #   port = 8181;
     # };
 
-    networking.firewall.allowedTCPPorts = [80 443 2222 53 22 5380];
-    networking.firewall.allowedUDPPorts = [80 443 53];
+    networking.firewall.allowedTCPPorts = [ 80 443 2222 53 22 5380];
+    networking.firewall.allowedUDPPorts = [ 80 443 53 ];
     # Or disable the firewall altogether.
     networking.firewall.enable = true;
 
@@ -78,24 +78,22 @@
     };
 
     services.imperium.vaultwarden = {
-      enable = false;
+      enable = true;
       port = 8222;
       config = {
         SIGNUPS_ALLOWED = true;
         WEBSOCKET_ENABLED = true;
-        WEBSOCKET_ADDRESS = "localhost";
+        WEBSOCKET_ADDRESS = "127.0.0.1";
         WEBSOCKET_PORT = 3012;
 
         PUSH_ENABLED = false;
 
         INCOMPLETE_2FA_TIME_LIMIT = 5;
 
-        ROCKET_ADDRESS = "localhost";
+        ROCKET_ADDRESS = "127.0.0.1";
         ROCKET_LOG = "critical";
-
-        
       };
-      environmentFile = [];
+
     };
 
     # services.imperium.ntfy-sh = {

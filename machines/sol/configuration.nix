@@ -34,6 +34,14 @@
 
   services.imperium.smb.enable = false;
 
+  services.openssh = {
+    enable = true;
+    ports = [22];
+    settings = {
+      PasswordAuthentication = false;
+    };
+  };
+
   services.imperium.impermanence = {
     enable = false; # TODO: Setup impermanence
   };
