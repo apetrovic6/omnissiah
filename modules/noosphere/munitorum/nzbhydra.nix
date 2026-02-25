@@ -29,7 +29,7 @@
       };
 
       services.caddy.virtualHosts."${mkDomain cfg.subdomain}" = {
-        extraConfig = mkRevProxyVHost cfg.port;
+        extraConfig = mkRevProxyVHost {port = cfg.port;};
       };
     };
   };
