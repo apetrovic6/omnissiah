@@ -5,9 +5,11 @@
   pkgs,
   ...
 }: let
+  inherit (self.lib) mkRevProxyVHost mkDomain;
 in {
   imports = [
     self.nixosModules.smb
+    self.nixosModules.nfs
     self.nixosModules.postgresql
     self.nixosModules.impermanence
     self.inputs.magos.nixosModules.stylix
@@ -17,6 +19,58 @@ in {
   ];
 
   services.qemuGuest.enable = true;
+
+  services.caddy.virtualHosts = {
+    "${mkDomain "syn"}" = {
+      extraConfig = mkRevProxyVHost {
+        port = 5000;
+        host = "192.168.1.61";
+      };
+    };
+  };
+
+  services.caddy.virtualHosts = {
+    "${mkDomain "proxmox"}" = {
+      extraConfig = ''
+        reverse_proxy "https://192.168.1.10:8006" {
+          transport http {
+            tls_insecure_skip_verify
+          }
+        }
+        tls {
+          dns cloudflare {$CLOUDFLARE_API_TOKEN}
+        }
+      '';
+    };
+  };
+
+  services.imperium.nfs = {
+    enable = true;
+
+    hosts.manjaca = {
+      host = "192.168.1.61";
+
+      exports.backup = {
+        remotePath = "/volume1/postgres_backup"; # path on the NAS
+        mountPoint = "/mnt/nas/postgres_backup";
+      };
+
+      # exports.media = {
+      #   remotePath = "/volume1/media";
+      #   mountPoint = "/mnt/nas/media";
+      # };
+
+      # exports.selfhosted = {
+      #   remotePath = "/volume1/selfhosted";
+      #   mountPoint = "/mnt/nas/selfhosted";
+      # };
+    };
+  };
+
+  users.users.postgres.extraGroups = ["backup"];
+  users.groups.backup = {
+    gid = 65539;
+  };
 
   # nix = {
   #   extraOptions = ''
