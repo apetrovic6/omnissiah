@@ -11,7 +11,9 @@
     pkgs,
     ...
   }: {
-    imports = [];
+    imports = [
+      self.inputs.nix-index-database.nixosModules.default
+    ];
 
     environment.systemPackages = with pkgs; [
       attic-client
@@ -26,8 +28,19 @@
       fastfetch
       yazi
       killall
+      (
+        pkgs.writeShellApplication {
+          name = "ns";
+          runtimeInputs = with pkgs; [
+            fzf
+            nix-search-tv
+          ];
+          text = builtins.readFile "${pkgs.nix-search-tv.src}/nixpkgs.sh";
+        }
+      )
     ];
 
+    programs.nix-index-database.comma.enable = true;
     # Firmware updates (UEFI / TB / docks, etc.)
     services.fwupd.enable = true;
 
