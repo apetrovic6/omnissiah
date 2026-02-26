@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: let
-    inherit (lib) mkOption mkIf mkForce types mapAttrsToList mapAttrs' nameValuePair flatten;
+    inherit (lib) mkOption mkIf mkForce mkMerge types mapAttrsToList mapAttrs' nameValuePair flatten;
     cfg = config.services.imperium.postgresql;
   in {
     options.services.imperium.postgresql = {
@@ -62,6 +62,18 @@
           default = "*-*-* 03:00:00";
           description = "Systemd calendar expression for when to run backups.";
         };
+
+        retention = mkOption {
+          type = types.int;
+          default = 7;
+          description = "Number of days to keep backups. Older backups are automatically deleted.";
+        };
+
+        databases = mkOption {
+          type = types.listOf types.str;
+          default = flatten (mapAttrsToList (_: u: u.databases) cfg.users);
+          description = "List of databases to backup. Defaults to all databases managed by imperium users.";
+        };
       };
 
       users = mkOption {
@@ -107,11 +119,69 @@
 
       networking.firewall.allowedTCPPorts = mkIf cfg.openFirewall [cfg.port];
 
-      services.postgresqlBackup = mkIf cfg.backup.enable {
-        enable = true;
-        location = cfg.backup.location;
-        startAt = cfg.backup.startAt;
-      };
+      systemd.services = mkMerge [
+        (mkIf cfg.backup.enable (builtins.listToAttrs (map (db: let
+          pg_dump = "${config.services.postgresql.package}/bin/pg_dump";
+        in nameValuePair "postgresqlBackup-${db}" {
+          description = "PostgreSQL backup for ${db}";
+          after = ["postgresql.service"];
+          requires = ["postgresql.service"];
+          serviceConfig = {
+            Type = "oneshot";
+            User = "postgres";
+            Group = "postgres";
+          };
+          script = ''
+            set -euo pipefail
+            mkdir -p "${cfg.backup.location}"
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            ${pg_dump} -Fc "${db}" > "${cfg.backup.location}/${db}-$TIMESTAMP.dump"
+
+            # Remove backups older than ${toString cfg.backup.retention} days
+            ${pkgs.findutils}/bin/find "${cfg.backup.location}" \
+              -name "${db}-*.dump" \
+              -mtime +${toString cfg.backup.retention} \
+              -delete
+          '';
+        }) cfg.backup.databases)))
+
+        {
+          postgresql-password-init = {
+            description = "Set PostgreSQL user passwords from sops secrets";
+            after = ["postgresql.service" "postgresql-setup.service"];
+            requires = ["postgresql.service" "postgresql-setup.service"];
+            wantedBy = ["multi-user.target"];
+            serviceConfig = {
+              Type = "oneshot";
+              User = "postgres";
+              Group = "postgres";
+            };
+            script = let
+              psql = "${config.services.postgresql.package}/bin/psql";
+              commands = mapAttrsToList (userName: _: let
+                passwordFile = config.clan.core.vars.generators."postgresql-${userName}".files.password.path;
+              in ''
+                echo "Setting password for user '${userName}'..."
+                PASSWORD=$(cat "${passwordFile}")
+                ${psql} -c "ALTER USER \"${userName}\" WITH PASSWORD '$PASSWORD';"
+              '') cfg.users;
+            in ''
+              set -euo pipefail
+              ${builtins.concatStringsSep "\n" commands}
+            '';
+          };
+        }
+      ];
+
+      systemd.timers = mkIf cfg.backup.enable (builtins.listToAttrs (map (db:
+        nameValuePair "postgresqlBackup-${db}" {
+          wantedBy = ["timers.target"];
+          timerConfig = {
+            OnCalendar = cfg.backup.startAt;
+            Persistent = true;
+          };
+        }
+      ) cfg.backup.databases));
 
       # One clan vars generator per user for password management
       clan.core.vars.generators =
@@ -140,32 +210,6 @@
             }
         )
         cfg.users;
-
-      # Single systemd service that sets all user passwords from sops secrets
-      systemd.services.postgresql-password-init = {
-        description = "Set PostgreSQL user passwords from sops secrets";
-        after = ["postgresql.service" "postgresql-setup.service"];
-        requires = ["postgresql.service" "postgresql-setup.service"];
-        wantedBy = ["multi-user.target"];
-        serviceConfig = {
-          Type = "oneshot";
-          User = "postgres";
-          Group = "postgres";
-        };
-        script = let
-          psql = "${config.services.postgresql.package}/bin/psql";
-          commands = mapAttrsToList (userName: _: let
-            passwordFile = config.clan.core.vars.generators."postgresql-${userName}".files.password.path;
-          in ''
-            echo "Setting password for user '${userName}'..."
-            PASSWORD=$(cat "${passwordFile}")
-            ${psql} -c "ALTER USER \"${userName}\" WITH PASSWORD '$PASSWORD';"
-          '') cfg.users;
-        in ''
-          set -euo pipefail
-          ${builtins.concatStringsSep "\n" commands}
-        '';
-      };
     };
   };
 }

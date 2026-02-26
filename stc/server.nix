@@ -60,7 +60,8 @@
 
       backup = {
         enable = true;
-        location = "/mnt/nas/selfhosted/postgres/backups";
+        location = "/mnt/nas/postgres_backup/vaultwarden";
+        startAt = "*-*-* 01:15:00";
       };
 
       users.vaultwarden = {
