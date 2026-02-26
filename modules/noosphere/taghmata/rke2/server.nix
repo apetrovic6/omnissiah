@@ -37,6 +37,16 @@
         description = "CNI plugin RKE2 should deploy.";
       };
 
+      multus = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Enable Multus CNI as a meta-plugin alongside the primary CNI.
+          When true, RKE2 is started with `--cni=multus,<primary-cni>`
+          instead of `--cni=<primary-cni>`.
+        '';
+      };
+
       extraFlags = mkOption {
         type = types.listOf types.str;
         default = [];
@@ -103,14 +113,15 @@
         enable = true;
         serverAddr = cfg.serverAddr;
         role = "server";
-        cni = cfg.cni;
+        cni = if cfg.multus then null else cfg.cni;
 
         nodeName = config.networking.hostName;
         nodeLabel = cfg.nodeLabels;
         nodeTaint = cfg.nodeTaints;
 
         tokenFile = cfg.tokenFile;
-        extraFlags = cfg.extraFlags;
+        extraFlags = cfg.extraFlags
+          ++ (lib.optional cfg.multus "--cni=multus,${cfg.cni}");
 
         manifests = cfg.manifests;
         gracefulNodeShutdown = {

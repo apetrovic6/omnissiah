@@ -3,6 +3,7 @@ data:
   default-setting.yaml: |-
     priority-class: "longhorn-critical"
     disable-revision-counter: "{\"v1\":\"true\"}"
+    storage-network: "longhorn-system/longhorn-storage-network"
 kind: ConfigMap
 metadata:
   labels:

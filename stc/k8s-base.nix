@@ -55,6 +55,14 @@
       name = "iqn.2005-10.org.open-iscsi:${config.networking.hostName}";
     };
 
+    networking.interfaces.enp2s0.useDHCP = false;
+
+    # Prevent NetworkManager from managing enp2s0 (dedicated storage network)
+    environment.etc."NetworkManager/conf.d/storage-network.conf".text = ''
+      [keyfile]
+      unmanaged-devices=interface-name:enp2s0
+    '';
+
     networking.firewall.interfaces.tailscale0.allowedTCPPorts = [80 443 9000];
 
     boot.kernel.sysctl = {
@@ -115,6 +123,7 @@
       enable = true;
       clusterName = "taghmata-omnissiah";
       cni = "calico";
+      multus = true;
       nodeLabels = [
         "role=control-plane"
         "cluster=${clusterName}"

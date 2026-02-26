@@ -72,8 +72,33 @@ in {
           defaultClassReplicaCount = 2;
           reclaimPolicy = "Retain";
         };
+        defaultSettings = {
+          storageNetwork = "longhorn-system/longhorn-storage-network";
+        };
       };
     };
+
+    yamls = [
+      ''
+        apiVersion: k8s.cni.cncf.io/v1
+        kind: NetworkAttachmentDefinition
+        metadata:
+          name: longhorn-storage-network
+          namespace: longhorn-system
+        spec:
+          config: |-
+            {
+              "cniVersion": "0.3.1",
+              "type": "macvlan",
+              "master": "enp2s0",
+              "mode": "bridge",
+              "ipam": {
+                "type": "whereabouts",
+                "range": "10.0.100.0/24"
+              }
+            }
+      ''
+    ];
 
     resources.storageClasses.longhorn-rec-1 = {
       provisioner = "driver.longhorn.io";
