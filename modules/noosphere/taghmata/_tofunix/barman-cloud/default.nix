@@ -1,4 +1,8 @@
-{ref, ...}: let
+{
+  ref,
+  lib,
+  ...
+}: let
   secretsFile = toString ../../../../../vars/shared/barman-s3-credentials/barman-s3-credentials/value;
 
   namespaces = [
@@ -11,11 +15,17 @@
     "pocket-id"
   ];
 
-  mkSecret = ns: {
-    "barman-s3-${ns}" = {
+  mkSecret = {
+    "barman-s3-secret-key" = {
       metadata = {
         name = "barman-s3-secret-key";
-        namespace = ns;
+        namespace = "reflector";
+        annotations = {
+          "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+          "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "${lib.join "," namespaces}";
+          "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+          "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "${lib.join "," namespaces}";
+        };
         labels = {
           "cnpg.io/reload" = "true";
         };
@@ -33,6 +43,5 @@ in {
     input_type = "yaml";
   };
 
-  resource.kubernetes_secret_v1 =
-    builtins.foldl' (acc: ns: acc // mkSecret ns) {} namespaces;
+  resource.kubernetes_secret_v1 = mkSecret;
 }
