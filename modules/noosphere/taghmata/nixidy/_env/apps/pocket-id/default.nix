@@ -32,7 +32,7 @@ in {
         host = "id.${domain}";
 
         pocketID.image = {
-          tag = "v2.2.0";
+          tag = "v2.3.0";
         };
 
         config = {
