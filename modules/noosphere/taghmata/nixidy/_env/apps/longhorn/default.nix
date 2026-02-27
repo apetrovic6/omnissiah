@@ -74,6 +74,7 @@ in {
         };
         defaultSettings = {
           storageNetwork = "longhorn-system/longhorn-storage-network";
+          backupTarget = "nfs://192.168.1.61:/volume1/longhorn_backup";
         };
       };
     };
@@ -99,6 +100,30 @@ in {
             }
       ''
     ];
+
+    # Daily snapshot at 1 AM, keep 7
+    resources.longhornRecurringJobs.snapshot-daily = {
+      metadata.namespace = namespace;
+      spec = {
+        task = "snapshot";
+        cron = "0 1 * * *";
+        retain = 7;
+        concurrency = 1;
+        groups = ["default"];
+      };
+    };
+
+    # Daily backup to NFS at 2 AM, keep 7
+    resources.longhornRecurringJobs.backup-daily = {
+      metadata.namespace = namespace;
+      spec = {
+        task = "backup";
+        cron = "0 2 * * *";
+        retain = 7;
+        concurrency = 1;
+        groups = ["default"];
+      };
+    };
 
     resources.storageClasses.longhorn-rec-1 = {
       provisioner = "driver.longhorn.io";
