@@ -25,6 +25,8 @@ spec:
     spec:
       containers:
         - env:
+            - name: AUDIT_LOG_RETENTION_DAYS
+              value: "7"
             - name: DB_CONNECTION_STRING
               valueFrom:
                 secretKeyRef:

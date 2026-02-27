@@ -95,6 +95,7 @@ in {
         name = "pocket-id-encryption-key";
         key = "encryption-key";
       };
+      AUDIT_LOG_RETENTION_DAYS.value = "7";
     };
 
     templates.cnpg-database-cluster.pocket-id = {
