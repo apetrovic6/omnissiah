@@ -13,6 +13,7 @@ in {
       inherit ref;
       domain = domain;
     })
+    (import ./forgejo-nix {inherit ref;})
     (import ./garage-ui {
       inherit ref;
       domain = domain;

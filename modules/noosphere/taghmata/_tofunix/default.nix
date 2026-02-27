@@ -2,6 +2,7 @@
   imports = [
     ./harbor
     ./forgejo
+    ./forgejo-nix
     ./kubernetes
     ./projects
     ./pocket-id
