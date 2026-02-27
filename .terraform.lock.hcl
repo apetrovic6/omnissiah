@@ -5,7 +5,7 @@ provider "registry.opentofu.org/adyxax/forgejo" {
   version     = "1.5.0"
   constraints = "1.5.0"
   hashes = [
-    "h1:kMNIZO7JzjOfOvu/o2oLKi7tSXKDq3vg9yloa4H/qb0=",
+    "h1:7lD7CRsPmNPfW2gYYGU6gKvKH9F4ypClUBe8wENUtiQ=",
   ]
 }
 
@@ -13,7 +13,7 @@ provider "registry.opentofu.org/carlpett/sops" {
   version     = "1.3.0"
   constraints = "1.3.0"
   hashes = [
-    "h1:JvCBdVoNto0nrUF1LhvGrWfiHfmQfBf48FbXWE9K0HE=",
+    "h1:EHvQyDFBwekJyYl3tyVLg0u51p/VtCSuj9Mn49HABLE=",
   ]
 }
 
@@ -21,7 +21,7 @@ provider "registry.opentofu.org/goharbor/harbor" {
   version     = "3.11.3"
   constraints = "3.11.3"
   hashes = [
-    "h1:/xyrYvl6nnW3TO6RlnpLpNrWpyc5YV1b7eDQsiCAZ4E=",
+    "h1:5m7djuhNdbSgdDkrZwTu54o5iDGtVw+ODpi1QT3oZ0U=",
   ]
 }
 
@@ -29,7 +29,7 @@ provider "registry.opentofu.org/hashicorp/kubernetes" {
   version     = "3.0.1"
   constraints = "3.0.1"
   hashes = [
-    "h1:oVFcAUJnuqvcobFoC6C7xaYq0GwzeMRQNLq9JckfJDA=",
+    "h1:qM8XMMTxsOpy8U0luVDgLIoCELDaTn4bjH8d3MYRjCo=",
   ]
 }
 
@@ -37,7 +37,7 @@ provider "registry.opentofu.org/hashicorp/local" {
   version     = "2.6.2"
   constraints = "2.6.2"
   hashes = [
-    "h1:ffo8IET+O6g7ElezGLXZdx2YA39WhkdP5ARyiesAyVg=",
+    "h1:ZFkyDr5YToUSQuavsY2H5ok1z+F2u9iy9YmX2dcHuIw=",
   ]
 }
 
@@ -45,6 +45,6 @@ provider "registry.opentofu.org/trozz/pocketid" {
   version     = "0.1.7"
   constraints = "0.1.7"
   hashes = [
-    "h1:JNhfj6cSHiJwb3rnQ8v4r/Kx06bcS6E3LRXrINImkew=",
+    "h1:Grv2pblfaYOU/sk0uDaHuJ7H6FuPaMIcol6IUsEa/00=",
   ]
 }
