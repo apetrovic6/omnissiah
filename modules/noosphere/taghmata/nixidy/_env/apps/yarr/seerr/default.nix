@@ -231,7 +231,16 @@ in {
               comment = "Sonarr User";
               login = true;
               superuser = false;
-              passwordSecret.name = "pg-sonarr-password";
+              passwordSecret.name = "pg-radarr-password";
+            }
+
+            {
+              name = "radarr";
+              ensure = "present";
+              comment = "Radarr User";
+              login = true;
+              superuser = false;
+              passwordSecret.name = "pg-radarr-password";
             }
           ];
 
@@ -323,6 +332,37 @@ in {
             cluster.name = "${db-cluster-name}";
           };
         }
+
+        {
+          name = "db-radarr";
+
+          metadata = {
+            annotations = {
+              "argocd.proj.io/sync-options" = "Prune=false";
+            };
+          };
+          spec = {
+            name = "radarr";
+            owner = "radarr";
+            cluster.name = "${db-cluster-name}";
+          };
+        }
+
+        {
+          name = "db-radarr-logs";
+
+          metadata = {
+            annotations = {
+              "argocd.proj.io/sync-options" = "Prune=false";
+            };
+          };
+          spec = {
+            name = "radarr-logs";
+            owner = "radarr";
+            cluster.name = "${db-cluster-name}";
+          };
+        }
+
       ];
 
       backups = {
