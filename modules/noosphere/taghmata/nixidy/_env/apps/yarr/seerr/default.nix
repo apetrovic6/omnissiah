@@ -7,6 +7,8 @@
   prowlarr = import ../prowlarr {inherit domain namespace db-cluster-name;};
   sonarr = import ../sonarr {inherit domain namespace db-cluster-name;};
   radarr = import ../radarr {inherit domain namespace db-cluster-name;};
+  lidarr = import ../lidarr {inherit domain namespace db-cluster-name;};
+
 in {
   imports = [
     ../../../../_modules/templates/garage-object-store.nix
@@ -14,6 +16,7 @@ in {
     prowlarr
     sonarr
     radarr
+    lidarr
   ];
 
   applications.seerr = {
@@ -244,6 +247,15 @@ in {
               superuser = false;
               passwordSecret.name = "pg-radarr-password";
             }
+
+            {
+              name = "lidarr";
+              ensure = "present";
+              comment = "Lidarr User";
+              login = true;
+              superuser = false;
+              passwordSecret.name = "pg-lidarr-password";
+            }
           ];
 
           externalClusters = [
@@ -361,6 +373,35 @@ in {
           spec = {
             name = "radarr-logs";
             owner = "radarr";
+            cluster.name = "${db-cluster-name}";
+          };
+        }
+        {
+          name = "db-lidarr";
+
+          metadata = {
+            annotations = {
+              "argocd.proj.io/sync-options" = "Prune=false";
+            };
+          };
+          spec = {
+            name = "lidarr";
+            owner = "lidarr";
+            cluster.name = "${db-cluster-name}";
+          };
+        }
+
+        {
+          name = "db-lidarr-logs";
+
+          metadata = {
+            annotations = {
+              "argocd.proj.io/sync-options" = "Prune=false";
+            };
+          };
+          spec = {
+            name = "lidarr-logs";
+            owner = "lidarr";
             cluster.name = "${db-cluster-name}";
           };
         }

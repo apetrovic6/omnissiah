@@ -54,6 +54,13 @@ spec:
         passwordSecret:
           name: pg-radarr-password
         superuser: false
+      - comment: Lidarr User
+        ensure: present
+        login: true
+        name: lidarr
+        passwordSecret:
+          name: pg-lidarr-password
+        superuser: false
   monitoring:
     customQueriesConfigMap:
       - key: queries

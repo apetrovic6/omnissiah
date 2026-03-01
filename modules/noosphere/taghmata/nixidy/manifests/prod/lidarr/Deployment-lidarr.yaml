@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: lidarr
+  name: lidarr
+  namespace: yarr
+spec:
+  selector:
+    matchLabels:
+      app: lidarr
+  template:
+    metadata:
+      labels:
+        app: lidarr
+    spec:
+      containers:
+        - env:
+            - name: PUID
+              value: "1031"
+            - name: PGID
+              value: "65537"
+            - name: LIDARR__POSTGRES__HOST
+              value: pg-yarr-1-rw
+            - name: LIDARR__POSTGRES__PORT
+              value: "5432"
+            - name: LIDARR__POSTGRES__USER
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: pg-lidarr-password
+            - name: LIDARR__POSTGRES__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-lidarr-password
+            - name: LIDARR__POSTGRES__MAINDB
+              value: lidarr
+            - name: LIDARR__POSTGRES__LOGDB
+              value: lidarr-logs
+            - name: LIDARR__SERVER__PORT
+              value: "7878"
+          image: lscr.io/linuxserver/lidarr:latest
+          name: lidarr
+          ports:
+            - containerPort: 7878
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /data
+              name: data
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: lidarr-pvc
+        - name: data
+          nfs:
+            path: /volume1/data/
+            server: 192.168.1.61

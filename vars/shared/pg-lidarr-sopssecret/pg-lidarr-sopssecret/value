@@ -1,0 +1,29 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: pg-lidarr-password
+    namespace: yarr
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:9syJ8ssY0bFpoRVCikBNUsG2,iv:0NGnl431xLjR8/yHo41V7i6YPKuPPyMKN1rG5pC0bXM=,tag:cEMSyXZqIIc7oB78HtiZbg==,type:str]
+          labels:
+            cnpg.io/reload: ENC[AES256_GCM,data:N7dZIQ==,iv:Dx9ouSsHY+BW7rghHGSpR/sms1ZV34y50voX9VKUOoU=,tag:aOMo5YpKfn1H8d5NSdhSPg==,type:str]
+          type: ENC[AES256_GCM,data:paNyA7we,iv:GantBvMN8foJHGYcbLyf2hNVY2HlL+QLWaWmB+etwos=,tag:LUAZyvRwvWest2HygF7V0g==,type:str]
+          stringData:
+            username: ENC[AES256_GCM,data:8EzXrjBz,iv:qdNje7ewb2qoI/CdCuACEHzYII4jJkDddQOLxUtsURk=,tag:JrKZAjuIIX1vbmnOwTrzcw==,type:str]
+            password: ENC[AES256_GCM,data:Bk5mkNvTMaFxf1gPWjxrcIPv4Vk=,iv:4yzHWehM8kvejvuefqYR20360Yje8bfypnho0skTZmA=,tag:fITl4RdW2+dU2eIflXMAbw==,type:str]
+sops:
+    age:
+        - recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBXaHhzTXZXRkVPVWJtejd0
+            L1F5Rys1QzNZOHdiNFJld2hBZU5uQUhqdnp3CkcrUlB5a0hHMGNtYm1ORmo1OGxr
+            L2N5aGg0QUZhY1preXNNcHZLcGkxZWcKLS0tIEszMGw0OGhETWp6MjRZbVl6TUVS
+            K1gra3VSME5PelRGZ1ZHUWtYcy9ZdEkKE3mQNxVIEcNkbtqtf5F9/KHK3Bxwq02m
+            dbhpodWtXHQBvTvdBB93Af/IhGCzW/aSKvXANSGvPPrTy3SWLQsz/w==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-03-01T18:40:41Z"
+    mac: ENC[AES256_GCM,data:uoreewegWzIC3mSWw+fUyKIbt+/R/wNyhbP7tkzRP44488gkV+ECZz1ZE5pVSZWvunnkphhTp3hODO7TMaiD1e5enFEErMuqhNZttQSqqSvrcDmSY11I+ONNOWrVKOyCRnqoda6OEyci/OFyJVuMrJkX1vCdgnBNDKlnNEpbIXQ=,iv:JZ4UtCc9EfwifsN6QDzFypydqtiI9IYm84IXSCyjlTA=,tag:xH9P+aMoIs7jFGv+JjBorA==,type:str]
+    encrypted_suffix: Templates
+    version: 3.12.0
