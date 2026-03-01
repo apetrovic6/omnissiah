@@ -39,11 +39,11 @@ spec:
             - name: LIDARR__POSTGRES__LOGDB
               value: lidarr-logs
             - name: LIDARR__SERVER__PORT
-              value: "7878"
+              value: "8686"
           image: lscr.io/linuxserver/lidarr:latest
           name: lidarr
           ports:
-            - containerPort: 7878
+            - containerPort: 8686
           volumeMounts:
             - mountPath: /config
               name: config

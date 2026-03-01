@@ -84,15 +84,15 @@
                 value = "65537";
               }
               {
-                name = "lidarr__POSTGRES__HOST";
+                name = "LIDARR__POSTGRES__HOST";
                 value = "${db-cluster-name}-rw";
               }
               {
-                name = "lidarr__POSTGRES__PORT";
+                name = "LIDARR__POSTGRES__PORT";
                 value = "5432";
               }
               {
-                name = "lidarr__POSTGRES__USER";
+                name = "LIDARR__POSTGRES__USER";
                 valueFrom.secretKeyRef = {
                   name = "pg-lidarr-password";
                   key = "username";
@@ -100,7 +100,7 @@
               }
 
               {
-                name = "lidarr__POSTGRES__PASSWORD";
+                name = "LIDARR__POSTGRES__PASSWORD";
 
                 valueFrom.secretKeyRef = {
                   name = "pg-lidarr-password";
@@ -109,22 +109,22 @@
               }
 
               {
-                name = "lidarr__POSTGRES__MAINDB";
+                name = "LIDARR__POSTGRES__MAINDB";
                 value = "lidarr";
               }
 
               {
-                name = "lidarr__POSTGRES__LOGDB";
+                name = "LIDARR__POSTGRES__LOGDB";
                 value = "lidarr-logs";
               }
               {
-                name = "lidarr__SERVER__PORT";
-                value = "7878";
+                name = "LIDARR__SERVER__PORT";
+                value = "8686";
               }
               # { name = "lidarr__SERVER__URLBASE"; value = "";}
             ];
 
-            ports = [{containerPort = 7878;}];
+            ports = [{containerPort = 8686;}];
           }
         ];
       };
@@ -143,7 +143,7 @@
           {
             protocol = "TCP";
             port = 80;
-            targetPort = 7878;
+            targetPort = 8686;
           }
         ];
       };

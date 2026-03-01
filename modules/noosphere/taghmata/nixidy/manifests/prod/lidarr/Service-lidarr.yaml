@@ -7,7 +7,7 @@ spec:
   ports:
     - port: 80
       protocol: TCP
-      targetPort: 7878
+      targetPort: 8686
   selector:
     app: lidarr
   type: ClusterIP
