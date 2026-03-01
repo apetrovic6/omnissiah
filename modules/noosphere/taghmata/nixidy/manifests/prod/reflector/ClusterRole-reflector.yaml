@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: reflector
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: reflector
-    app.kubernetes.io/version: 10.0.13
-    helm.sh/chart: reflector-10.0.13
+    app.kubernetes.io/version: 10.0.14
+    helm.sh/chart: reflector-10.0.14
   name: reflector
   namespace: reflector
 rules:

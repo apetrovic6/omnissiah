@@ -45,7 +45,14 @@ spec:
         login: true
         name: sonarr
         passwordSecret:
-          name: pg-sonarr-password
+          name: pg-radarr-password
+        superuser: false
+      - comment: Radarr User
+        ensure: present
+        login: true
+        name: radarr
+        passwordSecret:
+          name: pg-radarr-password
         superuser: false
   monitoring:
     customQueriesConfigMap:

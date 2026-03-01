@@ -124,7 +124,7 @@
               # { name = "SONARR__SERVER__URLBASE"; value = "";}
             ];
 
-            ports = [{containerPort = 9696;}];
+            ports = [{containerPort = 8989;}];
           }
         ];
       };

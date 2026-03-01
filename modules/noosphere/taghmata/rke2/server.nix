@@ -113,14 +113,18 @@
         enable = true;
         serverAddr = cfg.serverAddr;
         role = "server";
-        cni = if cfg.multus then null else cfg.cni;
+        cni =
+          if cfg.multus
+          then null
+          else cfg.cni;
 
         nodeName = config.networking.hostName;
         nodeLabel = cfg.nodeLabels;
         nodeTaint = cfg.nodeTaints;
 
         tokenFile = cfg.tokenFile;
-        extraFlags = cfg.extraFlags
+        extraFlags =
+          cfg.extraFlags
           ++ (lib.optional cfg.multus "--cni=multus,${cfg.cni}");
 
         manifests = cfg.manifests;

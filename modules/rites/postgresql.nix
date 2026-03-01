@@ -103,10 +103,12 @@
 
         ensureDatabases = flatten (mapAttrsToList (_: u: u.databases) cfg.users);
 
-        ensureUsers = mapAttrsToList (name: u: {
-          inherit name;
-          inherit (u) ensureDBOwnership;
-        }) cfg.users;
+        ensureUsers =
+          mapAttrsToList (name: u: {
+            inherit name;
+            inherit (u) ensureDBOwnership;
+          })
+          cfg.users;
 
         settings = {
           inherit (cfg) port;
@@ -122,28 +124,30 @@
       systemd.services = mkMerge [
         (mkIf cfg.backup.enable (builtins.listToAttrs (map (db: let
           pg_dump = "${config.services.postgresql.package}/bin/pg_dump";
-        in nameValuePair "postgresqlBackup-${db}" {
-          description = "PostgreSQL backup for ${db}";
-          after = ["postgresql.service"];
-          requires = ["postgresql.service"];
-          serviceConfig = {
-            Type = "oneshot";
-            User = "postgres";
-            Group = "postgres";
-          };
-          script = ''
-            set -euo pipefail
-            mkdir -p "${cfg.backup.location}"
-            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-            ${pg_dump} -Fc "${db}" > "${cfg.backup.location}/${db}-$TIMESTAMP.dump"
+        in
+          nameValuePair "postgresqlBackup-${db}" {
+            description = "PostgreSQL backup for ${db}";
+            after = ["postgresql.service"];
+            requires = ["postgresql.service"];
+            serviceConfig = {
+              Type = "oneshot";
+              User = "postgres";
+              Group = "postgres";
+            };
+            script = ''
+              set -euo pipefail
+              mkdir -p "${cfg.backup.location}"
+              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+              ${pg_dump} -Fc "${db}" > "${cfg.backup.location}/${db}-$TIMESTAMP.dump"
 
-            # Remove backups older than ${toString cfg.backup.retention} days
-            ${pkgs.findutils}/bin/find "${cfg.backup.location}" \
-              -name "${db}-*.dump" \
-              -mtime +${toString cfg.backup.retention} \
-              -delete
-          '';
-        }) cfg.backup.databases)))
+              # Remove backups older than ${toString cfg.backup.retention} days
+              ${pkgs.findutils}/bin/find "${cfg.backup.location}" \
+                -name "${db}-*.dump" \
+                -mtime +${toString cfg.backup.retention} \
+                -delete
+            '';
+          })
+        cfg.backup.databases)))
 
         {
           postgresql-password-init = {
@@ -158,13 +162,15 @@
             };
             script = let
               psql = "${config.services.postgresql.package}/bin/psql";
-              commands = mapAttrsToList (userName: _: let
-                passwordFile = config.clan.core.vars.generators."postgresql-${userName}".files.password.path;
-              in ''
-                echo "Setting password for user '${userName}'..."
-                PASSWORD=$(cat "${passwordFile}")
-                ${psql} -c "ALTER USER \"${userName}\" WITH PASSWORD '$PASSWORD';"
-              '') cfg.users;
+              commands =
+                mapAttrsToList (userName: _: let
+                  passwordFile = config.clan.core.vars.generators."postgresql-${userName}".files.password.path;
+                in ''
+                  echo "Setting password for user '${userName}'..."
+                  PASSWORD=$(cat "${passwordFile}")
+                  ${psql} -c "ALTER USER \"${userName}\" WITH PASSWORD '$PASSWORD';"
+                '')
+                cfg.users;
             in ''
               set -euo pipefail
               ${builtins.concatStringsSep "\n" commands}
@@ -173,15 +179,17 @@
         }
       ];
 
-      systemd.timers = mkIf cfg.backup.enable (builtins.listToAttrs (map (db:
-        nameValuePair "postgresqlBackup-${db}" {
-          wantedBy = ["timers.target"];
-          timerConfig = {
-            OnCalendar = cfg.backup.startAt;
-            Persistent = true;
-          };
-        }
-      ) cfg.backup.databases));
+      systemd.timers = mkIf cfg.backup.enable (builtins.listToAttrs (map (
+          db:
+            nameValuePair "postgresqlBackup-${db}" {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnCalendar = cfg.backup.startAt;
+                Persistent = true;
+              };
+            }
+        )
+        cfg.backup.databases));
 
       # One clan vars generator per user for password management
       clan.core.vars.generators =

@@ -43,7 +43,7 @@ spec:
           image: lscr.io/linuxserver/sonarr:latest
           name: sonarr
           ports:
-            - containerPort: 9696
+            - containerPort: 8989
           volumeMounts:
             - mountPath: /config
               name: config

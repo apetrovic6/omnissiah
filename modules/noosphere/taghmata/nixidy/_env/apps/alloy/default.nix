@@ -37,7 +37,7 @@ in {
 
     resources.ingresses.alloy-ip-root = {
       metadata = {
-        inherit namespace;
+        namespace = "observability";
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";

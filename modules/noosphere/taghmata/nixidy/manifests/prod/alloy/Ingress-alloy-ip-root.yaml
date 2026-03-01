@@ -4,7 +4,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: alloy-ip-root
-  namespace: alloy
+  namespace: observability
 spec:
   ingressClassName: traefik
   rules:

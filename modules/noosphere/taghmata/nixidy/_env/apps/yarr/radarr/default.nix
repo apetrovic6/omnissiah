@@ -119,12 +119,12 @@
               }
               {
                 name = "radarr__SERVER__PORT";
-                value = "8989";
+                value = "7878";
               }
               # { name = "radarr__SERVER__URLBASE"; value = "";}
             ];
 
-            ports = [{containerPort = 9696;}];
+            ports = [{containerPort = 7878;}];
           }
         ];
       };
@@ -143,7 +143,7 @@
           {
             protocol = "TCP";
             port = 80;
-            targetPort = 8989;
+            targetPort = 7878;
           }
         ];
       };
@@ -157,7 +157,7 @@
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
           "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
           "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "radarr";
+          "glance/name" = "Radarr";
           "glance/icon" = "di:radarr";
           "glance/url" = "https://radarr.${domain}";
           "glance/description" = "Pvr";
