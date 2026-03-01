@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: radarr
+  name: radarr
+  namespace: yarr
+spec:
+  selector:
+    matchLabels:
+      app: radarr
+  template:
+    metadata:
+      labels:
+        app: radarr
+    spec:
+      containers:
+        - env:
+            - name: PUID
+              value: "1031"
+            - name: PGID
+              value: "65537"
+            - name: radarr__POSTGRES__HOST
+              value: pg-yarr-1-rw
+            - name: radarr__POSTGRES__PORT
+              value: "5432"
+            - name: radarr__POSTGRES__USER
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: pg-radarr-password
+            - name: radarr__POSTGRES__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-radarr-password
+            - name: radarr__POSTGRES__MAINDB
+              value: radarr
+            - name: radarr__POSTGRES__LOGDB
+              value: radarr-logs
+            - name: radarr__SERVER__PORT
+              value: "7878"
+          image: lscr.io/linuxserver/radarr:latest
+          name: radarr
+          ports:
+            - containerPort: 7878
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /data
+              name: data
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: radarr-pvc
+        - name: data
+          nfs:
+            path: /volume1/data/
+            server: 192.168.1.61
