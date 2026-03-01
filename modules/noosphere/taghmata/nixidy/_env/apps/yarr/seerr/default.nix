@@ -6,12 +6,14 @@
 
   prowlarr = import ../prowlarr {inherit domain namespace db-cluster-name;};
   sonarr = import ../sonarr {inherit domain namespace db-cluster-name;};
+  radarr = import ../radarr {inherit domain namespace db-cluster-name;};
 in {
   imports = [
     ../../../../_modules/templates/garage-object-store.nix
     ../../../../_modules/templates/database-template.nix
     prowlarr
     sonarr
+    radarr
   ];
 
   applications.seerr = {

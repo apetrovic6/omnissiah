@@ -74,7 +74,6 @@ in {
         };
         defaultSettings = {
           storageNetwork = "longhorn-system/longhorn-storage-network";
-          backupTarget = "nfs://192.168.1.61:/volume1/longhorn_backup";
         };
       };
     };
@@ -98,6 +97,17 @@ in {
                 "range": "10.0.100.0/24"
               }
             }
+      ''
+      ''
+        apiVersion: longhorn.io/v1beta2
+        kind: BackupTarget
+        metadata:
+          name: default
+          namespace: longhorn-system
+        spec:
+          backupTargetURL: "nfs://192.168.1.61:/volume1/longhorn_backup"
+          credentialSecret: ""
+          pollInterval: "300s"
       ''
     ];
 
