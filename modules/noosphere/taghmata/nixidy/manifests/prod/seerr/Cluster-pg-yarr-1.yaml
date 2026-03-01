@@ -45,7 +45,7 @@ spec:
         login: true
         name: sonarr
         passwordSecret:
-          name: pg-radarr-password
+          name: pg-sonarr-password
         superuser: false
       - comment: Radarr User
         ensure: present

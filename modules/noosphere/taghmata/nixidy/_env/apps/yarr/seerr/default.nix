@@ -233,7 +233,7 @@ in {
               comment = "Sonarr User";
               login = true;
               superuser = false;
-              passwordSecret.name = "pg-radarr-password";
+              passwordSecret.name = "pg-sonarr-password";
             }
 
             {

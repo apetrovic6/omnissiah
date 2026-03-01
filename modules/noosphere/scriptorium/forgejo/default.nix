@@ -12,7 +12,7 @@
       name = serviceName;
     };
 
-    inherit (lib) mkIf mkOption types mkEnableOption optionalAttrs;
+    inherit (lib) mkIf mkMerge mkOption types mkEnableOption optionalAttrs;
     inherit (self.lib) mkRevProxyVHost mkDomain;
 
     cfg = config.services.imperium.${serviceName};
@@ -34,7 +34,7 @@
 
       rootUrl = mkOption {
         type = types.str;
-        default = "http://${cfg.subdomain}.${cfg.domain}";
+        default = "https://${cfg.subdomain}.${cfg.domain}";
         description = "Full public URL of Forgejo server";
       };
 
@@ -154,75 +154,176 @@
           }
         '';
       };
+
+      sso = {
+        enable = mkEnableOption "OIDC SSO";
+
+        providerName = mkOption {
+          type = types.str;
+          default = "SSO";
+          description = "Display name for the SSO provider shown in Forgejo's login page";
+        };
+
+        autoDiscoverUrl = mkOption {
+          type = types.str;
+          description = "OIDC well-known configuration URL";
+          example = "https://id.example.com/.well-known/openid-configuration";
+        };
+      };
     };
 
-    config = mkIf cfg.enable {
-      services.forgejo = {
-        enable = true;
+    config = mkMerge [
+      (mkIf cfg.enable {
+        services.forgejo = {
+          enable = true;
 
-        user = cfg.user;
-        group = cfg.user;
+          user = cfg.user;
+          group = cfg.user;
 
-        stateDir = cfg.stateDir;
+          stateDir = cfg.stateDir;
 
-        lfs =
-          {enable = cfg.lfs.enable;}
-          // optionalAttrs (cfg.lfs.contentDir != null) {
-            contentDir = cfg.lfs.contentDir;
+          lfs =
+            {enable = cfg.lfs.enable;}
+            // optionalAttrs (cfg.lfs.contentDir != null) {
+              contentDir = cfg.lfs.contentDir;
+            };
+
+          dump =
+            {inherit (cfg.dump) enable interval type age;}
+            // optionalAttrs (cfg.dump.backupDir != null) {backupDir = cfg.dump.backupDir;}
+            // optionalAttrs (cfg.dump.file != null) {file = cfg.dump.file;};
+
+          database =
+            {
+              type = "postgres";
+              inherit (cfg.database) host port name user createDatabase;
+              passwordFile = config.clan.core.vars.generators."forgejo-db".files."db-password".path;
+            }
+            // optionalAttrs (cfg.database.socket != null) {socket = cfg.database.socket;};
+
+          secrets = cfg.secrets;
+
+          settings.server = {
+            HTTP_PORT = cfg.port;
+            SSH_PORT = cfg.sshPort;
+            ROOT_URL = cfg.rootUrl;
+            DISABLE_SSH = cfg.disableSsh;
+            START_SSH_SERVER = cfg.startSshServer;
+            HTTP_ADDR = cfg.host;
+            DOMAIN = cfg.domain;
           };
 
-        dump =
-          {inherit (cfg.dump) enable interval type age;}
-          // optionalAttrs (cfg.dump.backupDir != null) {backupDir = cfg.dump.backupDir;}
-          // optionalAttrs (cfg.dump.file != null) {file = cfg.dump.file;};
-
-        database =
-          {
-            type = "postgres";
-            inherit (cfg.database) host port name user createDatabase;
-            passwordFile = config.clan.core.vars.generators."forgejo-db".files."db-password".path;
-          }
-          // optionalAttrs (cfg.database.socket != null) {socket = cfg.database.socket;};
-
-        secrets = cfg.secrets;
-
-        settings.server = {
-          HTTP_PORT = cfg.port;
-          SSH_PORT = cfg.sshPort;
-          ROOT_URL = cfg.rootUrl;
-          DISABLE_SSH = cfg.disableSsh;
-          START_SSH_SERVER = cfg.startSshServer;
-          HTTP_ADDR = cfg.host;
-          DOMAIN = cfg.domain;
+          settings.session.COOKIE_SECURE = true;
         };
 
-        settings.session.COOKIE_SECURE = true;
-      };
-
-      services.caddy.virtualHosts."${mkDomain cfg.subdomain}" = {
-        extraConfig = mkRevProxyVHost {port = cfg.port;};
-      };
-
-      clan.core.vars.generators."forgejo-db" = {
-        share = false;
-
-        files."db-password" = {
-          secret = true;
-          owner = cfg.user;
-          group = cfg.user;
-          mode = "0400";
+        services.caddy.virtualHosts."${mkDomain cfg.subdomain}" = {
+          extraConfig = mkRevProxyVHost {port = cfg.port;};
         };
 
-        prompts.password = {
-          description = "Database password for Forgejo (${cfg.database.user}@${cfg.database.host}/${cfg.database.name})";
-          type = "hidden";
-          persist = true;
+        clan.core.vars.generators."forgejo-db" = {
+          share = false;
+
+          files."db-password" = {
+            secret = true;
+            owner = cfg.user;
+            group = cfg.user;
+            mode = "0400";
+          };
+
+          prompts.password = {
+            description = "Database password for Forgejo (${cfg.database.user}@${cfg.database.host}/${cfg.database.name})";
+            type = "hidden";
+            persist = true;
+          };
+
+          script = ''
+            cp "$prompts/password" "$out/db-password"
+          '';
+        };
+      })
+
+      (mkIf (cfg.enable && cfg.sso.enable) {
+        clan.core.vars.generators."forgejo-oidc" = {
+          share = false;
+
+          files."client-id" = {
+            secret = true;
+            owner = cfg.user;
+            group = cfg.user;
+            mode = "0400";
+          };
+
+          files."client-secret" = {
+            secret = true;
+            owner = cfg.user;
+            group = cfg.user;
+            mode = "0400";
+          };
+
+          prompts.client-id = {
+            description = "OIDC client ID for Forgejo (${cfg.sso.providerName})";
+            type = "line";
+            persist = true;
+          };
+
+          prompts.client-secret = {
+            description = "OIDC client secret for Forgejo (${cfg.sso.providerName})";
+            type = "hidden";
+            persist = true;
+          };
+
+          script = ''
+            cp "$prompts/client-id"     "$out/client-id"
+            cp "$prompts/client-secret" "$out/client-secret"
+          '';
         };
 
-        script = ''
-          cp "$prompts/password" "$out/db-password"
-        '';
-      };
-    };
+        systemd.services.forgejo-oidc-config = {
+          description = "Configure Forgejo OIDC authentication (${cfg.sso.providerName})";
+          after = ["forgejo.service"];
+          requires = ["forgejo.service"];
+          wantedBy = ["multi-user.target"];
+
+          environment.GITEA_WORK_DIR = cfg.stateDir;
+
+          path = [cfg.package pkgs.gawk];
+
+          serviceConfig = {
+            Type = "oneshot";
+            User = cfg.user;
+            Group = cfg.group;
+            RemainAfterExit = true;
+          };
+
+          script = let
+            clientIdFile = config.clan.core.vars.generators."forgejo-oidc".files."client-id".path;
+            clientSecretFile = config.clan.core.vars.generators."forgejo-oidc".files."client-secret".path;
+          in ''
+            set -euo pipefail
+            CLIENT_ID=$(cat ${clientIdFile})
+            CLIENT_SECRET=$(cat ${clientSecretFile})
+
+            AUTH_ID=$(forgejo admin auth list 2>/dev/null \
+              | awk -F'\t' -v name="${cfg.sso.providerName}" 'NR>1 && $2==name {print $1}')
+
+            if [ -n "$AUTH_ID" ]; then
+              forgejo admin auth update-oauth \
+                --id "$AUTH_ID" \
+                --provider openidConnect \
+                --auto-discover-url "${cfg.sso.autoDiscoverUrl}" \
+                --key "$CLIENT_ID" \
+                --secret "$CLIENT_SECRET"
+            else
+              forgejo admin auth add-oauth \
+                --name "${cfg.sso.providerName}" \
+                --provider openidConnect \
+                --auto-discover-url "${cfg.sso.autoDiscoverUrl}" \
+                --key "$CLIENT_ID" \
+                --secret "$CLIENT_SECRET"
+            fi
+          '';
+        };
+      })
+    ];
   };
 }

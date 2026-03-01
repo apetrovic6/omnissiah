@@ -12,12 +12,13 @@
     pkgs,
     ...
   }: let
-    pangolin-cli-0-5-0 = pkgs.pangolin-cli.overrideAttrs (old: {
-      version = "0.5.0";
+    pangolin-cli-override = pkgs.pangolin-cli.overrideAttrs (old: {
+      version = "0.5.1";
       src = old.src.override {
-        hash = "sha256-ox/GqqvAW6cuWT+yLmrJVbjL5U/oUlVHzY9QHNWc8V8=";
+        hash = "sha256-+WwCYWC3CBvPnoakwD7rKJHckT5g4pUbtci/zRhGPFs=";
       };
-      vendorHash = "sha256-6vubBtchj2K8OrmDeMuuRGlRmFMYjCFXItg0KupoRBc=";
+      vendorHash = "sha256-gj7c8kMIX+xrGeoJjRQkPZdLuQuri2wAR0rXE2APCd8=";
+      doInstallCheck = false; # upstream 0.5.1 tag has version const still set to 0.5.0
     });
   in {
     imports = [
@@ -28,7 +29,7 @@
       self.nixosModules.virtualisation
     ];
 
-    networking.nameservers = [ "192.168.1.191" ];
+    networking.nameservers = ["192.168.1.191"];
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.login.enableGnomeKeyring = true;
@@ -150,7 +151,7 @@
 
       neomutt
       proton-vpn-cli
-      pangolin-cli-0-5-0
+      pangolin-cli-override
 
       alacritty
       nfs-utils

@@ -18,6 +18,36 @@ in {
     full_name = "Monolith Softworks";
   };
 
+  resource.forgejo_repository.nvf = {
+    name = "nvf";
+    description = "Neovim NVF";
+    private = false;
+    default_branch = "master";
+    has_pull_requests = true;
+    has_actions = true;
+    has_issues = true;
+  };
+
+  resource.forgejo_repository.chirp-backend = {
+    name = "chirp-backend";
+    description = "Chirp backend";
+    private = false;
+    default_branch = "master";
+    has_pull_requests = true;
+    has_actions = true;
+    has_issues = true;
+  };
+
+  resource.forgejo_repository.chirp-client = {
+    name = "chirp-client";
+    description = "Chirp client";
+    private = false;
+    default_branch = "master";
+    has_pull_requests = true;
+    has_actions = true;
+    has_issues = true;
+  };
+
   resource.forgejo_repository.zellij = {
     name = "zellij";
     description = "Zellij wrapper flake";

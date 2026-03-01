@@ -91,6 +91,11 @@ in {
           base_domain = "noosphere.uk";
           cert_resolver = "letsencrypt";
         };
+
+        keksic = {
+          base_domain = "keksic.xyz";
+          cert_resolver = "letsencrypt";
+        };
       };
     };
   };
@@ -109,7 +114,7 @@ in {
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [22 80 443];
-    allowedUDPPorts = [22 80 443 21820 ];
+    allowedUDPPorts = [22 80 443 21820];
   };
 
   services.openssh = {

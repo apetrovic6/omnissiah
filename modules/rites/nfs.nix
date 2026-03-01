@@ -72,9 +72,13 @@
                   [
                     "nfsvers=${exportCfg.nfsVersion}"
                     "x-systemd.automount"
+                    "x-systemd.mount-timeout=30"
                     "noauto"
                     "_netdev"
                     "nofail"
+                    "soft"
+                    "timeo=30"
+                    "retrans=3"
                   ]
                   ++ exportCfg.extraOptions;
               in

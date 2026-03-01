@@ -33,8 +33,8 @@
     #   port = 8181;
     # };
 
-    networking.firewall.allowedTCPPorts = [ 80 443 2222 53 22 5380];
-    networking.firewall.allowedUDPPorts = [ 80 443 53 ];
+    networking.firewall.allowedTCPPorts = [80 443 2222 53 22 5380];
+    networking.firewall.allowedUDPPorts = [80 443 53 222];
     # Or disable the firewall altogether.
     networking.firewall.enable = true;
 
@@ -68,9 +68,13 @@
         databases = ["vaultwarden"];
         ensureDBOwnership = true;
       };
+
+      users.forgejo = {
+        databases = ["forgejo"];
+        ensureDBOwnership = true;
+      };
     };
 
-    
     services.imperium.technitium-dns-server = {
       enable = true;
       subdomain = "technitium";
@@ -94,7 +98,6 @@
         ROCKET_ADDRESS = "127.0.0.1";
         ROCKET_LOG = "critical";
       };
-
     };
 
     # services.imperium.ntfy-sh = {
@@ -115,9 +118,9 @@
     #   port = 5076;
     # };
 
-    users.groups.media = {
-      gid = 1337;
-    };
+    # users.groups.media = {
+    #   gid = 65537;
+    # };
 
     # services.imperium.navidrome = {
     #   enable = true;
@@ -130,7 +133,7 @@
       openFirewall = true;
       package = pkgs.caddy.withPlugins {
         plugins = ["github.com/caddy-dns/cloudflare@v0.2.1"];
-        hash = "sha256-Zls+5kWd/JSQsmZC4SRQ/WS+pUcRolNaaI7UQoPzJA0=";
+        hash = "sha256-hZKTEzevrabjgZCCcoRKlqUfdDIUr89KEFJ84kyFxeg=";
       };
     };
   };

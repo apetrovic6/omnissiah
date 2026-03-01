@@ -47,7 +47,7 @@
         default = [];
         example = "/var/lib/vaultwarden.env";
         description = ''
-          '';
+        '';
       };
 
       config = mkOption {
@@ -95,10 +95,12 @@
             ROCKET_PORT = cfg.port;
             DOMAIN = "https://${cfg.subdomain}.${baseDomain}";
           };
-        environmentFile = cfg.environmentFile ++ [
-          config.clan.core.vars.generators.vaultwarden-admin-token.files.vaultwarden-env.path
-          config.clan.core.vars.generators.vaultwarden-db.files.vaultwarden-db-env.path
-        ];
+        environmentFile =
+          cfg.environmentFile
+          ++ [
+            config.clan.core.vars.generators.vaultwarden-admin-token.files.vaultwarden-env.path
+            config.clan.core.vars.generators.vaultwarden-db.files.vaultwarden-db-env.path
+          ];
       };
 
       services.caddy.virtualHosts = {
@@ -106,7 +108,6 @@
           extraConfig = mkRevProxyVHost {port = cfg.port;};
         };
       };
-
 
       clan.core.vars.generators.vaultwarden-db = {
         share = false;
@@ -152,10 +153,10 @@
         '';
       };
 
-      clan.core.vars.generators.vaultwarden-admin-token= {
+      clan.core.vars.generators.vaultwarden-admin-token = {
         share = false;
 
-        files.vaultwarden-env= {
+        files.vaultwarden-env = {
           secret = true;
           mode = "0400";
         };
@@ -166,15 +167,13 @@
           persist = false;
         };
 
-        runtimeInputs = with pkgs; [ libargon2 openssl ];
+        runtimeInputs = with pkgs; [libargon2 openssl];
 
         script = ''
           ADMIN_TOKEN=$(cat "$prompts/admin-token" | argon2 "$(openssl rand -base64 32)" -e -id -k 19456 -t 2 -p 1)
           echo "ADMIN_TOKEN=$ADMIN_TOKEN" > "$out/vaultwarden-env"
         '';
       };
-
-      
     };
   };
 }
