@@ -1,0 +1,13 @@
+apiVersion: garage.rajsingh.info/v1alpha1
+kind: GarageBucket
+metadata:
+  name: forgejo-lfs
+  namespace: garage-operator
+spec:
+  clusterRef:
+    name: garage-main
+  keyPermissions:
+    - keyRef: forgejo
+      owner: true
+      read: true
+      write: true

@@ -22,7 +22,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 5c9f314aa27736803cd815c543ccf841fa10209d08e2c8287763bff3f5ac6a34
+        checksum/config: 16639c6d9fd13e5ff078962c5a28bdf82d90740a37cecff228cadff42bbb5ddc
         checksum/oauth_0: 1235cb8d117ff073769a438f8fde36b2d6934e6741e53db04212479b8a555022
       labels:
         app: forgejo
@@ -169,6 +169,16 @@ spec:
                   key: MINIO_ACCESS_KEY_ID
                   name: forgejo-s3-secret-key
             - name: FORGEJO__storage__MINIO_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: MINIO_SECRET_ACCESS_KEY
+                  name: forgejo-s3-secret-key
+            - name: FORGEJO__lfs__MINIO_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: MINIO_ACCESS_KEY_ID
+                  name: forgejo-s3-secret-key
+            - name: FORGEJO__lfs__MINIO_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   key: MINIO_SECRET_ACCESS_KEY
