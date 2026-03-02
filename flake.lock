@@ -565,11 +565,11 @@
     "garage-operator": {
       "flake": false,
       "locked": {
-        "lastModified": 1771355301,
-        "narHash": "sha256-5PjIj8j7e15hWlMKrwVnIRVxDdm0GTpo1DvhHKmxZDw=",
+        "lastModified": 1772416966,
+        "narHash": "sha256-VdieZJnC1C4+cn3BGrboTBJ1mtsNXmTU61XfgMBwIbk=",
         "owner": "rajsinghtech",
         "repo": "garage-operator",
-        "rev": "6945252349e0da628fb6caef56cb9fe71c07f1f9",
+        "rev": "e989d1083f4955557de1f4a21fc37c6df965d2ba",
         "type": "github"
       },
       "original": {
