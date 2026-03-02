@@ -14,8 +14,8 @@ metadata:
     app.kubernetes.io/instance: karakeep
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: karakeep
-    app.kubernetes.io/version: 0.27.0
-    helm.sh/chart: karakeep-0.27.0
+    app.kubernetes.io/version: 0.31.0
+    helm.sh/chart: karakeep-0.31.0
   name: karakeep
   namespace: karakeep
 spec:
