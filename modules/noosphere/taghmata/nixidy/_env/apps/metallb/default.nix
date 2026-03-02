@@ -36,6 +36,13 @@
 
         spec = {
           ipAddressPools = ["lan-pool"];
+          nodeSelectors = [
+            {
+              matchLabels = {
+                "kubernetes.io/hostname" = "sol";
+              };
+            }
+          ];
         };
       };
     };
