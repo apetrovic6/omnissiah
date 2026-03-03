@@ -1,7 +1,7 @@
 # ---
 # schema = "single-disk"
 # [placeholders]
-# mainDisk = "/dev/disk/by-path/pci-0000:07:00.0" 
+# mainDisk = "/dev/disk/by-path/pci-0000:00:10.0" 
 # ---
 # This file was automatically generated!
 # CHANGING this configuration requires wiping and reinstalling the machine
@@ -13,8 +13,8 @@
   disko.devices = {
     disk = {
       main = {
-        name = "main-dd59616b69884a83b9feb575e05c810f";
-        device = "/dev/disk/by-path/pci-0000:07:00.0";
+        name = "main-62c1fb2faa1a488a8c7dc62e5d93d12c";
+        device = "/dev/disk/by-path/pci-0000:00:10.0";
         type = "disk";
         content = {
           type = "gpt";
