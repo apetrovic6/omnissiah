@@ -6,8 +6,7 @@ metadata:
   name: lan-adv
   namespace: metallb-system
 spec:
+  interfaces:
+    - enp1s0
   ipAddressPools:
     - lan-pool
-  nodeSelectors:
-    - matchLabels:
-        kubernetes.io/hostname: sol
