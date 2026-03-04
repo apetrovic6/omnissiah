@@ -9,6 +9,9 @@
 
     helm.releases.metallb = {
       chart = charts.metallb.metallb;
+      values = {
+        controller.replicas = 3;
+      };
     };
 
     resources = {
@@ -36,13 +39,14 @@
 
         spec = {
           ipAddressPools = ["lan-pool"];
-          nodeSelectors = [
-            {
-              matchLabels = {
-                "kubernetes.io/hostname" = "sol";
-              };
-            }
-          ];
+          interfaces = ["enp1s0"];
+          # nodeSelectors = [
+          #   {
+          #     matchLabels = {
+          #       "kubernetes.io/hostname" = "sol";
+          #     };
+          #   }
+          # ];
         };
       };
     };

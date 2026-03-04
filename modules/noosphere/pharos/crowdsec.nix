@@ -1,11 +1,11 @@
-{self, ...}: {
+{...}: {
   flake.nixosModules.pharos = {
-    pkgs,
     config,
     lib,
+    pkgs,
     ...
   }: let
-    inherit (lib) mkIf mkEnableOption types;
+    inherit (lib) mkIf mkEnableOption;
 
     cfg = config.services.imperium.crowdsec;
   in {
@@ -13,22 +13,13 @@
       enable = mkEnableOption "Enable Crowdsec ";
     };
 
-    disabledModules = [
-      "services/security/crowdsec.nix"
-      "services/security/crowdsec-firewall-bouncer.nix"
-    ];
-
-    imports = [
-      "${self.inputs.nixpkgs-crowdsec}/nixos/modules/services/security/crowdsec.nix"
-      "${self.inputs.nixpkgs-crowdsec}/nixos/modules/services/security/crowdsec-firewall-bouncer.nix"
-    ];
-
     config = mkIf cfg.enable {
       services.crowdsec = {
         enable = true;
-        package = self.inputs.nixpkgs-crowdsec.legacyPackages.${pkgs.system}.crowdsec;
 
-        name = "alfrost";
+        name = config.networking.hostName;
+
+        
 
         autoUpdateService = true;
         hub = {
@@ -48,24 +39,35 @@
           ];
         };
 
+        localConfig.acquisitions = [
+          {
+            journalctl_filter = ["_SYSTEMD_UNIT=sshd.service"];
+            labels = {type = "syslog";};
+            source = "journalctl";
+          }
+          {
+            journalctl_filter = ["_SYSTEMD_UNIT=traefik.service"];
+            labels = {type = "traefik";};
+            source = "journalctl";
+          }
+        ];
+
         settings = {
-          console.enrollKeyFile = config.clan.core.vars.generators.crowdsec-enroll.files."enroll-key".path;
-
-          config.api.server.online_client.credentials_path = "/var/lib/crowdsec/online_api_credentials.yaml";
-
-          acquisitions = [
-            {
-              journalctl_filter = ["_SYSTEMD_UNIT=sshd.service"];
-              labels = {type = "syslog";};
-              source = "journalctl";
-            }
-
-            {
-              journalctl_filter = ["_SYSTEMD_UNIT=traefik.service"];
-              labels = {type = "traefik";};
-              source = "journalctl";
-            }
-          ];
+          # Enable the Local API so bouncer registration and cscli work
+          general.api.server.enable = true;
+          # LAPI credentials for the agent to authenticate against the local API
+          lapi.credentialsFile = "/var/lib/crowdsec/state/local_api_credentials.yaml";
+          console = {
+            tokenFile = config.clan.core.vars.generators.crowdsec-enroll.files."enroll-key".path;
+            configuration = {
+              share_manual_decisions = true;
+              share_custom = true;
+              share_tainted = true;
+              share_context = true;
+              console_management = true;
+            };
+          };
+          capi.credentialsFile = "/var/lib/crowdsec/online_api_credentials.yaml";
         };
       };
 
@@ -88,11 +90,36 @@
         '';
       };
 
+      # Upstream module uses DynamicUser=true but never sets StateDirectory,
+      # so /var/lib/private/crowdsec is never created and services fail at
+      # NAMESPACE setup. Disable DynamicUser since the module already creates
+      # proper system users; all other sandboxing still applies.
+      # Ensure credential files exist (even empty) before crowdsec starts.
+      # On first boot these don't exist yet, but cscli tries to open them
+      # during initialization before the setup script can create them.
+      systemd.tmpfiles.rules = [
+        "f /var/lib/crowdsec/online_api_credentials.yaml 0640 crowdsec crowdsec -"
+        # The NixOS module sets hub_dir=/var/lib/crowdsec/state/hub/ but
+        # CrowdSec creates symlinks referencing /var/lib/crowdsec/hub/.
+        # Bridge the two paths so hub item symlinks resolve correctly.
+        "L+ /var/lib/crowdsec/hub - - - - /var/lib/crowdsec/state/hub"
+      ];
+
+      # CrowdSec's journalctl datasource needs journalctl in PATH.
+      # Upstream module sets path = mkForce [], so we must also mkForce.
+      systemd.services.crowdsec.path = lib.mkForce [pkgs.systemd];
+      systemd.services.crowdsec.serviceConfig.DynamicUser = lib.mkForce false;
+      systemd.services.crowdsec-update-hub.serviceConfig.DynamicUser = lib.mkForce false;
+      systemd.services.crowdsec-firewall-bouncer-register.serviceConfig.DynamicUser = lib.mkForce false;
+      systemd.services.crowdsec-firewall-bouncer.serviceConfig.DynamicUser = lib.mkForce false;
+      # Upstream module has Requires= but not After= for the register service,
+      # so the bouncer starts before the API key file is created.
+      systemd.services.crowdsec-firewall-bouncer.after = ["crowdsec-firewall-bouncer-register.service"];
+
       users.users.crowdsec.extraGroups = ["systemd-journal"];
 
       services.crowdsec-firewall-bouncer = {
         enable = true;
-        package = self.inputs.nixpkgs-crowdsec.legacyPackages.${pkgs.system}.crowdsec-firewall-bouncer;
 
         settings.mode = "iptables";
         registerBouncer = {

@@ -53,8 +53,8 @@
     };
 
     magos = {
-      url = "github:apetrovic6/magos";
-      # url = "path:/home/apetrovic/clan/magos";
+      # url = "github:apetrovic6/magos";
+      url = "path:/home/apetrovic/clan/magos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -74,8 +74,8 @@
     };
 
     nixhelm = {
-      # url = "path:/home/apetrovic/clan/nixhelm";
-      url = "github:apetrovic6/nixhelm";
+      url = "path:/home/apetrovic/clan/nixhelm";
+      # url = "github:apetrovic6/nixhelm";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -124,6 +124,7 @@
     flake-parts,
     import-tree,
     nixhelm,
+    nixpkgs,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
@@ -138,6 +139,7 @@
         inputs.clan-core.flakeModules.default
         inputs.treefmt-nix.flakeModule
         (import-tree ./modules)
+        (import-tree ./overlays)
       ];
 
       noosphere = import ./modules/vars/_noosphere-values.nix;
@@ -145,6 +147,7 @@
       # https://docs.clan.lol/guides/flake-parts
       clan = {
         imports = [./clan.nix];
+
       };
 
       perSystem = {
@@ -155,6 +158,7 @@
         lib,
         ...
       }: {
+
         checks = {
           enginseer =
             self.nixosConfigurations.enginseer.config.system.build.toplevel;

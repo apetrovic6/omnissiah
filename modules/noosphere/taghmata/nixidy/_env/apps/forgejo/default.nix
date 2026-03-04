@@ -155,6 +155,22 @@ in {
                 key = "MINIO_SECRET_ACCESS_KEY";
               };
             }
+
+            {
+              name = "FORGEJO__lfs__MINIO_ACCESS_KEY_ID";
+              valueFrom.secretKeyRef = {
+                name = "forgejo-s3-secret-key";
+                key = "MINIO_ACCESS_KEY_ID";
+              };
+            }
+
+            {
+              name = "FORGEJO__lfs__MINIO_SECRET_ACCESS_KEY";
+              valueFrom.secretKeyRef = {
+                name = "forgejo-s3-secret-key";
+                key = "MINIO_SECRET_ACCESS_KEY";
+              };
+            }
           ];
 
           config = {
@@ -169,6 +185,22 @@ in {
               SERVE_DIRECT = false;
               MINIO_ENDPOINT = "garage-s3-api.garage-operator.svc.cluster.local:3900";
               MINIO_BUCKET = "forgejo";
+              MINIO_BUCKET_LOOKUP = "auto";
+              MINIO_LOCATION = "main";
+              MINIO_USE_SSL = false;
+              MINIO_INSECURE_SKIP_VERIFY = false;
+              MINIO_CHECKSUM_ALGORITHM = "default";
+            };
+
+            server = {
+              LFS_START_SERVER = true;
+            };
+
+            lfs = {
+              STORAGE_TYPE = "minio";
+              SERVE_DIRECT = false;
+              MINIO_ENDPOINT = "garage-s3-api.garage-operator.svc.cluster.local:3900";
+              MINIO_BUCKET = "forgejo-lfs";
               MINIO_BUCKET_LOOKUP = "auto";
               MINIO_LOCATION = "main";
               MINIO_USE_SSL = false;

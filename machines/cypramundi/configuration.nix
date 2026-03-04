@@ -1,57 +1,87 @@
 {
   self,
   config,
+  lib,
   pkgs,
   ...
 }: let
-  # pangolinOverride = pkgs.fosrl-pangolin.overrideAttrs (old: {
-  #   version = "1.15.4";
-  #   src = pkgs.fetchFromGitHub {
-  #     owner = "fosrl";
-  #     repo = "pangolin";
-  #     rev = "1.15.4";
-  #     hash = "sha256-HayJqkLp2/+V+TufsINK4uVeQ2vAdvQnvT7Fz57gAyU=";
-  #   };
+  pangolinOverride = pkgs.fosrl-pangolin.overrideAttrs (old: {
+    version = "1.16.2";
+    src = pkgs.fetchFromGitHub {
+      owner = "fosrl";
+      repo = "pangolin";
+      rev = "1.16.2";
+      hash = "sha256-pWD2VinfkCiSSP6/einXgduKQ8lzWdHlrj2eqUU/x6Y=";
+    };
 
-  #   preBuild = ''
-  #     npm run set:oss
-  #     npm run set:sqlite
-  #     npm run db:generate
-  #   '';
+    npmDeps = pkgs.fetchNpmDeps {
+      name = "pangolin-1.16.2-npm-deps";
+      src = pkgs.fetchFromGitHub {
+        owner = "fosrl";
+        repo = "pangolin";
+        rev = "1.16.2";
+        hash = "sha256-pWD2VinfkCiSSP6/einXgduKQ8lzWdHlrj2eqUU/x6Y=";
+      };
+      hash = "sha256-CwS26eRAIuxJ2fekRRapDWYAOHXPV0mIX/by4uW2ZOM=";
+    };
 
-  #   buildPhase = ''
-  #     runHook preBuild
-  #     npm run build
-  #     npm run build:cli
-  #     runHook postBuild
-  #   '';
+    postPatch = ''
+      substituteInPlace src/app/layout.tsx --replace-fail \
+        '{ Inter } from "next/font/google"' \
+        'localFont from "next/font/local"'
 
-  #   installPhase = ''
-  #     runHook preInstall
-  #     mkdir -p $out/{bin,share/pangolin}
+      substituteInPlace src/app/layout.tsx --replace-fail \
+        'Inter({' \
+        'localFont({'
 
-  #     cp -r node_modules $out/share/pangolin
+      substituteInPlace src/app/layout.tsx --replace-fail \
+        'subsets: ["latin"]' \
+        "src: './Inter.ttf'"
 
-  #     cp -r .next/standalone/.next $out/share/pangolin
-  #     cp .next/standalone/package.json $out/share/pangolin
+      cp "${pkgs.inter}/share/fonts/truetype/InterVariable.ttf" src/app/Inter.ttf
+    '';
 
-  #     cp -r .next/static $out/share/pangolin/.next/static
-  #     cp -r public $out/share/pangolin/public
+    preBuild = ''
+      npm run set:oss
+      npm run set:pg
+      npm run db:generate
+    '';
 
-  #     cp -r dist $out/share/pangolin/dist
+    buildPhase = ''
+      runHook preBuild
+      npm run build
+      npm run build:cli
+      runHook postBuild
+    '';
 
-  #     cp server/db/names.json $out/share/pangolin/dist/names.json
-  #     cp server/db/ios_models.json $out/share/pangolin/dist/ios_models.json
-  #     cp server/db/mac_models.json $out/share/pangolin/dist/mac_models.json
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/{bin,share/pangolin}
 
-  #     runHook postInstall
-  #   '';
-  # });
+      cp -r node_modules $out/share/pangolin
 
-  # domain = "ugalabugala.org";
+      cp -r .next/standalone/.next $out/share/pangolin
+      cp .next/standalone/package.json $out/share/pangolin
+
+      cp -r .next/static $out/share/pangolin/.next/static
+      cp -r public $out/share/pangolin/public
+
+      cp -r dist $out/share/pangolin/dist
+      cp -r server/migrations $out/share/pangolin/dist/init
+
+      cp server/db/names.json $out/share/pangolin/dist/names.json
+      cp server/db/ios_models.json $out/share/pangolin/dist/ios_models.json
+      cp server/db/mac_models.json $out/share/pangolin/dist/mac_models.json
+
+      runHook postInstall
+    '';
+  });
+
+  domain = "ugalabugala.org";
 in {
   imports = [
     # self.inputs.omnishell.nixosModules.helix
+    self.nixosModules.postgresql
     self.nixosModules.pharos
   ];
 
@@ -64,43 +94,66 @@ in {
 
   services.traefik.staticConfigOptions.accesslog.filepath = {};
 
-  # services.pangolin = {
-  #   enable = true;
+  services.imperium.postgresql = {
+    enable = true;
 
-  #   package = pangolinOverride;
-  #   openFirewall = true;
-  #   letsEncryptEmail = "cloudflare.fervor993@simplelogin.com";
-  #   dashboardDomain = domain;
-  #   baseDomain = domain;
-  #   dnsProvider = "cloudflare";
+    authentication = ''
+      # TYPE  DATABASE  USER      ADDRESS         METHOD
+      local   all       all                       peer
+      host    pangolin  pangolin  127.0.0.1/32    scram-sha-256
+    '';
 
-  #   environmentFile = config.clan.core.vars.generators.pangolin.files."pangolin.env".path;
+    listenAddresses = "127.0.0.1";
+    backup = {
+      enable = true;
+      location = "/var/pg_backup/";
+      startAt = "*-*-* 01:15:00";
+    };
 
-  #   settings = {
-  #     flags = {
-  #       disable_signup_without_invite = true;
-  #       disable_user_create_org = true;
-  #     };
+    users.pangolin = {
+      databases = ["pangolin"];
+      ensureDBOwnership = true;
+      passwordDependency = "pangolin";
+    };
+  };
 
-  #     gerbil = {
-  #       base_endpoint = "172.245.55.111";
-  #     };
+  services.pangolin = {
+    enable = true;
 
-  #     domains = {
-  #       noosphere = {
-  #         base_domain = "noosphere.uk";
-  #         cert_resolver = "letsencrypt";
-  #       };
+    package = pangolinOverride;
+    openFirewall = true;
+    letsEncryptEmail = "cloudflare.fervor993@simplelogin.com";
+    dashboardDomain = domain;
+    baseDomain = domain;
+    dnsProvider = "cloudflare";
 
-  #       keksic = {
-  #         base_domain = "keksic.xyz";
-  #         cert_resolver = "letsencrypt";
-  #       };
-  #     };
-  #   };
-  # };
+    environmentFile = config.clan.core.vars.generators.pangolin.files."pangolin.env".path;
 
-  # services.imperium.crowdsec.enable = true;
+    settings = {
+      flags = {
+        disable_signup_without_invite = true;
+        disable_user_create_org = true;
+      };
+
+      gerbil = {
+        base_endpoint = "152.53.34.16";
+      };
+
+      domains = {
+        noosphere = {
+          base_domain = "noosphere.uk";
+          cert_resolver = "letsencrypt";
+        };
+
+        keksic = {
+          base_domain = "keksic.xyz";
+          cert_resolver = "letsencrypt";
+        };
+      };
+    };
+  };
+
+  services.imperium.crowdsec.enable = true;
 
   # systemd.services.traefik.serviceConfig.EnvironmentFile = [
   #   config.clan.core.vars.generators.cloudflare-dns.files."cloudflare-dns.env".path
@@ -110,23 +163,23 @@ in {
   users.mutableUsers = false;
 
   networking.networkmanager.enable = false;
-  networking.useNetworkd = true;
-  systemd.network.enable = true;
-  systemd.network.networks."10-enp3s0" = {
-    matchConfig.Name = "enp3s0";
-    address = ["192.168.240.44/24"];
-    routes = [{routeConfig.Gateway = "192.168.240.1";}];
-  };
+  # networking.useNetworkd = true;
+  # systemd.network.enable = true;
+  # systemd.network.networks."10-enp3s0" = {
+  #   matchConfig.Name = "enp3s0";
+  #   address = ["192.168.240.44/24"];
+  #   gateway = ["192.168.240.1"];
+  # };
 
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [22 80 443 51799];
-    allowedUDPPorts = [22 80 443 21820 51799];
+    allowedUDPPorts = [80 443 21820];
   };
 
   services.openssh = {
     enable = true;
-    ports = [51799];
+    ports = [22];
     settings = {
       PasswordAuthentication = false;
     };

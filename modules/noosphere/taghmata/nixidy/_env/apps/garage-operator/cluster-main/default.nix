@@ -114,6 +114,21 @@
       };
     };
 
+    resources.garageBuckets.forgejo-lfs = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-main";
+        keyPermissions = [
+          {
+            keyRef = "forgejo";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+      };
+    };
+
     resources.garageKeys.harbor = {
       metadata = {inherit namespace;};
       spec = {

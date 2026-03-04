@@ -8,19 +8,10 @@
   roles.default.perInstance.nixosModule = {
     self,
     config,
-    lib,
     pkgs,
     ...
-  }: let
-    pangolin-cli-override = pkgs.pangolin-cli.overrideAttrs (old: {
-      version = "0.5.1";
-      src = old.src.override {
-        hash = "sha256-+WwCYWC3CBvPnoakwD7rKJHckT5g4pUbtci/zRhGPFs=";
-      };
-      vendorHash = "sha256-gj7c8kMIX+xrGeoJjRQkPZdLuQuri2wAR0rXE2APCd8=";
-      doInstallCheck = false; # upstream 0.5.1 tag has version const still set to 0.5.0
-    });
-  in {
+  }: 
+  {
     imports = [
       self.nixosModules.flatpak
       self.inputs.magos.nixosModules.default
@@ -28,6 +19,8 @@
       self.nixosModules.bluetooth
       self.nixosModules.virtualisation
     ];
+
+    nixpkgs.overlays = [ self.overlays.pangolin-cli ];
 
     networking.nameservers = ["192.168.1.191"];
 
@@ -142,6 +135,8 @@
       kubectl
       kubectl-cnpg
 
+      signal-desktop
+
       claude-code
       claude-monitor
 
@@ -151,7 +146,7 @@
 
       neomutt
       proton-vpn-cli
-      pangolin-cli-override
+      pangolin-cli
 
       alacritty
       nfs-utils

@@ -17,9 +17,14 @@
     cerberus = {
       tags = ["base" "server"];
       deploy.targetHost = "root@192.168.1.191";
+      deploy.buildHost = "localhost";
     };
 
     alfrost = {
+      tags = [];
+    };
+
+    cypramundi = {
       tags = [];
     };
 

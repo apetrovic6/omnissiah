@@ -14,6 +14,10 @@
   }: {
     imports = [];
 
+    services.tailscale = {
+      enable = lib.mkForce false;
+    };
+
     swapDevices = [
       {
         size = 50 * 1024;
@@ -63,7 +67,6 @@
       unmanaged-devices=interface-name:enp2s0
     '';
 
-    networking.firewall.interfaces.tailscale0.allowedTCPPorts = [80 443 9000];
 
     boot.kernel.sysctl = {
       "net.ipv4.conf.all.rp_filter" = 0;

@@ -60,7 +60,7 @@
 
       backup = {
         enable = true;
-        location = "/mnt/nas/postgres_backup/vaultwarden";
+        location = "/mnt/nas/postgres_backup/manjo";
         startAt = "*-*-* 01:15:00";
       };
 

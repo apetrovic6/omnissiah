@@ -136,6 +136,8 @@
 
       networking.firewall = mkIf cfg.openFirewall {
         allowedTCPPorts = [
+          80
+          443
           6443 # Kubernetes API
           9345 # RKE2 supervisor API
           2379 # etcd client

@@ -92,6 +92,16 @@
               default = false;
               description = "Grant ownership of the user's databases.";
             };
+
+            passwordDependency = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = ''
+                Name of another generator whose `password` file to use instead of
+                prompting. When set, no prompt is created for this user; the password
+                is copied from `$in/<passwordDependency>/password` at generation time.
+              '';
+            };
           };
         }));
       };
@@ -120,6 +130,10 @@
       };
 
       networking.firewall.allowedTCPPorts = mkIf cfg.openFirewall [cfg.port];
+
+      systemd.tmpfiles.rules = mkIf cfg.backup.enable [
+        "d ${cfg.backup.location} 0750 postgres postgres -"
+      ];
 
       systemd.services = mkMerge [
         (mkIf cfg.backup.enable (builtins.listToAttrs (map (db: let
@@ -191,31 +205,52 @@
         )
         cfg.backup.databases));
 
-      # One clan vars generator per user for password management
+      # One clan vars generator per user for password management.
+      # If passwordDependency is set, the password is sourced from another generator
+      # (no prompt); otherwise a prompt is shown.
       clan.core.vars.generators =
         mapAttrs' (
-          userName: _:
-            nameValuePair "postgresql-${userName}" {
-              share = false;
+          userName: u:
+            nameValuePair "postgresql-${userName}" (
+              if u.passwordDependency != null
+              then {
+                share = false;
 
-              files.password = {
-                secret = true;
-                owner = "postgres";
-                group = "postgres";
-                mode = "0400";
-              };
+                files.password = {
+                  secret = true;
+                  owner = "postgres";
+                  group = "postgres";
+                  mode = "0400";
+                };
 
-              prompts.password = {
-                description = "PostgreSQL password for user '${userName}'";
-                type = "hidden";
-                persist = true;
-                display.label = "PostgreSQL password (${userName})";
-              };
+                dependencies = [u.passwordDependency];
 
-              script = ''
-                cp "$prompts/password" "$out/password"
-              '';
-            }
+                script = ''
+                  cp "$in/${u.passwordDependency}/password" "$out/password"
+                '';
+              }
+              else {
+                share = false;
+
+                files.password = {
+                  secret = true;
+                  owner = "postgres";
+                  group = "postgres";
+                  mode = "0400";
+                };
+
+                prompts.password = {
+                  description = "PostgreSQL password for user '${userName}'";
+                  type = "hidden";
+                  persist = true;
+                  display.label = "PostgreSQL password (${userName})";
+                };
+
+                script = ''
+                  cp "$prompts/password" "$out/password"
+                '';
+              }
+            )
         )
         cfg.users;
     };
