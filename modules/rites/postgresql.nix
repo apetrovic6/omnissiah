@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: let
-    inherit (lib) mkOption mkIf mkForce mkMerge types mapAttrsToList mapAttrs' nameValuePair flatten;
+    inherit (lib) mkOption mkPackageOption mkIf mkForce mkMerge types mapAttrsToList mapAttrs' nameValuePair flatten;
     cfg = config.services.imperium.postgresql;
   in {
     options.services.imperium.postgresql = {
@@ -14,6 +14,7 @@
         default = false;
         description = "Enable Imperium PostgreSQL server with declarative user password management.";
       };
+    package = mkPackageOption pkgs "postgresql" {};
 
       port = mkOption {
         type = types.port;
@@ -76,6 +77,23 @@
         };
       };
 
+      extensions = mkOption {
+        type = types.attrsOf (types.functionTo types.package);
+        default = {};
+        description = ''
+          Extensions to install and enable in every managed database.
+          The attribute name is the SQL extension name used in CREATE EXTENSION;
+          the value is a function that selects the package from the PostgreSQL
+          package set (same argument as services.postgresql.extensions).
+        '';
+        example = lib.literalExpression ''
+          {
+            vector  = ps: ps.pgvector;
+            postgis = ps: ps.postgis;
+          }
+        '';
+      };
+
       users = mkOption {
         description = "PostgreSQL users with sops-managed passwords.";
         default = {};
@@ -102,6 +120,14 @@
                 is copied from `$in/<passwordDependency>/password` at generation time.
               '';
             };
+
+            extensions = mkOption {
+              type = types.listOf types.str;
+              default = [];
+              description = "SQL extension names to CREATE EXTENSION IF NOT EXISTS in each of this user's databases. The corresponding packages must be declared in services.imperium.postgresql.extensions.";
+              example = ["vchord" "pg_trgm"];
+            };
+
           };
         }));
       };
@@ -110,6 +136,8 @@
     config = mkIf (cfg.enable && cfg.users != {}) {
       services.postgresql = {
         enable = true;
+
+        extensions = ps: mapAttrsToList (_: f: f ps) cfg.extensions;
 
         ensureDatabases = flatten (mapAttrsToList (_: u: u.databases) cfg.users);
 
@@ -177,12 +205,19 @@
             script = let
               psql = "${config.services.postgresql.package}/bin/psql";
               commands =
-                mapAttrsToList (userName: _: let
+                mapAttrsToList (userName: u: let
                   passwordFile = config.clan.core.vars.generators."postgresql-${userName}".files.password.path;
+                  extCmds = flatten (map (db:
+                    map (ext: ''
+                      echo "Creating extension '${ext}' in database '${db}'..."
+                      ${psql} -d "${db}" -c "CREATE EXTENSION IF NOT EXISTS \"${ext}\" CASCADE;"
+                    '') u.extensions
+                  ) u.databases);
                 in ''
                   echo "Setting password for user '${userName}'..."
                   PASSWORD=$(cat "${passwordFile}")
                   ${psql} -c "ALTER USER \"${userName}\" WITH PASSWORD '$PASSWORD';"
+                  ${builtins.concatStringsSep "\n" extCmds}
                 '')
                 cfg.users;
             in ''

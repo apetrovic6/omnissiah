@@ -33,7 +33,7 @@
     #   port = 8181;
     # };
 
-    networking.firewall.allowedTCPPorts = [80 443 2222 53 22 5380];
+    networking.firewall.allowedTCPPorts = [80 443 2222 53 22 5380 8123];
     networking.firewall.allowedUDPPorts = [80 443 53 222];
     # Or disable the firewall altogether.
     networking.firewall.enable = true;
@@ -49,6 +49,12 @@
       enable = true;
       listenAddresses = "*";
       openFirewall = true;
+      package = pkgs.postgresql_18;
+
+      extensions = {
+        vector = ps: ps.pgvector;
+        vchord = ps: ps.vectorchord;
+      };
 
       authentication = ''
         # TYPE  DATABASE  USER      ADDRESS         METHOD
@@ -72,6 +78,17 @@
       users.forgejo = {
         databases = ["forgejo"];
         ensureDBOwnership = true;
+      };
+
+      users.hass = {
+        databases = ["hass"];
+        ensureDBOwnership = true;
+      };
+
+      users.immich = {
+        databases = ["immich"];
+        ensureDBOwnership = true;
+        extensions = ["unaccent" "uuid-ossp" "cube" "earthdistance" "pg_trgm" "vector" "vchord"];
       };
     };
 
