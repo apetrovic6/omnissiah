@@ -53,8 +53,8 @@
     };
 
     magos = {
-      # url = "github:apetrovic6/magos";
-      url = "path:/home/apetrovic/clan/magos";
+      url = "github:apetrovic6/magos";
+      # url = "path:/home/apetrovic/clan/magos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -74,8 +74,8 @@
     };
 
     nixhelm = {
-      url = "path:/home/apetrovic/clan/nixhelm";
-      # url = "github:apetrovic6/nixhelm";
+      # url = "path:/home/apetrovic/clan/nixhelm";
+      url = "github:apetrovic6/nixhelm";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
