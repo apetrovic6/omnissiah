@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    argocd.proj.io/sync-options: Prune=false,Delete=false
+    category: yarr
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Binary newsreader
+    glance/icon: di:sabnzbd
+    glance/id: sabnzbd
+    glance/name: sabnzbd
+    glance/parent: sabnzbd
+    glance/url: https://sab.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: sabnzbd-ip-root
+  namespace: yarr
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: sab.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: sabnzbd
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - sab.noosphere.uk
+      secretName: sabnzbd-tls

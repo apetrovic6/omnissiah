@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: sabnzbd
+  name: sabnzbd
+  namespace: yarr
+spec:
+  selector:
+    matchLabels:
+      app: sabnzbd
+  template:
+    metadata:
+      labels:
+        app: sabnzbd
+    spec:
+      containers:
+        - env:
+            - name: PUID
+              value: "1031"
+            - name: PGID
+              value: "65537"
+          image: lscr.io/linuxserver/sabnzbd:latest
+          name: sabnzbd
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /data
+              name: data
+      initContainers:
+        - command:
+            - sh
+            - /scripts/init-config.sh
+          image: busybox:latest
+          name: init-config
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /scripts
+              name: init-scripts
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: sabnzbd-config
+        - configMap:
+            defaultMode: 493
+            name: sabnzbd-init
+          name: init-scripts
+        - name: data
+          nfs:
+            path: /volume1/data/
+            server: 192.168.1.61

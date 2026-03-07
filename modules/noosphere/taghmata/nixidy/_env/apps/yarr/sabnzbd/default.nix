@@ -17,12 +17,30 @@ in {
 
       spec = {
         accessModes = ["ReadWriteOnce"];
-        storageClass = "longhorn";
+        storageClassName = "longhorn";
         resources.requests.storage = "2Gi";
       };
     };
 
-    resources.deployments.radarr = {
+    resources.configMaps.sabnzbd-init = {
+      metadata = {inherit namespace;};
+      data."init-config.sh" = ''
+        #!/bin/sh
+        INI=/config/sabnzbd.ini
+        if [ ! -f "$INI" ]; then
+          echo "sabnzbd.ini not found, skipping patch"
+          exit 0
+        fi
+        if grep -q '^host_whitelist' "$INI"; then
+          sed -i "s|^host_whitelist.*|host_whitelist = sab.${domain}|" "$INI"
+        else
+          sed -i '/^\[misc\]/a host_whitelist = sab.${domain}' "$INI"
+        fi
+        echo "host_whitelist patched"
+      '';
+    };
+
+    resources.deployments.sabnzbd= {
       metadata = {
         inherit namespace labels;
       };
@@ -31,21 +49,32 @@ in {
 
       spec.template = {
         metadata = {inherit labels;};
+        spec.initContainers = [
+          {
+            name = "init-config";
+            image = "busybox:latest";
+            command = ["sh" "/scripts/init-config.sh"];
+            volumeMounts = [
+              {name = "config"; mountPath = "/config";}
+              {name = "init-scripts"; mountPath = "/scripts";}
+            ];
+          }
+        ];
+
         spec.volumes = [
           {
             name = "config";
             persistentVolumeClaim.claimName = "sabnzbd-config";
           }
           {
-            name = "incomplete";
-            nfs = {
-              server = "192.168.1.61";
-              path = "/volume1/data/";
+            name = "init-scripts";
+            configMap = {
+              name = "sabnzbd-init";
+              defaultMode = 493; # 0755
             };
           }
-
           {
-            name = "complete";
+            name = "data";
             nfs = {
               server = "192.168.1.61";
               path = "/volume1/data/";
@@ -64,14 +93,10 @@ in {
               }
 
               {
-                name = "incomplete";
-                mountPath = "/incomplete-downloads";
+                name = "data";
+                mountPath = "/data";
               }
 
-              {
-                name = "complete";
-                mountPath = "/downloads";
-              }
             ];
 
             env = [
@@ -109,7 +134,7 @@ in {
       };
     };
 
-    resources.ingress.sabnzbd-ip-root = {
+    resources.ingresses.sabnzbd-ip-root = {
       metadata = {
         inherit namespace;
 
@@ -120,7 +145,7 @@ in {
           "glance/name" = "sabnzbd";
           "glance/icon" = "di:sabnzbd";
           "glance/url" = "https://sab.${domain}";
-          "glance/description" = "Pvr";
+          "glance/description" = "Binary newsreader";
           "glance/id" = "sabnzbd";
           "glance/parent" = "sabnzbd";
           "category" = "yarr";
