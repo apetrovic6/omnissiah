@@ -115,6 +115,29 @@
       # Upstream module has Requires= but not After= for the register service,
       # so the bouncer starts before the API key file is created.
       systemd.services.crowdsec-firewall-bouncer.after = ["crowdsec-firewall-bouncer-register.service"];
+      # Some nixpkgs versions use the raw cscli binary in the register service
+      # instead of the NixOS wrapper, so cscli can't find /etc/crowdsec/config.yaml
+      # (NixOS puts the config in the nix store). Override to use the wrapper.
+      systemd.services.crowdsec-firewall-bouncer-register.serviceConfig.ExecStart = lib.mkForce (
+        pkgs.writeShellScript "crowdsec-firewall-bouncer-register-start" ''
+          set -e
+          cscli=/run/current-system/sw/bin/cscli
+          apiKeyFile=/var/lib/crowdsec-firewall-bouncer-register/api-key.cred
+          bouncerName=crowdsec-firewall-bouncer
+          if $cscli bouncers list --output json | ${pkgs.jq}/bin/jq -e -- "any(.[]; .name == \"$bouncerName\")" >/dev/null; then
+            if [ ! -f "$apiKeyFile" ]; then
+              echo "Bouncer registered but API key is not present"
+              exit 1
+            fi
+          else
+            rm -f "$apiKeyFile"
+            if ! $cscli bouncers add --output raw -- "$bouncerName" >"$apiKeyFile"; then
+              rm -f "$apiKeyFile"
+              exit 1
+            fi
+          fi
+        ''
+      );
 
       users.users.crowdsec.extraGroups = ["systemd-journal"];
 

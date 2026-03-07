@@ -12,7 +12,7 @@
 
     services.imperium.taghmata.rke2.server = {
       enable = true;
-      serverAddr = "https://192.168.1.59:9345";
+      serverAddr = "https://192.168.1.60:9345";
     };
   };
 }

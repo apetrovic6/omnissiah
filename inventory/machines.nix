@@ -26,6 +26,7 @@
 
     cypramundi = {
       tags = [];
+      deploy.targetHost =  "root@152.53.34.16";
     };
 
     terra = {
@@ -35,7 +36,7 @@
 
     luna = {
       tags = ["base" "k8s-base" "k8s-server"];
-      deploy.targetHost = "root@192.168.1.59";
+      deploy.targetHost = "root@192.168.1.60";
     };
 
     sol = {
