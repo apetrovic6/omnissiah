@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: vikunja
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: vikunja
-    app.kubernetes.io/version: 1.0.0
-    helm.sh/chart: vikunja-v2.0.2
+    app.kubernetes.io/version: 2.1.0
+    helm.sh/chart: vikunja-2.1.0
   name: vikunja-data
   namespace: vikunja
 spec:
