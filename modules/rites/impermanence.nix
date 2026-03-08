@@ -50,6 +50,7 @@
             "Videos"
             "programming"
             ".config/attic"
+            ".config/pangolin"
             ".config/Bitwarden"
             ".config/noctalia"
             ".config/sabnzbd-tui"

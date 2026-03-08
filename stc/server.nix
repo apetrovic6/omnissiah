@@ -123,11 +123,6 @@
     #   port = 8085;
     # };
 
-    # services.imperium.plex = {
-    #   enable = true;
-    #   port = 32400; # This is just for Caddy, Plex doesn't expose a port option.
-    #   group = "media";
-    # };
 
     # services.imperium.nzbhydra2 = {
     #   enable = true;

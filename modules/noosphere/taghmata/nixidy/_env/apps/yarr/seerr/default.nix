@@ -8,6 +8,7 @@
   sonarr = import ../sonarr {inherit domain namespace db-cluster-name;};
   radarr = import ../radarr {inherit domain namespace db-cluster-name;};
   lidarr = import ../lidarr {inherit domain namespace db-cluster-name;};
+  sabnzbd = import ../sabnzbd {inherit domain namespace;};
 
 in {
   imports = [
@@ -17,6 +18,7 @@ in {
     sonarr
     radarr
     lidarr
+    sabnzbd
   ];
 
   applications.seerr = {

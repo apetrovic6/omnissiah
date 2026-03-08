@@ -73,8 +73,17 @@ in {
 
     user = "immich";
     group = "photos";
-    mediaLocation = "/mnt/nas/photos/";
-    accelerationDevices = [ "/dev/dri/renderD128" ];
+    mediaLocation = "/mnt/nas/photos/immich";
+    accelerationDevices = ["/dev/dri/renderD128"];
+  };
+
+  services.imperium.plex = {
+    enable = true;
+    port = 32400; # This is just for Caddy, Plex doesn't expose a port option.
+    openFirewall = true;
+    user = "plex";
+    group = "media";
+    accelerationDevices = ["*"];
   };
 
   services.newt = {
@@ -97,19 +106,8 @@ in {
           alias = "*.ugalabugala.org";
           site = siteCerberus;
           disable-icmp = true;
-          tcp-ports = "80,443,53,2222,22";
-          udp-ports = "53";
-        };
-
-        keksic = {
-          name = "Keksic";
-          mode = "host";
-          destination = "192.168.1.243";
-          alias = "*.keksic.xyz";
-          site = siteCerberus;
-          disable-icmp = true;
-          tcp-ports = "80,443";
-          udp-ports = "";
+          tcp-ports = "443,80,53,2222,22,32400";
+          udp-ports = "443,80,53,2222,22,32400";
         };
 
         noosphere = {
@@ -119,8 +117,8 @@ in {
           alias = "*.noosphere.uk";
           site = siteCerberus;
           disable-icmp = true;
-          tcp-ports = "80,443";
-          udp-ports = "";
+          tcp-ports = "443,80,22";
+          udp-ports = "443,80,22";
         };
 
         technitium = {
@@ -129,8 +127,8 @@ in {
           destination = "192.168.1.105";
           site = siteCerberus;
           disable-icmp = true;
-          tcp-ports = "53";
-          udp-ports = "53";
+          tcp-ports = "443,80,53,2222";
+          udp-ports = "443,80,53,2222";
         };
       };
     };
@@ -189,8 +187,8 @@ in {
         nfsVersion = "3";
         extraOptions = ["nolock"];
       };
-      
-      exports.photos= {
+
+      exports.photos = {
         remotePath = "${nasRoot}/photos";
         mountPoint = "${serverRoot}/photos";
       };
@@ -258,8 +256,9 @@ in {
     '';
   };
 
+  # users.users.plex.extraGroups = ["media"];
   users.users.immich.extraGroups = ["photos"];
-  users.groups.photos= {
+  users.groups.photos = {
     gid = 65541;
   };
 
@@ -450,6 +449,73 @@ in {
   services.caddy.virtualHosts = {
     "${mkDomain "ha"}" = {
       extraConfig = mkRevProxyVHost {port = 8123;};
+    };
+  };
+
+  # Pangolin/Newt routes all *.noosphere.uk traffic to this machine because it
+  # shares a site VPN IP with ugala-bugala. Caddy catches it here and forwards
+  # to the k8s MetalLB VIP (Traefik), preserving the original SNI so Traefik
+  # can select the right certificate and Ingress route.
+  services.caddy.virtualHosts = {
+    "*.noosphere.uk" = {
+      extraConfig = ''
+        reverse_proxy https://192.168.1.240 {
+          header_up Host {http.request.host}
+          transport http {
+            tls_server_name {http.request.host}
+          }
+        }
+        tls {
+          dns cloudflare {$CLOUDFLARE_API_TOKEN}
+        }
+      '';
+    };
+  };
+
+  # keksic.xyz is on a separate Cloudflare account — needs its own token.
+  clan.core.vars.generators."caddy-keksic" = {
+    files."keksic.env" = {
+      secret = true;
+      owner = config.services.caddy.user;
+      group = config.services.caddy.group;
+      mode = "0400";
+    };
+    prompts.token = {
+      description = "Cloudflare API token for keksic.xyz DNS-01 challenge";
+      type = "hidden";
+      persist = true;
+    };
+    runtimeInputs = [pkgs.coreutils];
+    script = ''
+            token="$(cat "$prompts/token")"
+            cat > "$out/keksic.env" <<EOF
+      CLOUDFLARE_API_TOKEN_KEKSIC=$token
+      EOF
+    '';
+  };
+
+  # Inject the keksic token alongside the existing caddy.env.
+  systemd.services.caddy.serviceConfig.EnvironmentFile = lib.mkForce [
+    config.services.caddy.environmentFile
+    config.clan.core.vars.generators."caddy-keksic".files."keksic.env".path
+  ];
+
+  # Pangolin non-deterministically routes the shared VPN IP to either the
+  # cerberus or keksic site peer depending on the client. Cerberus Caddy
+  # proxies keksic.xyz on to the keksic VM for clients that land here.
+  services.caddy.virtualHosts = {
+    "*.keksic.xyz" = {
+      extraConfig = ''
+        reverse_proxy https://192.168.1.243 {
+          header_up Host {http.request.host}
+          transport http {
+            tls_server_name {http.request.host}
+          }
+        }
+        tls {
+          dns cloudflare {$CLOUDFLARE_API_TOKEN_KEKSIC}
+        }
+      '';
     };
   };
 }

@@ -38,7 +38,7 @@
         accelerationDevices = cfg.accelerationDevices;
       };
 
-      environment.persistence."/persist".directories = ["/var/lib/plex"];
+      # environment.persistence."/persist".directories = ["/var/lib/plex"];
 
       services.caddy.virtualHosts = {
         "${mkDomain cfg.subdomain}" = {

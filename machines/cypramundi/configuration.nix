@@ -155,9 +155,9 @@ in {
 
   services.imperium.crowdsec.enable = true;
 
-  # systemd.services.traefik.serviceConfig.EnvironmentFile = [
-  #   config.clan.core.vars.generators.cloudflare-dns.files."cloudflare-dns.env".path
-  # ];
+  services.traefik.environmentFiles = [
+    config.clan.core.vars.generators.cloudflare-dns.files."cloudflare-dns.env".path
+  ];
 
   services.dbus.enable = true;
   users.mutableUsers = false;

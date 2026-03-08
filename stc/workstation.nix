@@ -22,7 +22,10 @@
 
     nixpkgs.overlays = [ self.overlays.pangolin-cli ];
 
-    networking.nameservers = ["192.168.1.105"];
+    networking.nameservers = [
+      "192.168.1.105"
+      # "9.9.9.9"
+    ];
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.login.enableGnomeKeyring = true;

@@ -33,17 +33,11 @@
       lidSwitchDocked = "ignore";
     };
 
-    systemd.sleep.extraConfig = ''
-      # Valid kernel state for suspend-to-RAM:
-      # values must come from: freeze mem disk
-      SuspendState=mem
-
-      # How hibernate should write to /sys/power/disk
-      HibernateMode=shutdown
-
-      # Suspend-then-hibernate timing logic
-      HibernateDelaySec=1h
-      SuspendEstimationSec=0
-    '';
+    systemd.sleep.settings.Sleep = {
+       HibernateDelaySec = "1h";
+        SuspentSTate = "mem";
+        HibernateMode = "shutdown";
+      SuspendEstimationSec=0;
+     };
   };
 }
