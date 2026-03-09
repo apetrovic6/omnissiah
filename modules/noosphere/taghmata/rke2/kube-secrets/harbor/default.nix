@@ -410,20 +410,14 @@ in {
       share = true;
 
       prompts.client-id = {
-        description = "Keycloak Client ID for Harbor";
+        description = "Pocket ID Client ID for Harbor (from tofunix harbor-oidc secret or Pocket ID UI)";
         type = "line";
         persist = false;
       };
 
       prompts.client-secret = {
-        description = "Keycloak Client Secret for Harbor";
+        description = "Pocket ID Client Secret for Harbor (from tofunix harbor-oidc secret or Pocket ID UI)";
         type = "hidden";
-        persist = false;
-      };
-
-      prompts.oidc-endpoint = {
-        description = "Keycloak OIDC Endpoint (e.g., https://keycloak.noosphere.uk/realms/adeptus-terra)";
-        type = "line";
         persist = false;
       };
 
@@ -436,18 +430,17 @@ in {
 
         client_id="$(tr -d '\r\n' < "$prompts/client-id")"
         client_secret="$(tr -d '\r\n' < "$prompts/client-secret")"
-        oidc_endpoint="$(tr -d '\r\n' < "$prompts/oidc-endpoint")"
 
         # Create Harbor CONFIG_OVERWRITE_JSON
         config_json=$(jq -cn \
           --arg auth_mode "oidc_auth" \
-          --arg oidc_name "Keycloak" \
-          --arg oidc_endpoint "$oidc_endpoint" \
+          --arg oidc_name "Pocket ID" \
+          --arg oidc_endpoint "https://id.noosphere.uk" \
           --arg oidc_client_id "$client_id" \
           --arg oidc_client_secret "$client_secret" \
           --arg oidc_groups_claim "groups" \
-          --arg oidc_admin_group "harbor-admins" \
-          --arg oidc_scope "openid,profile,email,offline_access" \
+          --arg oidc_admin_group "Admin" \
+          --arg oidc_scope "openid,profile,email" \
           --argjson oidc_verify_cert true \
           --argjson oidc_auto_onboard true \
           --arg oidc_user_claim "preferred_username" \

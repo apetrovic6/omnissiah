@@ -107,6 +107,27 @@ in {
     };
   };
 
+  resource.pocketid_client.audiobookshelf = let
+    baseUrl = "https://audiobookshelf.ugalabugala.org";
+  in {
+    name = "Audiobookshelf";
+    callback_urls = [
+      "${baseUrl}/auth/openid/callback"
+      "${baseUrl}/auth/openid/mobile-redirect"
+    ];
+
+    logout_callback_urls = [
+      baseUrl
+    ];
+
+    allowed_user_groups = [
+      ref.pocketid_group.users.id
+    ];
+
+    pkce_enabled = false;
+    launch_url = baseUrl;
+  };
+
   resource.pocketid_client.argocd = let
     baseUrl = "https://argocd.${domain}";
   in {
@@ -139,6 +160,36 @@ in {
     data = {
       client-id = ref.pocketid_client.argocd.id;
       client-secret = ref.pocketid_client.argocd.client_secret;
+    };
+  };
+
+  resource.pocketid_client.harbor = let
+    baseUrl = "https://harbor.${domain}";
+  in {
+    name = "Harbor";
+    callback_urls = [
+      "${baseUrl}/c/oidc/callback"
+    ];
+
+    logout_callback_urls = [baseUrl];
+
+    allowed_user_groups = [
+      ref.pocketid_group.users.id
+    ];
+
+    pkce_enabled = false;
+    launch_url = baseUrl;
+  };
+
+  resource.kubernetes_secret_v1.harbor-oidc = {
+    metadata = {
+      name = "harbor-oidc";
+      namespace = "harbor";
+    };
+
+    data = {
+      client-id = ref.pocketid_client.harbor.id;
+      client-secret = ref.pocketid_client.harbor.client_secret;
     };
   };
 }
