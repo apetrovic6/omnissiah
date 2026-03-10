@@ -19,12 +19,6 @@
 
     # TODO: Setup services so that they listen on localhost
 
-    # services.imperium.audiobookshelf = {
-    #   enable = true;
-    #   port = 8008;
-    #   group = "media";
-    #   openFirewall = false;
-    # };
 
     # services.imperium.tautulli = {
     #   enable = true;

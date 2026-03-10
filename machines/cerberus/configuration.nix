@@ -56,6 +56,16 @@ in {
     };
   };
 
+  users.users.audiobookshelf.extraGroups = ["media"];
+
+  services.imperium.audiobookshelf = {
+    enable = true;
+    port = 8008;
+    group = "media";
+    openFirewall = false;
+    subdomain = "audiobookshelf";
+  };
+
   services.imperium.immich = {
     enable = true;
 
@@ -85,6 +95,8 @@ in {
     group = "media";
     accelerationDevices = ["*"];
   };
+
+  users.users.plex.extraGroups = ["media"];
 
   services.newt = {
     enable = true;
@@ -231,6 +243,32 @@ in {
     '';
   };
 
+  clan.core.state.audiobookshelf= {
+    folders = [
+      "/var/lib/audiobookshelf/metadata/backups"
+    ];
+
+    preBackupScript = ''
+      export PATH=${
+        lib.makeBinPath [
+          config.systemd.package
+        ]
+      }
+
+        systemctl stop audiobookshelf.service
+    '';
+
+    postBackupScript = ''
+        export PATH=${
+        lib.makeBinPath [
+          config.systemd.package
+        ]
+      }
+
+      systemctl start audiobookshelf.service
+    '';
+  };
+
   # clan.core.postgresql.enable = true;
 
   # Write /var/lib/hass/secrets.yaml at runtime so Home Assistant can use !secret db_url.
@@ -256,7 +294,6 @@ in {
     '';
   };
 
-  # users.users.plex.extraGroups = ["media"];
   users.users.immich.extraGroups = ["photos"];
   users.groups.photos = {
     gid = 65541;
