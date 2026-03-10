@@ -9,6 +9,7 @@
     self,
     config,
     pkgs,
+    lib,
     ...
   }: 
   {
@@ -22,10 +23,10 @@
 
     nixpkgs.overlays = [ self.overlays.pangolin-cli ];
 
-    networking.nameservers = [
-      "192.168.1.105"
-      # "9.9.9.9"
-    ];
+    networking.nameservers = ["192.168.1.105"];
+    # Prevent NetworkManager from pushing DHCP-provided DNS to systemd-resolved,
+    # which would override Technitium and cause intermittent split-horizon failures.
+    networking.networkmanager.dns = lib.mkForce "none";
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.login.enableGnomeKeyring = true;
