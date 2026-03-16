@@ -151,6 +151,7 @@
       neomutt
       proton-vpn-cli
       pangolin-cli
+      element-desktop
 
       alacritty
       nfs-utils
