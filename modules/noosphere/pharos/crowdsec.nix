@@ -139,6 +139,18 @@
         ''
       );
 
+      # Whitelist all Matrix API traffic — registration/auth flows generate
+      # enough 401s to trigger the http-generic-401-bf ban.
+      environment.etc."crowdsec/parsers/s02-enrich/matrix-whitelist.yaml".text = ''
+        name: local/matrix-whitelist
+        description: "Whitelist Matrix API endpoints"
+        whitelist:
+          reason: "Matrix API traffic"
+          expression:
+            - "evt.Parsed.request startsWith '/_matrix/'"
+            - "evt.Parsed.request startsWith '/_synapse/'"
+      '';
+
       users.users.crowdsec.extraGroups = ["systemd-journal"];
 
       services.crowdsec-firewall-bouncer = {

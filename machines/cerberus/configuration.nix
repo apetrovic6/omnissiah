@@ -243,7 +243,7 @@ in {
     '';
   };
 
-  clan.core.state.audiobookshelf= {
+  clan.core.state.audiobookshelf = {
     folders = [
       "/var/lib/audiobookshelf/metadata/backups"
     ];
@@ -423,7 +423,9 @@ in {
 
   services.dbus.enable = true;
 
-  services.home-assistant = {
+  services.home-assistant = let
+    yaml = pkgs.formats.yaml {};
+  in {
     enable = true;
 
     extraPackages = ps:
@@ -480,6 +482,54 @@ in {
         time_zone = "Europe/Zagreb";
         temperature_unit = "C";
       };
+
+      automation = [
+        {
+          alias = "Turn on lamp on sunset";
+          description = "";
+          mode = "single";
+          triggers = [
+            {
+              trigger = "time";
+              at = "21:00:00";
+              weekday = ["mon" "tue" "wed" "thu" "fri" "sat" "sun"];
+            }
+          ];
+          conditions = [];
+          actions = [
+            {
+              type = "turn_on";
+              device_id = "aec38ac4e11c2de001daeb6a1c9d7ca2";
+              entity_id = "bd1206a71a6b20abb3d7ad3be3ef5698";
+              domain = "light";
+              brightness_pct = 15;
+            }
+          ];
+        }
+
+        {
+          alias = "Turn off lamp before sleep";
+          description = "";
+          mode = "single";
+          triggers = [
+            {
+              trigger = "time";
+              at = "23:30:00";
+              weekday = ["mon" "tue" "wed" "thu" "fri" "sat" "sun"];
+            }
+          ];
+          conditions = [];
+          actions = [
+            {
+              type = "turn_off";
+              device_id = "aec38ac4e11c2de001daeb6a1c9d7ca2";
+              entity_id = "bd1206a71a6b20abb3d7ad3be3ef5698";
+              domain = "light";
+              metadata.secondary = false;
+            }
+          ];
+        }
+      ];
     };
   };
 

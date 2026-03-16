@@ -48,26 +48,25 @@
       settings = {
         server_name = domain;
         public_baseurl = "https://${matrixDomain}";
-
+        serve_server_wellknown = true;
         listeners = [
           {
             port = 8008;
             bind_addresses = ["127.0.0.1"];
             type = "http";
             tls = false;
-            x.forwrded = true;
+            x_forwarded = true;
             resources = [
               {
-                names = ["client"];
+                names = ["client" "federation"];
                 compress = true;
               }
             ];
           }
         ];
 
-
         database = {
-          name =  "psycopg2";
+          name = "psycopg2";
           allow_unsafe_locale = true;
           args = {
             user = "matrix-synapse";
@@ -78,34 +77,36 @@
 
         max_upload_size = "100";
         url_preview_enabled = true;
-        enable_registration = false;
+        enable_registration = true;
+        registration_requires_token = true;
         enable_metrics = false;
 
         trusted_key_servers = [{server_name = "matrix.org";}];
       };
     };
 
-    services.nginx.virtualHosts.${domain} = {
-      enableACME = true;
-      forceSSL = true;
-      locations. "= /.well-known/matrix/server".extraConfig = mkWellKnown serverConfig;
-      locations. "= /.well-known/matrix/client".extraConfig = mkWellKnown clientConfig;
-    };
+    # services.nginx.enable = true;
+    # services.nginx.virtualHosts.${domain} = {
+    #   enableACME = true;
+    #   forceSSL = true;
+    #   locations. "= /.well-known/matrix/server".extraConfig = mkWellKnown serverConfig;
+    #   locations. "= /.well-known/matrix/client".extraConfig = mkWellKnown clientConfig;
+    # };
 
-    services.nginx.virtualHosts.${matrixDomain} = {
-      enableACME = true;
-      forceSSL = true;
-      locations."/" = {
-        proxyPass = "http://127.0.0.1:8008";
-        extraConfig = ''
-          proxy_set_header X-Forwarded-For $remote_addr;
-          proxy_set_header x-Forwarded-Proto $scheme;
-          proxy_set_header Host $host;
-          client_max_body_size 100M;
-          '';
-      };
-    };
+    # services.nginx.virtualHosts.${matrixDomain} = {
+    #   enableACME = true;
+    #   forceSSL = true;
+    #   locations."/" = {
+    #     proxyPass = "http://127.0.0.1:8008";
+    #     extraConfig = ''
+    #       proxy_set_header X-Forwarded-For $remote_addr;
+    #       proxy_set_header x-Forwarded-Proto $scheme;
+    #       proxy_set_header Host $host;
+    #       client_max_body_size 100M;
+    #       '';
+    #   };
+    # };
 
-   networking.firewall.allowedTCPPorts = [8448];   
+    # networking.firewall.allowedTCPPorts = [8448];
   };
 }

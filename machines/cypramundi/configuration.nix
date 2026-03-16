@@ -83,6 +83,7 @@ in {
     # self.inputs.omnishell.nixosModules.helix
     self.nixosModules.postgresql
     self.nixosModules.pharos
+    self.nixosModules.vox
   ];
 
   disko.devices.disk.main.imageSize = "3500M"; # adjust as needed
@@ -114,6 +115,11 @@ in {
       databases = ["pangolin"];
       ensureDBOwnership = true;
       passwordDependency = "pangolin";
+    };
+
+    users.matrix-synapse = {
+      databases = ["matrix-synapse"];
+      ensureDBOwnership = true;
     };
   };
 
@@ -159,6 +165,47 @@ in {
     config.clan.core.vars.generators.cloudflare-dns.files."cloudflare-dns.env".path
   ];
 
+  services.traefik.dynamicConfigOptions = {
+    http = {
+      routers = {
+        matrix = {
+          rule = "Host(`matrix.ugalabugala.org`)";
+          entryPoints = ["websecure"];
+          service = "matrix-synapse";
+          tls.certResolver = "letsencrypt";
+          middlewares = ["matrix-headers" "matrix-body-limit"];
+        };
+        # .well-known on the base domain — route to synapse (serve_server_wellknown = true in matrix.nix)
+        matrix-well-known = {
+          rule = "Host(`ugalabugala.org`) && PathPrefix(`/.well-known/matrix`)";
+          entryPoints = ["websecure"];
+          service = "matrix-synapse";
+          tls.certResolver = "letsencrypt";
+          middlewares = ["matrix-cors"];
+          priority = 100; # higher than Pangolin's catch-all
+        };
+      };
+
+      services.matrix-synapse = {
+        loadBalancer.servers = [{url = "http://127.0.0.1:8008";}];
+      };
+
+      middlewares = {
+        matrix-headers.headers = {
+          # Traefik passes X-Forwarded-For/Proto/Host automatically;
+          # this just ensures the real IP reaches synapse
+          customRequestHeaders."X-Forwarded-For" = "";
+        };
+        matrix-body-limit.buffering = {
+          maxRequestBodyBytes = 104857600; # 100M
+        };
+        matrix-cors.headers = {
+          accessControlAllowOriginList = ["*"];
+        };
+      };
+    };
+  };
+
   services.dbus.enable = true;
   users.mutableUsers = false;
 
@@ -173,7 +220,7 @@ in {
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [22 80 443 51799];
+    allowedTCPPorts = [22 80 443];
     allowedUDPPorts = [80 443 21820];
   };
 
