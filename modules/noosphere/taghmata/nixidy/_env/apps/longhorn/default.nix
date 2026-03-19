@@ -65,8 +65,8 @@ in {
         };
         preUpgradeChecker.upgradeVersionCheck = false;
         image.longhorn = {
-          instanceManager.tag = "v1.11.0-hotfix-1";
-          manager.tag = "v1.11.0-hotfix-1";
+          # instanceManager.tag = "v1.11.0-hotfix-1";
+          # manager.tag = "v1.11.0-hotfix-1";
         };
         persistence = {
           defaultClassReplicaCount = 2;
