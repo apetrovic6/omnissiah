@@ -12,7 +12,7 @@
 
   flake.overlays.newt = final: prev: {
     fosrl-newt = prev.fosrl-newt.overrideAttrs (old: {
-      version = "1.10.1";
+      version = "1.10.3";
       src = final.fetchFromGitHub {
         owner = "fosrl";
         repo = "newt";
