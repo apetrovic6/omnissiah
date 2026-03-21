@@ -91,7 +91,6 @@
         database = with cfg.database; {
           enable = false;
           createDB = false;
-          enableVectorChord = true;
 
           inherit user port host name;
         };
