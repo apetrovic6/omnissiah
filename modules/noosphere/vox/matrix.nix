@@ -75,7 +75,7 @@
           };
         };
 
-        max_upload_size = "100";
+        max_upload_size = "100M";
         url_preview_enabled = true;
         enable_registration = true;
         registration_requires_token = true;
