@@ -29,8 +29,8 @@ in {
   ];
 
   nixpkgs.overlays = [self.overlays.newt];
-
   services.qemuGuest.enable = true;
+  nixpkgs.config = { allowUnfree = true; };
 
   services.caddy.virtualHosts = {
     "${mkDomain "syn"}" = {
@@ -327,6 +327,7 @@ in {
 
   services.imperium.forgejo = {
     enable = true;
+    package = pkgs.forgejo;
 
     user = "forgejo";
     group = "git";

@@ -12,6 +12,7 @@
 
     genetor = {
       machineClass = "darwin";
+      deploy.targetHost = "root@192.168.1.109";
     };
 
     cerberus = {
