@@ -32,6 +32,8 @@
       flake = false;
     };
 
+    nix-jetbrains-plugins.url = "github:nix-community/nix-jetbrains-plugins";
+
     clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
 
     nixpkgs.follows = "nixpkgs-unstable";
@@ -124,7 +126,7 @@
     flake-parts,
     import-tree,
     nixhelm,
-    nixpkgs,
+    # nixpkgs,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
@@ -147,7 +149,11 @@
       # https://docs.clan.lol/guides/flake-parts
       clan = {
         imports = [./clan.nix];
-
+        pkgsForSystem = system:
+          import inputs.nixpkgs {
+            inherit system;
+            config.allowUnfree = true;
+          };
       };
 
       perSystem = {
@@ -166,6 +172,9 @@
           terra = self.nixosConfigurations.terra.config.system.build.toplevel;
           luna = self.nixosConfigurations.luna.config.system.build.toplevel;
           phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
+          cerberus = self.nixosConfigurations.cerberus.config.system.build.toplevel;
+          alfrost = self.nixosConfigurations.alfrost.config.system.build.toplevel;
+          cypramundi = self.nixosConfigurations.cypramundi.config.system.build.toplevel;
         };
 
         noosphere.nixidy = {
@@ -189,10 +198,6 @@
             kube-prometheus-stack.chart = nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
             prometheus.chart = nixhelm.chartsDerivations.${system}.prometheus-community.prometheus;
             csi-driver-nfs.chart = nixhelm.chartsDerivations.${system}.kubernetes-csi.csi-driver-nfs;
-            percona-server-mongodb-operator = {
-              chart = nixhelm.chartsDerivations.${system}.percona.psmdb-operator;
-              outputName = "psmdb-crd.nix";
-            };
 
             barman-cloud.chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.plugin-barman-cloud;
             garage-operator.chart = pkgs.runCommand "garage-operator-chart" {} ''

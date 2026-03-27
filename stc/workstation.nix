@@ -11,8 +11,7 @@
     pkgs,
     lib,
     ...
-  }: 
-  {
+  }: {
     imports = [
       self.nixosModules.flatpak
       self.inputs.magos.nixosModules.default
@@ -21,12 +20,14 @@
       self.nixosModules.virtualisation
     ];
 
-    nixpkgs.overlays = [ self.overlays.pangolin-cli ];
+    nixpkgs.overlays = [self.overlays.pangolin-cli];
 
     networking.nameservers = ["192.168.1.105"];
     # Prevent NetworkManager from pushing DHCP-provided DNS to systemd-resolved,
     # which would override Technitium and cause intermittent split-horizon failures.
     networking.networkmanager.dns = lib.mkForce "none";
+    # Remove compiled-in fallback DNS servers so only Technitium is used.
+    services.resolved.fallbackDns = [];
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.login.enableGnomeKeyring = true;
@@ -110,7 +111,17 @@
       # };
     };
 
-    environment.systemPackages = with pkgs; [
+    environment.systemPackages = with pkgs; let
+      inherit (self.inputs.nix-jetbrains-plugins.lib) buildIdeWithPlugins;
+
+      commonPlugins = [
+        "IdeaVIM"
+      ];
+
+      intellijPlugins = [
+        "com.jetbrains.kmm"
+      ];
+    in [
       thunar
       zathura
       file-roller
@@ -127,6 +138,7 @@
       freerdp
 
       plex-desktop
+      plex-htpc
       plexamp
       bitwarden-desktop
 
@@ -146,6 +158,8 @@
 
       exercism
 
+      xwayland
+
       (self.inputs.dagger-cli.packages.${system}.dagger)
 
       neomutt
@@ -155,6 +169,8 @@
 
       alacritty
       nfs-utils
+      (buildIdeWithPlugins pkgs "idea" commonPlugins)
+      (buildIdeWithPlugins pkgs "rust-rover" commonPlugins)
     ];
 
     services.protonmail-bridge = {

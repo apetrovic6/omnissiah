@@ -18,6 +18,18 @@
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
+    # borgbackup = {
+    #   module = {
+    #     name = "borgbackup";
+    #     input = "clan-core";
+    #   };
+
+    #   roles.client.machines = {
+    #     cerberus = 
+    #   };
+    # };
+
+    
     laptop = {
       module.input = "self";
       module.name = "@imperium/laptop";

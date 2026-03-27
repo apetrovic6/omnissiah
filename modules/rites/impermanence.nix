@@ -49,6 +49,7 @@
             "Documents"
             "Videos"
             "programming"
+            ".android"
             ".config/attic"
             ".config/pangolin"
             ".config/Bitwarden"

@@ -14,6 +14,8 @@
   }: {
     imports = [];
 
+    nixpkgs.overlays = [self.overlays.rke2];
+
     services.tailscale = {
       enable = lib.mkForce false;
     };
@@ -39,6 +41,9 @@
     # Make mount helpers visible in FHS-ish locations Longhorn expects via nsenter
     systemd.tmpfiles.rules = [
       "d /mnt/storage/garage 0755 root root -"
+      "d /var/lib/nfs 0755 root root -"
+      "d /var/lib/nfs/sm 0755 root root -"
+      "d /var/lib/nfs/sm.bak 0755 root root -"
       "L+ /bin/mount - - - - ${pkgs.util-linux}/bin/mount"
       "L+ /usr/bin/mount - - - - ${pkgs.util-linux}/bin/mount"
 
@@ -53,6 +58,10 @@
 
     environment.systemPackages = with pkgs; [nfs-utils util-linux openiscsi cryptsetup];
     boot.kernelModules = ["iscsi_tcp" "dm_crypt"];
+
+    services.rpcbind.enable = true;
+    systemd.packages = [ pkgs.nfs-utils ];
+    systemd.services.rpc-statd.wantedBy = [ "multi-user.target" ];
 
     services.openiscsi = {
       enable = true;

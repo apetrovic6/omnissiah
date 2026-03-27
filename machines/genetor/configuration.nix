@@ -10,6 +10,8 @@
     ../../users/apetrovic/home-darwin.nix
   ];
 
+  nixpkgs.config = { allowUnfree = true; };
+
   system.primaryUser = "apetrovic";
   nix-homebrew = {
     enable = true;
@@ -67,6 +69,8 @@
     obsidian
     bitwarden-desktop
     localsend
+    devenv
+    claude-code
   ];
   nix.enable = false;
   fonts.packages = [
@@ -75,8 +79,6 @@
     pkgs.nerd-fonts.hack
     pkgs.nerd-fonts.jetbrains-mono
   ];
-
-  nixpkgs.config.allowUnfree = true;
 
   users.users.root.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOuTvHKw/dHSm0NLjCQsk/9sPyNRerLB/wWuwitVpvdg"

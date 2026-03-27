@@ -1,4 +1,17 @@
 { ...}: {
+  flake.overlays.rke2 = final: prev: {
+    rke2_1_35 = prev.rke2_1_35.overrideAttrs (old: {
+      # GOEXPERIMENT=boringcrypto makes runtime.Version() return "go1.26.1-X:boringcrypto"
+      # but the ldflag sets UpstreamGolang=go1.26.1 — k8s validation fails on the mismatch.
+      # Append the boringcrypto suffix so they match.
+      ldflags = map (flag:
+        if final.lib.hasPrefix "-X github.com/k3s-io/k3s/pkg/version.UpstreamGolang=" flag
+        then flag + "-X:boringcrypto"
+        else flag
+      ) old.ldflags;
+    });
+  };
+
   flake.overlays.pangolin-cli = final: prev: {
     pangolin-cli = prev.pangolin-cli.overrideAttrs (old: {
       version = "0.5.1";

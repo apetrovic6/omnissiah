@@ -17,6 +17,19 @@
   # Sets the private key secret for sops secrets operator in the cluster
   noosphere.taghmata.sopsAgeKey.enable = true;
 
+networking.interfaces.enp1s0 = {
+    useDHCP = false;
+    ipv4.addresses = [{
+      address = "192.168.1.138";
+      prefixLength = 24;
+    }];
+  };
+  networking.defaultGateway = {
+    address = "192.168.1.1";
+    interface = "enp1s0";
+  };
+  networking.nameservers = [ "192.168.1.105" ]; 
+
   magos.stylix = {
     enable = true;
     image = ../../wallpapers/lofi/17.png;

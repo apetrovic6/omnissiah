@@ -93,10 +93,9 @@
     };
 
     services.tailscale = {
-      enable = true;
+      enable = false;
       openFirewall = true;
     };
 
-    nixpkgs.config.allowUnfree = true;
   };
 }

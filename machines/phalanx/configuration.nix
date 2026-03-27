@@ -20,6 +20,22 @@ in {
     self.inputs.nixvirt.nixosModules.default
   ];
 
+  nixpkgs.config = { allowUnfree = true; }
+  ;
+
+networking.interfaces.enp6s0= {
+    useDHCP = false;
+    ipv4.addresses = [{
+      address = "192.168.1.46";
+      prefixLength = 24;
+    }];
+  };
+  networking.defaultGateway = {
+    address = "192.168.1.1";
+    interface = "enp1s0";
+  };
+  networking.nameservers = [ "192.168.1.105" ];
+    virtualisation.waydroid.enable = true;
   # nix = {
   #   extraOptions = ''
   #     !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
@@ -32,6 +48,8 @@ in {
   #     ];
   #   };
   # };
+
+  networking.nftables.enable = true;
 
   boot = {
     kernelParams = ["amd_iommu=on"];
