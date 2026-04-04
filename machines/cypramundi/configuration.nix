@@ -210,13 +210,7 @@ in {
   users.mutableUsers = false;
 
   networking.networkmanager.enable = false;
-  # networking.useNetworkd = true;
-  # systemd.network.enable = true;
-  # systemd.network.networks."10-enp3s0" = {
-  #   matchConfig.Name = "enp3s0";
-  #   address = ["192.168.240.44/24"];
-  #   gateway = ["192.168.240.1"];
-  # };
+  networking.interfaces.ens3.useDHCP = true;
 
   networking.firewall = {
     enable = true;
