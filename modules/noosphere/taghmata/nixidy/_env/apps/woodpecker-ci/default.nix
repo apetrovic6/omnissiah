@@ -165,27 +165,14 @@ in {
           size = "15Gi";
         };
 
-        bootstrap.recovery = {
-          source = "origin";
-          recoveryTarget.targetTime = "2026-02-16T00:00:00Z";
-        };
-
-        externalClusters = [
-          {
-            name = "origin";
-            plugin = {
-              name = "barman-cloud.cloudnative-pg.io";
-              parameters = {
-                barmanObjectName = objectStoreName;
-                serverName = "pg-woodpecker";
-              };
-            };
-          }
-        ];
-
         walStorage = {
           storageClass = "longhorn-cnpg-strict-local";
           size = "15Gi";
+        };
+
+        backup = {
+          target = "prefer-standby";
+          retentionPolicy = "30d";
         };
 
         plugins = [

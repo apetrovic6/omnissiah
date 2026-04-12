@@ -7,18 +7,9 @@ metadata:
   name: pg-woodpecker-rev-1
   namespace: woodpecker
 spec:
-  bootstrap:
-    recovery:
-      recoveryTarget:
-        targetTime: "2026-02-16T00:00:00Z"
-      source: origin
-  externalClusters:
-    - name: origin
-      plugin:
-        name: barman-cloud.cloudnative-pg.io
-        parameters:
-          barmanObjectName: woodpecker-object-store
-          serverName: pg-woodpecker
+  backup:
+    retentionPolicy: 30d
+    target: prefer-standby
   imageName: ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie
   instances: 3
   monitoring:
