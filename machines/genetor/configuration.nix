@@ -21,7 +21,7 @@
     taps = {
       "homebrew/homebrew-core" = self.inputs.homebrew-core;
       "homebrew/homebrew-cask" = self.inputs.homebrew-cask;
-      "quickemu-project/homebrew-quickemu" = self.inputs.homebrew-quickemu;
+      # "quickemu-project/homebrew-quickemu" = self.inputs.homebrew-quickemu;
     };
 
     # Optional: Enable fully-declarative tap management
@@ -34,7 +34,7 @@
     enable = true;
     brews = [
       "mas"
-      "quickemu"
+      # "quickemu"
     ];
     casks = [
       "ghostty"
@@ -109,7 +109,6 @@
       "System/Applications/Reminders.app"
       "System/Applications/App Store.app"
       "/Applications/Librewolf.app"
-      "/Applications/Waterfox.app"
       "/Applications/Ghostty.app"
       "/Applications/Cubase 14.app"
       "System/Applications/System Settings.app"
