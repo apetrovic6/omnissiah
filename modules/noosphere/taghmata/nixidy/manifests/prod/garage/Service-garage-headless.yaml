@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: garage
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage
-    app.kubernetes.io/version: v2.2.0
-    helm.sh/chart: garage-0.9.2
+    app.kubernetes.io/version: v2.3.0
+    helm.sh/chart: garage-0.9.3
   name: garage-headless
   namespace: garage
 spec:
