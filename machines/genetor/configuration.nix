@@ -10,7 +10,7 @@
     ../../users/apetrovic/home-darwin.nix
   ];
 
-  nixpkgs.config = { allowUnfree = true; };
+  nixpkgs.config = {allowUnfree = true;};
 
   system.primaryUser = "apetrovic";
   nix-homebrew = {
@@ -39,11 +39,12 @@
     casks = [
       "ghostty"
       "bambu-studio"
-      # "steinberg-download-assistant"
-      # "steinberg-library-manager"
-      # "ilok-license-manager"
-      # "microsoft-teams"
-      # "native-access"
+      "steinberg-download-assistant"
+      "steinberg-library-manager"
+      "ilok-license-manager"
+      "microsoft-teams"
+      "native-access"
+      "librewolf"
     ];
     onActivation = {
       cleanup = "zap";
@@ -52,9 +53,9 @@
     };
 
     masApps = {
-      "Xcode" = 497799835;
+      # "Xcode" = 497799835;
       #"Tailscale" = 1475387142;
-      "LocalSend" = 1661733229;
+      # "LocalSend" = 1661733229;
     };
 
     taps = builtins.attrNames config.nix-homebrew.taps;
@@ -73,8 +74,11 @@
     localsend
     devenv
     claude-code
+    xcodes
   ];
+  
   nix.enable = false;
+
   fonts.packages = [
     pkgs.nerd-fonts.fira-code
     pkgs.nerd-fonts.fira-mono
@@ -85,6 +89,7 @@
   users.users.root.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOuTvHKw/dHSm0NLjCQsk/9sPyNRerLB/wWuwitVpvdg"
   ];
+
   system.stateVersion = 6;
 
   clan.core.networking.targetHost = "root@192.168.1.149";
