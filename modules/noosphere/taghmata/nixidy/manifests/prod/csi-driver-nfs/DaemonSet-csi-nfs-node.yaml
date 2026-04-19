@@ -50,6 +50,7 @@ spec:
             - --v=2
             - --csi-address=/csi/csi.sock
             - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+            - --timeout=60s
             - --http-endpoint=localhost:19809
           env:
             - name: DRIVER_REG_SOCK_PATH
@@ -67,7 +68,7 @@ spec:
               path: /healthz
               port: healthz
             initialDelaySeconds: 20
-            periodSeconds: 5
+            periodSeconds: 20
             timeoutSeconds: 10
           name: node-driver-registrar
           ports:
