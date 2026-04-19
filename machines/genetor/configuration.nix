@@ -21,6 +21,7 @@
     taps = {
       "homebrew/homebrew-core" = self.inputs.homebrew-core;
       "homebrew/homebrew-cask" = self.inputs.homebrew-cask;
+      "quickemu-project/homebrew-quickemu" = self.inputs.homebrew-quickemu;
     };
 
     # Optional: Enable fully-declarative tap management
@@ -33,6 +34,7 @@
     enable = true;
     brews = [
       "mas"
+      "quickemu"
     ];
     casks = [
       "ghostty"
@@ -51,8 +53,8 @@
 
     masApps = {
       "Xcode" = 497799835;
-      "Tailscale" = 1475387142;
-      #"LocalSend" = 1661733229;
+      #"Tailscale" = 1475387142;
+      "LocalSend" = 1661733229;
     };
 
     taps = builtins.attrNames config.nix-homebrew.taps;

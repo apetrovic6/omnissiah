@@ -167,6 +167,8 @@
       pangolin-cli
       element-desktop
 
+      quickemu
+
       alacritty
       nfs-utils
       (buildIdeWithPlugins pkgs "idea" commonPlugins)

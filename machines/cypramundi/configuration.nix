@@ -5,40 +5,40 @@
   pkgs,
   ...
 }: let
+  pangolinSrc = pkgs.fetchFromGitHub {
+    owner = "fosrl";
+    repo = "pangolin";
+    rev = "1.17.0";
+    hash = "sha256-E0GfYznHj4CKsRWQm6zHTAJ8hJw9ieFoKIOT9tcumYQ=";
+  };
+
   pangolinOverride = pkgs.fosrl-pangolin.overrideAttrs (old: {
-    version = "1.16.2";
-    src = pkgs.fetchFromGitHub {
-      owner = "fosrl";
-      repo = "pangolin";
-      rev = "1.16.2";
-      hash = "sha256-pWD2VinfkCiSSP6/einXgduKQ8lzWdHlrj2eqUU/x6Y=";
-    };
+    version = "1.17.0";
+    src = pangolinSrc;
 
     npmDeps = pkgs.fetchNpmDeps {
-      name = "pangolin-1.16.2-npm-deps";
-      src = pkgs.fetchFromGitHub {
-        owner = "fosrl";
-        repo = "pangolin";
-        rev = "1.16.2";
-        hash = "sha256-pWD2VinfkCiSSP6/einXgduKQ8lzWdHlrj2eqUU/x6Y=";
-      };
-      hash = "sha256-CwS26eRAIuxJ2fekRRapDWYAOHXPV0mIX/by4uW2ZOM=";
+      name = "pangolin-1.17.0-npm-deps";
+      src = pangolinSrc;
+      hash = "sha256-DyPfylne9Ku7sEUNN0LLlN0EOnCjcklsh+F6YP+rXv4=";
     };
 
+    npmFlags = [ "--legacy-peer-deps" ];
+
     postPatch = ''
-      substituteInPlace src/app/layout.tsx --replace-fail \
-        '{ Inter } from "next/font/google"' \
-        'localFont from "next/font/local"'
+            substituteInPlace src/app/layout.tsx --replace-fail \
+              '{ Inter } from "next/font/google"' \
+              'localFont from "next/font/local"'
 
-      substituteInPlace src/app/layout.tsx --replace-fail \
-        'Inter({' \
-        'localFont({'
+            substituteInPlace src/app/layout.tsx --replace-fail \
+              'Inter({' \
+              'localFont({'
 
-      substituteInPlace src/app/layout.tsx --replace-fail \
-        'subsets: ["latin"]' \
-        "src: './Inter.ttf'"
+            substituteInPlace src/app/layout.tsx --replace-fail \
+              'subsets: ["latin"]' \
+              "src: './Inter.ttf'"
 
-      cp "${pkgs.inter}/share/fonts/truetype/InterVariable.ttf" src/app/Inter.ttf
+
+            cp "${pkgs.inter}/share/fonts/truetype/InterVariable.ttf" src/app/Inter.ttf
     '';
 
     preBuild = ''

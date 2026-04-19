@@ -106,6 +106,11 @@
       flake = false;
     };
 
+    homebrew-quickemu = {
+      url = "github:quickemu-project/homebrew-quickemu";
+      flake = false;
+    };
+
     homebrew-cask = {
       url = "github:homebrew/homebrew-cask";
       flake = false;
@@ -164,7 +169,6 @@
         lib,
         ...
       }: {
-
         checks = {
           enginseer =
             self.nixosConfigurations.enginseer.config.system.build.toplevel;

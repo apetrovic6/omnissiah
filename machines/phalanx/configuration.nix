@@ -19,23 +19,24 @@ in {
     self.nixosModules.smb
     self.inputs.nixvirt.nixosModules.default
   ];
+  nixpkgs.config = {allowUnfree = true;};
 
-  nixpkgs.config = { allowUnfree = true; }
-  ;
 
-networking.interfaces.enp6s0= {
+  networking.interfaces.enp6s0 = {
     useDHCP = false;
-    ipv4.addresses = [{
-      address = "192.168.1.46";
-      prefixLength = 24;
-    }];
+    ipv4.addresses = [
+      {
+        address = "192.168.1.46";
+        prefixLength = 24;
+      }
+    ];
   };
   networking.defaultGateway = {
     address = "192.168.1.1";
     interface = "enp1s0";
   };
-  networking.nameservers = [ "192.168.1.105" ];
-    virtualisation.waydroid.enable = true;
+  networking.nameservers = ["192.168.1.105"];
+  virtualisation.waydroid.enable = true;
   # nix = {
   #   extraOptions = ''
   #     !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
@@ -56,202 +57,209 @@ networking.interfaces.enp6s0= {
     kernelModules = ["kvm-amd" "vfio-pci"];
   };
 
-  virtualisation.libvirt = let
-    nixvirt = self.inputs.nixvirt;
-  in {
-    enable = false;
-    connections."qemu:///system" = {
-      networks = [
-        {
-          definition =
-            nixvirt.lib.network.writeXML
-            (nixvirt.lib.network.templates.bridge {
-              # pick your own UUID (uuidgen)
-              uuid = "b334bce1-4364-4fa8-b26f-d74d3666aab8";
-              # this gives you 192.168.71.0/24 with DHCP
-              subnet_byte = 71;
-              # name and bridge_name default to "default" + "virbr0"
-            });
-          active = true;
-        }
-      ];
+  programs.virt-manager.enable = true;
+  users.groups.libvirtd.members = ["apetrovic"];
+  virtualisation.libvirtd.enable = true;
+  virtualisation.spiceUSBRedirection.enable = true;
+  services.qemuGuest.enable = true;
+  services.spice-vdagentd.enable = true;
 
-      pools = [
-        {
-          # A simple directory-backed pool at /var/lib/libvirt/images/data-vault
-          definition = nixvirt.lib.pool.writeXML {
-            name = "data-vault"; # libvirt pool name
-            uuid = "1d50764c-2d7d-40cf-a1f3-a1cd2c1a8b9d"; # run `uuidgen` and replace
-            type = "dir";
-            target = {path = "/var/lib/libvirt/images/data-vault";};
-          };
+  # virtualisation.libvirt = let
+  #   nixvirt = self.inputs.nixvirt;
+  # in {
+  #   enable = true;
+  #   connections."qemu:///system" = {
+  #     networks = [
+  #       {
+  #         definition =
+  #           nixvirt.lib.network.writeXML
+  #           (nixvirt.lib.network.templates.bridge {
+  #             # pick your own UUID (uuidgen)
+  #             uuid = "b334bce1-4364-4fa8-b26f-d74d3666aab8";
+  #             # this gives you 192.168.71.0/24 with DHCP
+  #             subnet_byte = 71;
+  #             # name and bridge_name default to "default" + "virbr0"
+  #           });
+  #         active = true;
+  #       }
+  #     ];
 
-          active = true;
+  #     pools = [
+  #       {
+  #         # A simple directory-backed pool at /var/lib/libvirt/images/data-vault
+  #         definition = nixvirt.lib.pool.writeXML {
+  #           name = "data-vault"; # libvirt pool name
+  #           uuid = "1d50764c-2d7d-40cf-a1f3-a1cd2c1a8b9d"; # run `uuidgen` and replace
+  #           type = "dir";
+  #           target = {path = "/var/lib/libvirt/images/data-vault";};
+  #         };
 
-          # Create a single disk volume for the VM
-          volumes = [
-            {
-              definition = nixvirt.lib.volume.writeXML {
-                # volume name inside the pool
-                name = "sol";
-                target = {
-                  format = {type = "qcow2";};
-                };
-                # raw 40 GiB disk (good enough to start; tweak as you like)
-                capacity = {
-                  count = 65;
-                  unit = "GiB";
-                };
-              };
-            }
+  #         active = true;
 
-            {
-              definition = nixvirt.lib.volume.writeXML {
-                # volume name inside the pool
-                name = "terra";
-                target = {
-                  format = {type = "qcow2";};
-                };
-                # raw 40 GiB disk (good enough to start; tweak as you like)
-                capacity = {
-                  count = 65;
-                  unit = "GiB";
-                };
-              };
-            }
+  #         # Create a single disk volume for the VM
+  #         volumes = [
+  #           {
+  #             definition = nixvirt.lib.volume.writeXML {
+  #               # volume name inside the pool
+  #               name = "sol";
+  #               target = {
+  #                 format = {type = "qcow2";};
+  #               };
+  #               # raw 40 GiB disk (good enough to start; tweak as you like)
+  #               capacity = {
+  #                 count = 65;
+  #                 unit = "GiB";
+  #               };
+  #             };
+  #           }
 
-            {
-              definition = nixvirt.lib.volume.writeXML {
-                # volume name inside the pool
-                name = "luna";
-                target = {
-                  format = {type = "qcow2";};
-                };
-                # raw 40 GiB disk (good enough to start; tweak as you like)
-                capacity = {
-                  count = 65;
-                  unit = "GiB";
-                };
-              };
-            }
-          ];
-        }
-      ];
+  #           {
+  #             definition = nixvirt.lib.volume.writeXML {
+  #               # volume name inside the pool
+  #               name = "terra";
+  #               target = {
+  #                 format = {type = "qcow2";};
+  #               };
+  #               # raw 40 GiB disk (good enough to start; tweak as you like)
+  #               capacity = {
+  #                 count = 65;
+  #                 unit = "GiB";
+  #               };
+  #             };
+  #           }
 
-      domains = [
-        {
-          definition =
-            nixvirt.lib.domain.writeXML
-            (nixvirt.lib.domain.templates.linux {
-              # Libvirt domain name
-              name = "sol";
+  #           {
+  #             definition = nixvirt.lib.volume.writeXML {
+  #               # volume name inside the pool
+  #               name = "luna";
+  #               target = {
+  #                 format = {type = "qcow2";};
+  #               };
+  #               # raw 40 GiB disk (good enough to start; tweak as you like)
+  #               capacity = {
+  #                 count = 65;
+  #                 unit = "GiB";
+  #               };
+  #             };
+  #           }
+  #         ];
+  #       }
+  #     ];
 
-              # Pick your own UUID: `uuidgen`
-              uuid = "cc7439ed-36af-4696-a6f2-1f0c4474d87e";
+  #     domains = [
+  #       {
+  #         definition =
+  #           nixvirt.lib.domain.writeXML
+  #           (nixvirt.lib.domain.templates.linux {
+  #             # Libvirt domain name
+  #             name = "sol";
 
-              # VM RAM
-              memory = {
-                count = 16;
-                unit = "GiB";
-              };
+  #             # Pick your own UUID: `uuidgen`
+  #             uuid = "cc7439ed-36af-4696-a6f2-1f0c4474d87e";
 
-              # Attach the disk volume we just defined
-              storage_vol = {
-                pool = "data-vault";
-                volume = "servitor-nixos-01";
-              };
+  #             # VM RAM
+  #             memory = {
+  #               count = 16;
+  #               unit = "GiB";
+  #             };
 
-              # Boot from a NixOS ISO to install:
-              # Put the ISO here (or adjust the path)
-              # install_vol =
-              #   /var/lib/libvirt/iso/nixos-minimal-25.11.iso;
+  #             # Attach the disk volume we just defined
+  #             storage_vol = {
+  #               pool = "data-vault";
+  #               volume = "servitor-nixos-01";
+  #             };
 
-              virtio_video = false;
-              # Attach to the default libvirt bridge
-              bridge_name = "virbr0";
-            });
+  #             # Boot from a NixOS ISO to install:
+  #             # Put the ISO here (or adjust the path)
+  #             # install_vol =
+  #             #   /var/lib/libvirt/iso/nixos-minimal-25.11.iso;
 
-          # Have NixVirt ensure the domain is running
-          # (set to false if you don't want it autostarting)
-          active = true;
-        }
+  #             virtio_video = false;
+  #             # Attach to the default libvirt bridge
+  #             bridge_name = "virbr0";
+  #           });
 
-        {
-          definition =
-            nixvirt.lib.domain.writeXML
-            (nixvirt.lib.domain.templates.linux {
-              # Libvirt domain name
-              name = "terra";
+  #         # Have NixVirt ensure the domain is running
+  #         # (set to false if you don't want it autostarting)
+  #         active = true;
+  #       }
 
-              # Pick your own UUID: `uuidgen`
-              uuid = "558d01d6-9656-4930-aba3-ea05f0d98e70";
+  #       {
+  #         definition =
+  #           nixvirt.lib.domain.writeXML
+  #           (nixvirt.lib.domain.templates.linux {
+  #             # Libvirt domain name
+  #             name = "terra";
 
-              # VM RAM
-              memory = {
-                count = 16;
-                unit = "GiB";
-              };
+  #             # Pick your own UUID: `uuidgen`
+  #             uuid = "558d01d6-9656-4930-aba3-ea05f0d98e70";
 
-              # Attach the disk volume we just defined
-              storage_vol = {
-                pool = "data-vault";
-                volume = "terra";
-              };
+  #             # VM RAM
+  #             memory = {
+  #               count = 16;
+  #               unit = "GiB";
+  #             };
 
-              # Boot from a NixOS ISO to install:
-              # Put the ISO here (or adjust the path)
-              # install_vol =
-              #   /var/lib/libvirt/iso/nixos-minimal-25.11.iso;
+  #             # Attach the disk volume we just defined
+  #             storage_vol = {
+  #               pool = "data-vault";
+  #               volume = "terra";
+  #             };
 
-              virtio_video = false;
-              # Attach to the default libvirt bridge
-              bridge_name = "virbr0";
-            });
+  #             # Boot from a NixOS ISO to install:
+  #             # Put the ISO here (or adjust the path)
+  #             # install_vol =
+  #             #   /var/lib/libvirt/iso/nixos-minimal-25.11.iso;
 
-          # Have NixVirt ensure the domain is running
-          # (set to false if you don't want it autostarting)
-          active = true;
-        }
+  #             virtio_video = false;
+  #             # Attach to the default libvirt bridge
+  #             bridge_name = "virbr0";
+  #           });
 
-        {
-          definition =
-            nixvirt.lib.domain.writeXML
-            (nixvirt.lib.domain.templates.linux {
-              # Libvirt domain name
-              name = "luna";
+  #         # Have NixVirt ensure the domain is running
+  #         # (set to false if you don't want it autostarting)
+  #         active = true;
+  #       }
 
-              # Pick your own UUID: `uuidgen`
-              uuid = "1ea32446-1f3b-4bdb-b254-256582da5511";
+  #       {
+  #         definition =
+  #           nixvirt.lib.domain.writeXML
+  #           (nixvirt.lib.domain.templates.linux {
+  #             # Libvirt domain name
+  #             name = "luna";
 
-              # VM RAM
-              memory = {
-                count = 16;
-                unit = "GiB";
-              };
+  #             # Pick your own UUID: `uuidgen`
+  #             uuid = "1ea32446-1f3b-4bdb-b254-256582da5511";
 
-              # Attach the disk volume we just defined
-              storage_vol = {
-                pool = "data-vault";
-                volume = "luna";
-              };
+  #             # VM RAM
+  #             memory = {
+  #               count = 16;
+  #               unit = "GiB";
+  #             };
 
-              # Boot from a NixOS ISO to install:
-              # Put the ISO here (or adjust the path)
-              # install_vol =
-              #   /var/lib/libvirt/iso/nixos-minimal-25.11.iso;
+  #             # Attach the disk volume we just defined
+  #             storage_vol = {
+  #               pool = "data-vault";
+  #               volume = "luna";
+  #             };
 
-              virtio_video = false;
-              # Attach to the default libvirt bridge
-              bridge_name = "virbr0";
-            });
+  #             # Boot from a NixOS ISO to install:
+  #             # Put the ISO here (or adjust the path)
+  #             # install_vol =
+  #             #   /var/lib/libvirt/iso/nixos-minimal-25.11.iso;
 
-          # Have NixVirt ensure the domain is running
-          # (set to false if you don't want it autostarting)
-          active = true;
-        }
-      ];
-    };
-  };
+  #             virtio_video = false;
+  #             # Attach to the default libvirt bridge
+  #             bridge_name = "virbr0";
+  #           });
+
+  #         # Have NixVirt ensure the domain is running
+  #         # (set to false if you don't want it autostarting)
+  #         active = true;
+  #       }
+  #     ];
+  #   };
+  # };
 
   # Let libvirt’s qemu use the bridge
   virtualisation.libvirtd = {

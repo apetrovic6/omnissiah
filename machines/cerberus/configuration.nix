@@ -30,7 +30,7 @@ in {
 
   nixpkgs.overlays = [self.overlays.newt];
   services.qemuGuest.enable = true;
-  nixpkgs.config = { allowUnfree = true; };
+  # nixpkgs.config.allowUnfree = true; # can't set with external pkgs from pkgsForSystem
 
   services.caddy.virtualHosts = {
     "${mkDomain "syn"}" = {

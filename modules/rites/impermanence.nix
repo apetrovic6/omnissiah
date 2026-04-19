@@ -52,6 +52,7 @@
             ".android"
             ".config/attic"
             ".config/pangolin"
+            ".config/secretspec"
             ".config/Bitwarden"
             ".config/noctalia"
             ".config/sabnzbd-tui"
