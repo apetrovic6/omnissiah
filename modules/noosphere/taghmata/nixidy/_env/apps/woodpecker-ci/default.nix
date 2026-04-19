@@ -162,12 +162,12 @@ in {
         instances = 3;
         storage = {
           storageClass = "longhorn-cnpg-strict-local";
-          size = "15Gi";
+          size = "20Gi";
         };
 
         walStorage = {
           storageClass = "longhorn-cnpg-strict-local";
-          size = "15Gi";
+          size = "50Gi";
         };
 
         backup = {
