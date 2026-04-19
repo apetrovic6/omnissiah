@@ -1539,8 +1539,8 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1776525812,
-        "narHash": "sha256-sZE9ea2D7WqW+RdiQBy5jsprfQe7W8LH5dfmNOvPHkw=",
+        "lastModified": 1776618301,
+        "narHash": "sha256-dCWTfuVkClDvWGD6hxxM6EQ3Ndh3MFD7CkPIO0snpXk=",
         "path": "/home/apetrovic/clan/nixhelm",
         "type": "path"
       },
