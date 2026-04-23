@@ -123,6 +123,18 @@ in {
       };
     };
 
+    # Weekly filesystem trim on Sunday at 3 AM to reclaim freed space
+    resources.longhornRecurringJobs.trim-weekly = {
+      metadata.namespace = namespace;
+      spec = {
+        task = "filesystem-trim";
+        cron = "0 3 * * 0";
+        retain = 0;
+        concurrency = 1;
+        groups = ["default"];
+      };
+    };
+
     # Daily backup to NFS at 2 AM, keep 7
     resources.longhornRecurringJobs.backup-daily = {
       metadata.namespace = namespace;
