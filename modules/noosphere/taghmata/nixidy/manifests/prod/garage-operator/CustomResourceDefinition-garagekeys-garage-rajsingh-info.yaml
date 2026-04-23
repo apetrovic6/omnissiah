@@ -3,14 +3,6 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-    helm.sh/resource-policy: keep
-  labels:
-    app.kubernetes.io/instance: garage-operator
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: garage-operator
-    app.kubernetes.io/version: 0.0.14
-    control-plane: controller-manager
-    helm.sh/chart: garage-operator-0.1.0
   name: garagekeys.garage.rajsingh.info
 spec:
   group: garage.rajsingh.info
