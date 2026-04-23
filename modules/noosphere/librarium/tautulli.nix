@@ -38,6 +38,7 @@
       services.tautulli = {
         enable = true;
         package = cfg.package;
+        port = cfg.port;
         user = cfg.user;
         group = cfg.group;
         openFirewall = cfg.openFirewall;
@@ -45,7 +46,7 @@
         dataDir = cfg.dataDir;
       };
 
-      environment.persistence."/persist".directories = ["/var/lib/plexpy"];
+      # environment.persistence."/persist".directories = ["/var/lib/plexpy"];
 
       services.caddy.virtualHosts = {
         "${mkDomain cfg.subdomain}" = {

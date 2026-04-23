@@ -19,7 +19,7 @@
     pangolin-cli = prev.pangolin-cli.overrideAttrs (old: {
       version = "0.6.0";
       src = old.src.override {
-        hash = "sha256-ZgdYc7DbNdxwNxPswSRgmuZ4czqL+IfZAjo4XH2Df2I=";
+        hash = "sha256-9uQLCSH7LLl8I/LgsgTo6w808iwmH1FF0GYNn5xyVuc=";
       };
       vendorHash = "sha256-eBrglhyqKy6pG9eF0yfJdCOLxeWys4atKAp9Jgtzdj8=";
        doInstallCheck = false; # upstream 0.5.1 tag has version const still set to 0.5.0

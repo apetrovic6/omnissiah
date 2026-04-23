@@ -8,16 +8,16 @@
   pangolinSrc = pkgs.fetchFromGitHub {
     owner = "fosrl";
     repo = "pangolin";
-    rev = "1.17.0";
+    rev = "1.17.1";
     hash = "sha256-E0GfYznHj4CKsRWQm6zHTAJ8hJw9ieFoKIOT9tcumYQ=";
   };
 
   pangolinOverride = pkgs.fosrl-pangolin.overrideAttrs (old: {
-    version = "1.17.0";
+    version = "1.17.1";
     src = pangolinSrc;
 
     npmDeps = pkgs.fetchNpmDeps {
-      name = "pangolin-1.17.0-npm-deps";
+      name = "pangolin-1.17.1-npm-deps";
       src = pangolinSrc;
       hash = "sha256-DyPfylne9Ku7sEUNN0LLlN0EOnCjcklsh+F6YP+rXv4=";
     };

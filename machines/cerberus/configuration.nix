@@ -30,7 +30,7 @@ in {
 
   nixpkgs.overlays = [self.overlays.newt];
   services.qemuGuest.enable = true;
-  # nixpkgs.config.allowUnfree = true; # can't set with external pkgs from pkgsForSystem
+  nixpkgs.config.allowUnfree = true; # can't set with external pkgs from pkgsForSystem
 
   services.caddy.virtualHosts = {
     "${mkDomain "syn"}" = {
@@ -94,6 +94,13 @@ in {
     user = "plex";
     group = "media";
     accelerationDevices = ["*"];
+  };
+
+  services.imperium.tautulli = {
+    enable = true;
+    group = "media";
+    user = "plexpy";
+    port = 8181;
   };
 
   users.users.plex.extraGroups = ["media"];
