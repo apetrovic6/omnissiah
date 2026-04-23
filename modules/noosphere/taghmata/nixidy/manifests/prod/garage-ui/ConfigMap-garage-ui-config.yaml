@@ -90,7 +90,7 @@ metadata:
     app.kubernetes.io/instance: garage-ui
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-ui
-    app.kubernetes.io/version: v0.2.2
-    helm.sh/chart: garage-ui-0.2.2
+    app.kubernetes.io/version: v0.4.2
+    helm.sh/chart: garage-ui-0.2.5
   name: garage-ui-config
   namespace: garage
