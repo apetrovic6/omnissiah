@@ -1,4 +1,4 @@
-{lib, ...}: {
+{ ... }: {
   flake.overlays.rke2 = final: prev: {
     rke2_1_35 = prev.rke2_1_35.overrideAttrs (old: {
       # GOEXPERIMENT=boringcrypto makes runtime.Version() return "go1.26.1-X:boringcrypto"

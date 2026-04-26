@@ -132,7 +132,7 @@ in {
         noosphere = {
           name = "Noosphere";
           mode = "host";
-          destination = "192.168.1.240";
+          destination = "192.168.1.250";
           alias = "*.noosphere.uk";
           site = siteCerberus;
           disable-icmp = true;
@@ -553,7 +553,7 @@ in {
   services.caddy.virtualHosts = {
     "*.noosphere.uk" = {
       extraConfig = ''
-        reverse_proxy https://192.168.1.240 {
+        reverse_proxy https://192.168.1.250 {
           header_up Host {http.request.host}
           transport http {
             tls_server_name {http.request.host}

@@ -3,7 +3,7 @@ kind: Service
 metadata:
   annotations:
     metallb.io/allow-shared-ip: noosphere
-    metallb.io/loadBalancerIPs: 192.168.1.240
+    metallb.io/loadBalancerIPs: 192.168.1.250
   labels:
     app: forgejo
     app.kubernetes.io/instance: forgejo

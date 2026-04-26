@@ -337,7 +337,7 @@ in {
       };
       spec = {
         type = "LoadBalancer";
-        loadBalancerIP = "192.168.1.240";
+        loadBalancerIP = "192.168.1.250";
         selector = {
           app = "unifi-controller";
         };
@@ -368,7 +368,7 @@ in {
       };
       spec = {
         type = "LoadBalancer";
-        loadBalancerIP = "192.168.1.240";
+        loadBalancerIP = "192.168.1.250";
         selector = {
           app = "unifi-controller";
         };

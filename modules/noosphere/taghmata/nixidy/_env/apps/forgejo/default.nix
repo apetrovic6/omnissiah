@@ -98,7 +98,7 @@ in {
           annotations = {
             # sharing key (same key on both Services you want to share an IP)
             "metallb.io/allow-shared-ip" = "noosphere";
-            "metallb.io/loadBalancerIPs" = "192.168.1.240";
+            "metallb.io/loadBalancerIPs" = "192.168.1.250";
           };
         };
 

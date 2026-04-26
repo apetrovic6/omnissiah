@@ -20,10 +20,12 @@ networking.interfaces.enp1s0 = {
       prefixLength = 24;
     }];
   };
+
   networking.defaultGateway = {
     address = "192.168.1.1";
     interface = "enp1s0";
   };
+
   networking.nameservers = [ "192.168.1.105" ]; 
 
   magos.stylix = {
