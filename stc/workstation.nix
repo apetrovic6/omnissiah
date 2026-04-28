@@ -173,7 +173,10 @@
       nfs-utils
       (buildIdeWithPlugins pkgs "idea" commonPlugins)
       (buildIdeWithPlugins pkgs "rust-rover" commonPlugins)
+      jetbrais-toolbox
     ];
+
+  services.spice-vdagentd.enable = true;
 
     services.protonmail-bridge = {
       enable = true;

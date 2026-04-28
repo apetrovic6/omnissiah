@@ -70,10 +70,10 @@
 
     networking.interfaces.enp2s0.useDHCP = false;
 
-    # Prevent NetworkManager from managing enp2s0 (dedicated storage network)
+    # Prevent NetworkManager from managing k8s node interfaces
     environment.etc."NetworkManager/conf.d/storage-network.conf".text = ''
       [keyfile]
-      unmanaged-devices=interface-name:enp2s0
+      unmanaged-devices=interface-name:enp2s0;interface-name:enp1s0
     '';
 
 
