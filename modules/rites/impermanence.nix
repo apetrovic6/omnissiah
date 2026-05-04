@@ -93,6 +93,7 @@
             # ".screenrc"
             # ".bash_history"
             # ".gitconfig"
+            ".ideavimrc"
           ];
         };
       };

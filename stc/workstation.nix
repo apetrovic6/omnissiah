@@ -173,7 +173,7 @@
       nfs-utils
       (buildIdeWithPlugins pkgs "idea" commonPlugins)
       (buildIdeWithPlugins pkgs "rust-rover" commonPlugins)
-      jetbrais-toolbox
+      jetbrains-toolbox
     ];
 
   services.spice-vdagentd.enable = true;

@@ -210,7 +210,9 @@ in {
   users.mutableUsers = false;
 
   networking.networkmanager.enable = false;
+  networking.useDHCP = false;
   networking.interfaces.ens3.useDHCP = true;
+  networking.dhcpcd.enable = true;
 
   networking.firewall = {
     enable = true;
