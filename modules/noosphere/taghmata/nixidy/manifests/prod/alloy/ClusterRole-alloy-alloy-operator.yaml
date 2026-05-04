@@ -11,7 +11,13 @@ rules:
       - serviceaccounts
       - services
     verbs:
-      - '*'
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
   - apiGroups:
       - apps
     resources:
@@ -19,26 +25,50 @@ rules:
       - deployments
       - statefulsets
     verbs:
-      - '*'
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
   - apiGroups:
       - autoscaling
     resources:
       - horizontalpodautoscalers
     verbs:
-      - '*'
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
   - apiGroups:
       - networking.k8s.io
     resources:
       - ingresses
       - networkpolicies
     verbs:
-      - '*'
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
   - apiGroups:
       - policy
     resources:
       - poddisruptionbudgets
     verbs:
-      - '*'
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -47,4 +77,12 @@ rules:
       - roles
       - rolebindings
     verbs:
-      - '*'
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+      - bind
+      - escalate
