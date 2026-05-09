@@ -1,0 +1,31 @@
+when:
+  event: cron
+  cron: update
+
+steps:
+  update:
+    image: nixos/nix:2.33.1
+    environment:
+      NIX_CONFIG: "experimental-features = nix-command flakes"
+    commands:
+      - nix fmt
+      - nix flake update
+
+  commit:
+    image: alpine/git
+    environment:
+      FORGEJO_TOKEN:
+        from_secret: forgejo_token
+    commands:
+      - git config user.name "Woodpecker CI"
+      - git config user.email "ci@noosphere.uk"
+      - git config credential.helper cache
+      - echo -e "protocol=https\nhost=${CI_FORGE_URL#https://}\nusername=$CI\npassword=$FORGEJO_TOKEN" | git credential-cache store
+      - git remote set-url origin $CI_REPO_CLONE_URL
+      - git add .
+      - git diff --staged --quiet || git commit -m "Woodpecker CI - flake update"
+      - git pull --rebase origin master
+      - git push --set-upstream origin master
+
+
+
