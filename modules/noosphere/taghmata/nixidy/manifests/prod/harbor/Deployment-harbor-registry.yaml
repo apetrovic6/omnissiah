@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: harbor
     app.kubernetes.io/part-of: harbor
-    app.kubernetes.io/version: 2.14.3
+    app.kubernetes.io/version: 2.15.0
     chart: harbor
     component: registry
     heritage: Helm
@@ -28,10 +28,10 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: c4fb43178faf33f2bea3c13671531b570ffb0659427731959d4d01583bc93c60
-        checksum/secret: b21304f6ebdddb295e7eb432e106c3c3bf50adcd66d74f555b4b529a22850918
-        checksum/secret-core: 59669814fb7baa809e9428f8ded55a9bf9281f6bfedaa638b53b49cff7b66e22
-        checksum/secret-jobservice: f3a0135630d8fa98235c6c6341ee8e42262bad005727f86ce3f0a0679271f1ed
+        checksum/configmap: 1a12cd2cbcc4d4f2eea3cd445bff84163ce336e6ab5e5e867b044509b445d836
+        checksum/secret: f7fb7b53bd38bad048f3a20fabb446e162b2eb501c3a8e4ced520b4c09ed9e74
+        checksum/secret-core: 7d184289f51bc7b1001e976c80693ff24befaa3ccfb2146ab9c4051b61ae385d
+        checksum/secret-jobservice: 388df16a5ce670284aaa57126ada65df238ddadbad14c5aaa94a384592da2e7d
       labels:
         app: harbor
         app.kubernetes.io/component: registry
@@ -39,7 +39,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: harbor
         app.kubernetes.io/part-of: harbor
-        app.kubernetes.io/version: 2.14.3
+        app.kubernetes.io/version: 2.15.0
         chart: harbor
         component: registry
         heritage: Helm
@@ -53,36 +53,37 @@ spec:
                 secretKeyRef:
                   key: REGISTRY_HTTP_SECRET
                   name: harbor-registry-http-secret
-            - name: REGISTRY_REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_PASSWORD
-                  name: harbor-redis-password-secret
           envFrom:
             - secretRef:
                 name: harbor-registry
             - secretRef:
                 name: harbor-s3-secret-key
-          image: goharbor/registry-photon:v2.14.3
+          image: docker.io/goharbor/registry-photon:v2.15.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
+            failureThreshold: 3
             httpGet:
               path: /
               port: 5000
               scheme: HTTP
             initialDelaySeconds: 300
             periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
           name: registry
           ports:
             - containerPort: 5000
             - containerPort: 8001
           readinessProbe:
+            failureThreshold: 3
             httpGet:
               path: /
               port: 5000
               scheme: HTTP
             initialDelaySeconds: 1
             periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -117,11 +118,6 @@ spec:
                 secretKeyRef:
                   key: JOBSERVICE_SECRET
                   name: harbor-job-service-secret
-            - name: REGISTRY_REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  key: REDIS_PASSWORD
-                  name: harbor-redis-password-secret
           envFrom:
             - configMapRef:
                 name: harbor-registryctl
@@ -131,25 +127,31 @@ spec:
                 name: harbor-registryctl
             - secretRef:
                 name: harbor-s3-secret-key
-          image: goharbor/harbor-registryctl:v2.14.3
+          image: docker.io/goharbor/harbor-registryctl:v2.15.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
+            failureThreshold: 3
             httpGet:
               path: /api/health
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 300
             periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
           name: registryctl
           ports:
             - containerPort: 8080
           readinessProbe:
+            failureThreshold: 3
             httpGet:
               path: /api/health
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 1
             periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

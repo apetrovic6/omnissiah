@@ -10,7 +10,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: harbor
     app.kubernetes.io/part-of: harbor
-    app.kubernetes.io/version: 2.14.3
+    app.kubernetes.io/version: 2.15.0
     chart: harbor
     component: core
     heritage: Helm
@@ -28,9 +28,9 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: ed3c3c5b301633e6f8d5b91705d03178d190f1e8aaac1850f7ea82c06f6d4ec4
-        checksum/secret: 59669814fb7baa809e9428f8ded55a9bf9281f6bfedaa638b53b49cff7b66e22
-        checksum/secret-jobservice: f3a0135630d8fa98235c6c6341ee8e42262bad005727f86ce3f0a0679271f1ed
+        checksum/configmap: 52ca8dea53c17bcd3b424f475c534c3cc327ecb3d4cc05821cc86446312bb104
+        checksum/secret: 7d184289f51bc7b1001e976c80693ff24befaa3ccfb2146ab9c4051b61ae385d
+        checksum/secret-jobservice: 388df16a5ce670284aaa57126ada65df238ddadbad14c5aaa94a384592da2e7d
       labels:
         app: harbor
         app.kubernetes.io/component: core
@@ -38,7 +38,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: harbor
         app.kubernetes.io/part-of: harbor
-        app.kubernetes.io/version: 2.14.3
+        app.kubernetes.io/version: 2.15.0
         chart: harbor
         component: core
         heritage: Helm
@@ -87,7 +87,7 @@ spec:
                 name: harbor-core
             - secretRef:
                 name: harbor-core
-          image: goharbor/harbor-core:v2.14.3
+          image: docker.io/goharbor/harbor-core:v2.15.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 2
@@ -95,7 +95,10 @@ spec:
               path: /api/v2.0/ping
               port: 8080
               scheme: HTTP
+            initialDelaySeconds: 0
             periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
           name: core
           ports:
             - containerPort: 8080
@@ -105,7 +108,10 @@ spec:
               path: /api/v2.0/ping
               port: 8080
               scheme: HTTP
+            initialDelaySeconds: 0
             periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -123,6 +129,8 @@ spec:
               scheme: HTTP
             initialDelaySeconds: 10
             periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
           volumeMounts:
             - mountPath: /etc/core/app.conf
               name: config
