@@ -6,6 +6,7 @@
 
     helm.releases.sops-secrets-operator = {
       chart = charts.isindir.sops-secrets-operator;
+      extraOpts = ["--kube-version" "1.35.0"];
       values = {
         secretsAsFiles = [
           {
