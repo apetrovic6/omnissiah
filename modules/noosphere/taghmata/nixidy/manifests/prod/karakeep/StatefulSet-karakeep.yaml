@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/instance: karakeep
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: karakeep
-    app.kubernetes.io/version: 0.31.0
-    helm.sh/chart: karakeep-0.31.0
+    app.kubernetes.io/version: 0.32.0
+    helm.sh/chart: karakeep-0.32.0
   name: karakeep
   namespace: karakeep
 spec:
@@ -52,22 +52,18 @@ spec:
                 name: karakeep-oidc
             - secretRef:
                 name: karakeep-meilisearch-secret
-          image: ghcr.io/karakeep-app/karakeep:0.31.0
+          image: ghcr.io/karakeep-app/karakeep:0.32.0
           livenessProbe:
-            failureThreshold: 3
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            tcpSocket:
+            httpGet:
+              path: /api/health
               port: 3000
-            timeoutSeconds: 1
+            initialDelaySeconds: 10
           name: karakeep
           readinessProbe:
-            failureThreshold: 3
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            tcpSocket:
+            httpGet:
+              path: /api/health
               port: 3000
-            timeoutSeconds: 1
+            initialDelaySeconds: 10
           volumeMounts:
             - mountPath: /data
               name: data
