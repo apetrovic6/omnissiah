@@ -54,6 +54,9 @@
       # iSCSI tools for Longhorn volume attachment
       "L+ /sbin/iscsiadm - - - - ${pkgs.openiscsi}/bin/iscsiadm"
       "L+ /usr/bin/iscsiadm - - - - ${pkgs.openiscsi}/bin/iscsiadm"
+
+      # fstrim for Longhorn trimFilesystem action (nsenter uses this path)
+      "L+ /usr/bin/fstrim - - - - ${pkgs.util-linux}/bin/fstrim"
     ];
 
     environment.systemPackages = with pkgs; [nfs-utils util-linux openiscsi cryptsetup];

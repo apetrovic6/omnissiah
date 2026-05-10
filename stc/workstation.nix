@@ -173,6 +173,7 @@
       nfs-utils
       (buildIdeWithPlugins pkgs "idea" commonPlugins)
       (buildIdeWithPlugins pkgs "rust-rover" commonPlugins)
+      (buildIdeWithPlugins pkgs "goland" commonPlugins)
       jetbrains-toolbox
     ];
 
