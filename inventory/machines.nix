@@ -28,6 +28,7 @@
     cypramundi = {
       tags = [];
       deploy.targetHost =  "root@152.53.34.16";
+      deploy.buildHost =  "localhost";
     };
 
     terra = {
