@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/instance: woodpecker
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: agent
-    app.kubernetes.io/version: 3.14.0
+    app.kubernetes.io/version: 3.14.1
     helm.sh/chart: agent-2.0.1
   name: woodpecker-agent
   namespace: woodpecker
@@ -31,6 +31,7 @@ spec:
             - name: WOODPECKER_BACKEND_K8S_NAMESPACE
               value: woodpecker
             - name: WOODPECKER_BACKEND_K8S_NAMESPACE_PER_ORGANIZATION
+              value: "false"
             - name: WOODPECKER_BACKEND_K8S_POD_ANNOTATIONS
               value: ""
             - name: WOODPECKER_BACKEND_K8S_POD_LABELS
@@ -38,6 +39,7 @@ spec:
             - name: WOODPECKER_BACKEND_K8S_STORAGE_CLASS
               value: longhorn-rec-delete-strict-local
             - name: WOODPECKER_BACKEND_K8S_STORAGE_RWX
+              value: "true"
             - name: WOODPECKER_BACKEND_K8S_VOLUME_SIZE
               value: 10G
             - name: WOODPECKER_CONNECT_RETRY_COUNT
@@ -53,7 +55,7 @@ spec:
                 name: pg-woodpecker-rev-1-app
             - secretRef:
                 name: woodpecker-default-agent-secret
-          image: docker.io/woodpeckerci/woodpecker-agent:v3.14.0
+          image: docker.io/woodpeckerci/woodpecker-agent:v3.14.1
           imagePullPolicy: IfNotPresent
           name: agent
           ports:
