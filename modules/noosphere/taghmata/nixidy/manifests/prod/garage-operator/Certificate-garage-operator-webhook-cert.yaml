@@ -1,0 +1,24 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/instance: garage-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: garage-operator
+    app.kubernetes.io/version: 0.4.1
+    control-plane: controller-manager
+    helm.sh/chart: garage-operator-0.4.1
+  name: garage-operator-webhook-cert
+  namespace: garage-operator
+spec:
+  dnsNames:
+    - garage-operator-webhook
+    - garage-operator-webhook.garage-operator
+    - garage-operator-webhook.garage-operator.svc
+    - garage-operator-webhook.garage-operator.svc.cluster.local
+  duration: 8760h
+  issuerRef:
+    kind: Issuer
+    name: garage-operator-selfsigned-issuer
+  renewBefore: 720h
+  secretName: garage-operator-webhook-cert

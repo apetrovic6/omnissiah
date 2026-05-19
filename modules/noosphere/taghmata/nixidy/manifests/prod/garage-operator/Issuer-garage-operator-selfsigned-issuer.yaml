@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  labels:
+    app.kubernetes.io/instance: garage-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: garage-operator
+    app.kubernetes.io/version: 0.4.1
+    control-plane: controller-manager
+    helm.sh/chart: garage-operator-0.4.1
+  name: garage-operator-selfsigned-issuer
+  namespace: garage-operator
+spec:
+  selfSigned: {}
