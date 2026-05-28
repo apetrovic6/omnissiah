@@ -22,7 +22,6 @@
       btop
       pciutils
       vim
-      self.inputs.nvf.packages.${pkgs.system}.default
       wget
       git
       fastfetch

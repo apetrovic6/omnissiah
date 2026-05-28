@@ -19,8 +19,18 @@ in {
     self.nixosModules.smb
     self.inputs.nixvirt.nixosModules.default
   ];
-  nixpkgs.config = {allowUnfree = true;};
 
+  nixpkgs = {
+    overlays = [self.overlays.openldap];
+    config = {
+      allowUnfree = true;
+      allowUnfreePredicate = pkg:
+        builtins.elem (lib.getName pkg) [
+          "replace"
+          "nvidia"
+        ];
+    };
+  };
 
   networking.interfaces.enp6s0 = {
     useDHCP = false;
