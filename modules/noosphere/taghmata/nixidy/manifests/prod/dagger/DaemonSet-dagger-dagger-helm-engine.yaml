@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: dagger-helm
     app.kubernetes.io/part-of: dagger-helm
-    app.kubernetes.io/version: v0.20.8
-    helm.sh/chart: dagger-helm-0.20.8
+    app.kubernetes.io/version: v0.21.0
+    helm.sh/chart: dagger-helm-0.21.0
   name: dagger-dagger-helm-engine
   namespace: dagger
 spec:
@@ -21,12 +21,12 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: dagger-helm
         app.kubernetes.io/part-of: dagger-helm
-        app.kubernetes.io/version: v0.20.8
-        helm.sh/chart: dagger-helm-0.20.8
+        app.kubernetes.io/version: v0.21.0
+        helm.sh/chart: dagger-helm-0.21.0
         name: dagger-dagger-helm-engine
     spec:
       containers:
-        - image: registry.dagger.io/engine:v0.20.8
+        - image: registry.dagger.io/engine:v0.21.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             exec:
