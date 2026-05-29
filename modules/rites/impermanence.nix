@@ -49,6 +49,7 @@
             "Documents"
             "Videos"
             "programming"
+            "Games"
             ".android"
             ".config/attic"
             ".config/pangolin"
