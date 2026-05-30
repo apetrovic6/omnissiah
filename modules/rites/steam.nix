@@ -48,6 +48,7 @@
                 stdenv.cc.cc.lib # Provides libstdc++.so.6
                 libkrb5
                 keyutils
+                pulseaudio
                 # Add other libraries as needed
               ];
           };
