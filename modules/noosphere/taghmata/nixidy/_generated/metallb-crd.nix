@@ -180,6 +180,739 @@ let
     ));
 
   definitions = {
+    "frrk8s.metallb.io.v1beta1.BGPSessionState" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "BGPSessionStateSpec defines the desired state of BGPSessionState.";
+          type = (types.nullOr types.attrs);
+        };
+        "status" = mkOption {
+          description = "BGPSessionStateStatus defines the observed state of BGPSessionState.";
+          type = (types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.BGPSessionStateStatus"));
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.BGPSessionStateStatus" = {
+
+      options = {
+        "bfdStatus" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "bgpStatus" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "node" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "peer" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "vrf" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "bfdStatus" = mkOverride 1002 null;
+        "bgpStatus" = mkOverride 1002 null;
+        "node" = mkOverride 1002 null;
+        "peer" = mkOverride 1002 null;
+        "vrf" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfiguration" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "FRRConfigurationSpec defines the desired state of FRRConfiguration.";
+          type = (types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpec"));
+        };
+        "status" = mkOption {
+          description = "FRRConfigurationStatus defines the observed state of FRRConfiguration.";
+          type = (types.nullOr types.attrs);
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpec" = {
+
+      options = {
+        "bgp" = mkOption {
+          description = "BGP is the configuration related to the BGP protocol.";
+          type = (types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgp"));
+        };
+        "nodeSelector" = mkOption {
+          description = "NodeSelector limits the nodes that will attempt to apply this config.\nWhen specified, the configuration will be considered only on nodes\nwhose labels match the specified selectors.\nWhen it is not specified all nodes will attempt to apply this config.";
+          type = (types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecNodeSelector"));
+        };
+        "raw" = mkOption {
+          description = "Raw is a snippet of raw frr configuration that gets appended to the\none rendered translating the type safe API.";
+          type = (types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecRaw"));
+        };
+      };
+
+      config = {
+        "bgp" = mkOverride 1002 null;
+        "nodeSelector" = mkOverride 1002 null;
+        "raw" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgp" = {
+
+      options = {
+        "bfdProfiles" = mkOption {
+          description = "BFDProfiles is the list of bfd profiles to be used when configuring the neighbors.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpBfdProfiles"
+                "name"
+                [ ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "routers" = mkOption {
+          description = "Routers is the list of routers we want FRR to configure (one per VRF).";
+          type = (
+            types.nullOr (types.listOf (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRouters"))
+          );
+        };
+      };
+
+      config = {
+        "bfdProfiles" = mkOverride 1002 null;
+        "routers" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpBfdProfiles" = {
+
+      options = {
+        "detectMultiplier" = mkOption {
+          description = "Configures the detection multiplier to determine\npacket loss. The remote transmission interval will be multiplied\nby this value to determine the connection loss detection timer.";
+          type = (types.nullOr types.int);
+        };
+        "echoInterval" = mkOption {
+          description = "Configures the minimal echo receive transmission\ninterval that this system is capable of handling in milliseconds.\nDefaults to 50ms";
+          type = (types.nullOr types.int);
+        };
+        "echoMode" = mkOption {
+          description = "Enables or disables the echo transmission mode.\nThis mode is disabled by default, and not supported on multi\nhops setups.";
+          type = (types.nullOr types.bool);
+        };
+        "minimumTtl" = mkOption {
+          description = "For multi hop sessions only: configure the minimum\nexpected TTL for an incoming BFD control packet.";
+          type = (types.nullOr types.int);
+        };
+        "name" = mkOption {
+          description = "The name of the BFD Profile to be referenced in other parts\nof the configuration.";
+          type = types.str;
+        };
+        "passiveMode" = mkOption {
+          description = "Mark session as passive: a passive session will not\nattempt to start the connection and will wait for control packets\nfrom peer before it begins replying.";
+          type = (types.nullOr types.bool);
+        };
+        "receiveInterval" = mkOption {
+          description = "The minimum interval that this system is capable of\nreceiving control packets in milliseconds.\nDefaults to 300ms.";
+          type = (types.nullOr types.int);
+        };
+        "transmitInterval" = mkOption {
+          description = "The minimum transmission interval (less jitter)\nthat this system wants to use to send BFD control packets in\nmilliseconds. Defaults to 300ms";
+          type = (types.nullOr types.int);
+        };
+      };
+
+      config = {
+        "detectMultiplier" = mkOverride 1002 null;
+        "echoInterval" = mkOverride 1002 null;
+        "echoMode" = mkOverride 1002 null;
+        "minimumTtl" = mkOverride 1002 null;
+        "passiveMode" = mkOverride 1002 null;
+        "receiveInterval" = mkOverride 1002 null;
+        "transmitInterval" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRouters" = {
+
+      options = {
+        "asn" = mkOption {
+          description = "ASN is the AS number to use for the local end of the session.";
+          type = types.int;
+        };
+        "id" = mkOption {
+          description = "ID is the BGP router ID";
+          type = (types.nullOr types.str);
+        };
+        "imports" = mkOption {
+          description = "Imports is the list of imported VRFs we want for this router / vrf.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersImports")
+            )
+          );
+        };
+        "neighbors" = mkOption {
+          description = "Neighbors is the list of neighbors we want to establish BGP sessions with.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighbors")
+            )
+          );
+        };
+        "prefixes" = mkOption {
+          description = "Prefixes is the list of prefixes we want to advertise from this router instance.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "vrf" = mkOption {
+          description = "VRF is the host vrf used to establish sessions from this router.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "id" = mkOverride 1002 null;
+        "imports" = mkOverride 1002 null;
+        "neighbors" = mkOverride 1002 null;
+        "prefixes" = mkOverride 1002 null;
+        "vrf" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersImports" = {
+
+      options = {
+        "vrf" = mkOption {
+          description = "Vrf is the vrf we want to import from";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "vrf" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighbors" = {
+
+      options = {
+        "address" = mkOption {
+          description = "Address is the IP address to establish the session with.";
+          type = (types.nullOr types.str);
+        };
+        "asn" = mkOption {
+          description = "ASN is the AS number to use for the local end of the session.\nASN and DynamicASN are mutually exclusive and one of them must be specified.";
+          type = (types.nullOr types.int);
+        };
+        "bfdProfile" = mkOption {
+          description = "BFDProfile is the name of the BFD Profile to be used for the BFD session associated\nto the BGP session. If not set, the BFD session won't be set up.";
+          type = (types.nullOr types.str);
+        };
+        "connectTime" = mkOption {
+          description = "Requested BGP connect time, controls how long BGP waits between connection attempts to a neighbor.";
+          type = (types.nullOr types.str);
+        };
+        "disableMP" = mkOption {
+          description = "DisableMP is no longer used and has no effect.\nUse DualStackAddressFamily instead to enable the neighbor for both IPv4 and IPv6 address families.\n\nDeprecated: This field is ignored. Use DualStackAddressFamily instead.";
+          type = (types.nullOr types.bool);
+        };
+        "dualStackAddressFamily" = mkOption {
+          description = "To set if we want to enable the neighbor not only for the ipfamily related to its session,\nbut also the other one. This allows to advertise/receive IPv4 prefixes over IPv6 sessions and vice versa.";
+          type = (types.nullOr types.bool);
+        };
+        "dynamicASN" = mkOption {
+          description = "DynamicASN detects the AS number to use for the local end of the session\nwithout explicitly setting it via the ASN field. Limited to:\ninternal - if the neighbor's ASN is different than the router's the connection is denied.\nexternal - if the neighbor's ASN is the same as the router's the connection is denied.\nASN and DynamicASN are mutually exclusive and one of them must be specified.";
+          type = (types.nullOr types.str);
+        };
+        "ebgpMultiHop" = mkOption {
+          description = "EBGPMultiHop indicates if the BGPPeer is multi-hops away.";
+          type = (types.nullOr types.bool);
+        };
+        "enableGracefulRestart" = mkOption {
+          description = "EnableGracefulRestart allows BGP peer to continue to forward data packets along\nknown routes while the routing protocol information is being restored. If\nthe session is already established, the configuration will have effect\nafter reconnecting to the peer";
+          type = (types.nullOr types.bool);
+        };
+        "holdTime" = mkOption {
+          description = "HoldTime is the requested BGP hold time, per RFC4271.\nDefaults to 180s.";
+          type = (types.nullOr types.str);
+        };
+        "interface" = mkOption {
+          description = "Interface is the node interface over which the unnumbered BGP peering will\nbe established. No API validation takes place as that string value\nrepresents an interface name on the host and if user provides an invalid\nvalue, only the actual BGP session will not be established.\nAddress and Interface are mutually exclusive and one of them must be specified.\nNote: when enabling unnumbered, the neighbor will be enabled for both\nIPv4 and IPv6 address families.";
+          type = (types.nullOr types.str);
+        };
+        "keepaliveTime" = mkOption {
+          description = "KeepaliveTime is the requested BGP keepalive time, per RFC4271.\nDefaults to 60s.";
+          type = (types.nullOr types.str);
+        };
+        "localASN" = mkOption {
+          description = "LocalASN allows advertising a different AS number to the peer using BGP's\nlocal-as feature. When set, FRR will advertise this ASN to the peer\nvia \"neighbor <peer> local-as <ASN> no-prepend replace-as\", overriding\nthe router-level ASN for this specific session.\nNote: this field is only applicable to eBGP sessions (where the peer ASN differs\nfrom the router ASN). Setting it on an iBGP session is rejected.";
+          type = (types.nullOr types.int);
+        };
+        "password" = mkOption {
+          description = "Password to be used for establishing the BGP session.\nPassword and PasswordSecret are mutually exclusive.";
+          type = (types.nullOr types.str);
+        };
+        "passwordSecret" = mkOption {
+          description = "PasswordSecret is name of the authentication secret for the neighbor.\nthe secret must be of type \"kubernetes.io/basic-auth\", and created in the\nsame namespace as the frr-k8s daemon. The password is stored in the\nsecret as the key \"password\".\nPassword and PasswordSecret are mutually exclusive.";
+          type = (
+            types.nullOr (
+              submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsPasswordSecret"
+            )
+          );
+        };
+        "port" = mkOption {
+          description = "Port is the port to dial when establishing the session.\nDefaults to 179.";
+          type = (types.nullOr types.int);
+        };
+        "sourceaddress" = mkOption {
+          description = "SourceAddress is the IPv4 or IPv6 source address to use for the BGP\nsession to this neighbour, may be specified as either an IP address\ndirectly or as an interface name";
+          type = (types.nullOr types.str);
+        };
+        "toAdvertise" = mkOption {
+          description = "ToAdvertise represents the list of prefixes to advertise to the given neighbor\nand the associated properties.";
+          type = (
+            types.nullOr (
+              submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertise"
+            )
+          );
+        };
+        "toReceive" = mkOption {
+          description = "ToReceive represents the list of prefixes to receive from the given neighbor.";
+          type = (
+            types.nullOr (
+              submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToReceive"
+            )
+          );
+        };
+      };
+
+      config = {
+        "address" = mkOverride 1002 null;
+        "asn" = mkOverride 1002 null;
+        "bfdProfile" = mkOverride 1002 null;
+        "connectTime" = mkOverride 1002 null;
+        "disableMP" = mkOverride 1002 null;
+        "dualStackAddressFamily" = mkOverride 1002 null;
+        "dynamicASN" = mkOverride 1002 null;
+        "ebgpMultiHop" = mkOverride 1002 null;
+        "enableGracefulRestart" = mkOverride 1002 null;
+        "holdTime" = mkOverride 1002 null;
+        "interface" = mkOverride 1002 null;
+        "keepaliveTime" = mkOverride 1002 null;
+        "localASN" = mkOverride 1002 null;
+        "password" = mkOverride 1002 null;
+        "passwordSecret" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "sourceaddress" = mkOverride 1002 null;
+        "toAdvertise" = mkOverride 1002 null;
+        "toReceive" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsPasswordSecret" = {
+
+      options = {
+        "name" = mkOption {
+          description = "name is unique within a namespace to reference a secret resource.";
+          type = (types.nullOr types.str);
+        };
+        "namespace" = mkOption {
+          description = "namespace defines the space within which the secret name must be unique.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "name" = mkOverride 1002 null;
+        "namespace" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertise" = {
+
+      options = {
+        "allowed" = mkOption {
+          description = "Allowed is is the list of prefixes allowed to be propagated to\nthis neighbor. They must match the prefixes defined in the router.";
+          type = (
+            types.nullOr (
+              submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseAllowed"
+            )
+          );
+        };
+        "withCommunity" = mkOption {
+          description = "PrefixesWithCommunity is a list of prefixes that are associated to a\nbgp community when being advertised. The prefixes associated to a given local pref\nmust be in the prefixes allowed to be advertised.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseWithCommunity"
+              )
+            )
+          );
+        };
+        "withLocalPref" = mkOption {
+          description = "PrefixesWithLocalPref is a list of prefixes that are associated to a local\npreference when being advertised. The prefixes associated to a given local pref\nmust be in the prefixes allowed to be advertised.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseWithLocalPref"
+              )
+            )
+          );
+        };
+      };
+
+      config = {
+        "allowed" = mkOverride 1002 null;
+        "withCommunity" = mkOverride 1002 null;
+        "withLocalPref" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseAllowed" = {
+
+      options = {
+        "mode" = mkOption {
+          description = "Mode is the mode to use when handling the prefixes.\nWhen set to \"filtered\", only the prefixes in the given list will be allowed.\nWhen set to \"all\", all the prefixes configured on the router will be allowed.";
+          type = (types.nullOr types.str);
+        };
+        "prefixes" = mkOption {
+          description = "";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "mode" = mkOverride 1002 null;
+        "prefixes" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseWithCommunity" = {
+
+      options = {
+        "community" = mkOption {
+          description = "Community is the community associated to the prefixes.";
+          type = (types.nullOr types.str);
+        };
+        "prefixes" = mkOption {
+          description = "Prefixes is the list of prefixes associated to the community.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "community" = mkOverride 1002 null;
+        "prefixes" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseWithLocalPref" = {
+
+      options = {
+        "localPref" = mkOption {
+          description = "LocalPref is the local preference associated to the prefixes.";
+          type = (types.nullOr types.int);
+        };
+        "prefixes" = mkOption {
+          description = "Prefixes is the list of prefixes associated to the local preference.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "localPref" = mkOverride 1002 null;
+        "prefixes" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToReceive" = {
+
+      options = {
+        "allowed" = mkOption {
+          description = "Allowed is the list of prefixes allowed to be received from\nthis neighbor.";
+          type = (
+            types.nullOr (
+              submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToReceiveAllowed"
+            )
+          );
+        };
+      };
+
+      config = {
+        "allowed" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToReceiveAllowed" = {
+
+      options = {
+        "mode" = mkOption {
+          description = "Mode is the mode to use when handling the prefixes.\nWhen set to \"filtered\", only the prefixes in the given list will be allowed.\nWhen set to \"all\", all the prefixes configured on the router will be allowed.";
+          type = (types.nullOr types.str);
+        };
+        "prefixes" = mkOption {
+          description = "";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToReceiveAllowedPrefixes"
+              )
+            )
+          );
+        };
+      };
+
+      config = {
+        "mode" = mkOverride 1002 null;
+        "prefixes" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToReceiveAllowedPrefixes" = {
+
+      options = {
+        "ge" = mkOption {
+          description = "The prefix length modifier. This selector accepts any matching prefix with length\ngreater or equal the given value.";
+          type = (types.nullOr types.int);
+        };
+        "le" = mkOption {
+          description = "The prefix length modifier. This selector accepts any matching prefix with length\nless or equal the given value.";
+          type = (types.nullOr types.int);
+        };
+        "prefix" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "ge" = mkOverride 1002 null;
+        "le" = mkOverride 1002 null;
+        "prefix" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecNodeSelector" = {
+
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecNodeSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecNodeSelectorMatchExpressions" = {
+
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecRaw" = {
+
+      options = {
+        "priority" = mkOption {
+          description = "Priority is the order with this configuration is appended to the\nbottom of the rendered configuration. A higher value means the\nraw config is appended later in the configuration file.";
+          type = (types.nullOr types.int);
+        };
+        "rawConfig" = mkOption {
+          description = "Config is a raw FRR configuration to be appended to the configuration\nrendered via the k8s api.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "priority" = mkOverride 1002 null;
+        "rawConfig" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRK8sConfiguration" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "FRRK8sConfigurationSpec defines the desired state of FRRK8sConfiguration.";
+          type = (types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.FRRK8sConfigurationSpec"));
+        };
+        "status" = mkOption {
+          description = "FRRK8sConfigurationStatus defines the observed state of FRRK8sConfiguration.";
+          type = (types.nullOr types.attrs);
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRK8sConfigurationSpec" = {
+
+      options = {
+        "logLevel" = mkOption {
+          description = "LogLevel sets the logging verbosity for the FRR-K8s components at runtime.\nWhen configured, this value overrides the defaults established by the --log-level CLI flag.\nValid values are: all, debug, info, warn, error, none.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "logLevel" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRNodeState" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "FRRNodeStateSpec defines the desired state of FRRNodeState.";
+          type = (types.nullOr types.attrs);
+        };
+        "status" = mkOption {
+          description = "FRRNodeStateStatus defines the observed state of FRRNodeState.";
+          type = (types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.FRRNodeStateStatus"));
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "frrk8s.metallb.io.v1beta1.FRRNodeStateStatus" = {
+
+      options = {
+        "lastConversionResult" = mkOption {
+          description = "LastConversionResult is the status of the last translation between the `FRRConfiguration`s resources and FRR's configuration, contains \"success\" or an error.";
+          type = (types.nullOr types.str);
+        };
+        "lastReloadResult" = mkOption {
+          description = "LastReloadResult represents the status of the last configuration update operation by FRR, contains \"success\" or an error.";
+          type = (types.nullOr types.str);
+        };
+        "runningConfig" = mkOption {
+          description = "RunningConfig represents the current FRR running config, which is the configuration the FRR instance is currently running with.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "lastConversionResult" = mkOverride 1002 null;
+        "lastReloadResult" = mkOverride 1002 null;
+        "runningConfig" = mkOverride 1002 null;
+      };
+
+    };
     "metallb.io.v1beta1.BFDProfile" = {
 
       options = {
@@ -333,6 +1066,12 @@ let
           description = "Peers limits the bgppeer to advertise the ips of the selected pools to.\nWhen empty, the loadbalancer IP is announced to all the BGPPeers configured.";
           type = (types.nullOr (types.listOf types.str));
         };
+        "serviceSelectors" = mkOption {
+          description = "ServiceSelectors limits the set of services that will be advertised via this advertisement.\nIf empty, all services from the selected pools are advertised.\nThis field is mutually exclusive with aggregationLength and aggregationLengthV6 -\nservices can only be selected when using the default /32 (IPv4) or /128 (IPv6) aggregation.";
+          type = (
+            types.nullOr (types.listOf (submoduleOf "metallb.io.v1beta1.BGPAdvertisementSpecServiceSelectors"))
+          );
+        };
       };
 
       config = {
@@ -344,6 +1083,7 @@ let
         "localPref" = mkOverride 1002 null;
         "nodeSelectors" = mkOverride 1002 null;
         "peers" = mkOverride 1002 null;
+        "serviceSelectors" = mkOverride 1002 null;
       };
 
     };
@@ -418,6 +1158,51 @@ let
 
     };
     "metallb.io.v1beta1.BGPAdvertisementSpecNodeSelectorsMatchExpressions" = {
+
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+
+    };
+    "metallb.io.v1beta1.BGPAdvertisementSpecServiceSelectors" = {
+
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "metallb.io.v1beta1.BGPAdvertisementSpecServiceSelectorsMatchExpressions")
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+
+    };
+    "metallb.io.v1beta1.BGPAdvertisementSpecServiceSelectorsMatchExpressions" = {
 
       options = {
         "key" = mkOption {
@@ -875,6 +1660,12 @@ let
             types.nullOr (types.listOf (submoduleOf "metallb.io.v1beta1.L2AdvertisementSpecNodeSelectors"))
           );
         };
+        "serviceSelectors" = mkOption {
+          description = "ServiceSelectors limits the set of services that will be advertised via this advertisement.\nIf empty, all services from the selected pools are advertised.";
+          type = (
+            types.nullOr (types.listOf (submoduleOf "metallb.io.v1beta1.L2AdvertisementSpecServiceSelectors"))
+          );
+        };
       };
 
       config = {
@@ -882,6 +1673,7 @@ let
         "ipAddressPoolSelectors" = mkOverride 1002 null;
         "ipAddressPools" = mkOverride 1002 null;
         "nodeSelectors" = mkOverride 1002 null;
+        "serviceSelectors" = mkOverride 1002 null;
       };
 
     };
@@ -956,6 +1748,51 @@ let
 
     };
     "metallb.io.v1beta1.L2AdvertisementSpecNodeSelectorsMatchExpressions" = {
+
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+
+    };
+    "metallb.io.v1beta1.L2AdvertisementSpecServiceSelectors" = {
+
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "metallb.io.v1beta1.L2AdvertisementSpecServiceSelectorsMatchExpressions")
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+
+    };
+    "metallb.io.v1beta1.L2AdvertisementSpecServiceSelectorsMatchExpressions" = {
 
       options = {
         "key" = mkOption {
@@ -1180,11 +2017,11 @@ let
           type = (types.nullOr types.str);
         };
         "ebgpMultiHop" = mkOption {
-          description = "To set if the BGPPeer is multi-hops away. Needed for FRR mode only.";
+          description = "To set if the BGPPeer is multi-hops away. Needed for FRR-based modes (FRR-K8s, FRR) only.";
           type = (types.nullOr types.bool);
         };
         "enableGracefulRestart" = mkOption {
-          description = "EnableGracefulRestart allows BGP peer to continue to forward data packets\nalong known routes while the routing protocol information is being\nrestored. This field is immutable because it requires restart of the BGP\nsession. Supported for FRR mode only.";
+          description = "EnableGracefulRestart allows BGP peer to continue to forward data packets\nalong known routes while the routing protocol information is being\nrestored. This field is immutable because it requires restart of the BGP\nsession. Supported for FRR-based modes (FRR-K8s, FRR) only.";
           type = (types.nullOr types.bool);
         };
         "holdTime" = mkOption {
@@ -1198,6 +2035,10 @@ let
         "keepaliveTime" = mkOption {
           description = "Requested BGP keepalive time, per RFC4271.";
           type = (types.nullOr types.str);
+        };
+        "localASN" = mkOption {
+          description = "LocalASN allows advertising a different AS number to the peer using BGP's\nlocal-as feature. When set, MetalLB will advertise this ASN to the peer\nvia \"neighbor <peer> local-as <ASN> no-prepend replace-as\", overriding\nthe router-level MyASN for this specific session.\nNot supported in native BGP mode.";
+          type = (types.nullOr types.int);
         };
         "myASN" = mkOption {
           description = "AS number to use for the local end of the session.";
@@ -1252,6 +2093,7 @@ let
         "holdTime" = mkOverride 1002 null;
         "interface" = mkOverride 1002 null;
         "keepaliveTime" = mkOverride 1002 null;
+        "localASN" = mkOverride 1002 null;
         "nodeSelectors" = mkOverride 1002 null;
         "password" = mkOverride 1002 null;
         "passwordSecret" = mkOverride 1002 null;
@@ -1335,6 +2177,53 @@ in
   # all resource versions
   options = {
     resources = {
+      "frrk8s.metallb.io"."v1beta1"."BGPSessionState" = mkOption {
+        description = "BGPSessionState exposes the status of a BGP Session from the FRR instance running on the node.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "frrk8s.metallb.io.v1beta1.BGPSessionState" "bgpsessionstates"
+              "BGPSessionState"
+              "frrk8s.metallb.io"
+              "v1beta1"
+          )
+        );
+        default = { };
+      };
+      "frrk8s.metallb.io"."v1beta1"."FRRConfiguration" = mkOption {
+        description = "FRRConfiguration is a piece of FRR configuration.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "frrk8s.metallb.io.v1beta1.FRRConfiguration" "frrconfigurations"
+              "FRRConfiguration"
+              "frrk8s.metallb.io"
+              "v1beta1"
+          )
+        );
+        default = { };
+      };
+      "frrk8s.metallb.io"."v1beta1"."FRRK8sConfiguration" = mkOption {
+        description = "FRRK8sConfiguration holds the FRR Operator configuration with global\nsettings for the K8s and FRR.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "frrk8s.metallb.io.v1beta1.FRRK8sConfiguration" "frrk8sconfigurations"
+              "FRRK8sConfiguration"
+              "frrk8s.metallb.io"
+              "v1beta1"
+          )
+        );
+        default = { };
+      };
+      "frrk8s.metallb.io"."v1beta1"."FRRNodeState" = mkOption {
+        description = "FRRNodeState exposes the status of the FRR instance running on each node.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "frrk8s.metallb.io.v1beta1.FRRNodeState" "frrnodestates" "FRRNodeState"
+              "frrk8s.metallb.io"
+              "v1beta1"
+          )
+        );
+        default = { };
+      };
       "metallb.io"."v1beta1"."BFDProfile" = mkOption {
         description = "BFDProfile represents the settings of the bfd session that can be\noptionally associated with a BGP session.";
         type = (
@@ -1464,6 +2353,18 @@ in
         );
         default = { };
       };
+      "bgpSessionStates" = mkOption {
+        description = "BGPSessionState exposes the status of a BGP Session from the FRR instance running on the node.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "frrk8s.metallb.io.v1beta1.BGPSessionState" "bgpsessionstates"
+              "BGPSessionState"
+              "frrk8s.metallb.io"
+              "v1beta1"
+          )
+        );
+        default = { };
+      };
       "communities" = mkOption {
         description = "Community is a collection of aliases for communities.\nUsers can define named aliases to be used in the BGPPeer CRD.";
         type = (
@@ -1481,6 +2382,41 @@ in
             submoduleForDefinition "metallb.io.v1beta1.ConfigurationState" "configurationstates"
               "ConfigurationState"
               "metallb.io"
+              "v1beta1"
+          )
+        );
+        default = { };
+      };
+      "frrConfigurations" = mkOption {
+        description = "FRRConfiguration is a piece of FRR configuration.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "frrk8s.metallb.io.v1beta1.FRRConfiguration" "frrconfigurations"
+              "FRRConfiguration"
+              "frrk8s.metallb.io"
+              "v1beta1"
+          )
+        );
+        default = { };
+      };
+      "fRRK8sConfigurations" = mkOption {
+        description = "FRRK8sConfiguration holds the FRR Operator configuration with global\nsettings for the K8s and FRR.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "frrk8s.metallb.io.v1beta1.FRRK8sConfiguration" "frrk8sconfigurations"
+              "FRRK8sConfiguration"
+              "frrk8s.metallb.io"
+              "v1beta1"
+          )
+        );
+        default = { };
+      };
+      "frrNodeStates" = mkOption {
+        description = "FRRNodeState exposes the status of the FRR instance running on each node.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "frrk8s.metallb.io.v1beta1.FRRNodeState" "frrnodestates" "FRRNodeState"
+              "frrk8s.metallb.io"
               "v1beta1"
           )
         );
@@ -1540,6 +2476,34 @@ in
 
     # register resource types
     types = [
+      {
+        name = "bgpsessionstates";
+        group = "frrk8s.metallb.io";
+        version = "v1beta1";
+        kind = "BGPSessionState";
+        attrName = "bgpSessionStates";
+      }
+      {
+        name = "frrconfigurations";
+        group = "frrk8s.metallb.io";
+        version = "v1beta1";
+        kind = "FRRConfiguration";
+        attrName = "frrConfigurations";
+      }
+      {
+        name = "frrk8sconfigurations";
+        group = "frrk8s.metallb.io";
+        version = "v1beta1";
+        kind = "FRRK8sConfiguration";
+        attrName = "fRRK8sConfigurations";
+      }
+      {
+        name = "frrnodestates";
+        group = "frrk8s.metallb.io";
+        version = "v1beta1";
+        kind = "FRRNodeState";
+        attrName = "frrNodeStates";
+      }
       {
         name = "bfdprofiles";
         group = "metallb.io";
@@ -1611,10 +2575,20 @@ in
         mkAliasDefinitions
           options.resources."bgpAdvertisements";
       "metallb.io"."v1beta2"."BGPPeer" = mkAliasDefinitions options.resources."bgpPeers";
+      "frrk8s.metallb.io"."v1beta1"."BGPSessionState" =
+        mkAliasDefinitions
+          options.resources."bgpSessionStates";
       "metallb.io"."v1beta1"."Community" = mkAliasDefinitions options.resources."communities";
       "metallb.io"."v1beta1"."ConfigurationState" =
         mkAliasDefinitions
           options.resources."configurationStates";
+      "frrk8s.metallb.io"."v1beta1"."FRRConfiguration" =
+        mkAliasDefinitions
+          options.resources."frrConfigurations";
+      "frrk8s.metallb.io"."v1beta1"."FRRK8sConfiguration" =
+        mkAliasDefinitions
+          options.resources."fRRK8sConfigurations";
+      "frrk8s.metallb.io"."v1beta1"."FRRNodeState" = mkAliasDefinitions options.resources."frrNodeStates";
       "metallb.io"."v1beta1"."IPAddressPool" = mkAliasDefinitions options.resources."ipAddressPools";
       "metallb.io"."v1beta1"."L2Advertisement" = mkAliasDefinitions options.resources."l2Advertisements";
       "metallb.io"."v1beta1"."ServiceBGPStatus" =
@@ -1627,6 +2601,24 @@ in
     # make all namespaced resources default to the
     # application's namespace
     defaults = [
+      {
+        group = "frrk8s.metallb.io";
+        version = "v1beta1";
+        kind = "BGPSessionState";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "frrk8s.metallb.io";
+        version = "v1beta1";
+        kind = "FRRConfiguration";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "frrk8s.metallb.io";
+        version = "v1beta1";
+        kind = "FRRK8sConfiguration";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
       {
         group = "metallb.io";
         version = "v1beta1";

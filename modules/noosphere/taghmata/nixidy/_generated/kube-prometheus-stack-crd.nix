@@ -303,7 +303,7 @@ let
           type = (types.nullOr types.str);
         };
         "containers" = mkOption {
-          description = "containers allows injecting additional containers. This is meant to\nallow adding an authentication proxy to an Alertmanager pod.\nContainers described here modify an operator generated container if they\nshare the same name and modifications are done via a strategic merge\npatch. The current container names are: `alertmanager` and\n`config-reloader`. Overriding containers is entirely outside the scope\nof what the maintainers will support and by doing so, you accept that\nthis behaviour may break at any time without notice.";
+          description = "containers allows injecting additional containers or modifying operator\ngenerated containers. This can be used to allow adding an authentication\nproxy to the Pods or to change the behavior of an operator generated\ncontainer. Containers described here modify an operator generated\ncontainer if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of containers managed by the operator are:\n* `alertmanager`\n* `config-reloader`\n* `thanos-sidecar`\n\nOverriding containers which are managed by the operator require careful\ntesting, especially when upgrading to a new version of the operator.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "monitoring.coreos.com.v1.AlertmanagerSpecContainers" "name" [ ]
@@ -369,7 +369,7 @@ let
           apply = attrsToList;
         };
         "initContainers" = mkOption {
-          description = "initContainers allows adding initContainers to the pod definition. Those can be used to e.g.\nfetch secrets for injection into the Alertmanager configuration from external sources. Any\nerrors during the execution of an initContainer will lead to a restart of the Pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/\nInitContainers described here modify an operator\ngenerated init containers if they share the same name and modifications are\ndone via a strategic merge patch. The current init container name is:\n`init-config-reloader`. Overriding init containers is entirely outside the\nscope of what the maintainers will support and by doing so, you accept that\nthis behaviour may break at any time without notice.";
+          description = "initContainers allows injecting initContainers to the Pod definition. Those\ncan be used to e.g.  fetch secrets for injection into the Prometheus\nconfiguration from external sources. Any errors during the execution of\nan initContainer will lead to a restart of the Pod. More info:\nhttps://kubernetes.io/docs/concepts/workloads/pods/init-containers/\nInitContainers described here modify an operator generated init\ncontainers if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of init container name managed by the operator are:\n* `init-config-reloader`.\n\nOverriding init containers which are managed by the operator require\ncareful testing, especially when upgrading to a new version of the\noperator.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "monitoring.coreos.com.v1.AlertmanagerSpecInitContainers" "name"
@@ -444,6 +444,10 @@ let
         };
         "routePrefix" = mkOption {
           description = "routePrefix Alertmanager registers HTTP handlers for. This is useful,\nif using ExternalURL and a proxy is rewriting HTTP routes of a request,\nand the actual ExternalURL is still true, but the server serves requests\nunder a different route prefix. For example for use with `kubectl proxy`.";
+          type = (types.nullOr types.str);
+        };
+        "schedulerName" = mkOption {
+          description = "schedulerName defines the scheduler to use for Pod scheduling. If not specified, the default scheduler is used.";
           type = (types.nullOr types.str);
         };
         "secrets" = mkOption {
@@ -573,6 +577,7 @@ let
         "resources" = mkOverride 1002 null;
         "retention" = mkOverride 1002 null;
         "routePrefix" = mkOverride 1002 null;
+        "schedulerName" = mkOverride 1002 null;
         "secrets" = mkOverride 1002 null;
         "securityContext" = mkOverride 1002 null;
         "serviceAccountName" = mkOverride 1002 null;
@@ -1697,6 +1702,14 @@ let
             )
           );
         };
+        "mattermost" = mkOption {
+          description = "mattermost defines the default Mattermost Config";
+          type = (
+            types.nullOr (
+              submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecAlertmanagerConfigurationGlobalMattermost"
+            )
+          );
+        };
         "opsGenieApiKey" = mkOption {
           description = "opsGenieApiKey defines the default OpsGenie API Key.";
           type = (
@@ -1782,6 +1795,7 @@ let
       config = {
         "httpConfig" = mkOverride 1002 null;
         "jira" = mkOverride 1002 null;
+        "mattermost" = mkOverride 1002 null;
         "opsGenieApiKey" = mkOverride 1002 null;
         "opsGenieApiUrl" = mkOverride 1002 null;
         "pagerdutyUrl" = mkOverride 1002 null;
@@ -2669,6 +2683,47 @@ let
       };
 
     };
+    "monitoring.coreos.com.v1.AlertmanagerSpecAlertmanagerConfigurationGlobalMattermost" = {
+
+      options = {
+        "webhookURL" = mkOption {
+          description = "webhookURL defines the default Mattermost Webhook URL.\n\nIt requires Alertmanager >= v0.32.0.";
+          type = (
+            types.nullOr (
+              submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecAlertmanagerConfigurationGlobalMattermostWebhookURL"
+            )
+          );
+        };
+      };
+
+      config = {
+        "webhookURL" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1.AlertmanagerSpecAlertmanagerConfigurationGlobalMattermostWebhookURL" = {
+
+      options = {
+        "key" = mkOption {
+          description = "The key of the secret to select from.  Must be a valid secret key.";
+          type = types.str;
+        };
+        "name" = mkOption {
+          description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
+          type = (types.nullOr types.str);
+        };
+        "optional" = mkOption {
+          description = "Specify whether the Secret or its key must be defined";
+          type = (types.nullOr types.bool);
+        };
+      };
+
+      config = {
+        "name" = mkOverride 1002 null;
+        "optional" = mkOverride 1002 null;
+      };
+
+    };
     "monitoring.coreos.com.v1.AlertmanagerSpecAlertmanagerConfigurationGlobalOpsGenieApiKey" = {
 
       options = {
@@ -2843,6 +2898,10 @@ let
           description = "authUsername represents SMTP Auth using CRAM-MD5, LOGIN and PLAIN. If empty, Alertmanager doesn't authenticate to the SMTP server.";
           type = (types.nullOr types.str);
         };
+        "forceImplicitTLS" = mkOption {
+          description = "forceImplicitTLS defines whether to force use of implicit TLS (direct TLS connection) for better security.\ntrue: force use of implicit TLS (direct TLS connection on any port)\nfalse: force disable implicit TLS (use explicit TLS/STARTTLS if required)\nnil (default): auto-detect based on port (465=implicit, other=explicit) for backward compatibility\nIt requires Alertmanager >= v0.31.0.";
+          type = (types.nullOr types.bool);
+        };
         "from" = mkOption {
           description = "from defines the default SMTP From header field.";
           type = (types.nullOr types.str);
@@ -2878,6 +2937,7 @@ let
         "authPassword" = mkOverride 1002 null;
         "authSecret" = mkOverride 1002 null;
         "authUsername" = mkOverride 1002 null;
+        "forceImplicitTLS" = mkOverride 1002 null;
         "from" = mkOverride 1002 null;
         "hello" = mkOverride 1002 null;
         "requireTLS" = mkOverride 1002 null;
@@ -3907,7 +3967,7 @@ let
           );
         };
         "resizePolicy" = mkOption {
-          description = "Resources resize policy for the container.";
+          description = "Resources resize policy for the container.\nThis field cannot be set on ephemeral containers.";
           type = (
             types.nullOr (
               types.listOf (submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecContainersResizePolicy")
@@ -5676,7 +5736,7 @@ let
           );
         };
         "resizePolicy" = mkOption {
-          description = "Resources resize policy for the container.";
+          description = "Resources resize policy for the container.\nThis field cannot be set on ephemeral containers.";
           type = (
             types.nullOr (
               types.listOf (submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecInitContainersResizePolicy")
@@ -7737,7 +7797,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecStorageEphemeralVolumeClaimTemplateSpecResources"
@@ -7991,7 +8051,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecStorageVolumeClaimTemplateSpecResources"
@@ -8161,11 +8221,11 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "allocatedResourceStatuses" = mkOption {
-          description = "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.";
+          description = "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.";
           type = (types.nullOr (types.attrsOf types.str));
         };
         "allocatedResources" = mkOption {
-          description = "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.";
+          description = "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.";
           type = (types.nullOr (types.attrsOf (types.either types.int types.str)));
         };
         "capacity" = mkOption {
@@ -8279,7 +8339,7 @@ let
           type = (types.nullOr types.str);
         };
         "operator" = mkOption {
-          description = "Operator represents a key's relationship to the value.\nValid operators are Exists and Equal. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.";
+          description = "Operator represents a key's relationship to the value.\nValid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.\nLt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).";
           type = (types.nullOr types.str);
         };
         "tolerationSeconds" = mkOption {
@@ -9118,7 +9178,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecVolumesEphemeralVolumeClaimTemplateSpecResources"
@@ -9997,6 +10057,10 @@ let
           description = "Kubelet's generated CSRs will be addressed to this signer.";
           type = types.str;
         };
+        "userAnnotations" = mkOption {
+          description = "userAnnotations allow pod authors to pass additional information to\nthe signer implementation.  Kubernetes does not restrict or validate this\nmetadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of\nthe PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations,\nwith the addition that all keys must be domain-prefixed. No restrictions\nare placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should\ndeny requests that contain keys they do not recognize.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
       };
 
       config = {
@@ -10004,6 +10068,7 @@ let
         "credentialBundlePath" = mkOverride 1002 null;
         "keyPath" = mkOverride 1002 null;
         "maxExpirationSeconds" = mkOverride 1002 null;
+        "userAnnotations" = mkOverride 1002 null;
       };
 
     };
@@ -13727,7 +13792,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "containers" = mkOption {
-          description = "containers allows injecting additional containers or modifying operator\ngenerated containers. This can be used to allow adding an authentication\nproxy to the Pods or to change the behavior of an operator generated\ncontainer. Containers described here modify an operator generated\ncontainer if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of containers managed by the operator are:\n* `prometheus`\n* `config-reloader`\n* `thanos-sidecar`\n\nOverriding containers is entirely outside the scope of what the\nmaintainers will support and by doing so, you accept that this behaviour\nmay break at any time without notice.";
+          description = "containers allows injecting additional containers or modifying operator\ngenerated containers. This can be used to allow adding an authentication\nproxy to the Pods or to change the behavior of an operator generated\ncontainer. Containers described here modify an operator generated\ncontainer if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of containers managed by the operator are:\n* `prometheus`\n* `config-reloader`\n* `thanos-sidecar`\n\nOverriding containers which are managed by the operator require careful\ntesting, especially when upgrading to a new version of the operator.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "monitoring.coreos.com.v1.PrometheusSpecContainers" "name" [ ]
@@ -13867,7 +13932,7 @@ let
           apply = attrsToList;
         };
         "initContainers" = mkOption {
-          description = "initContainers allows injecting initContainers to the Pod definition. Those\ncan be used to e.g.  fetch secrets for injection into the Prometheus\nconfiguration from external sources. Any errors during the execution of\nan initContainer will lead to a restart of the Pod. More info:\nhttps://kubernetes.io/docs/concepts/workloads/pods/init-containers/\nInitContainers described here modify an operator generated init\ncontainers if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of init container name managed by the operator are:\n* `init-config-reloader`.\n\nOverriding init containers is entirely outside the scope of what the\nmaintainers will support and by doing so, you accept that this behaviour\nmay break at any time without notice.";
+          description = "initContainers allows injecting initContainers to the Pod definition. Those\ncan be used to e.g. fetch secrets for injection into the Prometheus\nconfiguration from external sources. Any errors during the execution of\nan initContainer will lead to a restart of the Pod. More info:\nhttps://kubernetes.io/docs/concepts/workloads/pods/init-containers/\nInitContainers described here modify an operator generated init\ncontainers if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of init container name managed by the operator are:\n* `init-config-reloader`.\n\nOverriding init containers which are managed by the operator require\ncareful testing, especially when upgrading to a new version of the\noperator.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "monitoring.coreos.com.v1.PrometheusSpecInitContainers" "name"
@@ -14082,6 +14147,10 @@ let
           description = "sampleLimit defines per-scrape limit on number of scraped samples that will be accepted.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedSampleLimit.";
           type = (types.nullOr types.int);
         };
+        "schedulerName" = mkOption {
+          description = "schedulerName defines the scheduler to use for Pod scheduling. If not specified, the default scheduler is used.";
+          type = (types.nullOr types.str);
+        };
         "scrapeClasses" = mkOption {
           description = "scrapeClasses defines the list of scrape classes to expose to scraping objects such as\nPodMonitors, ServiceMonitors, Probes and ScrapeConfigs.\n\nThis is an *experimental feature*, it may change in any upcoming release\nin a breaking way.";
           type = (
@@ -14098,13 +14167,13 @@ let
           type = (types.nullOr types.bool);
         };
         "scrapeConfigNamespaceSelector" = mkOption {
-          description = "scrapeConfigNamespaceSelector defines the namespaces to match for ScrapeConfig discovery. An empty label selector\nmatches all namespaces. A null label selector matches the current\nnamespace only.\n\nNote that the ScrapeConfig custom resource definition is currently at Alpha level.";
+          description = "scrapeConfigNamespaceSelector defines the namespaces to match for ScrapeConfig discovery. An empty label selector\nmatches all namespaces. A null label selector matches the current\nnamespace only.\n\nNote that the ScrapeConfig custom resource definition is currently at Alpha level\nand will be graduated to Beta in a future release.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecScrapeConfigNamespaceSelector")
           );
         };
         "scrapeConfigSelector" = mkOption {
-          description = "scrapeConfigSelector defines the scrapeConfigs to be selected for target discovery. An empty label\nselector matches all objects. A null label selector matches no objects.\n\nIf `spec.serviceMonitorSelector`, `spec.podMonitorSelector`, `spec.probeSelector`\nand `spec.scrapeConfigSelector` are null, the Prometheus configuration is unmanaged.\nThe Prometheus operator will ensure that the Prometheus configuration's\nSecret exists, but it is the responsibility of the user to provide the raw\ngzipped Prometheus configuration under the `prometheus.yaml.gz` key.\nThis behavior is *deprecated* and will be removed in the next major version\nof the custom resource definition. It is recommended to use\n`spec.additionalScrapeConfigs` instead.\n\nNote that the ScrapeConfig custom resource definition is currently at Alpha level.";
+          description = "scrapeConfigSelector defines the scrapeConfigs to be selected for target discovery. An empty label\nselector matches all objects. A null label selector matches no objects.\n\nIf `spec.serviceMonitorSelector`, `spec.podMonitorSelector`, `spec.probeSelector`\nand `spec.scrapeConfigSelector` are null, the Prometheus configuration is unmanaged.\nThe Prometheus operator will ensure that the Prometheus configuration's\nSecret exists, but it is the responsibility of the user to provide the raw\ngzipped Prometheus configuration under the `prometheus.yaml.gz` key.\nThis behavior is *deprecated* and will be removed in the next major version\nof the custom resource definition. It is recommended to use\n`spec.additionalScrapeConfigs` instead.\n\nNote that the ScrapeConfig custom resource definition is currently at Alpha level\nand will be graduated to Beta in a future release.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecScrapeConfigSelector"));
         };
         "scrapeFailureLogFile" = mkOption {
@@ -14164,6 +14233,10 @@ let
         "shardRetentionPolicy" = mkOption {
           description = "shardRetentionPolicy defines the retention policy for the Prometheus shards.\n(Alpha) Using this field requires the 'PrometheusShardRetentionPolicy' feature gate to be enabled.\n\nThe final goals for this feature can be seen at https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/proposals/202310-shard-autoscaling.md#graceful-scale-down-of-prometheus-servers,\nhowever, the feature is not yet fully implemented in this PR. The limitation being:\n* Retention duration is not settable, for now, shards are retained forever.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecShardRetentionPolicy"));
+        };
+        "shardingStrategy" = mkOption {
+          description = "shardingStrategy defines the sharding strategy for distributing scraped targets across Prometheus shards.\n\nWhen not defined, the operator defaults to the 'Address' mode which distributes\ntargets based on a hash of the target address.";
+          type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecShardingStrategy"));
         };
         "shards" = mkOption {
           description = "shards defines the number of shards to distribute the scraped targets onto.\n\n`spec.replicas` multiplied by `spec.shards` is the total number of Pods\nbeing created.\n\nWhen not defined, the operator assumes only one shard.\n\nNote that scaling down shards will not reshard data onto the remaining\ninstances, it must be manually moved. Increasing shards will not reshard\ndata either but it will continue to be available from the same\ninstances. To query globally, use either\n* Thanos sidecar + querier for query federation and Thanos Ruler for rules.\n* Remote-write to send metrics to a central location.\n\nBy default, the sharding of targets is performed on:\n* The `__address__` target's metadata label for PodMonitor,\nServiceMonitor and ScrapeConfig resources.\n* The `__param_target__` label for Probe resources.\n\nUsers can define their own sharding implementation by setting the\n`__tmp_hash` label during the target discovery with relabeling\nconfiguration (either in the monitoring resources or via scrape class).\n\nYou can also disable sharding on a specific target by setting the\n`__tmp_disable_sharding` label with relabeling configuration. When\nthe label value isn't empty, all Prometheus shards will scrape the target.";
@@ -14338,6 +14411,7 @@ let
         "rules" = mkOverride 1002 null;
         "runtime" = mkOverride 1002 null;
         "sampleLimit" = mkOverride 1002 null;
+        "schedulerName" = mkOverride 1002 null;
         "scrapeClasses" = mkOverride 1002 null;
         "scrapeClassicHistograms" = mkOverride 1002 null;
         "scrapeConfigNamespaceSelector" = mkOverride 1002 null;
@@ -14356,6 +14430,7 @@ let
         "serviceName" = mkOverride 1002 null;
         "sha" = mkOverride 1002 null;
         "shardRetentionPolicy" = mkOverride 1002 null;
+        "shardingStrategy" = mkOverride 1002 null;
         "shards" = mkOverride 1002 null;
         "storage" = mkOverride 1002 null;
         "tag" = mkOverride 1002 null;
@@ -15746,6 +15821,10 @@ let
             )
           );
         };
+        "externalId" = mkOption {
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
+          type = (types.nullOr types.str);
+        };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
           type = (types.nullOr types.str);
@@ -15774,6 +15853,7 @@ let
 
       config = {
         "accessKey" = mkOverride 1002 null;
+        "externalId" = mkOverride 1002 null;
         "profile" = mkOverride 1002 null;
         "region" = mkOverride 1002 null;
         "roleArn" = mkOverride 1002 null;
@@ -16567,7 +16647,7 @@ let
           );
         };
         "resizePolicy" = mkOption {
-          description = "Resources resize policy for the container.";
+          description = "Resources resize policy for the container.\nThis field cannot be set on ephemeral containers.";
           type = (
             types.nullOr (
               types.listOf (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecContainersResizePolicy")
@@ -18358,7 +18438,7 @@ let
           );
         };
         "resizePolicy" = mkOption {
-          description = "Resources resize policy for the container.";
+          description = "Resources resize policy for the container.\nThis field cannot be set on ephemeral containers.";
           type = (
             types.nullOr (
               types.listOf (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecInitContainersResizePolicy")
@@ -21221,7 +21301,7 @@ let
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecRemoteWriteTlsConfig"));
         };
         "url" = mkOption {
-          description = "url defines the URL of the endpoint to send samples to.";
+          description = "url defines the URL of the endpoint to send samples to.\n\nIt must use the HTTP or HTTPS scheme.";
           type = types.str;
         };
         "writeRelabelConfigs" = mkOption {
@@ -21983,6 +22063,10 @@ let
             types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecRemoteWriteSigv4AccessKey")
           );
         };
+        "externalId" = mkOption {
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
+          type = (types.nullOr types.str);
+        };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
           type = (types.nullOr types.str);
@@ -22009,6 +22093,7 @@ let
 
       config = {
         "accessKey" = mkOverride 1002 null;
+        "externalId" = mkOverride 1002 null;
         "profile" = mkOverride 1002 null;
         "region" = mkOverride 1002 null;
         "roleArn" = mkOverride 1002 null;
@@ -23360,7 +23445,7 @@ let
 
       options = {
         "retain" = mkOption {
-          description = "retain defines the config for retention when the retention policy is set to `Retain`.\nThis field is ineffective as of now.";
+          description = "retain defines the config for retention when the retention policy is set\nto `Retain`.\n\nIf not defined, the operator will use the retention duration configured\nfor the Prometheus data. If the resource uses size-based retention, the\nshard(s) are kept forever (unless manually deleted).";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecShardRetentionPolicyRetain")
           );
@@ -23381,12 +23466,52 @@ let
 
       options = {
         "retentionPeriod" = mkOption {
-          description = "retentionPeriod defines the retentionPeriod for shard retention policy.";
+          description = "retentionPeriod defines how long the scaled-down shard(s) need to be\nkept before being deleted.";
           type = types.str;
         };
       };
 
       config = { };
+
+    };
+    "monitoring.coreos.com.v1.PrometheusSpecShardingStrategy" = {
+
+      options = {
+        "mode" = mkOption {
+          description = "mode defines the sharding mode. Can be 'Address' or 'Topology'.\n\n'Address' is the default mode and distributes targets across shards\nbased on a hash of the target address.\n\n'Topology' enables zone-aware sharding where each shard is assigned to a\nspecific topology zone and only scrapes targets in that zone.\n(Alpha) Using the 'Topology' mode requires the `PrometheusTopologySharding`\nfeature gate to be enabled.";
+          type = (types.nullOr types.str);
+        };
+        "topology" = mkOption {
+          description = "topology defines the configuration for topology-aware sharding.\nThis field is only valid when mode is set to 'Topology'.";
+          type = (
+            types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecShardingStrategyTopology")
+          );
+        };
+      };
+
+      config = {
+        "mode" = mkOverride 1002 null;
+        "topology" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1.PrometheusSpecShardingStrategyTopology" = {
+
+      options = {
+        "externalLabelName" = mkOption {
+          description = "externalLabelName defines the name of the Prometheus external label used\nto communicate the topology zone assigned to the Prometheus instance.\nIf not defined, it defaults to \"zone\".\nIf set to the empty string, no external label is added to the Prometheus configuration.";
+          type = (types.nullOr types.str);
+        };
+        "values" = mkOption {
+          description = "values defines the list of topology values (e.g. zone names) to be used\nfor sharding. The configured number of shards must be greater than or\nequal to the number of values.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "externalLabelName" = mkOverride 1002 null;
+        "values" = mkOverride 1002 null;
+      };
 
     };
     "monitoring.coreos.com.v1.PrometheusSpecStorage" = {
@@ -23501,7 +23626,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecStorageEphemeralVolumeClaimTemplateSpecResources"
@@ -23753,7 +23878,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecStorageVolumeClaimTemplateSpecResources"
@@ -23922,11 +24047,11 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "allocatedResourceStatuses" = mkOption {
-          description = "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.";
+          description = "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.";
           type = (types.nullOr (types.attrsOf types.str));
         };
         "allocatedResources" = mkOption {
-          description = "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.";
+          description = "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.";
           type = (types.nullOr (types.attrsOf (types.either types.int types.str)));
         };
         "capacity" = mkOption {
@@ -24063,7 +24188,7 @@ let
           type = (types.nullOr types.bool);
         };
         "grpcServerTlsConfig" = mkOption {
-          description = "grpcServerTlsConfig defines the TLS parameters for the gRPC server providing the StoreAPI.\n\nNote: Currently only the `caFile`, `certFile`, and `keyFile` fields are supported.";
+          description = "grpcServerTlsConfig defines the TLS parameters for the gRPC server providing the StoreAPI.\n\nNote: Currently only the `minVersion`, `caFile`, `certFile`, `keyFile`, `cipherSuites` and `curves` fields are supported.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecThanosGrpcServerTlsConfig")
           );
@@ -24211,6 +24336,14 @@ let
           description = "certFile defines the path to the client cert file in the Prometheus container for the targets.";
           type = (types.nullOr types.str);
         };
+        "cipherSuites" = mkOption {
+          description = "cipherSuites defines the list of supported cipher suites for TLS\nversions up to TLS 1.2.\n\nIf not defined, the Go default cipher suites are used.\nAvailable cipher suites are documented in the Go documentation:\nhttps://golang.org/pkg/crypto/tls/#pkg-constants\n\nIt requires Thanos >= v0.42.0. Note that the operator doesn't verify if\nthe Thanos version supports the provided values.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "curves" = mkOption {
+          description = "curves defines the list of preferred elliptic curves for\nTLS handshakes.\n\nIf not defined, the Go default curves are used.\nAvailable curves are documented in the Go documentation:\nhttps://golang.org/pkg/crypto/tls/#CurveID\n\nIt requires Thanos >= v0.42.0. Note that the operator doesn't verify if\nthe Thanos version supports the provided values.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "insecureSkipVerify" = mkOption {
           description = "insecureSkipVerify defines how to disable target certificate validation.";
           type = (types.nullOr types.bool);
@@ -24246,6 +24379,8 @@ let
         "caFile" = mkOverride 1002 null;
         "cert" = mkOverride 1002 null;
         "certFile" = mkOverride 1002 null;
+        "cipherSuites" = mkOverride 1002 null;
+        "curves" = mkOverride 1002 null;
         "insecureSkipVerify" = mkOverride 1002 null;
         "keyFile" = mkOverride 1002 null;
         "keySecret" = mkOverride 1002 null;
@@ -24573,7 +24708,7 @@ let
           type = (types.nullOr types.str);
         };
         "operator" = mkOption {
-          description = "Operator represents a key's relationship to the value.\nValid operators are Exists and Equal. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.";
+          description = "Operator represents a key's relationship to the value.\nValid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.\nLt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).";
           type = (types.nullOr types.str);
         };
         "tolerationSeconds" = mkOption {
@@ -25700,7 +25835,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecVolumesEphemeralVolumeClaimTemplateSpecResources"
@@ -26573,6 +26708,10 @@ let
           description = "Kubelet's generated CSRs will be addressed to this signer.";
           type = types.str;
         };
+        "userAnnotations" = mkOption {
+          description = "userAnnotations allow pod authors to pass additional information to\nthe signer implementation.  Kubernetes does not restrict or validate this\nmetadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of\nthe PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations,\nwith the addition that all keys must be domain-prefixed. No restrictions\nare placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should\ndeny requests that contain keys they do not recognize.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
       };
 
       config = {
@@ -26580,6 +26719,7 @@ let
         "credentialBundlePath" = mkOverride 1002 null;
         "keyPath" = mkOverride 1002 null;
         "maxExpirationSeconds" = mkOverride 1002 null;
+        "userAnnotations" = mkOverride 1002 null;
       };
 
     };
@@ -28775,7 +28915,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "containers" = mkOption {
-          description = "containers allows injecting additional containers or modifying operator generated\ncontainers. This can be used to allow adding an authentication proxy to a ThanosRuler pod or\nto change the behavior of an operator generated container. Containers described here modify\nan operator generated container if they share the same name and modifications are done via a\nstrategic merge patch. The current container names are: `thanos-ruler` and `config-reloader`.\nOverriding containers is entirely outside the scope of what the maintainers will support and by doing\nso, you accept that this behaviour may break at any time without notice.";
+          description = "containers allows injecting additional containers or modifying operator\ngenerated containers. This can be used to allow adding an authentication\nproxy to the Pods or to change the behavior of an operator generated\ncontainer. Containers described here modify an operator generated\ncontainer if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of containers managed by the operator are:\n* `thanos-ruler`\n* `config-reloader`\n\nOverriding containers which are managed by the operator require careful\ntesting, especially when upgrading to a new version of the operator.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "monitoring.coreos.com.v1.ThanosRulerSpecContainers" "name" [ ]
@@ -28823,7 +28963,7 @@ let
           type = (types.nullOr types.str);
         };
         "grpcServerTlsConfig" = mkOption {
-          description = "grpcServerTlsConfig defines the gRPC server from which Thanos Querier reads\nrecorded rule data.\nNote: Currently only the CAFile, CertFile, and KeyFile fields are supported.\nMaps to the '--grpc-server-tls-*' CLI args.";
+          description = "grpcServerTlsConfig defines the gRPC server from which Thanos Querier reads\nrecorded rule data.\n\nNote: Currently only the `minVersion`, `caFile`, `certFile`, `keyFile`, `cipherSuites` and `curves` fields are supported.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecGrpcServerTlsConfig"));
         };
         "hostAliases" = mkOption {
@@ -28855,7 +28995,7 @@ let
           apply = attrsToList;
         };
         "initContainers" = mkOption {
-          description = "initContainers allows adding initContainers to the pod definition. Those can be used to e.g.\nfetch secrets for injection into the ThanosRuler configuration from external sources. Any\nerrors during the execution of an initContainer will lead to a restart of the Pod.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/\nUsing initContainers for any use case other then secret fetching is entirely outside the scope\nof what the maintainers will support and by doing so, you accept that this behaviour may break\nat any time without notice.";
+          description = "initContainers allows injecting initContainers to the Pod definition.\nThose can be used to e.g. fetch secrets for injection into the\nconfiguration from external sources. Any errors during the execution of\nan initContainer will lead to a restart of the Pod. More info:\nhttps://kubernetes.io/docs/concepts/workloads/pods/init-containers/";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "monitoring.coreos.com.v1.ThanosRulerSpecInitContainers" "name"
@@ -28987,6 +29127,10 @@ let
           description = "ruleSelector defines the PrometheusRule objects to be selected for rule evaluation. An empty\nlabel selector matches all objects. A null label selector matches no\nobjects.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecRuleSelector"));
         };
+        "schedulerName" = mkOption {
+          description = "schedulerName defines the scheduler to use for Pod scheduling. If not specified, the default scheduler is used.";
+          type = (types.nullOr types.str);
+        };
         "securityContext" = mkOption {
           description = "securityContext defines the pod-level security attributes and common container settings.\nThis defaults to the default PodSecurityContext.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecSecurityContext"));
@@ -29114,6 +29258,7 @@ let
         "ruleOutageTolerance" = mkOverride 1002 null;
         "ruleQueryOffset" = mkOverride 1002 null;
         "ruleSelector" = mkOverride 1002 null;
+        "schedulerName" = mkOverride 1002 null;
         "securityContext" = mkOverride 1002 null;
         "serviceAccountName" = mkOverride 1002 null;
         "serviceName" = mkOverride 1002 null;
@@ -30194,7 +30339,7 @@ let
           );
         };
         "resizePolicy" = mkOption {
-          description = "Resources resize policy for the container.";
+          description = "Resources resize policy for the container.\nThis field cannot be set on ephemeral containers.";
           type = (
             types.nullOr (
               types.listOf (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecContainersResizePolicy")
@@ -31898,6 +32043,14 @@ let
           description = "certFile defines the path to the client cert file in the Prometheus container for the targets.";
           type = (types.nullOr types.str);
         };
+        "cipherSuites" = mkOption {
+          description = "cipherSuites defines the list of supported cipher suites for TLS\nversions up to TLS 1.2.\n\nIf not defined, the Go default cipher suites are used.\nAvailable cipher suites are documented in the Go documentation:\nhttps://golang.org/pkg/crypto/tls/#pkg-constants\n\nIt requires Thanos >= v0.42.0. Note that the operator doesn't verify if\nthe Thanos version supports the provided values.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "curves" = mkOption {
+          description = "curves defines the list of preferred elliptic curves for\nTLS handshakes.\n\nIf not defined, the Go default curves are used.\nAvailable curves are documented in the Go documentation:\nhttps://golang.org/pkg/crypto/tls/#CurveID\n\nIt requires Thanos >= v0.42.0. Note that the operator doesn't verify if\nthe Thanos version supports the provided values.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "insecureSkipVerify" = mkOption {
           description = "insecureSkipVerify defines how to disable target certificate validation.";
           type = (types.nullOr types.bool);
@@ -31931,6 +32084,8 @@ let
         "caFile" = mkOverride 1002 null;
         "cert" = mkOverride 1002 null;
         "certFile" = mkOverride 1002 null;
+        "cipherSuites" = mkOverride 1002 null;
+        "curves" = mkOverride 1002 null;
         "insecureSkipVerify" = mkOverride 1002 null;
         "keyFile" = mkOverride 1002 null;
         "keySecret" = mkOverride 1002 null;
@@ -32208,7 +32363,7 @@ let
           );
         };
         "resizePolicy" = mkOption {
-          description = "Resources resize policy for the container.";
+          description = "Resources resize policy for the container.\nThis field cannot be set on ephemeral containers.";
           type = (
             types.nullOr (
               types.listOf (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecInitContainersResizePolicy")
@@ -34032,7 +34187,7 @@ let
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecRemoteWriteTlsConfig"));
         };
         "url" = mkOption {
-          description = "url defines the URL of the endpoint to send samples to.";
+          description = "url defines the URL of the endpoint to send samples to.\n\nIt must use the HTTP or HTTPS scheme.";
           type = types.str;
         };
         "writeRelabelConfigs" = mkOption {
@@ -34794,6 +34949,10 @@ let
             types.nullOr (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecRemoteWriteSigv4AccessKey")
           );
         };
+        "externalId" = mkOption {
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
+          type = (types.nullOr types.str);
+        };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
           type = (types.nullOr types.str);
@@ -34820,6 +34979,7 @@ let
 
       config = {
         "accessKey" = mkOverride 1002 null;
+        "externalId" = mkOverride 1002 null;
         "profile" = mkOverride 1002 null;
         "region" = mkOverride 1002 null;
         "roleArn" = mkOverride 1002 null;
@@ -35597,7 +35757,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecStorageEphemeralVolumeClaimTemplateSpecResources"
@@ -35851,7 +36011,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecStorageVolumeClaimTemplateSpecResources"
@@ -36020,11 +36180,11 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "allocatedResourceStatuses" = mkOption {
-          description = "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.";
+          description = "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.";
           type = (types.nullOr (types.attrsOf types.str));
         };
         "allocatedResources" = mkOption {
-          description = "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.";
+          description = "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.";
           type = (types.nullOr (types.attrsOf (types.either types.int types.str)));
         };
         "capacity" = mkOption {
@@ -36138,7 +36298,7 @@ let
           type = (types.nullOr types.str);
         };
         "operator" = mkOption {
-          description = "Operator represents a key's relationship to the value.\nValid operators are Exists and Equal. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.";
+          description = "Operator represents a key's relationship to the value.\nValid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.\nLt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).";
           type = (types.nullOr types.str);
         };
         "tolerationSeconds" = mkOption {
@@ -36995,7 +37155,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecVolumesEphemeralVolumeClaimTemplateSpecResources"
@@ -37871,6 +38031,10 @@ let
           description = "Kubelet's generated CSRs will be addressed to this signer.";
           type = types.str;
         };
+        "userAnnotations" = mkOption {
+          description = "userAnnotations allow pod authors to pass additional information to\nthe signer implementation.  Kubernetes does not restrict or validate this\nmetadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of\nthe PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations,\nwith the addition that all keys must be domain-prefixed. No restrictions\nare placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should\ndeny requests that contain keys they do not recognize.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
       };
 
       config = {
@@ -37878,6 +38042,7 @@ let
         "credentialBundlePath" = mkOverride 1002 null;
         "keyPath" = mkOverride 1002 null;
         "maxExpirationSeconds" = mkOverride 1002 null;
+        "userAnnotations" = mkOverride 1002 null;
       };
 
     };
@@ -40070,6 +40235,10 @@ let
           description = "authUsername defines the username to use for SMTP authentication.\nThis is used for SMTP AUTH when the server requires authentication.";
           type = (types.nullOr types.str);
         };
+        "forceImplicitTLS" = mkOption {
+          description = "forceImplicitTLS defines whether to force use of implicit TLS (direct TLS connection) for better security.\ntrue: force use of implicit TLS (direct TLS connection on any port)\nfalse: force disable implicit TLS (use explicit TLS/STARTTLS if required)\nnil (default): auto-detect based on port (465=implicit, other=explicit) for backward compatibility\nIt requires Alertmanager >= v0.31.0.";
+          type = (types.nullOr types.bool);
+        };
         "from" = mkOption {
           description = "from defines the sender address for email notifications.\nThis appears as the \"From\" field in the email header.";
           type = (types.nullOr types.str);
@@ -40108,6 +40277,14 @@ let
           description = "text defines the plain text body of the email notification.\nThis provides a fallback for email clients that don't support HTML.";
           type = (types.nullOr types.str);
         };
+        "threading" = mkOption {
+          description = "threading defines the threading configuration for email receiver.\nIt requires Alertmanager >= v0.30.0.";
+          type = (
+            types.nullOr (
+              submoduleOf "monitoring.coreos.com.v1alpha1.AlertmanagerConfigSpecReceiversEmailConfigsThreading"
+            )
+          );
+        };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration for SMTP connections.\nThis includes settings for certificates, CA validation, and TLS protocol options.";
           type = (
@@ -40127,6 +40304,7 @@ let
         "authPassword" = mkOverride 1002 null;
         "authSecret" = mkOverride 1002 null;
         "authUsername" = mkOverride 1002 null;
+        "forceImplicitTLS" = mkOverride 1002 null;
         "from" = mkOverride 1002 null;
         "headers" = mkOverride 1002 null;
         "hello" = mkOverride 1002 null;
@@ -40135,6 +40313,7 @@ let
         "sendResolved" = mkOverride 1002 null;
         "smarthost" = mkOverride 1002 null;
         "text" = mkOverride 1002 null;
+        "threading" = mkOverride 1002 null;
         "tlsConfig" = mkOverride 1002 null;
         "to" = mkOverride 1002 null;
       };
@@ -40195,6 +40374,18 @@ let
         };
         "value" = mkOption {
           description = "value defines the value of the tuple.\nThis is the data or content associated with the key.";
+          type = types.str;
+        };
+      };
+
+      config = { };
+
+    };
+    "monitoring.coreos.com.v1alpha1.AlertmanagerConfigSpecReceiversEmailConfigsThreading" = {
+
+      options = {
+        "threadByDate" = mkOption {
+          description = "threadByDate defines what granularity of current date to thread by. Accepted values: Daily, None.\n(None means group by alert group key, no date).";
           type = types.str;
         };
       };
@@ -46612,6 +46803,10 @@ let
           description = "linkNames enables automatic linking of channel names and usernames in the message.\nWhen true, @channel and @username will be converted to clickable links.";
           type = (types.nullOr types.bool);
         };
+        "messageText" = mkOption {
+          description = "messageText defines text content of the Slack message.\nIf set, this is sent as the top-level 'text' field in the Slack payload.\nIt requires Alertmanager >= v0.31.0.";
+          type = (types.nullOr types.str);
+        };
         "mrkdwnIn" = mkOption {
           description = "mrkdwnIn defines which fields should be parsed as Slack markdown.\nValid values include \"pretext\", \"text\", and \"fields\".";
           type = (types.nullOr (types.listOf types.str));
@@ -46668,6 +46863,7 @@ let
         "iconURL" = mkOverride 1002 null;
         "imageURL" = mkOverride 1002 null;
         "linkNames" = mkOverride 1002 null;
+        "messageText" = mkOverride 1002 null;
         "mrkdwnIn" = mkOverride 1002 null;
         "pretext" = mkOverride 1002 null;
         "sendResolved" = mkOverride 1002 null;
@@ -48607,6 +48803,10 @@ let
             )
           );
         };
+        "externalId" = mkOption {
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
+          type = (types.nullOr types.str);
+        };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
           type = (types.nullOr types.str);
@@ -48635,6 +48835,7 @@ let
 
       config = {
         "accessKey" = mkOverride 1002 null;
+        "externalId" = mkOverride 1002 null;
         "profile" = mkOverride 1002 null;
         "region" = mkOverride 1002 null;
         "roleArn" = mkOverride 1002 null;
@@ -53702,7 +53903,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "containers" = mkOption {
-          description = "containers allows injecting additional containers or modifying operator\ngenerated containers. This can be used to allow adding an authentication\nproxy to the Pods or to change the behavior of an operator generated\ncontainer. Containers described here modify an operator generated\ncontainer if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of containers managed by the operator are:\n* `prometheus`\n* `config-reloader`\n* `thanos-sidecar`\n\nOverriding containers is entirely outside the scope of what the\nmaintainers will support and by doing so, you accept that this behaviour\nmay break at any time without notice.";
+          description = "containers allows injecting additional containers or modifying operator\ngenerated containers. This can be used to allow adding an authentication\nproxy to the Pods or to change the behavior of an operator generated\ncontainer. Containers described here modify an operator generated\ncontainer if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of containers managed by the operator are:\n* `prometheus`\n* `config-reloader`\n* `thanos-sidecar`\n\nOverriding containers which are managed by the operator require careful\ntesting, especially when upgrading to a new version of the operator.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecContainers"
@@ -53833,7 +54034,7 @@ let
           apply = attrsToList;
         };
         "initContainers" = mkOption {
-          description = "initContainers allows injecting initContainers to the Pod definition. Those\ncan be used to e.g.  fetch secrets for injection into the Prometheus\nconfiguration from external sources. Any errors during the execution of\nan initContainer will lead to a restart of the Pod. More info:\nhttps://kubernetes.io/docs/concepts/workloads/pods/init-containers/\nInitContainers described here modify an operator generated init\ncontainers if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of init container name managed by the operator are:\n* `init-config-reloader`.\n\nOverriding init containers is entirely outside the scope of what the\nmaintainers will support and by doing so, you accept that this behaviour\nmay break at any time without notice.";
+          description = "initContainers allows injecting initContainers to the Pod definition. Those\ncan be used to e.g. fetch secrets for injection into the Prometheus\nconfiguration from external sources. Any errors during the execution of\nan initContainer will lead to a restart of the Pod. More info:\nhttps://kubernetes.io/docs/concepts/workloads/pods/init-containers/\nInitContainers described here modify an operator generated init\ncontainers if they share the same name and modifications are done via a\nstrategic merge patch.\n\nThe names of init container name managed by the operator are:\n* `init-config-reloader`.\n\nOverriding init containers which are managed by the operator require\ncareful testing, especially when upgrading to a new version of the\noperator.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey
@@ -54015,6 +54216,10 @@ let
           description = "sampleLimit defines per-scrape limit on number of scraped samples that will be accepted.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedSampleLimit.";
           type = (types.nullOr types.int);
         };
+        "schedulerName" = mkOption {
+          description = "schedulerName defines the scheduler to use for Pod scheduling. If not specified, the default scheduler is used.";
+          type = (types.nullOr types.str);
+        };
         "scrapeClasses" = mkOption {
           description = "scrapeClasses defines the list of scrape classes to expose to scraping objects such as\nPodMonitors, ServiceMonitors, Probes and ScrapeConfigs.\n\nThis is an *experimental feature*, it may change in any upcoming release\nin a breaking way.";
           type = (
@@ -54031,7 +54236,7 @@ let
           type = (types.nullOr types.bool);
         };
         "scrapeConfigNamespaceSelector" = mkOption {
-          description = "scrapeConfigNamespaceSelector defines the namespaces to match for ScrapeConfig discovery. An empty label selector\nmatches all namespaces. A null label selector matches the current\nnamespace only.\n\nNote that the ScrapeConfig custom resource definition is currently at Alpha level.";
+          description = "scrapeConfigNamespaceSelector defines the namespaces to match for ScrapeConfig discovery. An empty label selector\nmatches all namespaces. A null label selector matches the current\nnamespace only.\n\nNote that the ScrapeConfig custom resource definition is currently at Alpha level\nand will be graduated to Beta in a future release.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecScrapeConfigNamespaceSelector"
@@ -54039,7 +54244,7 @@ let
           );
         };
         "scrapeConfigSelector" = mkOption {
-          description = "scrapeConfigSelector defines the scrapeConfigs to be selected for target discovery. An empty label\nselector matches all objects. A null label selector matches no objects.\n\nIf `spec.serviceMonitorSelector`, `spec.podMonitorSelector`, `spec.probeSelector`\nand `spec.scrapeConfigSelector` are null, the Prometheus configuration is unmanaged.\nThe Prometheus operator will ensure that the Prometheus configuration's\nSecret exists, but it is the responsibility of the user to provide the raw\ngzipped Prometheus configuration under the `prometheus.yaml.gz` key.\nThis behavior is *deprecated* and will be removed in the next major version\nof the custom resource definition. It is recommended to use\n`spec.additionalScrapeConfigs` instead.\n\nNote that the ScrapeConfig custom resource definition is currently at Alpha level.";
+          description = "scrapeConfigSelector defines the scrapeConfigs to be selected for target discovery. An empty label\nselector matches all objects. A null label selector matches no objects.\n\nIf `spec.serviceMonitorSelector`, `spec.podMonitorSelector`, `spec.probeSelector`\nand `spec.scrapeConfigSelector` are null, the Prometheus configuration is unmanaged.\nThe Prometheus operator will ensure that the Prometheus configuration's\nSecret exists, but it is the responsibility of the user to provide the raw\ngzipped Prometheus configuration under the `prometheus.yaml.gz` key.\nThis behavior is *deprecated* and will be removed in the next major version\nof the custom resource definition. It is recommended to use\n`spec.additionalScrapeConfigs` instead.\n\nNote that the ScrapeConfig custom resource definition is currently at Alpha level\nand will be graduated to Beta in a future release.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecScrapeConfigSelector")
           );
@@ -54101,6 +54306,12 @@ let
         "serviceName" = mkOption {
           description = "serviceName defines the name of the service name used by the underlying StatefulSet(s) as the governing service.\nIf defined, the Service  must be created before the Prometheus/PrometheusAgent resource in the same namespace and it must define a selector that matches the pod labels.\nIf empty, the operator will create and manage a headless service named `prometheus-operated` for Prometheus resources,\nor `prometheus-agent-operated` for PrometheusAgent resources.\nWhen deploying multiple Prometheus/PrometheusAgent resources in the same namespace, it is recommended to specify a different value for each.\nSee https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#stable-network-id for more details.";
           type = (types.nullOr types.str);
+        };
+        "shardingStrategy" = mkOption {
+          description = "shardingStrategy defines the sharding strategy for distributing scraped targets across Prometheus shards.\n\nWhen not defined, the operator defaults to the 'Address' mode which distributes\ntargets based on a hash of the target address.";
+          type = (
+            types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecShardingStrategy")
+          );
         };
         "shards" = mkOption {
           description = "shards defines the number of shards to distribute the scraped targets onto.\n\n`spec.replicas` multiplied by `spec.shards` is the total number of Pods\nbeing created.\n\nWhen not defined, the operator assumes only one shard.\n\nNote that scaling down shards will not reshard data onto the remaining\ninstances, it must be manually moved. Increasing shards will not reshard\ndata either but it will continue to be available from the same\ninstances. To query globally, use either\n* Thanos sidecar + querier for query federation and Thanos Ruler for rules.\n* Remote-write to send metrics to a central location.\n\nBy default, the sharding of targets is performed on:\n* The `__address__` target's metadata label for PodMonitor,\nServiceMonitor and ScrapeConfig resources.\n* The `__param_target__` label for Probe resources.\n\nUsers can define their own sharding implementation by setting the\n`__tmp_hash` label during the target discovery with relabeling\nconfiguration (either in the monitoring resources or via scrape class).\n\nYou can also disable sharding on a specific target by setting the\n`__tmp_disable_sharding` label with relabeling configuration. When\nthe label value isn't empty, all Prometheus shards will scrape the target.";
@@ -54261,6 +54472,7 @@ let
         "routePrefix" = mkOverride 1002 null;
         "runtime" = mkOverride 1002 null;
         "sampleLimit" = mkOverride 1002 null;
+        "schedulerName" = mkOverride 1002 null;
         "scrapeClasses" = mkOverride 1002 null;
         "scrapeClassicHistograms" = mkOverride 1002 null;
         "scrapeConfigNamespaceSelector" = mkOverride 1002 null;
@@ -54277,6 +54489,7 @@ let
         "serviceMonitorNamespaceSelector" = mkOverride 1002 null;
         "serviceMonitorSelector" = mkOverride 1002 null;
         "serviceName" = mkOverride 1002 null;
+        "shardingStrategy" = mkOverride 1002 null;
         "shards" = mkOverride 1002 null;
         "storage" = mkOverride 1002 null;
         "targetLimit" = mkOverride 1002 null;
@@ -55796,7 +56009,7 @@ let
           );
         };
         "resizePolicy" = mkOption {
-          description = "Resources resize policy for the container.";
+          description = "Resources resize policy for the container.\nThis field cannot be set on ephemeral containers.";
           type = (
             types.nullOr (
               types.listOf (
@@ -57643,7 +57856,7 @@ let
           );
         };
         "resizePolicy" = mkOption {
-          description = "Resources resize policy for the container.";
+          description = "Resources resize policy for the container.\nThis field cannot be set on ephemeral containers.";
           type = (
             types.nullOr (
               types.listOf (
@@ -59698,7 +59911,7 @@ let
           );
         };
         "url" = mkOption {
-          description = "url defines the URL of the endpoint to send samples to.";
+          description = "url defines the URL of the endpoint to send samples to.\n\nIt must use the HTTP or HTTPS scheme.";
           type = types.str;
         };
         "writeRelabelConfigs" = mkOption {
@@ -60484,6 +60697,10 @@ let
             )
           );
         };
+        "externalId" = mkOption {
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
+          type = (types.nullOr types.str);
+        };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
           type = (types.nullOr types.str);
@@ -60512,6 +60729,7 @@ let
 
       config = {
         "accessKey" = mkOverride 1002 null;
+        "externalId" = mkOverride 1002 null;
         "profile" = mkOverride 1002 null;
         "region" = mkOverride 1002 null;
         "roleArn" = mkOverride 1002 null;
@@ -61777,6 +61995,48 @@ let
       };
 
     };
+    "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecShardingStrategy" = {
+
+      options = {
+        "mode" = mkOption {
+          description = "mode defines the sharding mode. Can be 'Address' or 'Topology'.\n\n'Address' is the default mode and distributes targets across shards\nbased on a hash of the target address.\n\n'Topology' enables zone-aware sharding where each shard is assigned to a\nspecific topology zone and only scrapes targets in that zone.\n(Alpha) Using the 'Topology' mode requires the `PrometheusTopologySharding`\nfeature gate to be enabled.";
+          type = (types.nullOr types.str);
+        };
+        "topology" = mkOption {
+          description = "topology defines the configuration for topology-aware sharding.\nThis field is only valid when mode is set to 'Topology'.";
+          type = (
+            types.nullOr (
+              submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecShardingStrategyTopology"
+            )
+          );
+        };
+      };
+
+      config = {
+        "mode" = mkOverride 1002 null;
+        "topology" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecShardingStrategyTopology" = {
+
+      options = {
+        "externalLabelName" = mkOption {
+          description = "externalLabelName defines the name of the Prometheus external label used\nto communicate the topology zone assigned to the Prometheus instance.\nIf not defined, it defaults to \"zone\".\nIf set to the empty string, no external label is added to the Prometheus configuration.";
+          type = (types.nullOr types.str);
+        };
+        "values" = mkOption {
+          description = "values defines the list of topology values (e.g. zone names) to be used\nfor sharding. The configured number of shards must be greater than or\nequal to the number of values.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "externalLabelName" = mkOverride 1002 null;
+        "values" = mkOverride 1002 null;
+      };
+
+    };
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorage" = {
 
       options = {
@@ -61895,7 +62155,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageEphemeralVolumeClaimTemplateSpecResources"
@@ -62155,7 +62415,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageVolumeClaimTemplateSpecResources"
@@ -62325,11 +62585,11 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "allocatedResourceStatuses" = mkOption {
-          description = "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.";
+          description = "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.";
           type = (types.nullOr (types.attrsOf types.str));
         };
         "allocatedResources" = mkOption {
-          description = "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.";
+          description = "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.";
           type = (types.nullOr (types.attrsOf (types.either types.int types.str)));
         };
         "capacity" = mkOption {
@@ -62444,7 +62704,7 @@ let
           type = (types.nullOr types.str);
         };
         "operator" = mkOption {
-          description = "Operator represents a key's relationship to the value.\nValid operators are Exists and Equal. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.";
+          description = "Operator represents a key's relationship to the value.\nValid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.\nLt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).";
           type = (types.nullOr types.str);
         };
         "tolerationSeconds" = mkOption {
@@ -63654,7 +63914,7 @@ let
           );
         };
         "resources" = mkOption {
-          description = "resources represents the minimum resources the volume should have.\nIf RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
+          description = "resources represents the minimum resources the volume should have.\nUsers are allowed to specify resource requirements\nthat are lower than previous value but must still be higher than capacity recorded in the\nstatus field of the claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecVolumesEphemeralVolumeClaimTemplateSpecResources"
@@ -64544,6 +64804,10 @@ let
           description = "Kubelet's generated CSRs will be addressed to this signer.";
           type = types.str;
         };
+        "userAnnotations" = mkOption {
+          description = "userAnnotations allow pod authors to pass additional information to\nthe signer implementation.  Kubernetes does not restrict or validate this\nmetadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of\nthe PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations,\nwith the addition that all keys must be domain-prefixed. No restrictions\nare placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should\ndeny requests that contain keys they do not recognize.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
       };
 
       config = {
@@ -64551,6 +64815,7 @@ let
         "credentialBundlePath" = mkOverride 1002 null;
         "keyPath" = mkOverride 1002 null;
         "maxExpirationSeconds" = mkOverride 1002 null;
+        "userAnnotations" = mkOverride 1002 null;
       };
 
     };
@@ -65971,7 +66236,7 @@ let
           type = (types.nullOr types.str);
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defies the TLS configuration applying to the target HTTP endpoint.";
+          description = "tlsConfig defines the TLS configuration applying to the target HTTP endpoint.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecAzureSDConfigsTlsConfig")
           );
@@ -66849,12 +67114,16 @@ let
           type = (types.nullOr types.bool);
         };
         "filter" = mkOption {
-          description = "filter defines the filter expression used to filter the catalog results.\nSee https://www.consul.io/api-docs/catalog#list-services\nIt requires Prometheus >= 3.0.0.";
+          description = "filter defines the filter expression used to filter the catalog results.\nSee https://developer.hashicorp.com/consul/api-docs/catalog#filtering\nIt requires Prometheus >= 3.0.0.";
           type = (types.nullOr types.str);
         };
         "followRedirects" = mkOption {
           description = "followRedirects defines whether HTTP requests follow HTTP 3xx redirects.";
           type = (types.nullOr types.bool);
+        };
+        "healthFilter" = mkOption {
+          description = "healthFilter defines the filter expression used to filter the health results.\nSee https://developer.hashicorp.com/consul/api-docs/health#filtering\nIt requires Prometheus >= 3.11.2.";
+          type = (types.nullOr types.str);
         };
         "namespace" = mkOption {
           description = "namespace are only supported in Consul Enterprise.\n\nIt requires Prometheus >= 2.28.0.";
@@ -66940,6 +67209,7 @@ let
         "enableHTTP2" = mkOverride 1002 null;
         "filter" = mkOverride 1002 null;
         "followRedirects" = mkOverride 1002 null;
+        "healthFilter" = mkOverride 1002 null;
         "namespace" = mkOverride 1002 null;
         "noProxy" = mkOverride 1002 null;
         "nodeMeta" = mkOverride 1002 null;
@@ -67713,7 +67983,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecDigitalOceanSDConfigsAuthorization"
@@ -67761,7 +68031,7 @@ let
           type = (types.nullOr types.str);
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the DigitalOcean API.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecDigitalOceanSDConfigsTlsConfig"
@@ -68474,7 +68744,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the Docker daemon.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecDockerSDConfigsAuthorization"
@@ -68508,7 +68778,7 @@ let
           type = (types.nullOr types.bool);
         };
         "host" = mkOption {
-          description = "host defines the address of the docker daemon";
+          description = "host defines the address of the docker daemon.";
           type = types.str;
         };
         "hostNetworkingHost" = mkOption {
@@ -68550,7 +68820,7 @@ let
           type = (types.nullOr types.str);
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Docker daemon.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecDockerSDConfigsTlsConfig")
           );
@@ -69323,7 +69593,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the Docker Swarm API.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecDockerSwarmSDConfigsAuthorization"
@@ -69399,7 +69669,7 @@ let
           type = types.str;
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Docker Swarm daemon.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecDockerSwarmSDConfigsTlsConfig"
@@ -70239,7 +70509,7 @@ let
           );
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.\nIt requires Prometheus >= v2.41.0";
+          description = "tlsConfig defines the TLS configuration to connect to the EC2 API.\nIt requires Prometheus >= v2.41.0";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecEc2SDConfigsTlsConfig")
           );
@@ -70553,7 +70823,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the Eureka server.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecEurekaSDConfigsAuthorization"
@@ -70605,7 +70875,7 @@ let
           type = types.str;
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Eureka server.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecEurekaSDConfigsTlsConfig")
           );
@@ -71413,7 +71683,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the Hetzner API.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecHetznerSDConfigsAuthorization"
@@ -71475,7 +71745,7 @@ let
           type = types.str;
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Hetzner API.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecHetznerSDConfigsTlsConfig"
@@ -73037,7 +73307,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the IONOS.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the IONOS API.\nCannot be set at the same time as `oauth2`.";
           type = (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecIonosSDConfigsAuthorization");
         };
         "datacenterID" = mkOption {
@@ -73083,7 +73353,7 @@ let
           type = (types.nullOr types.str);
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the IONOS API.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecIonosSDConfigsTlsConfig")
           );
@@ -74660,7 +74930,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the Kuma control plane.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecKumaSDConfigsAuthorization"
@@ -74720,7 +74990,7 @@ let
           type = types.str;
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Kuma control plane.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecKumaSDConfigsTlsConfig")
           );
@@ -75481,7 +75751,7 @@ let
           );
         };
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the Lightsail API.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecLightSailSDConfigsAuthorization"
@@ -75555,7 +75825,7 @@ let
           );
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Lightsail API.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecLightSailSDConfigsTlsConfig"
@@ -76364,7 +76634,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the Linode API.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecLinodeSDConfigsAuthorization"
@@ -76418,7 +76688,7 @@ let
           type = (types.nullOr types.str);
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Linode API.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecLinodeSDConfigsTlsConfig")
           );
@@ -77148,7 +77418,7 @@ let
           type = (types.nullOr types.bool);
         };
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the Nomad API.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecNomadSDConfigsAuthorization"
@@ -77212,7 +77482,7 @@ let
           type = (types.nullOr types.str);
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Nomad API.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecNomadSDConfigsTlsConfig")
           );
@@ -78799,7 +79069,7 @@ let
 
       options = {
         "authorization" = mkOption {
-          description = "authorization defines the  header configuration to authenticate against the DigitalOcean API.\nCannot be set at the same time as `oauth2`.";
+          description = "authorization defines the header configuration to authenticate against the PuppetDB API.\nCannot be set at the same time as `oauth2`.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecPuppetDBSDConfigsAuthorization"
@@ -78861,7 +79131,7 @@ let
           type = (types.nullOr types.str);
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the PuppetDB server.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecPuppetDBSDConfigsTlsConfig"
@@ -79728,7 +79998,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "tlsConfig" = mkOption {
-          description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
+          description = "tlsConfig defines the TLS configuration to connect to the Scaleway API.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.ScrapeConfigSpecScalewaySDConfigsTlsConfig"
