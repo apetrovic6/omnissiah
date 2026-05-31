@@ -7,10 +7,10 @@
     resources.garageClusters.garage-backup = {
       metadata = {inherit namespace;};
       spec = {
-        replicas = 3;
         zone = "main";
 
         storage = {
+          replicas = 3;
           data = {
             size = "300Gi";
             storageClassName = "synology-nfs";
@@ -25,7 +25,6 @@
         replication = {factor = 3;};
 
         admin = {
-          enabled = true;
           bindPort = 3903;
           adminTokenSecretRef = {
             name = "garage-backup-admin-token";
@@ -144,9 +143,18 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "pocket-id";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
         secretTemplate = {
           name = "pocket-id-s3-secret-key";
-          namespace = "reflector";
           accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
           secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
           annotations = {
@@ -163,14 +171,14 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-backup";
-        keyPermissions = [
-          {
-            keyRef = "pocket-id";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
+        # keyPermissions = [
+        #   {
+        #     keyRef = "pocket-id";
+        #     read = true;
+        #     write = true;
+        #     owner = true;
+        #   }
+        # ];
       };
     };
   };

@@ -21,7 +21,6 @@ in {
   ];
 
   nixpkgs = {
-    overlays = [self.overlays.openldap];
     config = {
       allowUnfree = true;
       allowUnfreePredicate = pkg:

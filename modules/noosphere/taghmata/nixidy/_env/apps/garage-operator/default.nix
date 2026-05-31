@@ -25,7 +25,7 @@ in {
       chart = charts.rajsinghtech.garage-operator;
       values = {
         replicaCount = 3;
-        image.tag = "v0.0.36";
+        # image.tag = "v0.0.36";
       };
     };
   };

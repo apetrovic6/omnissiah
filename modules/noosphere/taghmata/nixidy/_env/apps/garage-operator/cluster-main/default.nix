@@ -7,10 +7,10 @@
     resources.garageClusters.garage-main = {
       metadata = {inherit namespace;};
       spec = {
-        replicas = 3;
         zone = "main";
 
         storage = {
+          replicas = 3;
           data = {
             size = "200Gi";
             storageClassName = "local-path";
@@ -25,7 +25,6 @@
         replication = {factor = 3;};
 
         admin = {
-          enabled = true;
           bindPort = 3903;
           adminTokenSecretRef = {
             name = "garage-main-admin-token";
@@ -62,16 +61,9 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
-      };
-    };
-
-    resources.garageBuckets.opentofu = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        keyPermissions = [
+        bucketPermissions = [
           {
-            keyRef = "opentofu";
+            bucketRef.name = "opentofu";
             read = true;
             write = true;
             owner = true;
@@ -80,13 +72,42 @@
       };
     };
 
+    resources.garageBuckets.opentofu = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-main";
+        # keyPermissions = [
+        #   {
+        #     keyRef = "opentofu";
+        #     read = true;
+        #     write = true;
+        #     owner = true;
+        #   }
+        # ];
+      };
+    };
+
     resources.garageKeys.forgejo = {
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
+        bucketPermissions = [
+          {
+            bucketRef.name = "forgejo";
+            read = true;
+            write = true;
+            owner = true;
+          }
+
+          {
+            bucketRef.name = "forgejo-lfs";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
         secretTemplate = {
           name = "forgejo-s3-secret-key";
-          namespace = "reflector";
           accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
           secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
           annotations = {
@@ -103,14 +124,14 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
-        keyPermissions = [
-          {
-            keyRef = "forgejo";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
+        # keyPermissions = [
+        #   {
+        #     keyRef = "forgejo";
+        #     read = true;
+        #     write = true;
+        #     owner = true;
+        #   }
+        # ];
       };
     };
 
@@ -118,14 +139,14 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
-        keyPermissions = [
-          {
-            keyRef = "forgejo";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
+        # keyPermissions = [
+        #   {
+        #     keyRef = "forgejo";
+        #     read = true;
+        #     write = true;
+        #     owner = true;
+        #   }
+        # ];
       };
     };
 
@@ -133,6 +154,16 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "harbor";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
       };
     };
 
@@ -140,14 +171,14 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
-        keyPermissions = [
-          {
-            keyRef = "harbor";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
+        # keyPermissions = [
+        #   {
+        #     keyRef = "harbor";
+        #     read = true;
+        #     write = true;
+        #     owner = true;
+        #   }
+        # ];
       };
     };
 
