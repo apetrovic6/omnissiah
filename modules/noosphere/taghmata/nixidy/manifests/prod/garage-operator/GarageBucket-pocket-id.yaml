@@ -1,4 +1,4 @@
-apiVersion: garage.rajsingh.info/v1alpha1
+apiVersion: garage.rajsingh.info/v1beta1
 kind: GarageBucket
 metadata:
   name: pocket-id
@@ -6,8 +6,3 @@ metadata:
 spec:
   clusterRef:
     name: garage-backup
-  keyPermissions:
-    - keyRef: pocket-id
-      owner: true
-      read: true
-      write: true

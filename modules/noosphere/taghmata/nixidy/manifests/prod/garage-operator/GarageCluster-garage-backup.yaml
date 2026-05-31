@@ -1,4 +1,4 @@
-apiVersion: garage.rajsingh.info/v1alpha1
+apiVersion: garage.rajsingh.info/v1beta2
 kind: GarageCluster
 metadata:
   name: garage-backup
@@ -9,7 +9,6 @@ spec:
       key: admin-token
       name: garage-backup-admin-token
     bindPort: 3903
-    enabled: true
   database:
     engine: sqlite
   discovery:
@@ -26,7 +25,6 @@ spec:
       name: garage-backup-rpc-secret
     service:
       type: ClusterIP
-  replicas: 3
   replication:
     factor: 3
   s3Api:
@@ -40,4 +38,5 @@ spec:
     metadata:
       size: 20Gi
       storageClassName: synology-nfs
+    replicas: 3
   zone: main

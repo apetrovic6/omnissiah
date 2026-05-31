@@ -1,4 +1,4 @@
-apiVersion: garage.rajsingh.info/v1alpha1
+apiVersion: garage.rajsingh.info/v1beta1
 kind: GarageBucket
 metadata:
   name: forgejo
@@ -6,8 +6,3 @@ metadata:
 spec:
   clusterRef:
     name: garage-main
-  keyPermissions:
-    - keyRef: forgejo
-      owner: true
-      read: true
-      write: true

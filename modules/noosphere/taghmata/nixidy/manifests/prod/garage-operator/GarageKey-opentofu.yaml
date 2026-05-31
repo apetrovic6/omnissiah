@@ -1,8 +1,14 @@
-apiVersion: garage.rajsingh.info/v1alpha1
+apiVersion: garage.rajsingh.info/v1beta1
 kind: GarageKey
 metadata:
   name: opentofu
   namespace: garage-operator
 spec:
+  bucketPermissions:
+    - bucketRef:
+        name: opentofu
+      owner: true
+      read: true
+      write: true
   clusterRef:
     name: garage-main

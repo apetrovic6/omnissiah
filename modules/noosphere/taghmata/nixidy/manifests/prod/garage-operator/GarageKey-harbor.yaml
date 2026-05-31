@@ -1,8 +1,14 @@
-apiVersion: garage.rajsingh.info/v1alpha1
+apiVersion: garage.rajsingh.info/v1beta1
 kind: GarageKey
 metadata:
   name: harbor
   namespace: garage-operator
 spec:
+  bucketPermissions:
+    - bucketRef:
+        name: harbor
+      owner: true
+      read: true
+      write: true
   clusterRef:
     name: garage-main
