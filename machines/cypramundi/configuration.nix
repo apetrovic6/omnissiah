@@ -126,7 +126,7 @@ in {
   services.pangolin = {
     enable = true;
 
-    package = pangolinOverride;
+    # package = pangolinOverride;
     openFirewall = true;
     letsEncryptEmail = "cloudflare.fervor993@simplelogin.com";
     dashboardDomain = domain;
@@ -211,8 +211,13 @@ in {
 
   networking.networkmanager.enable = false;
   networking.useDHCP = false;
-  networking.interfaces.ens3.useDHCP = true;
-  networking.dhcpcd.enable = true;
+  networking.interfaces.ens3 = {
+    ipv4.addresses = [{
+      address = "152.53.34.16";
+      prefixLength = 22;
+    }];
+  };
+  networking.defaultGateway  ={ address= "152.53.32.1"; interface = "ens3";};
 
   networking.firewall = {
     enable = true;
