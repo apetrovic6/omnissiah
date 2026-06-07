@@ -2,6 +2,8 @@
   inputs = {
     nixpkgs-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
 
+    nixpkgs-stable.url = "github:nixos/nixpkgs?ref=nixos-26.05";
+
     nix-index-database = {
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
