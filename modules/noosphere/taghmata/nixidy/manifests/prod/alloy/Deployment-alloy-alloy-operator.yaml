@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: alloy
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: alloy-operator
-    app.kubernetes.io/version: 1.8.1
-    helm.sh/chart: alloy-operator-0.5.7
+    app.kubernetes.io/version: 1.8.2
+    helm.sh/chart: alloy-operator-0.5.8
   name: alloy-alloy-operator
   namespace: alloy
 spec:
@@ -21,8 +21,8 @@ spec:
         app.kubernetes.io/instance: alloy
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: alloy-operator
-        app.kubernetes.io/version: 1.8.1
-        helm.sh/chart: alloy-operator-0.5.7
+        app.kubernetes.io/version: 1.8.2
+        helm.sh/chart: alloy-operator-0.5.8
     spec:
       containers:
         - args:
@@ -30,7 +30,7 @@ spec:
             - --metrics-bind-address=:8082
             - --leader-elect
             - --leader-election-id=alloy-alloy-operator
-          image: ghcr.io/grafana/alloy-operator:1.8.1
+          image: ghcr.io/grafana/alloy-operator:1.8.2
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
