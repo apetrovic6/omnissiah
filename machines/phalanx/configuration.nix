@@ -42,7 +42,7 @@ in {
   };
   networking.defaultGateway = {
     address = "192.168.1.1";
-    interface = "enp1s0";
+    interface = "enp6s0";
   };
   networking.nameservers = ["192.168.1.105"];
   virtualisation.waydroid.enable = true;
@@ -63,7 +63,7 @@ in {
 
   boot = {
     kernelParams = ["amd_iommu=on"];
-    kernelModules = ["kvm-amd" "vfio-pci"];
+    kernelModules = ["kvm-amd" "vfio-pci" "r8169"];
   };
 
   programs.virt-manager.enable = true;
