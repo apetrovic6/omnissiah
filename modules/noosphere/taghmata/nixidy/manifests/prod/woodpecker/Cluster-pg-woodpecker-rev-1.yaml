@@ -26,8 +26,8 @@ spec:
       shared_buffers: 1GB
   primaryUpdateStrategy: unsupervised
   storage:
-    size: 20Gi
+    size: 50Gi
     storageClass: longhorn-cnpg-strict-local
   walStorage:
-    size: 50Gi
+    size: 100Gi
     storageClass: longhorn-cnpg-strict-local
