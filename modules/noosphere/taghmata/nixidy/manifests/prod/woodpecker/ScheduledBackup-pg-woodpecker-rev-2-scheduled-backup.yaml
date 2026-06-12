@@ -1,12 +1,12 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
-  name: pg-woodpecker-rev-1-scheduled-backup
+  name: pg-woodpecker-rev-2-scheduled-backup
   namespace: woodpecker
 spec:
   backupOwnerReference: self
   cluster:
-    name: pg-woodpecker-rev-1
+    name: pg-woodpecker-rev-2
   immediate: true
   method: plugin
   pluginConfiguration:

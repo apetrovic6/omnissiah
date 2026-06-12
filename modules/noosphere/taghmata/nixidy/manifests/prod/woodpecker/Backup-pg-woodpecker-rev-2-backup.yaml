@@ -1,11 +1,11 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Backup
 metadata:
-  name: pg-woodpecker-rev-1-backup
+  name: pg-woodpecker-rev-2-backup
   namespace: woodpecker
 spec:
   cluster:
-    name: pg-woodpecker-rev-1
+    name: pg-woodpecker-rev-2
   method: plugin
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io

@@ -7,7 +7,7 @@
   domain = config.noosphere.domain;
   url = "${name}.${domain}";
   namespace = "${name}";
-  db-cluster-name = "pg-${name}-rev-1";
+  db-cluster-name = "pg-${name}-rev-2";
   objectStoreName = "${name}-object-store";
   barmanPluginName = "barman-cloud.cloudnative-pg.io";
   volumeSize = "2Gi";
@@ -183,6 +183,21 @@ in {
           }
         ];
 
+        bootstrap.recovery.source = "origin";
+
+        externalClusters = [
+          {
+            name = "origin";
+            plugin = {
+              name = barmanPluginName;
+              parameters = {
+                barmanObjectName = objectStoreName;
+                serverName = "pg-${name}-rev-1";
+              };
+            };
+          }
+        ];
+
         postgresql.parameters = {
           shared_buffers = "1GB";
           max_connections = "200";
@@ -205,19 +220,5 @@ in {
         monitoring.enablePodMonitor = true;
       };
     };
-
-    # resources.databases.db-crow = {
-    #   metadata = {
-    #     inherit namespace;
-    #     annotations = {
-    #       "argocd.proj.io/sync-options" = "Prune=false";
-    #     };
-    #   };
-    #   spec = {
-    #     name = "crow";
-    #     owner = "app";
-    #     cluster.name = "${db-cluster-name}";
-    #   };
-    # };
   };
 }

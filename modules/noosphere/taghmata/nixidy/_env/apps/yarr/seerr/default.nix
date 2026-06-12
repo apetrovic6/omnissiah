@@ -9,7 +9,6 @@
   radarr = import ../radarr {inherit domain namespace db-cluster-name;};
   lidarr = import ../lidarr {inherit domain namespace db-cluster-name;};
   sabnzbd = import ../sabnzbd {inherit domain namespace;};
-
 in {
   imports = [
     ../../../../_modules/templates/garage-object-store.nix
@@ -407,7 +406,6 @@ in {
             cluster.name = "${db-cluster-name}";
           };
         }
-
       ];
 
       backups = {

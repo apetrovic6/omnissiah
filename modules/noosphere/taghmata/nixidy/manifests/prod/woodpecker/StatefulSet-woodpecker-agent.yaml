@@ -52,7 +52,7 @@ spec:
             - secretRef:
                 name: woodpecker-default-agent-secret
             - secretRef:
-                name: pg-woodpecker-rev-1-app
+                name: pg-woodpecker-rev-2-app
             - secretRef:
                 name: woodpecker-default-agent-secret
           image: docker.io/woodpeckerci/woodpecker-agent:v3.15.0

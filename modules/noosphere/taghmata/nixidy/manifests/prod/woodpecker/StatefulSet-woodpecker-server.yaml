@@ -45,7 +45,7 @@ spec:
               value: https://woodpecker.noosphere.uk
           envFrom:
             - secretRef:
-                name: pg-woodpecker-rev-1-app
+                name: pg-woodpecker-rev-2-app
             - secretRef:
                 name: woodpecker-default-agent-secret
             - secretRef:
