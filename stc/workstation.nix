@@ -20,7 +20,10 @@
       self.nixosModules.virtualisation
     ];
 
-    nixpkgs.overlays = [self.overlays.pangolin-cli self.overlays.openldap];
+    nixpkgs.overlays = [
+      self.overlays.pangolin-cli
+      self.overlays.openldap
+    ];
 
     networking.nameservers = ["192.168.1.105"];
     # Prevent NetworkManager from pushing DHCP-provided DNS to systemd-resolved,

@@ -1,4 +1,12 @@
 {lib, ...}: {
+  # flake.overlays.bitwarden-desktop = final: prev: {
+  #   bitwarden-desktop = prev.bitwarden-desktop.override { electron_39 = final.electron_40-bin; };
+  # };
+
+  flake.overlays.bitwarden-desktop = final: prev: {
+    prev.electron_39 = final.electron_41-bin;
+  };
+
   flake.overlays.openldap = final: prev: {
     openldap = prev.openldap.overrideAttrs (_: {
       doCheck = false;
@@ -28,7 +36,7 @@
 
   flake.overlays.pangolin-cli = final: prev: {
     pangolin-cli = prev.pangolin-cli.overrideAttrs (old: {
-      version = "0.8.0";
+      version = "0.9.0";
       src = old.src.override {
         hash = "sha256-0G5HsAa9I0ilPQ92qQIuYssfGvoZhLrF3kyO1+0JqEQ=";
       };
