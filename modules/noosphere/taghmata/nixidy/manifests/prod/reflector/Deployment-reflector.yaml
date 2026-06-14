@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: reflector
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: reflector
-    app.kubernetes.io/version: 10.0.48
-    helm.sh/chart: reflector-10.0.48
+    app.kubernetes.io/version: 10.0.49
+    helm.sh/chart: reflector-10.0.49
   name: reflector
   namespace: reflector
 spec:
@@ -31,7 +31,7 @@ spec:
               value: ""
             - name: ES_Ignite__KubernetesClient__SkipTlsVerify
               value: "false"
-          image: docker.io/emberstack/kubernetes-reflector:10.0.48
+          image: docker.io/emberstack/kubernetes-reflector:10.0.49
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 5
