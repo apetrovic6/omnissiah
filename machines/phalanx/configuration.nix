@@ -20,14 +20,19 @@ in {
     self.inputs.nixvirt.nixosModules.default
   ];
 
-  nixpkgs = {
-    config = {
-      allowUnfree = true;
-      allowUnfreePredicate = pkg:
-        builtins.elem (lib.getName pkg) [
-          "replace"
-          "nvidia"
-        ];
+  nixpkgs.config = {
+    allowUnfree = true;
+    allowUnfreePredicate = pkg:
+      builtins.elem (lib.getName pkg) [
+        "replace"
+        "nvidia"
+      ];
+    permittedInsecurePackages = ["electron-39.8.10"];
+  };
+
+  magos.niri.outputs = {
+    "DP-2" = {
+      scale = 1.33;
     };
   };
 
@@ -40,11 +45,15 @@ in {
       }
     ];
   };
-  networking.defaultGateway = {
-    address = "192.168.1.1";
-    interface = "enp6s0";
+
+  networking = {
+    nameservers = ["192.168.1.105"];
+    defaultGateway = {
+      address = "192.168.1.1";
+      interface = "enp6s0";
+    };
   };
-  networking.nameservers = ["192.168.1.105"];
+
   virtualisation.waydroid.enable = true;
   # nix = {
   #   extraOptions = ''
@@ -275,7 +284,7 @@ in {
     allowedBridges = ["virbr0"];
   };
 
-  magos.core.hyprland.monitor = ",3840x2160@120, auto, 1";
+  # magos.core.hyprland.monitor = ",3840x2160@120, auto, 1";
 
   hardware.nvidia.open = true;
   hardware.nvidia.prime.sync.enable = lib.mkForce false;
