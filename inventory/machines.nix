@@ -7,7 +7,7 @@
 
     enginseer = {
       tags = ["base" "laptop" "workstation" "dev" "gaming"];
-      deploy.targetHost = "root@192.168.1.48";
+      deploy.targetHost = "root@192.168.1.159";
     };
 
     genetor = {

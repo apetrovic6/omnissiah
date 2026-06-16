@@ -15,7 +15,6 @@ in {
     self.nixosModules.scriptorium
     self.nixosModules.librarium
     self.nixosModules.impermanence
-    self.inputs.magos.nixosModules.stylix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.nixosModules.noosphere
     # self.inputs.magos.nixosModules.default
