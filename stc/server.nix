@@ -133,7 +133,7 @@
       openFirewall = true;
       package = pkgs.caddy.withPlugins {
         plugins = ["github.com/caddy-dns/cloudflare@v0.2.3"];
-        hash = "sha256-8E6OGxwZsjPofmfi1j8dMXTkCkIRxpzhQ/KTXYIGR0w=";
+        hash = "sha256-LEpsjwy0CYx04cg42CfG6/sFv86kHmhezUG6yGedYcA=";
       };
     };
   };
