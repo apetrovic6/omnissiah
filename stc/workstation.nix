@@ -14,7 +14,7 @@
   }: {
     imports = [
       self.nixosModules.flatpak
-      self.inputs.magos.nixosModules.default
+      self.inputs.magos.nixosModules.desktop
       # self.nixosModules.flatpak
       self.nixosModules.bluetooth
       self.nixosModules.virtualisation
@@ -60,29 +60,33 @@
     programs.appimage.enable = true;
     programs.appimage.binfmt = true;
 
-    magos.core.hyprland = {
-      enable = true;
-      xwayland = true;
-      nvidia = {
-        enable = true;
-        modesetting = true;
-        powerManagement = true;
-      };
+    # magos.core.hyprland = {
+    #   enable = true;
+    #   xwayland = true;
+    #   nvidia = {
+    #     enable = true;
+    #     modesetting = true;
+    #     powerManagement = true;
+    #   };
+    # };
+
+    networking.firewall = {
+      allowedTCPPorts = [
+        53317 # LocalSend
+      ];
+
+      allowedUDPPorts = [
+        53317 # LocalSend
+      ];
     };
-
-    networking.firewall.allowedTCPPorts = [
-      53317 # LocalSend
-    ];
-
-    networking.firewall.allowedUDPPorts = [
-      53317 # LocalSend
-    ];
 
     services.imperium.bluetooth.enable = true;
 
     magos.stylix = {
-      image = ../wallpapers/everforest/3.jpg;
+      enable = true;
+      image = ../wallpapers/everforest/1.png;
       base16Scheme = "everforest-dark-soft";
+      # base16Scheme = "nord";
     };
 
     boot.plymouth = {
@@ -94,7 +98,7 @@
       settings = {
         default_session = {
           user = "apetrovic";
-          command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd start-hyprland"; # start Hyprland with a TUI login manager
+          command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd niri-session";
         };
       };
     };
@@ -161,6 +165,7 @@
 
       exercism
 
+      obs-studio
       xwayland
 
       (self.inputs.dagger-cli.packages.${system}.dagger)
@@ -180,7 +185,7 @@
       jetbrains-toolbox
     ];
 
-  services.spice-vdagentd.enable = true;
+    services.spice-vdagentd.enable = true;
 
     services.protonmail-bridge = {
       enable = true;

@@ -13,11 +13,14 @@
     osConfig.clan.core.vars.generators.attic-pull-token.files.attic-substituter.path;
 in {
   imports = [
-    self.inputs.magos.homeManagerModules.default
+    # self.inputs.magos.homeManagerModules.default
     self.inputs.omnishell.homeManagerModules.default
 
     ./firefox
   ];
+
+  nixpkgs.overlays = [self.overlays.bitwarden-desktop];
+  nixpkgs.config.permittedInsecurePackages = ["electron-39.8.10"];
 
   xdg = {
     enable = true;
@@ -44,37 +47,37 @@ in {
     export SSH_AUTH_SOCK=/home/apetrovic/.bitwarden-ssh-agent.sock
   '';
 
-  magos.hyprland.hm = {
-    input = {
-      kbLayouts = ["us" "hr"];
-    };
-  };
+  # magos.hyprland.hm = {
+  #   input = {
+  #     kbLayouts = ["us" "hr"];
+  #   };
+  # };
 
-  magos.hm.core.swayosd.enable = false;
-  magos.hm.core.swaync.enable = false;
-  magos.hm.core.waybar.enable = false;
-  magos.hm.hyprlock.enable = false;
+  # magos.hm.core.swayosd.enable = false;
+  # magos.hm.core.swaync.enable = false;
+  # magos.hm.core.waybar.enable = false;
+  # magos.hm.hyprlock.enable = false;
 
-  magos.hm.noctalia.enable = true;
+  # magos.hm.noctalia.enable = true;
 
-  programs.noctalia-shell = {
-    settings = {
-      # bar.backgroundOpacity = lib.mkForce 0.0;
-      location = {
-        name = "Zagreb";
-      };
-    };
-  };
+  # programs.noctalia-shell = {
+  #   settings = {
+  #     # bar.backgroundOpacity = lib.mkForce 0.0;
+  #     location = {
+  #       name = "Zagreb";
+  #     };
+  #   };
+  # };
 
-  magos.hm.stylix = {
-    enable = true;
-    image = ../../wallpapers/everforest/1.png; # optional
-    # image = ../../wallpapers/everforest/1.png; # optional
-    polarity = "dark";
-    base16Scheme = "everforest-dark-soft";
+  # magos.hm.stylix = {
+  #   enable = true;
+  #   image = ../../wallpapers/everforest/1.png; # optional
+  #   # image = ../../wallpapers/everforest/1.png; # optional
+  #   polarity = "dark";
+  #   base16Scheme = "everforest-dark-soft";
 
-    targets.firefox.profileNames = ["apetrovic"];
-  };
+  #   targets.firefox.profileNames = ["apetrovic"];
+  # };
 
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
