@@ -55,7 +55,7 @@
             ".config/pangolin"
             ".config/secretspec"
             ".config/Bitwarden"
-            ".config/noctalia"
+            # ".config/noctalia"
             ".config/sabnzbd-tui"
             ".config/Element"
             ".config/remmina"
