@@ -33,6 +33,7 @@ in {
   magos.niri.outputs = {
     "DP-2" = {
       scale = 1.33;
+      mode= "3840x2160@119.999";
     };
   };
 
