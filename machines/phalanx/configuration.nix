@@ -20,20 +20,25 @@ in {
     self.inputs.nixvirt.nixosModules.default
   ];
 
-  nixpkgs.config = {
-    allowUnfree = true;
-    allowUnfreePredicate = pkg:
-      builtins.elem (lib.getName pkg) [
-        "replace"
-        "nvidia"
-      ];
-    permittedInsecurePackages = ["electron-39.8.10"];
+  nixpkgs = {
+    overlays = [
+      self.overlays.librewolf
+    ];
+    config = {
+      allowUnfree = true;
+      allowUnfreePredicate = pkg:
+        builtins.elem (lib.getName pkg) [
+          "replace"
+          "nvidia"
+        ];
+      permittedInsecurePackages = ["electron-39.8.10"];
+    };
   };
 
   magos.niri.outputs = {
     "DP-2" = {
       scale = 1.33;
-      mode= "3840x2160@119.999";
+      mode = "3840x2160@119.999";
     };
   };
 

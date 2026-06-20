@@ -31,9 +31,14 @@ in {
   # };
   #
 
-  nixpkgs.config = {
-    allowUnfree = true;
-    permittedInsecurePackages = ["electron-39.8.10"];
+  nixpkgs = {
+    overlays = [
+      self.overlays.librewolf
+    ];
+    config = {
+      allowUnfree = true;
+      permittedInsecurePackages = ["electron-39.8.10"];
+    };
   };
 
   # magos.core.hyprland.monitor = ",2560x1600@240,auto,1.33";
