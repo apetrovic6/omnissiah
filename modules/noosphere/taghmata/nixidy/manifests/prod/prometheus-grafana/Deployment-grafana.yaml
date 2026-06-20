@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/instance: kube-prometheus-stack
     app.kubernetes.io/name: grafana
     app.kubernetes.io/version: 13.0.2
-    helm.sh/chart: grafana-12.4.5
+    helm.sh/chart: grafana-12.4.8
   name: grafana
   namespace: observability
 spec:
@@ -27,7 +27,7 @@ spec:
         app.kubernetes.io/instance: kube-prometheus-stack
         app.kubernetes.io/name: grafana
         app.kubernetes.io/version: 13.0.2
-        helm.sh/chart: grafana-12.4.5
+        helm.sh/chart: grafana-12.4.8
     spec:
       automountServiceAccountToken: true
       containers:
