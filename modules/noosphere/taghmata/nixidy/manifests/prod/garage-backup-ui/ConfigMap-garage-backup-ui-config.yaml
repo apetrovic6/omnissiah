@@ -88,7 +88,7 @@ metadata:
     app.kubernetes.io/instance: garage-backup-ui
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-ui
-    app.kubernetes.io/version: v0.8.0
-    helm.sh/chart: garage-ui-0.6.1
+    app.kubernetes.io/version: v0.8.4
+    helm.sh/chart: garage-ui-0.8.4
   name: garage-backup-ui-config
   namespace: garage-operator
