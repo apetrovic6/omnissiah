@@ -10,6 +10,7 @@ metadata:
   name: csi-nfs-node
   namespace: csi-nfs
 spec:
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: csi-nfs-node
