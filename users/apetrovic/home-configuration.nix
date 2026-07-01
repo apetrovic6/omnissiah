@@ -19,7 +19,9 @@ in {
     ./firefox
   ];
 
-  nixpkgs.overlays = [self.overlays.bitwarden-desktop];
+  nixpkgs.overlays = [
+    self.overlays.bitwarden-desktop
+  ];
   nixpkgs.config.permittedInsecurePackages = ["electron-39.8.10"];
 
   xdg = {

@@ -33,7 +33,7 @@ in {
 
   nixpkgs = {
     overlays = [
-      self.overlays.librewolf
+      # self.overlays.librewolf
     ];
     config = {
       allowUnfree = true;

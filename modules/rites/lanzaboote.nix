@@ -18,7 +18,7 @@
 
     config = mkIf cfg.enable {
       boot.lanzaboote = {
-        enable = true;
+        # enable = true;
         pkiBundle = "/var/lib/sbctl";
       };
 

@@ -24,7 +24,6 @@
       self.overlays.pangolin-cli
       self.overlays.openldap
     ];
-
     networking.nameservers = ["192.168.1.105"];
     # Prevent NetworkManager from pushing DHCP-provided DNS to systemd-resolved,
     # which would override Technitium and cause intermittent split-horizon failures.
@@ -176,7 +175,8 @@
       element-desktop
 
       quickemu
-
+      evtest
+      librepods
       alacritty
       nfs-utils
       (buildIdeWithPlugins pkgs "idea" commonPlugins)

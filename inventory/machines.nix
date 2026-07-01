@@ -2,7 +2,7 @@
   inventory.machines = {
     phalanx = {
       tags = ["base" "workstation" "dev" "gaming"];
-      deploy.targetHost = "root@192.168.1.46";
+      deploy.targetHost = "root@192.168.1.71";
     };
 
     enginseer = {
