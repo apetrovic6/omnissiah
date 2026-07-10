@@ -16,9 +16,9 @@ metadata:
     app.kubernetes.io/instance: forgejo
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: forgejo
-    app.kubernetes.io/version: 15.0.3
-    helm.sh/chart: forgejo-17.1.1
-    version: 15.0.3
+    app.kubernetes.io/version: 15.0.4
+    helm.sh/chart: forgejo-17.1.2
+    version: 15.0.4
   name: forgejo
   namespace: forgejo
 spec:
