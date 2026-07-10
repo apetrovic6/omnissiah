@@ -11,14 +11,22 @@
 
         storage = {
           replicas = 3;
+          # Bulk data blocks stay on the NAS (immutable content-addressed files,
+          # NFS handles these fine).
           data = {
             size = "300Gi";
             storageClassName = "synology-nfs";
           };
+          # Metadata DB moved to node-local disk. SQLite/LMDB over NFS stalls on
+          # fcntl locking / mmap, causing RPC ping timeouts and quorum loss.
+          # Garage already replicates metadata across the 3 nodes, so local-path
+          # (no extra storage-layer replication) is the right fit.
           metadata = {
             size = "20Gi";
-            storageClassName = "synology-nfs";
+            storageClassName = "local-path";
           };
+          # Safe to fsync metadata now that it's on local SSD (crash durability).
+          metadataFsync = true;
         };
 
         database = {engine = "sqlite";};

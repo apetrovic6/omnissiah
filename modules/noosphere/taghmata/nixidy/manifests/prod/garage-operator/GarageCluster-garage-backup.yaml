@@ -37,6 +37,7 @@ spec:
       storageClassName: synology-nfs
     metadata:
       size: 20Gi
-      storageClassName: synology-nfs
+      storageClassName: local-path
+    metadataFsync: true
     replicas: 3
   zone: main
