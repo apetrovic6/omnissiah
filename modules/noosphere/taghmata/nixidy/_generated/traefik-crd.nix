@@ -106,8 +106,7 @@ let
   submoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = definitions."${ref}".options or { };
         config = definitions."${ref}".config or { };
       }
@@ -116,8 +115,7 @@ let
   globalSubmoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = config.definitions."${ref}".options or { };
         config = config.definitions."${ref}".config or { };
       }
@@ -155,8 +153,7 @@ let
       apiVersion = if group == "core" then version else "${group}/${version}";
     in
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         inherit (definitions."${ref}") options;
 
         imports = getDefaults resource group version kind;
@@ -1112,6 +1109,10 @@ let
           description = "AppIDClaim is the name of the claim holding the identifier of the application.\nThis field is sometimes named `client_id`.";
           type = types.str;
         };
+        "clientConfig" = mkOption {
+          description = "ClientConfig configures the HTTP client used to fetch the JWKS from the JWKS URL or the trusted issuers.";
+          type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APIAuthSpecJwtClientConfig"));
+        };
         "forwardHeaders" = mkOption {
           description = "ForwardHeaders specifies additional headers to forward with the request.";
           type = (types.nullOr (types.attrsOf types.str));
@@ -1153,6 +1154,7 @@ let
       };
 
       config = {
+        "clientConfig" = mkOverride 1002 null;
         "forwardHeaders" = mkOverride 1002 null;
         "jwksFile" = mkOverride 1002 null;
         "jwksUrl" = mkOverride 1002 null;
@@ -1162,6 +1164,49 @@ let
         "tokenNameClaim" = mkOverride 1002 null;
         "tokenQueryKey" = mkOverride 1002 null;
         "trustedIssuers" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.APIAuthSpecJwtClientConfig" = {
+
+      options = {
+        "maxRetries" = mkOption {
+          description = "MaxRetries defines the maximum number of retry attempts for failed requests.";
+          type = (types.nullOr types.int);
+        };
+        "timeoutSeconds" = mkOption {
+          description = "TimeoutSeconds configures the maximum amount of seconds to wait before giving up on requests.";
+          type = (types.nullOr types.int);
+        };
+        "tls" = mkOption {
+          description = "TLS configures TLS for the HTTP client.";
+          type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APIAuthSpecJwtClientConfigTls"));
+        };
+      };
+
+      config = {
+        "maxRetries" = mkOverride 1002 null;
+        "timeoutSeconds" = mkOverride 1002 null;
+        "tls" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.APIAuthSpecJwtClientConfigTls" = {
+
+      options = {
+        "ca" = mkOption {
+          description = "CA sets the CA bundle used to verify the server certificate.";
+          type = (types.nullOr types.str);
+        };
+        "insecureSkipVerify" = mkOption {
+          description = "InsecureSkipVerify skips the server certificate validation.\nFor testing purposes only, do not use in production.";
+          type = (types.nullOr types.bool);
+        };
+      };
+
+      config = {
+        "ca" = mkOverride 1002 null;
+        "insecureSkipVerify" = mkOverride 1002 null;
       };
 
     };
@@ -2207,6 +2252,10 @@ let
           description = "Claims configures JWT claim mappings for user attributes.";
           type = (submoduleOf "hub.traefik.io.v1alpha1.APIPortalAuthSpecOidcClaims");
         };
+        "clientConfig" = mkOption {
+          description = "ClientConfig configures the HTTP client used to communicate with the OIDC provider.";
+          type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APIPortalAuthSpecOidcClientConfig"));
+        };
         "issuerUrl" = mkOption {
           description = "IssuerURL is the OIDC provider issuer URL.";
           type = types.str;
@@ -2226,6 +2275,7 @@ let
       };
 
       config = {
+        "clientConfig" = mkOverride 1002 null;
         "scopes" = mkOverride 1002 null;
         "syncedAttributes" = mkOverride 1002 null;
       };
@@ -2266,6 +2316,49 @@ let
         "firstname" = mkOverride 1002 null;
         "lastname" = mkOverride 1002 null;
         "userId" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.APIPortalAuthSpecOidcClientConfig" = {
+
+      options = {
+        "maxRetries" = mkOption {
+          description = "MaxRetries defines the maximum number of retry attempts for failed requests.";
+          type = (types.nullOr types.int);
+        };
+        "timeoutSeconds" = mkOption {
+          description = "TimeoutSeconds configures the maximum amount of seconds to wait before giving up on requests.";
+          type = (types.nullOr types.int);
+        };
+        "tls" = mkOption {
+          description = "TLS configures TLS for the HTTP client.";
+          type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APIPortalAuthSpecOidcClientConfigTls"));
+        };
+      };
+
+      config = {
+        "maxRetries" = mkOverride 1002 null;
+        "timeoutSeconds" = mkOverride 1002 null;
+        "tls" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.APIPortalAuthSpecOidcClientConfigTls" = {
+
+      options = {
+        "ca" = mkOption {
+          description = "CA sets the CA bundle used to verify the server certificate.";
+          type = (types.nullOr types.str);
+        };
+        "insecureSkipVerify" = mkOption {
+          description = "InsecureSkipVerify skips the server certificate validation.\nFor testing purposes only, do not use in production.";
+          type = (types.nullOr types.bool);
+        };
+      };
+
+      config = {
+        "ca" = mkOverride 1002 null;
+        "insecureSkipVerify" = mkOverride 1002 null;
       };
 
     };
@@ -2804,6 +2897,10 @@ let
           description = "Path specifies the endpoint path within the Kubernetes Service where the OpenAPI specification can be obtained.\nThe Service queried is determined by the associated Ingress, IngressRoute, or HTTPRoute resource to which the API is attached.\nIt's important to note that this option is incompatible if the Ingress or IngressRoute specifies multiple backend services.\nThe Path must be accessible via a GET request method and should serve a YAML or JSON document containing the OpenAPI specification.";
           type = (types.nullOr types.str);
         };
+        "refreshInterval" = mkOption {
+          description = "RefreshInterval defines the rate at which the OpenAPI specification is refreshed.";
+          type = (types.nullOr types.str);
+        };
         "url" = mkOption {
           description = "URL is a Traefik Hub agent accessible URL for obtaining the OpenAPI specification.\nThe URL must be accessible via a GET request method and should serve a YAML or JSON document containing the OpenAPI specification.";
           type = (types.nullOr types.str);
@@ -2822,6 +2919,7 @@ let
         "operationSets" = mkOverride 1002 null;
         "override" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "refreshInterval" = mkOverride 1002 null;
         "url" = mkOverride 1002 null;
         "validateRequestBodySchema" = mkOverride 1002 null;
         "validateRequestMethodAndPath" = mkOverride 1002 null;
@@ -3112,6 +3210,10 @@ let
           description = "Path specifies the endpoint path within the Kubernetes Service where the OpenAPI specification can be obtained.\nThe Service queried is determined by the associated Ingress, IngressRoute, or HTTPRoute resource to which the API is attached.\nIt's important to note that this option is incompatible if the Ingress or IngressRoute specifies multiple backend services.\nThe Path must be accessible via a GET request method and should serve a YAML or JSON document containing the OpenAPI specification.";
           type = (types.nullOr types.str);
         };
+        "refreshInterval" = mkOption {
+          description = "RefreshInterval defines the rate at which the OpenAPI specification is refreshed.";
+          type = (types.nullOr types.str);
+        };
         "url" = mkOption {
           description = "URL is a Traefik Hub agent accessible URL for obtaining the OpenAPI specification.\nThe URL must be accessible via a GET request method and should serve a YAML or JSON document containing the OpenAPI specification.";
           type = (types.nullOr types.str);
@@ -3130,6 +3232,7 @@ let
         "operationSets" = mkOverride 1002 null;
         "override" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "refreshInterval" = mkOverride 1002 null;
         "url" = mkOverride 1002 null;
         "validateRequestBodySchema" = mkOverride 1002 null;
         "validateRequestMethodAndPath" = mkOverride 1002 null;
@@ -3543,7 +3646,7 @@ let
           type = (types.nullOr (types.attrsOf types.str));
         };
         "maxRetries" = mkOption {
-          description = "MaxRetries defines the number of retries for introspection requests.";
+          description = "MaxRetries defines the maximum number of retry attempts for failed requests.";
           type = (types.nullOr types.int);
         };
         "timeoutSeconds" = mkOption {
@@ -3551,7 +3654,7 @@ let
           type = (types.nullOr types.int);
         };
         "tls" = mkOption {
-          description = "TLS configures TLS communication with the Authorization Server.";
+          description = "TLS configures TLS for the HTTP client.";
           type = (
             types.nullOr (
               submoduleOf "hub.traefik.io.v1alpha1.AccessControlPolicySpecOAuthIntroClientConfigTls"
@@ -3581,11 +3684,11 @@ let
 
       options = {
         "ca" = mkOption {
-          description = "CA sets the CA bundle used to sign the Authorization Server certificate.";
+          description = "CA sets the CA bundle used to verify the server certificate.";
           type = (types.nullOr types.str);
         };
         "insecureSkipVerify" = mkOption {
-          description = "InsecureSkipVerify skips the Authorization Server certificate validation.\nFor testing purposes only, do not use in production.";
+          description = "InsecureSkipVerify skips the server certificate validation.\nFor testing purposes only, do not use in production.";
           type = (types.nullOr types.bool);
         };
       };

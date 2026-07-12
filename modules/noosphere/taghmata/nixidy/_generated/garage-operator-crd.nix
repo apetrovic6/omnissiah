@@ -106,8 +106,7 @@ let
   submoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = definitions."${ref}".options or { };
         config = definitions."${ref}".config or { };
       }
@@ -116,8 +115,7 @@ let
   globalSubmoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = config.definitions."${ref}".options or { };
         config = config.definitions."${ref}".config or { };
       }
@@ -155,8 +153,7 @@ let
       apiVersion = if group == "core" then version else "${group}/${version}";
     in
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         inherit (definitions."${ref}") options;
 
         imports = getDefaults resource group version kind;
@@ -1404,6 +1401,10 @@ let
             )
           );
         };
+        "managedKeyGrants" = mkOption {
+          description = "ManagedKeyGrants lists the access key IDs this bucket's spec.keyPermissions\nlast granted access to. Used to revoke grants when a keyRef is dropped\nfrom the spec, without disturbing grants made via a GarageKey's\nbucketPermissions/allBuckets or by hand.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "observedGeneration" = mkOption {
           description = "ObservedGeneration is the last observed generation";
           type = (types.nullOr types.int);
@@ -1445,6 +1446,7 @@ let
         "keys" = mkOverride 1002 null;
         "lifecycleRules" = mkOverride 1002 null;
         "localAliases" = mkOverride 1002 null;
+        "managedKeyGrants" = mkOverride 1002 null;
         "observedGeneration" = mkOverride 1002 null;
         "phase" = mkOverride 1002 null;
         "quotaUsage" = mkOverride 1002 null;
@@ -1940,6 +1942,10 @@ let
           description = "Annotations to add to the secret";
           type = (types.nullOr (types.attrsOf types.str));
         };
+        "bucketNameKey" = mkOption {
+          description = "BucketNameKey is the data key under which the bucket name is written\nin the Secret. Defaults to \"bucket\". Only used when IncludeBucketName is true.";
+          type = (types.nullOr types.str);
+        };
         "endpointKey" = mkOption {
           description = "EndpointKey is the key name for the S3 endpoint (includes http:// scheme)";
           type = (types.nullOr types.str);
@@ -1947,6 +1953,10 @@ let
         "hostKey" = mkOption {
           description = "HostKey is the key name for the S3 host (without scheme, e.g., \"host:port\")";
           type = (types.nullOr types.str);
+        };
+        "includeBucketName" = mkOption {
+          description = "IncludeBucketName controls whether the bucket name is written to the Secret.\nDefaults to false. When true, the bucket name is populated only if the key\nreferences exactly one bucket (via bucketRef or globalAlias); omitted otherwise.";
+          type = (types.nullOr types.bool);
         };
         "includeEndpoint" = mkOption {
           description = "IncludeEndpoint includes the S3 endpoint in the secret\nDefaults to true if not specified";
@@ -1986,8 +1996,10 @@ let
         "accessKeyIdKey" = mkOverride 1002 null;
         "additionalData" = mkOverride 1002 null;
         "annotations" = mkOverride 1002 null;
+        "bucketNameKey" = mkOverride 1002 null;
         "endpointKey" = mkOverride 1002 null;
         "hostKey" = mkOverride 1002 null;
+        "includeBucketName" = mkOverride 1002 null;
         "includeEndpoint" = mkOverride 1002 null;
         "includeRegion" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
@@ -4434,7 +4446,7 @@ let
           type = (types.nullOr types.str);
         };
         "type" = mkOption {
-          description = "Type specifies the volume type. Defaults to PVC.\nUse EmptyDir for ephemeral storage (e.g. testing).";
+          description = "Type specifies the volume type. Defaults to PersistentVolumeClaim.\nUse EmptyDir for ephemeral storage (e.g. testing).";
           type = (types.nullOr types.str);
         };
       };
@@ -4478,7 +4490,7 @@ let
           type = (types.nullOr types.str);
         };
         "type" = mkOption {
-          description = "Type specifies the volume type. Defaults to PVC.\nUse EmptyDir for ephemeral storage (e.g. testing).";
+          description = "Type specifies the volume type. Defaults to PersistentVolumeClaim.\nUse EmptyDir for ephemeral storage (e.g. testing).";
           type = (types.nullOr types.str);
         };
       };
@@ -4522,7 +4534,7 @@ let
           type = (types.nullOr types.str);
         };
         "type" = mkOption {
-          description = "Type specifies the volume type. Defaults to PVC.\nUse EmptyDir for ephemeral storage (e.g. testing).";
+          description = "Type specifies the volume type. Defaults to PersistentVolumeClaim.\nUse EmptyDir for ephemeral storage (e.g. testing).";
           type = (types.nullOr types.str);
         };
       };
@@ -4701,6 +4713,18 @@ let
           description = "Connected indicates if the node is currently connected";
           type = (types.nullOr types.bool);
         };
+        "cyclePhase" = mkOption {
+          description = "CyclePhase tracks progress of a graceful node cycle triggered by the\ngarage.rajsingh.info/cycle annotation. Empty when no cycle is active.\nUsed to make the add-before-remove state machine resumable/idempotent\nacross requeues: a non-empty value means a sibling has already been\nprovisioned, so the operator continues the swap rather than re-provisioning.";
+          type = (types.nullOr types.str);
+        };
+        "cycleSiblingName" = mkOption {
+          description = "CycleSiblingName is the name of the sibling GarageNode provisioned for an\nin-progress cycle (the replacement that takes over this node's layout slot).";
+          type = (types.nullOr types.str);
+        };
+        "cycleSiblingNodeId" = mkOption {
+          description = "CycleSiblingNodeID is the discovered Garage node ID of the cycle sibling,\nused to check its layout sync tracker before this node is removed.";
+          type = (types.nullOr types.str);
+        };
         "dataPartition" = mkOption {
           description = "DataPartition contains disk space info for the data partition\nNote: Garage reports a single partition even with multiple data paths";
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageNodeStatusDataPartition"));
@@ -4784,6 +4808,9 @@ let
         "clusterAdminTokenSecretRef" = mkOverride 1002 null;
         "conditions" = mkOverride 1002 null;
         "connected" = mkOverride 1002 null;
+        "cyclePhase" = mkOverride 1002 null;
+        "cycleSiblingName" = mkOverride 1002 null;
+        "cycleSiblingNodeId" = mkOverride 1002 null;
         "dataPartition" = mkOverride 1002 null;
         "dbEngine" = mkOverride 1002 null;
         "garageFeatures" = mkOverride 1002 null;
@@ -5877,6 +5904,12 @@ let
           description = "PriorityClassName for pods.";
           type = (types.nullOr types.str);
         };
+        "readinessProbe" = mkOption {
+          description = "ReadinessProbe overrides the gateway tier's readiness probe. When unset,\nthe operator uses a bind-only TCP check on the S3 port. The default is\ndeliberately NOT a serving-aware admin /health probe: /health is a\ncluster-wide consistent write-quorum signal, so at replication.factor=2 a\nsingle storage-node loss (or, for a federated cluster, the window before\nremote peers join) makes /health return 503 on every node, which would mark\nall gateways NotReady and — behind a publishNotReadyAddresses=false Service\nsuch as the Tailscale anycast — withdraw the whole anycast and take down\nreads too, even though read_quorum=1 means reads still work. Serving-health\nbelongs in monitoring (alert on /health), not readiness. Set this only if\nyou have a custom read-capability gate (e.g. an exec probe) that won't\nwithdraw a gateway that can still serve reads.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbe")
+          );
+        };
         "replicas" = mkOption {
           description = "Replicas is the number of gateway pods to deploy. Set to 0 to keep the\ngateway tier declared but stop all pods; the operator scales the\nstatefulset down and removes vacated entries from the layout.";
           type = types.int;
@@ -5928,6 +5961,7 @@ let
         "podDisruptionBudget" = mkOverride 1002 null;
         "podLabels" = mkOverride 1002 null;
         "priorityClassName" = mkOverride 1002 null;
+        "readinessProbe" = mkOverride 1002 null;
         "resources" = mkOverride 1002 null;
         "rpcPublicAddr" = mkOverride 1002 null;
         "securityContext" = mkOverride 1002 null;
@@ -7985,6 +8019,184 @@ let
       };
 
     };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbe" = {
+
+      options = {
+        "exec" = mkOption {
+          description = "Exec specifies a command to execute in the container.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeExec")
+          );
+        };
+        "failureThreshold" = mkOption {
+          description = "Minimum consecutive failures for the probe to be considered failed after having succeeded.\nDefaults to 3. Minimum value is 1.";
+          type = (types.nullOr types.int);
+        };
+        "grpc" = mkOption {
+          description = "GRPC specifies a GRPC HealthCheckRequest.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeGrpc")
+          );
+        };
+        "httpGet" = mkOption {
+          description = "HTTPGet specifies an HTTP GET request to perform.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeHttpGet"
+            )
+          );
+        };
+        "initialDelaySeconds" = mkOption {
+          description = "Number of seconds after the container has started before liveness probes are initiated.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes";
+          type = (types.nullOr types.int);
+        };
+        "periodSeconds" = mkOption {
+          description = "How often (in seconds) to perform the probe.\nDefault to 10 seconds. Minimum value is 1.";
+          type = (types.nullOr types.int);
+        };
+        "successThreshold" = mkOption {
+          description = "Minimum consecutive successes for the probe to be considered successful after having failed.\nDefaults to 1. Must be 1 for liveness and startup. Minimum value is 1.";
+          type = (types.nullOr types.int);
+        };
+        "tcpSocket" = mkOption {
+          description = "TCPSocket specifies a connection to a TCP port.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeTcpSocket"
+            )
+          );
+        };
+        "terminationGracePeriodSeconds" = mkOption {
+          description = "Optional duration in seconds the pod needs to terminate gracefully upon probe failure.\nThe grace period is the duration in seconds after the processes running in the pod are sent\na termination signal and the time when the processes are forcibly halted with a kill signal.\nSet this value longer than the expected cleanup time for your process.\nIf this value is nil, the pod's terminationGracePeriodSeconds will be used. Otherwise, this\nvalue overrides the value provided by the pod spec.\nValue must be non-negative integer. The value zero indicates stop immediately via\nthe kill signal (no opportunity to shut down).\nThis is a beta field and requires enabling ProbeTerminationGracePeriod feature gate.\nMinimum value is 1. spec.terminationGracePeriodSeconds is used if unset.";
+          type = (types.nullOr types.int);
+        };
+        "timeoutSeconds" = mkOption {
+          description = "Number of seconds after which the probe times out.\nDefaults to 1 second. Minimum value is 1.\nMore info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes";
+          type = (types.nullOr types.int);
+        };
+      };
+
+      config = {
+        "exec" = mkOverride 1002 null;
+        "failureThreshold" = mkOverride 1002 null;
+        "grpc" = mkOverride 1002 null;
+        "httpGet" = mkOverride 1002 null;
+        "initialDelaySeconds" = mkOverride 1002 null;
+        "periodSeconds" = mkOverride 1002 null;
+        "successThreshold" = mkOverride 1002 null;
+        "tcpSocket" = mkOverride 1002 null;
+        "terminationGracePeriodSeconds" = mkOverride 1002 null;
+        "timeoutSeconds" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeExec" = {
+
+      options = {
+        "command" = mkOption {
+          description = "Command is the command line to execute inside the container, the working directory for the\ncommand  is root ('/') in the container's filesystem. The command is simply exec'd, it is\nnot run inside a shell, so traditional shell instructions ('|', etc) won't work. To use\na shell, you need to explicitly call out to that shell.\nExit status of 0 is treated as live/healthy and non-zero is unhealthy.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "command" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeGrpc" = {
+
+      options = {
+        "port" = mkOption {
+          description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
+          type = types.int;
+        };
+        "service" = mkOption {
+          description = "Service is the name of the service to place in the gRPC HealthCheckRequest\n(see https://github.com/grpc/grpc/blob/master/doc/health-checking.md).\n\nIf this is not specified, the default behavior is defined by gRPC.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "service" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeHttpGet" = {
+
+      options = {
+        "host" = mkOption {
+          description = "Host name to connect to, defaults to the pod IP. You probably want to set\n\"Host\" in httpHeaders instead.";
+          type = (types.nullOr types.str);
+        };
+        "httpHeaders" = mkOption {
+          description = "Custom headers to set in the request. HTTP allows repeated headers.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeHttpGetHttpHeaders"
+                "name"
+                [ ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "path" = mkOption {
+          description = "Path to access on the HTTP server.";
+          type = (types.nullOr types.str);
+        };
+        "port" = mkOption {
+          description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
+          type = (types.either types.int types.str);
+        };
+        "scheme" = mkOption {
+          description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "host" = mkOverride 1002 null;
+        "httpHeaders" = mkOverride 1002 null;
+        "path" = mkOverride 1002 null;
+        "scheme" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeHttpGetHttpHeaders" = {
+
+      options = {
+        "name" = mkOption {
+          description = "The header field name.\nThis will be canonicalized upon output, so case-variant names will be understood as the same header.";
+          type = types.str;
+        };
+        "value" = mkOption {
+          description = "The header field value";
+          type = types.str;
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayReadinessProbeTcpSocket" = {
+
+      options = {
+        "host" = mkOption {
+          description = "Optional: Host name to connect to, defaults to the pod IP.";
+          type = (types.nullOr types.str);
+        };
+        "port" = mkOption {
+          description = "Number or name of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
+          type = (types.either types.int types.str);
+        };
+      };
+
+      config = {
+        "host" = mkOverride 1002 null;
+      };
+
+    };
     "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayResources" = {
 
       options = {
@@ -8480,12 +8692,67 @@ let
           description = "Interval is the Prometheus scrape interval (e.g. \"30s\", \"1m\").";
           type = (types.nullOr types.str);
         };
+        "metricRelabelings" = mkOption {
+          description = "MetricRelabelings are applied to samples scraped from the admin /metrics\nendpoint before ingestion (set as the ServiceMonitor endpoint's\nmetricRelabelings). Use them to drop high-cardinality series that nothing\nqueries — e.g. the per-method rpc_duration_* histograms, which dominate a\nGarage node's metric series count.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecMonitoringMetricRelabelings"
+              )
+            )
+          );
+        };
       };
 
       config = {
         "additionalLabels" = mkOverride 1002 null;
         "enabled" = mkOverride 1002 null;
         "interval" = mkOverride 1002 null;
+        "metricRelabelings" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecMonitoringMetricRelabelings" = {
+
+      options = {
+        "action" = mkOption {
+          description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
+          type = (types.nullOr types.str);
+        };
+        "modulus" = mkOption {
+          description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
+          type = (types.nullOr types.int);
+        };
+        "regex" = mkOption {
+          description = "regex defines the regular expression against which the extracted value is matched.";
+          type = (types.nullOr types.str);
+        };
+        "replacement" = mkOption {
+          description = "replacement value against which a Replace action is performed if the\nregular expression matches.\n\nRegex capture groups are available.";
+          type = (types.nullOr types.str);
+        };
+        "separator" = mkOption {
+          description = "separator defines the string between concatenated SourceLabels.";
+          type = (types.nullOr types.str);
+        };
+        "sourceLabels" = mkOption {
+          description = "sourceLabels defines the source labels select values from existing labels. Their content is\nconcatenated using the configured Separator and matched against the\nconfigured regular expression.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "targetLabel" = mkOption {
+          description = "targetLabel defines the label to which the resulting string is written in a replacement.\n\nIt is mandatory for `Replace`, `HashMod`, `Lowercase`, `Uppercase`,\n`KeepEqual` and `DropEqual` actions.\n\nRegex capture groups are available.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "action" = mkOverride 1002 null;
+        "modulus" = mkOverride 1002 null;
+        "regex" = mkOverride 1002 null;
+        "replacement" = mkOverride 1002 null;
+        "separator" = mkOverride 1002 null;
+        "sourceLabels" = mkOverride 1002 null;
+        "targetLabel" = mkOverride 1002 null;
       };
 
     };
@@ -8764,11 +9031,16 @@ let
           description = "GatewayRPCEndpointTemplate is a hostname:port template used by federation\nto connect to remote gateway pods individually. The literal `{ordinal}`\nis replaced with each remote gateway pod's ordinal (0, 1, ...) parsed\nfrom the layout role's pod-name tag (e.g. `garage-gateway-0`).\n\nRequired when the remote cluster runs gateway pods that participate in\nthe cluster layout (default since v0.5.8). FullReplication tables\n(key_table, bucket_table, ...) need quorum across all_nodes, which\nincludes remote gateways. Without this field the operator only peers\nstorage↔storage cross-region; remote gateways appear in layout but\nremain unreachable, blocking GetKeyInfo / DeleteKey / FullReplication\nwrites that need full quorum.\n\nExample: \"ottawa-garage-gw-{ordinal}.keiretsu.ts.net:3901\"";
           type = (types.nullOr types.str);
         };
+        "storageRpcEndpointTemplate" = mkOption {
+          description = "StorageRPCEndpointTemplate is a hostname:port template used by federation\nto connect to remote STORAGE pods individually, mirroring\nGatewayRPCEndpointTemplate. The literal `{ordinal}` is replaced with each\nremote storage pod's ordinal (0, 1, ...) parsed from the layout role's\npod-name tag (e.g. `garage-storage-0`).\n\nNeeded when a remote region runs more than one storage pod behind a single\nadmin hostname (e.g. a Tailscale VIP): the default storage↔storage connect\nloop dials every remote node at that one shared hostname, which only ever\nlands one pod, leaving the rest unreachable cross-region. Set this together\nwith the remote region's spec.storage.rpcPublicAddr `{ordinal}` template so\neach storage pod is both advertised and dialed per-pod.\n\nExample: \"ottawa-storage-{ordinal}.keiretsu.ts.net:3901\"";
+          type = (types.nullOr types.str);
+        };
       };
 
       config = {
         "adminTokenSecretRef" = mkOverride 1002 null;
         "gatewayRpcEndpointTemplate" = mkOverride 1002 null;
+        "storageRpcEndpointTemplate" = mkOverride 1002 null;
       };
 
     };
@@ -9024,6 +9296,10 @@ let
             )
           );
         };
+        "layoutPolicy" = mkOption {
+          description = "LayoutPolicy overrides the cluster-level spec.layoutPolicy for the STORAGE\ntier only. This lets a cluster hand-manage storage GarageNodes (Manual)\nwhile the gateway tier stays operator-managed (Auto) — e.g. a region with\nheterogeneous per-node storage arrays defined in gitops, keeping the\noperator's gateway automation (per-ordinal rpc_public_addr, tombstone\nreaper, per-pod LBs). Defaults to spec.layoutPolicy when empty. Auto->Manual\nis one-way (operator ejects its storage nodes; Manual->Auto is rejected by\nthe webhook), matching the cluster-level field.";
+          type = (types.nullOr types.str);
+        };
         "metadata" = mkOption {
           description = "Metadata configures the metadata PVC (Garage node identity + index DB).";
           type = (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageMetadata");
@@ -9080,6 +9356,10 @@ let
             types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageResources")
           );
         };
+        "rpcPublicAddr" = mkOption {
+          description = "RPCPublicAddr is the externally-routable rpc_public_addr advertised by\nstorage pods so peers in other regions can dial them by hostname.\n\nWith replicas > 1 a single shared address only ever routes to one pod\n(e.g. behind a Tailscale VIP), leaving the others unreachable\ncross-region. Use an `{ordinal}` placeholder — the operator substitutes\neach pod's ordinal (0, 1, ...), symmetric with the gateway tier's\nrpcPublicAddr and with remoteClusters[].storageRpcEndpointTemplate on the\nconsuming side — so every pod advertises its own address. An address\nwithout the placeholder is rendered verbatim (fine for a single-replica\nstorage tier). When a per-node publicEndpoint (LoadBalancer perNode) is in\neffect, that address wins and this field is ignored.\n\nExample: \"us-east-storage-{ordinal}.example.ts.net:3901\"";
+          type = (types.nullOr types.str);
+        };
         "securityContext" = mkOption {
           description = "SecurityContext for the pod.";
           type = (
@@ -9113,6 +9393,7 @@ let
         "dataFsync" = mkOverride 1002 null;
         "env" = mkOverride 1002 null;
         "envFrom" = mkOverride 1002 null;
+        "layoutPolicy" = mkOverride 1002 null;
         "metadataAutoSnapshotInterval" = mkOverride 1002 null;
         "metadataFsync" = mkOverride 1002 null;
         "metadataSnapshotsDir" = mkOverride 1002 null;
@@ -9123,6 +9404,7 @@ let
         "priorityClassName" = mkOverride 1002 null;
         "pvcRetentionPolicy" = mkOverride 1002 null;
         "resources" = mkOverride 1002 null;
+        "rpcPublicAddr" = mkOverride 1002 null;
         "securityContext" = mkOverride 1002 null;
         "tolerations" = mkOverride 1002 null;
         "topologySpreadConstraints" = mkOverride 1002 null;
@@ -12311,6 +12593,16 @@ let
           description = "Endpoints contains service endpoints.";
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusEndpoints"));
         };
+        "factorMigration" = mkOption {
+          description = "FactorMigration tracks an in-flight coordinated replication-factor migration\n(the garage.rajsingh.info/purge-cluster-layout operation). Nil when no\nmigration has run.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusFactorMigration")
+          );
+        };
+        "gatewayNodesNotInLayout" = mkOption {
+          description = "GatewayNodesNotInLayout lists operator-owned gateway GarageNodes that report\nstatus.inLayout == false — they have lost the capacity:nil layout role that\nkeeps S3 sig-auth local (#209) and have silently degraded to quorum auth.\nDrives the GatewayLayoutDegraded condition. Empty when every gateway node\nholds its role.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "gatewayReadyReplicas" = mkOption {
           description = "GatewayReadyReplicas is the number of ready gateway-tier pods.";
           type = (types.nullOr types.int);
@@ -12326,6 +12618,10 @@ let
         "lastOperation" = mkOption {
           description = "LastOperation records the result of the most recently triggered operational annotation.";
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusLastOperation"));
+        };
+        "layoutDiagnosis" = mkOption {
+          description = "LayoutDiagnosis is a one-line, human-readable summary of the most severe\nactive health condition (quorum at risk, remote clusters stale, federation\nmisconfigured). Empty when the cluster is healthy. Surfaced as a printcolumn\nso `kubectl get gc` shows the actionable problem at a glance.";
+          type = (types.nullOr types.str);
         };
         "layoutHistory" = mkOption {
           description = "LayoutHistory contains layout version history.";
@@ -12418,6 +12714,10 @@ let
           description = "TotalNodes is the total nodes across all clusters (local + remote).";
           type = (types.nullOr types.int);
         };
+        "unreachablePeers" = mkOption {
+          description = "UnreachablePeers lists peers that have been continuously down beyond the\nsustained-unreachable threshold, each as \"<shortNodeId> (down <duration>)\".\nDrives the PeerUnreachable condition. Empty when all peers are reachable.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "workerCount" = mkOption {
           description = "WorkerCount is the total number of background workers.";
           type = (types.nullOr types.int);
@@ -12441,10 +12741,13 @@ let
         "conditions" = mkOverride 1002 null;
         "drainingNodes" = mkOverride 1002 null;
         "endpoints" = mkOverride 1002 null;
+        "factorMigration" = mkOverride 1002 null;
+        "gatewayNodesNotInLayout" = mkOverride 1002 null;
         "gatewayReadyReplicas" = mkOverride 1002 null;
         "gatewayReplicas" = mkOverride 1002 null;
         "health" = mkOverride 1002 null;
         "lastOperation" = mkOverride 1002 null;
+        "layoutDiagnosis" = mkOverride 1002 null;
         "layoutHistory" = mkOverride 1002 null;
         "layoutPreview" = mkOverride 1002 null;
         "layoutVersion" = mkOverride 1002 null;
@@ -12463,6 +12766,7 @@ let
         "storageReplicas" = mkOverride 1002 null;
         "storageStats" = mkOverride 1002 null;
         "totalNodes" = mkOverride 1002 null;
+        "unreachablePeers" = mkOverride 1002 null;
         "workerCount" = mkOverride 1002 null;
         "workers" = mkOverride 1002 null;
         "workersFailed" = mkOverride 1002 null;
@@ -12656,6 +12960,60 @@ let
         "rpc" = mkOverride 1002 null;
         "s3" = mkOverride 1002 null;
         "web" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusFactorMigration" = {
+
+      options = {
+        "completedAt" = mkOption {
+          description = "CompletedAt is when the migration finished (Completed or Failed).";
+          type = (types.nullOr types.str);
+        };
+        "force" = mkOption {
+          description = "Force records whether the trigger carried the ,force flag (overriding the\ndangerous-mode / pending-tombstone guards). Captured at start because the\nannotation is consumed immediately.";
+          type = (types.nullOr types.bool);
+        };
+        "fromFactor" = mkOption {
+          description = "FromFactor is the replication factor before the migration.";
+          type = (types.nullOr types.int);
+        };
+        "message" = mkOption {
+          description = "Message is a human-readable description of the current phase or failure.";
+          type = (types.nullOr types.str);
+        };
+        "phase" = mkOption {
+          description = "Phase is the current migration phase.";
+          type = (types.nullOr types.str);
+        };
+        "phaseStartedAt" = mkOption {
+          description = "PhaseStartedAt is when the current Phase was entered. It is reset on every\nphase transition and bounds each wait phase independently of the overall\nmigration duration, so a single phase that hangs (e.g. a node whose\nstatus.nodeId never repopulates after restart) trips the stuck guard\nrather than the whole migration sharing one global deadline.";
+          type = (types.nullOr types.str);
+        };
+        "purgeId" = mkOption {
+          description = "PurgeID uniquely identifies this migration; it is the marker-file suffix the\nper-node init container uses so the on-disk cluster_layout is deleted exactly\nonce even across extra restarts.";
+          type = (types.nullOr types.str);
+        };
+        "startedAt" = mkOption {
+          description = "StartedAt is when the migration began.";
+          type = (types.nullOr types.str);
+        };
+        "toFactor" = mkOption {
+          description = "ToFactor is the target replication factor.";
+          type = (types.nullOr types.int);
+        };
+      };
+
+      config = {
+        "completedAt" = mkOverride 1002 null;
+        "force" = mkOverride 1002 null;
+        "fromFactor" = mkOverride 1002 null;
+        "message" = mkOverride 1002 null;
+        "phase" = mkOverride 1002 null;
+        "phaseStartedAt" = mkOverride 1002 null;
+        "purgeId" = mkOverride 1002 null;
+        "startedAt" = mkOverride 1002 null;
+        "toFactor" = mkOverride 1002 null;
       };
 
     };

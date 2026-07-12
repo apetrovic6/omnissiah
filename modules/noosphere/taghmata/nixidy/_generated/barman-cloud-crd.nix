@@ -106,8 +106,7 @@ let
   submoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = definitions."${ref}".options or { };
         config = definitions."${ref}".config or { };
       }
@@ -116,8 +115,7 @@ let
   globalSubmoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = config.definitions."${ref}".options or { };
         config = config.definitions."${ref}".config or { };
       }
@@ -155,8 +153,7 @@ let
       apiVersion = if group == "core" then version else "${group}/${version}";
     in
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         inherit (definitions."${ref}") options;
 
         imports = getDefaults resource group version kind;
@@ -433,7 +430,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "compression" = mkOption {
-          description = "Compress a backup file (a tar file per tablespace) while streaming it\nto the object store. Available options are empty string (no\ncompression, default), `gzip`, `bzip2`, and `snappy`.";
+          description = "Compress a backup file (a tar file per tablespace) while streaming it\nto the object store. Available options are empty string (no\ncompression, default), `gzip`, `bzip2`, `lz4`, and `snappy`.";
           type = (types.nullOr types.str);
         };
         "encryption" = mkOption {
@@ -448,6 +445,10 @@ let
           description = "The number of parallel jobs to be used to upload the backup, defaults\nto 2";
           type = (types.nullOr types.int);
         };
+        "restoreAdditionalCommandArgs" = mkOption {
+          description = "Additional arguments that can be appended to the 'barman-cloud-restore'\ncommand-line invocation. These arguments provide flexibility to customize\nthe data restore process further, according to specific requirements or\nconfigurations.\n\nExample:\nIn a scenario where specialized restore options are required, such as setting\na specific read timeout or defining custom behavior, users can use this field\nto specify additional command arguments.\n\nNote:\nIt's essential to ensure that the provided arguments are valid and supported\nby the 'barman-cloud-restore' command, to avoid potential errors or unintended\nbehavior during execution.";
+          type = (types.nullOr (types.listOf types.str));
+        };
       };
 
       config = {
@@ -456,6 +457,7 @@ let
         "encryption" = mkOverride 1002 null;
         "immediateCheckpoint" = mkOverride 1002 null;
         "jobs" = mkOverride 1002 null;
+        "restoreAdditionalCommandArgs" = mkOverride 1002 null;
       };
 
     };

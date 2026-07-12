@@ -106,8 +106,7 @@ let
   submoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = definitions."${ref}".options or { };
         config = definitions."${ref}".config or { };
       }
@@ -116,8 +115,7 @@ let
   globalSubmoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = config.definitions."${ref}".options or { };
         config = config.definitions."${ref}".config or { };
       }
@@ -155,8 +153,7 @@ let
       apiVersion = if group == "core" then version else "${group}/${version}";
     in
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         inherit (definitions."${ref}") options;
 
         imports = getDefaults resource group version kind;
@@ -1222,6 +1219,333 @@ let
       };
 
     };
+    "longhorn.io.v1beta2.EngineFrontend" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "EngineFrontendSpec defines the desired state of the Longhorn engine frontend (v2 initiator)";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.EngineFrontendSpec"));
+        };
+        "status" = mkOption {
+          description = "EngineFrontendStatus defines the observed state of the Longhorn engine frontend";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.EngineFrontendStatus"));
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.EngineFrontendSpec" = {
+
+      options = {
+        "active" = mkOption {
+          description = "";
+          type = (types.nullOr types.bool);
+        };
+        "dataEngine" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "desireState" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "disableFrontend" = mkOption {
+          description = "";
+          type = (types.nullOr types.bool);
+        };
+        "engineName" = mkOption {
+          description = "EngineName is the name of the v2 engine target (required for EngineFrontend instance creation)";
+          type = (types.nullOr types.str);
+        };
+        "frontend" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "image" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "logRequested" = mkOption {
+          description = "";
+          type = (types.nullOr types.bool);
+        };
+        "nodeID" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "salvageRequested" = mkOption {
+          description = "";
+          type = (types.nullOr types.bool);
+        };
+        "size" = mkOption {
+          description = "Size is the desired size of the frontend device in bytes, as requested\nby the volume owner. The EngineFrontend controller drives the frontend\ndevice toward this size independently of the engine's target size.";
+          type = (types.nullOr types.str);
+        };
+        "targetIP" = mkOption {
+          description = "TargetIP is the IP address of the v2 engine target";
+          type = (types.nullOr types.str);
+        };
+        "targetPort" = mkOption {
+          description = "TargetPort is the port of the v2 engine target";
+          type = (types.nullOr types.int);
+        };
+        "ublkNumberOfQueue" = mkOption {
+          description = "ublkNumberOfQueue controls the number of queues for ublk frontend.";
+          type = (types.nullOr types.int);
+        };
+        "ublkQueueDepth" = mkOption {
+          description = "ublkQueueDepth controls the depth of each queue for ublk frontend.";
+          type = (types.nullOr types.int);
+        };
+        "volumeName" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "volumeSize" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "active" = mkOverride 1002 null;
+        "dataEngine" = mkOverride 1002 null;
+        "desireState" = mkOverride 1002 null;
+        "disableFrontend" = mkOverride 1002 null;
+        "engineName" = mkOverride 1002 null;
+        "frontend" = mkOverride 1002 null;
+        "image" = mkOverride 1002 null;
+        "logRequested" = mkOverride 1002 null;
+        "nodeID" = mkOverride 1002 null;
+        "salvageRequested" = mkOverride 1002 null;
+        "size" = mkOverride 1002 null;
+        "targetIP" = mkOverride 1002 null;
+        "targetPort" = mkOverride 1002 null;
+        "ublkNumberOfQueue" = mkOverride 1002 null;
+        "ublkQueueDepth" = mkOverride 1002 null;
+        "volumeName" = mkOverride 1002 null;
+        "volumeSize" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.EngineFrontendStatus" = {
+
+      options = {
+        "activePath" = mkOption {
+          description = "ActivePath is the currently active frontend path address.";
+          type = (types.nullOr types.str);
+        };
+        "conditions" = mkOption {
+          description = "";
+          type = (
+            types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.EngineFrontendStatusConditions"))
+          );
+        };
+        "currentImage" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "currentSize" = mkOption {
+          description = "CurrentSize is the current size of the frontend device in bytes, as\nobserved from the data plane. It is 0 while the engine frontend is not\nrunning.";
+          type = (types.nullOr types.str);
+        };
+        "currentState" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "endpoint" = mkOption {
+          description = "Endpoint is the initiator endpoint (e.g., /dev/longhorn/vol-name)";
+          type = (types.nullOr types.str);
+        };
+        "instanceManagerName" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "ip" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "logFetched" = mkOption {
+          description = "";
+          type = (types.nullOr types.bool);
+        };
+        "ownerID" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "paths" = mkOption {
+          description = "Paths describes the currently known frontend multipath state.";
+          type = (types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.EngineFrontendStatusPaths")));
+        };
+        "port" = mkOption {
+          description = "";
+          type = (types.nullOr types.int);
+        };
+        "preferredPath" = mkOption {
+          description = "PreferredPath is the preferred frontend path address.";
+          type = (types.nullOr types.str);
+        };
+        "salvageExecuted" = mkOption {
+          description = "";
+          type = (types.nullOr types.bool);
+        };
+        "started" = mkOption {
+          description = "";
+          type = (types.nullOr types.bool);
+        };
+        "starting" = mkOption {
+          description = "";
+          type = (types.nullOr types.bool);
+        };
+        "storageIP" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "switchoverPhase" = mkOption {
+          description = "SwitchoverPhase is the last completed switchover phase reported by the data plane.";
+          type = (types.nullOr types.str);
+        };
+        "targetIP" = mkOption {
+          description = "TargetIP is the currently connected IP address of the v2 engine target";
+          type = (types.nullOr types.str);
+        };
+        "targetPort" = mkOption {
+          description = "TargetPort is the currently connected port of the v2 engine target";
+          type = (types.nullOr types.int);
+        };
+        "ublkID" = mkOption {
+          description = "";
+          type = (types.nullOr types.int);
+        };
+        "uuid" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "activePath" = mkOverride 1002 null;
+        "conditions" = mkOverride 1002 null;
+        "currentImage" = mkOverride 1002 null;
+        "currentSize" = mkOverride 1002 null;
+        "currentState" = mkOverride 1002 null;
+        "endpoint" = mkOverride 1002 null;
+        "instanceManagerName" = mkOverride 1002 null;
+        "ip" = mkOverride 1002 null;
+        "logFetched" = mkOverride 1002 null;
+        "ownerID" = mkOverride 1002 null;
+        "paths" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "preferredPath" = mkOverride 1002 null;
+        "salvageExecuted" = mkOverride 1002 null;
+        "started" = mkOverride 1002 null;
+        "starting" = mkOverride 1002 null;
+        "storageIP" = mkOverride 1002 null;
+        "switchoverPhase" = mkOverride 1002 null;
+        "targetIP" = mkOverride 1002 null;
+        "targetPort" = mkOverride 1002 null;
+        "ublkID" = mkOverride 1002 null;
+        "uuid" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.EngineFrontendStatusConditions" = {
+
+      options = {
+        "lastProbeTime" = mkOption {
+          description = "Last time we probed the condition.";
+          type = (types.nullOr types.str);
+        };
+        "lastTransitionTime" = mkOption {
+          description = "Last time the condition transitioned from one status to another.";
+          type = (types.nullOr types.str);
+        };
+        "message" = mkOption {
+          description = "Human-readable message indicating details about last transition.";
+          type = (types.nullOr types.str);
+        };
+        "reason" = mkOption {
+          description = "Unique, one-word, CamelCase reason for the condition's last transition.";
+          type = (types.nullOr types.str);
+        };
+        "status" = mkOption {
+          description = "Status is the status of the condition.\nCan be True, False, Unknown.";
+          type = (types.nullOr types.str);
+        };
+        "type" = mkOption {
+          description = "Type is the type of the condition.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "lastProbeTime" = mkOverride 1002 null;
+        "lastTransitionTime" = mkOverride 1002 null;
+        "message" = mkOverride 1002 null;
+        "reason" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+        "type" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.EngineFrontendStatusPaths" = {
+
+      options = {
+        "anaState" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "engineName" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "nguid" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "nqn" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "targetIP" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "targetPort" = mkOption {
+          description = "";
+          type = (types.nullOr types.int);
+        };
+      };
+
+      config = {
+        "anaState" = mkOverride 1002 null;
+        "engineName" = mkOverride 1002 null;
+        "nguid" = mkOverride 1002 null;
+        "nqn" = mkOverride 1002 null;
+        "targetIP" = mkOverride 1002 null;
+        "targetPort" = mkOverride 1002 null;
+      };
+
+    };
     "longhorn.io.v1beta2.EngineImage" = {
 
       options = {
@@ -1865,6 +2189,10 @@ let
           description = "";
           type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.InstanceManagerStatusDataEngineStatus"));
         };
+        "instanceEngineFrontends" = mkOption {
+          description = "";
+          type = (types.nullOr (types.attrsOf types.attrs));
+        };
         "instanceEngines" = mkOption {
           description = "";
           type = (types.nullOr (types.attrsOf types.attrs));
@@ -1898,6 +2226,7 @@ let
         "conditions" = mkOverride 1002 null;
         "currentState" = mkOverride 1002 null;
         "dataEngineStatus" = mkOverride 1002 null;
+        "instanceEngineFrontends" = mkOverride 1002 null;
         "instanceEngines" = mkOverride 1002 null;
         "instanceReplicas" = mkOverride 1002 null;
         "ip" = mkOverride 1002 null;
@@ -2754,6 +3083,10 @@ let
     "longhorn.io.v1beta2.ShareManagerStatus" = {
 
       options = {
+        "currentImage" = mkOption {
+          description = "The image currently used by the share manager pod";
+          type = (types.nullOr types.str);
+        };
         "endpoint" = mkOption {
           description = "NFS endpoint that can access the mounted filesystem of the volume";
           type = (types.nullOr types.str);
@@ -2769,6 +3102,7 @@ let
       };
 
       config = {
+        "currentImage" = mkOverride 1002 null;
         "endpoint" = mkOverride 1002 null;
         "ownerID" = mkOverride 1002 null;
         "state" = mkOverride 1002 null;
@@ -2839,6 +3173,10 @@ let
           description = "";
           type = (types.nullOr types.str);
         };
+        "checksumCalculatedAt" = mkOption {
+          description = "ChecksumCalculatedAt is the RFC3339 timestamp indicating when the checksum\nfor this snapshot was last calculated or updated.";
+          type = (types.nullOr types.str);
+        };
         "children" = mkOption {
           description = "";
           type = (types.nullOr (types.attrsOf types.bool));
@@ -2871,6 +3209,10 @@ let
           description = "";
           type = (types.nullOr types.bool);
         };
+        "requestedTime" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
         "restoreSize" = mkOption {
           description = "";
           type = (types.nullOr types.int);
@@ -2887,6 +3229,7 @@ let
 
       config = {
         "checksum" = mkOverride 1002 null;
+        "checksumCalculatedAt" = mkOverride 1002 null;
         "children" = mkOverride 1002 null;
         "creationTime" = mkOverride 1002 null;
         "error" = mkOverride 1002 null;
@@ -2895,6 +3238,7 @@ let
         "ownerID" = mkOverride 1002 null;
         "parent" = mkOverride 1002 null;
         "readyToUse" = mkOverride 1002 null;
+        "requestedTime" = mkOverride 1002 null;
         "restoreSize" = mkOverride 1002 null;
         "size" = mkOverride 1002 null;
         "userCreated" = mkOverride 1002 null;
@@ -3457,6 +3801,10 @@ let
           description = "";
           type = (types.nullOr types.bool);
         };
+        "engineNodeID" = mkOption {
+          description = "engineNodeID defines the node where the backend engine (target) runs.\nIf empty, falls back to NodeID.";
+          type = (types.nullOr types.str);
+        };
         "freezeFilesystemForSnapshot" = mkOption {
           description = "Setting that freezes the filesystem on the root partition before a snapshot is created.";
           type = (types.nullOr types.str);
@@ -3486,7 +3834,7 @@ let
           type = (types.nullOr types.str);
         };
         "nodeID" = mkOption {
-          description = "";
+          description = "nodeID defines the node where the volume is attached (where the frontend initiator runs).";
           type = (types.nullOr types.str);
         };
         "nodeSelector" = mkOption {
@@ -3541,6 +3889,10 @@ let
           description = "";
           type = (types.nullOr types.str);
         };
+        "snapshotHashingRequestedAt" = mkOption {
+          description = "SnapshotHashingRequestedAt is the RFC3339 timestamp (e.g., \"2026-03-16T10:30:00Z\") when an on-demand snapshot checksum calculation is requested.\nWhen this value is set and is later than LastOnDemandSnapshotHashingCompleteAt, the system will calculate checksums\nfor all user snapshots.\n\nIf SnapshotHashingRequestedAt differs from LastOnDemandSnapshotHashingCompleteAt, it indicates that a hashing request\nis still in progress, and a new request will be rejected.";
+          type = (types.nullOr types.str);
+        };
         "snapshotMaxCount" = mkOption {
           description = "";
           type = (types.nullOr types.int);
@@ -3581,6 +3933,7 @@ let
         "disableFrontend" = mkOverride 1002 null;
         "diskSelector" = mkOverride 1002 null;
         "encrypted" = mkOverride 1002 null;
+        "engineNodeID" = mkOverride 1002 null;
         "freezeFilesystemForSnapshot" = mkOverride 1002 null;
         "fromBackup" = mkOverride 1002 null;
         "frontend" = mkOverride 1002 null;
@@ -3602,6 +3955,7 @@ let
         "revisionCounterDisabled" = mkOverride 1002 null;
         "size" = mkOverride 1002 null;
         "snapshotDataIntegrity" = mkOverride 1002 null;
+        "snapshotHashingRequestedAt" = mkOverride 1002 null;
         "snapshotMaxCount" = mkOverride 1002 null;
         "snapshotMaxSize" = mkOverride 1002 null;
         "staleReplicaTimeout" = mkOverride 1002 null;
@@ -3625,6 +3979,10 @@ let
         "conditions" = mkOption {
           description = "";
           type = (types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.VolumeStatusConditions")));
+        };
+        "currentEngineNodeID" = mkOption {
+          description = "the node that the engine (target) is currently running on.";
+          type = (types.nullOr types.str);
         };
         "currentImage" = mkOption {
           description = "";
@@ -3654,6 +4012,10 @@ let
           description = "";
           type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.VolumeStatusKubernetesStatus"));
         };
+        "lastAutoSalvagedAt" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
         "lastBackup" = mkOption {
           description = "";
           type = (types.nullOr types.str);
@@ -3664,6 +4026,10 @@ let
         };
         "lastDegradedAt" = mkOption {
           description = "";
+          type = (types.nullOr types.str);
+        };
+        "lastOnDemandSnapshotHashingCompleteAt" = mkOption {
+          description = "LastOnDemandSnapshotHashingCompleteAt is the RFC3339 timestamp (e.g., \"2026-03-16T10:30:00Z\") when the\nmost recent on-demand snapshot checksum calculation completed.\nWhen this value matches SnapshotHashingRequestedAt, the requested on-demand checksum calculation is considered complete.";
           type = (types.nullOr types.str);
         };
         "ownerID" = mkOption {
@@ -3698,12 +4064,17 @@ let
           description = "";
           type = (types.nullOr types.str);
         };
+        "switchoverState" = mkOption {
+          description = "SwitchoverState describes the current progress of a v2 engine live switchover.\nEmpty when no switchover is in progress.";
+          type = (types.nullOr types.str);
+        };
       };
 
       config = {
         "actualSize" = mkOverride 1002 null;
         "cloneStatus" = mkOverride 1002 null;
         "conditions" = mkOverride 1002 null;
+        "currentEngineNodeID" = mkOverride 1002 null;
         "currentImage" = mkOverride 1002 null;
         "currentMigrationNodeID" = mkOverride 1002 null;
         "currentNodeID" = mkOverride 1002 null;
@@ -3711,9 +4082,11 @@ let
         "frontendDisabled" = mkOverride 1002 null;
         "isStandby" = mkOverride 1002 null;
         "kubernetesStatus" = mkOverride 1002 null;
+        "lastAutoSalvagedAt" = mkOverride 1002 null;
         "lastBackup" = mkOverride 1002 null;
         "lastBackupAt" = mkOverride 1002 null;
         "lastDegradedAt" = mkOverride 1002 null;
+        "lastOnDemandSnapshotHashingCompleteAt" = mkOverride 1002 null;
         "ownerID" = mkOverride 1002 null;
         "remountRequestedAt" = mkOverride 1002 null;
         "restoreInitiated" = mkOverride 1002 null;
@@ -3722,6 +4095,7 @@ let
         "shareEndpoint" = mkOverride 1002 null;
         "shareState" = mkOverride 1002 null;
         "state" = mkOverride 1002 null;
+        "switchoverState" = mkOverride 1002 null;
       };
 
     };
@@ -3969,6 +4343,17 @@ in
         );
         default = { };
       };
+      "longhorn.io"."v1beta2"."EngineFrontend" = mkOption {
+        description = "EngineFrontend is where Longhorn stores engine frontend object for v2 data engine initiator.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.EngineFrontend" "enginefrontends" "EngineFrontend"
+              "longhorn.io"
+              "v1beta2"
+          )
+        );
+        default = { };
+      };
       "longhorn.io"."v1beta2"."EngineImage" = mkOption {
         description = "EngineImage is where Longhorn stores engine image object.";
         type = (
@@ -4200,6 +4585,17 @@ in
         );
         default = { };
       };
+      "longhornEngineFrontends" = mkOption {
+        description = "EngineFrontend is where Longhorn stores engine frontend object for v2 data engine initiator.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.EngineFrontend" "enginefrontends" "EngineFrontend"
+              "longhorn.io"
+              "v1beta2"
+          )
+        );
+        default = { };
+      };
       "longhornEngineImages" = mkOption {
         description = "EngineImage is where Longhorn stores engine image object.";
         type = (
@@ -4408,6 +4804,13 @@ in
         attrName = "longhornEngines";
       }
       {
+        name = "enginefrontends";
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "EngineFrontend";
+        attrName = "longhornEngineFrontends";
+      }
+      {
         name = "engineimages";
         group = "longhorn.io";
         version = "v1beta2";
@@ -4528,6 +4931,9 @@ in
         mkAliasDefinitions
           options.resources."longhornBackupVolumes";
       "longhorn.io"."v1beta2"."Engine" = mkAliasDefinitions options.resources."longhornEngines";
+      "longhorn.io"."v1beta2"."EngineFrontend" =
+        mkAliasDefinitions
+          options.resources."longhornEngineFrontends";
       "longhorn.io"."v1beta2"."EngineImage" = mkAliasDefinitions options.resources."longhornEngineImages";
       "longhorn.io"."v1beta2"."InstanceManager" =
         mkAliasDefinitions
@@ -4608,6 +5014,12 @@ in
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Engine";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "EngineFrontend";
         default.metadata.namespace = lib.mkDefault config.namespace;
       }
       {

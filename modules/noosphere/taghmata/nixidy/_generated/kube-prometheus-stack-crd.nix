@@ -106,8 +106,7 @@ let
   submoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = definitions."${ref}".options or { };
         config = definitions."${ref}".config or { };
       }
@@ -116,8 +115,7 @@ let
   globalSubmoduleOf =
     ref:
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         options = config.definitions."${ref}".options or { };
         config = config.definitions."${ref}".config or { };
       }
@@ -155,8 +153,7 @@ let
       apiVersion = if group == "core" then version else "${group}/${version}";
     in
     types.submodule (
-      { name, ... }:
-      {
+      { name, ... }: {
         inherit (definitions."${ref}") options;
 
         imports = getDefaults resource group version kind;
@@ -5174,7 +5171,7 @@ let
           type = (types.nullOr types.bool);
         };
         "procMount" = mkOption {
-          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "readOnlyRootFilesystem" = mkOption {
@@ -6966,7 +6963,7 @@ let
           type = (types.nullOr types.bool);
         };
         "procMount" = mkOption {
-          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "readOnlyRootFilesystem" = mkOption {
@@ -8611,7 +8608,7 @@ let
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecVolumesHostPath"));
         };
         "image" = mkOption {
-          description = "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro) and non-executable files (noexec).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.";
+          description = "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecVolumesImage"));
         };
         "iscsi" = mkOption {
@@ -8639,7 +8636,7 @@ let
           );
         };
         "portworxVolume" = mkOption {
-          description = "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate\nis on.";
+          description = "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecVolumesPortworxVolume")
           );
@@ -11005,7 +11002,7 @@ let
 
       options = {
         "node" = mkOption {
-          description = "node when set to true, Prometheus attaches node metadata to the discovered\ntargets.\n\nThe Prometheus service account must have the `list` and `watch`\npermissions on the `Nodes` objects.";
+          description = "node when set to true, Prometheus attaches node metadata to the discovered\ntargets.\n\nThe Prometheus service account must have the `list` and `watch`\npermissions on the `Nodes` objects.\n\nNode metadata labels are not automatically added to scraped metrics. They are\nexposed as `__meta_kubernetes_node_*` labels and can be copied to timeseries\nwith relabeling configuration.";
           type = (types.nullOr types.bool);
         };
       };
@@ -14231,7 +14228,7 @@ let
           type = (types.nullOr types.str);
         };
         "shardRetentionPolicy" = mkOption {
-          description = "shardRetentionPolicy defines the retention policy for the Prometheus shards.\n(Alpha) Using this field requires the 'PrometheusShardRetentionPolicy' feature gate to be enabled.\n\nThe final goals for this feature can be seen at https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/proposals/202310-shard-autoscaling.md#graceful-scale-down-of-prometheus-servers,\nhowever, the feature is not yet fully implemented in this PR. The limitation being:\n* Retention duration is not settable, for now, shards are retained forever.";
+          description = "shardRetentionPolicy defines the retention policy for the Prometheus shards.\n\n(Beta) Using this mode requires the `PrometheusShardRetentionPolicy` feature gate (enabled by default).";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecShardRetentionPolicy"));
         };
         "shardingStrategy" = mkOption {
@@ -17839,7 +17836,7 @@ let
           type = (types.nullOr types.bool);
         };
         "procMount" = mkOption {
-          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "readOnlyRootFilesystem" = mkOption {
@@ -19656,7 +19653,7 @@ let
           type = (types.nullOr types.bool);
         };
         "procMount" = mkOption {
-          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "readOnlyRootFilesystem" = mkOption {
@@ -20081,6 +20078,14 @@ let
           description = "keepIdentifyingResourceAttributes enables adding `service.name`, `service.namespace` and `service.instance.id`\nresource attributes to the `target_info` metric, on top of converting them into the `instance` and `job` labels.\n\nIt requires Prometheus >= v3.1.0.";
           type = (types.nullOr types.bool);
         };
+        "labelNamePreserveMultipleUnderscores" = mkOption {
+          description = "labelNamePreserveMultipleUnderscores enables preserving of multiple consecutive underscores in label names when translation_strategy uses\nunderscore escaping.\nWhen true (default), multiple consecutive underscores are preserved during label name sanitization.\n\nNotice: This one has no impact if `nameEscapingScheme` is `AllowUTF8`.\n\nIt requires Prometheus >= v3.8.0.";
+          type = (types.nullOr types.bool);
+        };
+        "labelNameUnderscoreSanitization" = mkOption {
+          description = "labelNameUnderscoreSanitization controls whether to enable prepending of 'key_' to labels starting with '_'.\nReserved labels starting with '__' are not modified.\nThis is only relevant when translation_strategy uses underscore escaping (e.g., \"UnderscoreEscapingWithSuffixes\" or \"UnderscoreEscapingWithoutSuffixes\").\n\nNotice: This one has no impact if `nameEscapingScheme` is `AllowUTF8`.\n\nIt requires Prometheus >= v3.8.0.";
+          type = (types.nullOr types.bool);
+        };
         "promoteAllResourceAttributes" = mkOption {
           description = "promoteAllResourceAttributes promotes all resource attributes to metric labels except the ones defined in `ignoreResourceAttributes`.\n\nCannot be true when `promoteResourceAttributes` is defined.\nIt requires Prometheus >= v3.5.0.";
           type = (types.nullOr types.bool);
@@ -20103,6 +20108,8 @@ let
         "convertHistogramsToNHCB" = mkOverride 1002 null;
         "ignoreResourceAttributes" = mkOverride 1002 null;
         "keepIdentifyingResourceAttributes" = mkOverride 1002 null;
+        "labelNamePreserveMultipleUnderscores" = mkOverride 1002 null;
+        "labelNameUnderscoreSanitization" = mkOverride 1002 null;
         "promoteAllResourceAttributes" = mkOverride 1002 null;
         "promoteResourceAttributes" = mkOverride 1002 null;
         "promoteScopeMetadata" = mkOverride 1002 null;
@@ -20458,7 +20465,7 @@ let
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecRemoteReadTlsConfig"));
         };
         "url" = mkOption {
-          description = "url defines the URL of the endpoint to query from.";
+          description = "url defines the URL of the endpoint to query from.\n\nIt must use the HTTP or HTTPS scheme.";
           type = types.str;
         };
       };
@@ -22675,7 +22682,7 @@ let
 
       options = {
         "node" = mkOption {
-          description = "node when set to true, Prometheus attaches node metadata to the discovered\ntargets.\n\nThe Prometheus service account must have the `list` and `watch`\npermissions on the `Nodes` objects.";
+          description = "node when set to true, Prometheus attaches node metadata to the discovered\ntargets.\n\nThe Prometheus service account must have the `list` and `watch`\npermissions on the `Nodes` objects.\n\nNode metadata labels are not automatically added to scraped metrics. They are\nexposed as `__meta_kubernetes_node_*` labels and can be copied to timeseries\nwith relabeling configuration.";
           type = (types.nullOr types.bool);
         };
       };
@@ -25117,10 +25124,15 @@ let
           description = "outOfOrderTimeWindow defines how old an out-of-order/out-of-bounds sample can be with\nrespect to the TSDB max time.\n\nAn out-of-order/out-of-bounds sample is ingested into the TSDB as long as\nthe timestamp of the sample is >= (TSDB.MaxTime - outOfOrderTimeWindow).\n\nThis is an *experimental feature*, it may change in any upcoming release\nin a breaking way.\n\nIt requires Prometheus >= v2.39.0 or PrometheusAgent >= v2.54.0.";
           type = (types.nullOr types.str);
         };
+        "staleSeriesCompactionThreshold" = mkOption {
+          description = "staleSeriesCompactionThreshold configures the trigger point for compacting\nstale series from memory into persistent blocks and removing those stale\nseries from memory.\n\nThe threshold is a number between 0.0 and 1.0. It represents the ratio of\nstale series in memory to the total series in memory. The stale series\ncompaction is triggered when this ratio crosses the configured threshold.\nIt may not trigger the stale series compaction if the usual head compaction\nis about to happen soon.\n\nIf set to 0, stale series compaction is disabled.\n\nIt requires Prometheus >= v3.10.0.";
+          type = (types.nullOr (types.either types.int types.str));
+        };
       };
 
       config = {
         "outOfOrderTimeWindow" = mkOverride 1002 null;
+        "staleSeriesCompactionThreshold" = mkOverride 1002 null;
       };
 
     };
@@ -25276,7 +25288,7 @@ let
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecVolumesHostPath"));
         };
         "image" = mkOption {
-          description = "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro) and non-executable files (noexec).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.";
+          description = "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecVolumesImage"));
         };
         "iscsi" = mkOption {
@@ -25304,7 +25316,7 @@ let
           );
         };
         "portworxVolume" = mkOption {
-          description = "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate\nis on.";
+          description = "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecVolumesPortworxVolume"));
         };
         "projected" = mkOption {
@@ -27695,7 +27707,7 @@ let
 
       options = {
         "node" = mkOption {
-          description = "node when set to true, Prometheus attaches node metadata to the discovered\ntargets.\n\nThe Prometheus service account must have the `list` and `watch`\npermissions on the `Nodes` objects.";
+          description = "node when set to true, Prometheus attaches node metadata to the discovered\ntargets.\n\nThe Prometheus service account must have the `list` and `watch`\npermissions on the `Nodes` objects.\n\nNode metadata labels are not automatically added to scraped metrics. They are\nexposed as `__meta_kubernetes_node_*` labels and can be copied to timeseries\nwith relabeling configuration.";
           type = (types.nullOr types.bool);
         };
       };
@@ -27777,7 +27789,7 @@ let
           type = (types.nullOr types.str);
         };
         "port" = mkOption {
-          description = "port defines the name of the Service port which this endpoint refers to.\n\nIt takes precedence over `targetPort`.";
+          description = "port defines the name of the Service port which this endpoint refers to\n(e.g. `.spec.ports[].name`).\n\nIt takes precedence over `targetPort`.";
           type = (types.nullOr types.str);
         };
         "proxyConnectHeader" = mkOption {
@@ -27809,7 +27821,7 @@ let
           type = (types.nullOr types.str);
         };
         "targetPort" = mkOption {
-          description = "targetPort defines the name or number of the target port of the `Pod` object behind the\nService. The port must be specified with the container's port property.";
+          description = "targetPort defines the name or number of a container port on Pods selected\nby the Service.\nIf a name, it matches against `.spec.containers[].ports[].name` of the Pods.\nIf a number, it matches against `.spec.containers[].ports[].containerPort` of the Pods.";
           type = (types.nullOr (types.either types.int types.str));
         };
         "tlsConfig" = mkOption {
@@ -31541,7 +31553,7 @@ let
           type = (types.nullOr types.bool);
         };
         "procMount" = mkOption {
-          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "readOnlyRootFilesystem" = mkOption {
@@ -33589,7 +33601,7 @@ let
           type = (types.nullOr types.bool);
         };
         "procMount" = mkOption {
-          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "readOnlyRootFilesystem" = mkOption {
@@ -36592,7 +36604,7 @@ let
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecVolumesHostPath"));
         };
         "image" = mkOption {
-          description = "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro) and non-executable files (noexec).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.";
+          description = "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecVolumesImage"));
         };
         "iscsi" = mkOption {
@@ -36620,7 +36632,7 @@ let
           );
         };
         "portworxVolume" = mkOption {
-          description = "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate\nis on.";
+          description = "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver.";
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecVolumesPortworxVolume"));
         };
         "projected" = mkOption {
@@ -51741,6 +51753,10 @@ let
           description = "maxAlerts defines the maximum number of alerts to be sent per webhook message.\nWhen 0, all alerts are included in the webhook payload.";
           type = (types.nullOr types.int);
         };
+        "payload" = mkOption {
+          description = "payload define custom payload to be sent to the webhook endpoint.\nThis is an advanced configuration option that allows you\nto define a custom payload using Go templates.\nIt requires Alertmanager >= v0.32.0.";
+          type = (types.nullOr types.str);
+        };
         "sendResolved" = mkOption {
           description = "sendResolved defines whether or not to notify about resolved alerts.";
           type = (types.nullOr types.bool);
@@ -51766,6 +51782,7 @@ let
       config = {
         "httpConfig" = mkOverride 1002 null;
         "maxAlerts" = mkOverride 1002 null;
+        "payload" = mkOverride 1002 null;
         "sendResolved" = mkOverride 1002 null;
         "timeout" = mkOverride 1002 null;
         "url" = mkOverride 1002 null;
@@ -57252,7 +57269,7 @@ let
           type = (types.nullOr types.bool);
         };
         "procMount" = mkOption {
-          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "readOnlyRootFilesystem" = mkOption {
@@ -59104,7 +59121,7 @@ let
           type = (types.nullOr types.bool);
         };
         "procMount" = mkOption {
-          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nThis requires the ProcMountType feature flag to be enabled.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "procMount denotes the type of proc mount to use for the containers.\nThe default value is Default which uses the container runtime defaults for\nreadonly paths and masked paths.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "readOnlyRootFilesystem" = mkOption {
@@ -59533,6 +59550,14 @@ let
           description = "keepIdentifyingResourceAttributes enables adding `service.name`, `service.namespace` and `service.instance.id`\nresource attributes to the `target_info` metric, on top of converting them into the `instance` and `job` labels.\n\nIt requires Prometheus >= v3.1.0.";
           type = (types.nullOr types.bool);
         };
+        "labelNamePreserveMultipleUnderscores" = mkOption {
+          description = "labelNamePreserveMultipleUnderscores enables preserving of multiple consecutive underscores in label names when translation_strategy uses\nunderscore escaping.\nWhen true (default), multiple consecutive underscores are preserved during label name sanitization.\n\nNotice: This one has no impact if `nameEscapingScheme` is `AllowUTF8`.\n\nIt requires Prometheus >= v3.8.0.";
+          type = (types.nullOr types.bool);
+        };
+        "labelNameUnderscoreSanitization" = mkOption {
+          description = "labelNameUnderscoreSanitization controls whether to enable prepending of 'key_' to labels starting with '_'.\nReserved labels starting with '__' are not modified.\nThis is only relevant when translation_strategy uses underscore escaping (e.g., \"UnderscoreEscapingWithSuffixes\" or \"UnderscoreEscapingWithoutSuffixes\").\n\nNotice: This one has no impact if `nameEscapingScheme` is `AllowUTF8`.\n\nIt requires Prometheus >= v3.8.0.";
+          type = (types.nullOr types.bool);
+        };
         "promoteAllResourceAttributes" = mkOption {
           description = "promoteAllResourceAttributes promotes all resource attributes to metric labels except the ones defined in `ignoreResourceAttributes`.\n\nCannot be true when `promoteResourceAttributes` is defined.\nIt requires Prometheus >= v3.5.0.";
           type = (types.nullOr types.bool);
@@ -59555,6 +59580,8 @@ let
         "convertHistogramsToNHCB" = mkOverride 1002 null;
         "ignoreResourceAttributes" = mkOverride 1002 null;
         "keepIdentifyingResourceAttributes" = mkOverride 1002 null;
+        "labelNamePreserveMultipleUnderscores" = mkOverride 1002 null;
+        "labelNameUnderscoreSanitization" = mkOverride 1002 null;
         "promoteAllResourceAttributes" = mkOverride 1002 null;
         "promoteResourceAttributes" = mkOverride 1002 null;
         "promoteScopeMetadata" = mkOverride 1002 null;
@@ -61208,7 +61235,7 @@ let
 
       options = {
         "node" = mkOption {
-          description = "node when set to true, Prometheus attaches node metadata to the discovered\ntargets.\n\nThe Prometheus service account must have the `list` and `watch`\npermissions on the `Nodes` objects.";
+          description = "node when set to true, Prometheus attaches node metadata to the discovered\ntargets.\n\nThe Prometheus service account must have the `list` and `watch`\npermissions on the `Nodes` objects.\n\nNode metadata labels are not automatically added to scraped metrics. They are\nexposed as `__meta_kubernetes_node_*` labels and can be copied to timeseries\nwith relabeling configuration.";
           type = (types.nullOr types.bool);
         };
       };
@@ -63128,10 +63155,15 @@ let
           description = "outOfOrderTimeWindow defines how old an out-of-order/out-of-bounds sample can be with\nrespect to the TSDB max time.\n\nAn out-of-order/out-of-bounds sample is ingested into the TSDB as long as\nthe timestamp of the sample is >= (TSDB.MaxTime - outOfOrderTimeWindow).\n\nThis is an *experimental feature*, it may change in any upcoming release\nin a breaking way.\n\nIt requires Prometheus >= v2.39.0 or PrometheusAgent >= v2.54.0.";
           type = (types.nullOr types.str);
         };
+        "staleSeriesCompactionThreshold" = mkOption {
+          description = "staleSeriesCompactionThreshold configures the trigger point for compacting\nstale series from memory into persistent blocks and removing those stale\nseries from memory.\n\nThe threshold is a number between 0.0 and 1.0. It represents the ratio of\nstale series in memory to the total series in memory. The stale series\ncompaction is triggered when this ratio crosses the configured threshold.\nIt may not trigger the stale series compaction if the usual head compaction\nis about to happen soon.\n\nIf set to 0, stale series compaction is disabled.\n\nIt requires Prometheus >= v3.10.0.";
+          type = (types.nullOr (types.either types.int types.str));
+        };
       };
 
       config = {
         "outOfOrderTimeWindow" = mkOverride 1002 null;
+        "staleSeriesCompactionThreshold" = mkOverride 1002 null;
       };
 
     };
@@ -63319,7 +63351,7 @@ let
           );
         };
         "image" = mkOption {
-          description = "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro) and non-executable files (noexec).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.";
+          description = "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.\nThe volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails.\n- Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present.\n- IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation.\nA failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message.\nThe types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field.\nThe OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images.\nThe volume will be mounted read-only (ro).\nSub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33.\nThe field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecVolumesImage")
           );
@@ -63355,7 +63387,7 @@ let
           );
         };
         "portworxVolume" = mkOption {
-          description = "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate\nis on.";
+          description = "portworxVolume represents a portworx volume attached and mounted on kubelets host machine.\nDeprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type\nare redirected to the pxd.portworx.com CSI driver.";
           type = (
             types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecVolumesPortworxVolume")
           );

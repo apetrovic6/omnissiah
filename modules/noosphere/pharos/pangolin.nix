@@ -5,7 +5,7 @@ in {
       mkdir -p $out
       tar xzf ${pkgs.fetchurl {
         url = "https://github.com/GitSquared/node-geolite2-redist/raw/refs/heads/master/redist/GeoLite2-Country.tar.gz";
-        hash = "sha256-6cr5+/hJKZmbUkhkTtvRxuYsFdL9JgDZm86y0IzucEA=";
+        hash = "sha256-ZLx3puX88D3YtNEe/uYlfLXx06a1yPiPKfCukw4ESHg=";
       }} --strip-components=1
       cp GeoLite2-Country.mmdb $out/
     '';
@@ -47,6 +47,13 @@ in {
     systemd.services.pangolin = lib.mkIf (config.services.pangolin.enable or false) {
       wants = ["postgresql-password-init.service"];
       after = ["postgresql-password-init.service"];
+
+      # The pangolin launcher refreshes the Next.js build with `rm -rf .next && cp -rd <store>/.next .`,
+      # but `cp -d` copies the store's read-only perms, so the pangolin user can never remove the old
+      # `.next` on the next upgrade. The stale build then crashes createNextServer (dashboard 502s).
+      # Wipe it as root before start so the launcher always lays down the current build. The `+` prefix
+      # runs this ExecStartPre with full privileges regardless of the service User=.
+      serviceConfig.ExecStartPre = ["+${pkgs.coreutils}/bin/rm -rf /var/lib/pangolin/.next"];
     };
 
     clan.core.vars.generators.cloudflare-dns = {
