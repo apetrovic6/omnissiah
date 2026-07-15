@@ -58,6 +58,7 @@
             # ".config/noctalia"
             ".config/sabnzbd-tui"
             ".config/Element"
+            ".config/heroic"
             ".config/remmina"
             ".config/rog"
             ".config/Signal"
