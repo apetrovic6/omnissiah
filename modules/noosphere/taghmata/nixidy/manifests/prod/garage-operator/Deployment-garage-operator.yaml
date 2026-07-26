@@ -5,9 +5,9 @@ metadata:
     app.kubernetes.io/instance: garage-operator
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-operator
-    app.kubernetes.io/version: 0.6.23
+    app.kubernetes.io/version: 0.6.28
     control-plane: controller-manager
-    helm.sh/chart: garage-operator-0.6.23
+    helm.sh/chart: garage-operator-0.6.28
   name: garage-operator
   namespace: garage-operator
 spec:
@@ -40,7 +40,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          image: ghcr.io/rajsinghtech/garage-operator:v0.6.23
+          image: ghcr.io/rajsinghtech/garage-operator:v0.6.28
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
