@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: garage-main-ui
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-ui
-    app.kubernetes.io/version: v0.8.5
-    helm.sh/chart: garage-ui-0.8.5
+    app.kubernetes.io/version: v0.10.0
+    helm.sh/chart: garage-ui-0.10.0
   name: garage-main-ui
   namespace: garage-operator
 spec:
@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a28f3bc7f4115555721ce754fd364665cde62abe55709f9e927e8970196bc12b
+        checksum/config: bbcbe0180c00122091fa0c074cc0c939da09d0cf01b6e8bf4e2d6dfd8a7a5b11
       labels:
         app.kubernetes.io/instance: garage-main-ui
         app.kubernetes.io/name: garage-ui
@@ -45,7 +45,7 @@ spec:
                 secretKeyRef:
                   key: client-secret
                   name: garage-main-ui-oidc-secret
-          image: noooste/garage-ui:v0.8.5
+          image: noooste/garage-ui:v0.10.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3

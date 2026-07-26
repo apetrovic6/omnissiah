@@ -8,6 +8,7 @@ data:
           key: admin-password
           name: ""
         username: admin
+      metrics_public: false
       oidc:
         admin_role: Admin
         admin_roles: []
@@ -34,6 +35,7 @@ data:
         session_max_age: 86400
         skip_expiry_check: false
         skip_issuer_check: false
+        team_attribute_path: ""
         tls_skip_verify: false
         token_url: https://id.noosphere.uk/api/oidc/token
         userinfo_url: https://id.noosphere.uk/api/oidc/userinfo
@@ -91,7 +93,7 @@ metadata:
     app.kubernetes.io/instance: garage-main-ui
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-ui
-    app.kubernetes.io/version: v0.8.5
-    helm.sh/chart: garage-ui-0.8.5
+    app.kubernetes.io/version: v0.10.0
+    helm.sh/chart: garage-ui-0.10.0
   name: garage-main-ui-config
   namespace: garage-operator
