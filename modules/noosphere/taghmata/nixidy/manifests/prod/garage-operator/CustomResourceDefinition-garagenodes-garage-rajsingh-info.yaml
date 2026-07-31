@@ -8,9 +8,9 @@ metadata:
     app.kubernetes.io/instance: garage-operator
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-operator
-    app.kubernetes.io/version: 0.6.28
+    app.kubernetes.io/version: 0.6.29
     control-plane: controller-manager
-    helm.sh/chart: garage-operator-0.6.28
+    helm.sh/chart: garage-operator-0.6.29
   name: garagenodes.garage.rajsingh.info
 spec:
   group: garage.rajsingh.info
@@ -1975,9 +1975,19 @@ spec:
                           items:
                             type: string
                           type: array
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: Annotations to set on dynamically provisioned PVCs.
+                          type: object
                         existingClaim:
                           description: ExistingClaim references a pre-existing PVC by name in the cluster namespace.
                           type: string
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels to set on dynamically provisioned PVCs.
+                          type: object
                         path:
                           description: |-
                             Path is the in-container mount path for this volume. Only honored on
@@ -2049,9 +2059,19 @@ spec:
                             items:
                               type: string
                             type: array
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations to set on dynamically provisioned PVCs.
+                            type: object
                           existingClaim:
                             description: ExistingClaim references a pre-existing PVC by name in the cluster namespace.
                             type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Labels to set on dynamically provisioned PVCs.
+                            type: object
                           path:
                             description: |-
                               Path is the in-container mount path for this volume. Only honored on
@@ -2104,9 +2124,19 @@ spec:
                           items:
                             type: string
                           type: array
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: Annotations to set on dynamically provisioned PVCs.
+                          type: object
                         existingClaim:
                           description: ExistingClaim references a pre-existing PVC by name in the cluster namespace.
                           type: string
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels to set on dynamically provisioned PVCs.
+                          type: object
                         path:
                           description: |-
                             Path is the in-container mount path for this volume. Only honored on

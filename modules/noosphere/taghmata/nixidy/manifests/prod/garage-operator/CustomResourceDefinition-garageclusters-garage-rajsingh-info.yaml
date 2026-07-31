@@ -9,9 +9,9 @@ metadata:
     app.kubernetes.io/instance: garage-operator
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-operator
-    app.kubernetes.io/version: 0.6.28
+    app.kubernetes.io/version: 0.6.29
     control-plane: controller-manager
-    helm.sh/chart: garage-operator-0.6.28
+    helm.sh/chart: garage-operator-0.6.29
   name: garageclusters.garage.rajsingh.info
 spec:
   conversion:
@@ -1774,6 +1774,7 @@ spec:
 
                               Only applicable when the action is `HashMod`.
                             format: int64
+                            minimum: 0
                             type: integer
                           regex:
                             description: regex defines the regular expression against which the extracted value is matched.
@@ -8046,6 +8047,7 @@ spec:
 
                               Only applicable when the action is `HashMod`.
                             format: int64
+                            minimum: 0
                             type: integer
                           regex:
                             description: regex defines the regular expression against which the extracted value is matched.

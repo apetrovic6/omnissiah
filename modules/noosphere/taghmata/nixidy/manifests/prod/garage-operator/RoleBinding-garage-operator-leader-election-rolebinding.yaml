@@ -5,9 +5,9 @@ metadata:
     app.kubernetes.io/instance: garage-operator
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-operator
-    app.kubernetes.io/version: 0.6.28
+    app.kubernetes.io/version: 0.6.29
     control-plane: controller-manager
-    helm.sh/chart: garage-operator-0.6.28
+    helm.sh/chart: garage-operator-0.6.29
   name: garage-operator-leader-election-rolebinding
   namespace: garage-operator
 roleRef:
