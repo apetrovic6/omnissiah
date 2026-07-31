@@ -1,0 +1,23 @@
+apiVersion: garage.rajsingh.info/v1beta1
+kind: GarageKey
+metadata:
+  name: woodpecker
+  namespace: garage-operator
+spec:
+  bucketPermissions:
+    - bucketRef:
+        name: woodpecker
+      owner: true
+      read: true
+      write: true
+  clusterRef:
+    name: garage-backup
+  secretTemplate:
+    accessKeyIdKey: MINIO_ACCESS_KEY_ID
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: woodpecker
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: woodpecker
+    name: woodpecker-s3-secret-key
+    secretAccessKeyKey: MINIO_SECRET_ACCESS_KEY

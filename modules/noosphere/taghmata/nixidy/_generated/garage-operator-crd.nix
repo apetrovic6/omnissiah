@@ -2407,6 +2407,10 @@ let
           description = "Zone is the zone assignment for this node.\nUsed for data placement and fault tolerance.";
           type = types.str;
         };
+        "zoneFrom" = mkOption {
+          description = "ZoneFrom derives the layout zone from a label on the Kubernetes Node this\nnode's pod is scheduled to, instead of using the static Zone above. Zone\nstays required and is the fallback: it applies before the pod is\nscheduled, when the label is absent, and when the operator cannot read\nNodes (namespace-scoped installs grant no cluster-scoped RBAC).\n\nThe resolved value is reported as status.zone.\n\nNot valid on external nodes — there is no pod, so there is no Kubernetes\nNode to read a label from.";
+          type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageNodeSpecZoneFrom"));
+        };
       };
 
       config = {
@@ -2437,6 +2441,7 @@ let
         "tags" = mkOverride 1002 null;
         "tolerations" = mkOverride 1002 null;
         "topologySpreadConstraints" = mkOverride 1002 null;
+        "zoneFrom" = mkOverride 1002 null;
       };
 
     };
@@ -4712,6 +4717,18 @@ let
         };
 
       };
+    "garage.rajsingh.info.v1beta1.GarageNodeSpecZoneFrom" = {
+
+      options = {
+        "nodeLabel" = mkOption {
+          description = "NodeLabel is the label key on the Kubernetes Node whose value becomes the\nGarage layout zone.";
+          type = types.str;
+        };
+      };
+
+      config = { };
+
+    };
     "garage.rajsingh.info.v1beta1.GarageNodeStatus" = {
 
       options = {
@@ -4829,6 +4846,10 @@ let
           description = "Version is the Garage version on this node";
           type = (types.nullOr types.str);
         };
+        "zone" = mkOption {
+          description = "Zone is the layout zone actually assigned to this node. Equal to\nspec.zone unless spec.zoneFrom resolved a different value from the\nKubernetes Node the pod is scheduled to.";
+          type = (types.nullOr types.str);
+        };
       };
 
       config = {
@@ -4859,6 +4880,7 @@ let
         "storedData" = mkOverride 1002 null;
         "tags" = mkOverride 1002 null;
         "version" = mkOverride 1002 null;
+        "zone" = mkOverride 1002 null;
       };
 
     };
@@ -5310,6 +5332,10 @@ let
           description = "Zone is the Garage layout zone assigned to all nodes in this cluster.\nEach cluster in a federation must have a unique zone name.";
           type = (types.nullOr types.str);
         };
+        "zoneFrom" = mkOption {
+          description = "ZoneFrom derives each storage node's layout zone from a label on the\nKubernetes Node its pod is scheduled to, instead of using the single\ncluster-wide Zone above. This lets one cluster express failure domains\ninternally (racks, power circuits, switches) so replication.zoneRedundancy\nhas something to act on without splitting into a federation.\n\nApplies to Auto-mode storage nodes only. Zone remains the fallback when\nthe label is missing, when the pod is not scheduled yet, or when the\noperator cannot read Nodes (namespace-scoped installs).";
+          type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecZoneFrom"));
+        };
       };
 
       config = {
@@ -5341,6 +5367,7 @@ let
         "webApi" = mkOverride 1002 null;
         "workers" = mkOverride 1002 null;
         "zone" = mkOverride 1002 null;
+        "zoneFrom" = mkOverride 1002 null;
       };
 
     };
@@ -12576,6 +12603,18 @@ let
         "resyncWorkerCount" = mkOverride 1002 null;
         "scrubTranquility" = mkOverride 1002 null;
       };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecZoneFrom" = {
+
+      options = {
+        "nodeLabel" = mkOption {
+          description = "NodeLabel is the label key on the Kubernetes Node whose value becomes the\nGarage layout zone.\n\nExamples: \"topology.kubernetes.io/zone\" for cloud AZs,\n\"kubernetes.io/hostname\" for per-node failure domains, or a custom label\nsuch as \"example.com/rack\" for physical racks or power circuits.";
+          type = types.str;
+        };
+      };
+
+      config = { };
 
     };
     "garage.rajsingh.info.v1beta2.GarageClusterStatus" = {

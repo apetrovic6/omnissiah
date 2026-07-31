@@ -1,0 +1,23 @@
+apiVersion: garage.rajsingh.info/v1beta1
+kind: GarageKey
+metadata:
+  name: harbor-backup
+  namespace: garage-operator
+spec:
+  bucketPermissions:
+    - bucketRef:
+        name: harbor-backup
+      owner: true
+      read: true
+      write: true
+  clusterRef:
+    name: garage-backup
+  secretTemplate:
+    accessKeyIdKey: MINIO_ACCESS_KEY_ID
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: harbor
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: harbor
+    name: harbor-backup-s3-secret-key
+    secretAccessKeyKey: MINIO_SECRET_ACCESS_KEY

@@ -108,6 +108,22 @@ in {
 
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
+      # Migrated off the failing NFS-backed `garage` cluster onto the
+      # operator-managed `garage-backup` cluster (its keycloak bucket/key are
+      # provisioned and the creds are reflected as keycloak-s3-secret-key).
+      awsDefaultRegion = "backup";
+      destinationPath = "s3://keycloak/backups";
+      endpointUrl = "http://garage-backup.garage-operator.svc.cluster.local:3900";
+      S3Credentials = {
+        accessKeyId = {
+          name = "keycloak-s3-secret-key";
+          key = "MINIO_ACCESS_KEY_ID";
+        };
+        secretAccessKey = {
+          name = "keycloak-s3-secret-key";
+          key = "MINIO_SECRET_ACCESS_KEY";
+        };
+      };
     };
 
     templates.cnpg-database-cluster.keycloak = {

@@ -227,5 +227,182 @@
         clusterRef.name = "garage-backup";
       };
     };
+
+    # Named `harbor-backup` for the same reason as `forgejo-backup`: garage-main
+    # already owns a `harbor` bucket/key pair (registry blobs) in this namespace.
+    resources.garageKeys.harbor-backup = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "harbor-backup";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
+        secretTemplate = {
+          name = "harbor-backup-s3-secret-key";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "harbor";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "harbor";
+          };
+        };
+      };
+    };
+
+    resources.garageBuckets.harbor-backup = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+      };
+    };
+
+    resources.garageKeys.keycloak = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "keycloak";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
+        secretTemplate = {
+          name = "keycloak-s3-secret-key";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "keycloak";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "keycloak";
+          };
+        };
+      };
+    };
+
+    resources.garageBuckets.keycloak = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+      };
+    };
+
+    resources.garageKeys.vikunja = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "vikunja";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
+        secretTemplate = {
+          name = "vikunja-s3-secret-key";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "vikunja";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "vikunja";
+          };
+        };
+      };
+    };
+
+    resources.garageBuckets.vikunja = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+      };
+    };
+
+    resources.garageKeys.woodpecker = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "woodpecker";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
+        secretTemplate = {
+          name = "woodpecker-s3-secret-key";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "woodpecker";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "woodpecker";
+          };
+        };
+      };
+    };
+
+    resources.garageBuckets.woodpecker = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+      };
+    };
+
+    resources.garageKeys.yarr = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "yarr";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
+        secretTemplate = {
+          name = "yarr-s3-secret-key";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "yarr";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "yarr";
+          };
+        };
+      };
+    };
+
+    resources.garageBuckets.yarr = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+      };
+    };
   };
 }

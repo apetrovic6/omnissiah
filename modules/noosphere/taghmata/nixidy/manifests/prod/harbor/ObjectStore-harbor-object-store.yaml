@@ -5,21 +5,21 @@ metadata:
   namespace: harbor
 spec:
   configuration:
-    destinationPath: s3://cnpg-backup-bucket/backups
-    endpointURL: http://garage.garage.svc.cluster.local:3900
+    destinationPath: s3://harbor-backup/backups
+    endpointURL: http://garage-backup.garage-operator.svc.cluster.local:3900
     s3Credentials:
       accessKeyId:
-        key: ACCESS_KEY_ID
-        name: barman-s3-secret-key
+        key: MINIO_ACCESS_KEY_ID
+        name: harbor-backup-s3-secret-key
       secretAccessKey:
-        key: ACCESS_SECRET_KEY
-        name: barman-s3-secret-key
+        key: MINIO_SECRET_ACCESS_KEY
+        name: harbor-backup-s3-secret-key
     wal:
       compression: gzip
   instanceSidecarConfiguration:
     env:
       - name: AWS_DEFAULT_REGION
-        value: garage
+        value: backup
       - name: AWS_REQUEST_CHECKSUM_CALCULATION
         value: when_required
       - name: AWS_RESPONSE_CHECKSUM_VALIDATION

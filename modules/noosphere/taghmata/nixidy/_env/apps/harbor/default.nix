@@ -284,7 +284,26 @@ in {
       };
     };
 
-    templates.garageObjectStore.${objectStoreName} = {inherit namespace;};
+    templates.garageObjectStore.${objectStoreName} = {
+      inherit namespace;
+      # Migrated off the failing NFS-backed `garage` cluster onto the
+      # operator-managed `garage-backup` cluster (its harbor-backup bucket/key
+      # are provisioned and the creds are reflected as
+      # harbor-backup-s3-secret-key).
+      awsDefaultRegion = "backup";
+      destinationPath = "s3://harbor-backup/backups";
+      endpointUrl = "http://garage-backup.garage-operator.svc.cluster.local:3900";
+      S3Credentials = {
+        accessKeyId = {
+          name = "harbor-backup-s3-secret-key";
+          key = "MINIO_ACCESS_KEY_ID";
+        };
+        secretAccessKey = {
+          name = "harbor-backup-s3-secret-key";
+          key = "MINIO_SECRET_ACCESS_KEY";
+        };
+      };
+    };
 
     templates.cnpg-database-cluster.harbor-rev1 = {
       inherit namespace;

@@ -19,6 +19,22 @@ in {
 
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
+      # Migrated off the failing NFS-backed `garage` cluster onto the
+      # operator-managed `garage-backup` cluster (its vikunja bucket/key are
+      # provisioned and the creds are reflected as vikunja-s3-secret-key).
+      awsDefaultRegion = "backup";
+      destinationPath = "s3://vikunja/backups";
+      endpointUrl = "http://garage-backup.garage-operator.svc.cluster.local:3900";
+      S3Credentials = {
+        accessKeyId = {
+          name = "vikunja-s3-secret-key";
+          key = "MINIO_ACCESS_KEY_ID";
+        };
+        secretAccessKey = {
+          name = "vikunja-s3-secret-key";
+          key = "MINIO_SECRET_ACCESS_KEY";
+        };
+      };
     };
 
     templates.cnpg-database-cluster.vikunja = {
