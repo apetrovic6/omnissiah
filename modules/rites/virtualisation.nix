@@ -45,8 +45,10 @@ in {
         domain = globalCfg.noosphere.domain;
       in {
         enable = true;
-        registries = {
-          search = [
+        # v2 registries.conf: the deprecated `registries.search` renders a v1
+        # file, which newer skopeo/podman reject ("must be in v2 format").
+        registries.settings = {
+          unqualified-search-registries = [
             "docker.io"
             "ghcr.io"
             "quay.io"
