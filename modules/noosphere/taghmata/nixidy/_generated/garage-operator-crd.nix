@@ -4425,9 +4425,17 @@ let
           description = "AccessModes for the dynamically provisioned PVC.\nDefaults to [ReadWriteOnce] if not specified.";
           type = (types.nullOr (types.listOf types.str));
         };
+        "annotations" = mkOption {
+          description = "Annotations to set on dynamically provisioned PVCs.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
         "existingClaim" = mkOption {
           description = "ExistingClaim references a pre-existing PVC by name in the cluster namespace.";
           type = (types.nullOr types.str);
+        };
+        "labels" = mkOption {
+          description = "Labels to set on dynamically provisioned PVCs.";
+          type = (types.nullOr (types.attrsOf types.str));
         };
         "path" = mkOption {
           description = "Path is the in-container mount path for this volume. Only honored on\nmulti-HDD `storage.dataPaths[]` entries — both the K8s volumeMount and\nthe rendered garage.toml `data_dir = [{ path = ... }]` use this value.\nDefaults to `/data/data-<i>` when unset. The legacy-STS migration\npropagates `cluster.spec.storage.data.paths[i].path` so that on first\nboot Garage's DataLayout sees the same paths it stored under\npre-migration, avoiding partition reassignment and unnecessary\ncross-peer block refetch (../garage src/block/layout.rs).";
@@ -4453,7 +4461,9 @@ let
 
       config = {
         "accessModes" = mkOverride 1002 null;
+        "annotations" = mkOverride 1002 null;
         "existingClaim" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "size" = mkOverride 1002 null;
@@ -4469,9 +4479,17 @@ let
           description = "AccessModes for the dynamically provisioned PVC.\nDefaults to [ReadWriteOnce] if not specified.";
           type = (types.nullOr (types.listOf types.str));
         };
+        "annotations" = mkOption {
+          description = "Annotations to set on dynamically provisioned PVCs.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
         "existingClaim" = mkOption {
           description = "ExistingClaim references a pre-existing PVC by name in the cluster namespace.";
           type = (types.nullOr types.str);
+        };
+        "labels" = mkOption {
+          description = "Labels to set on dynamically provisioned PVCs.";
+          type = (types.nullOr (types.attrsOf types.str));
         };
         "path" = mkOption {
           description = "Path is the in-container mount path for this volume. Only honored on\nmulti-HDD `storage.dataPaths[]` entries — both the K8s volumeMount and\nthe rendered garage.toml `data_dir = [{ path = ... }]` use this value.\nDefaults to `/data/data-<i>` when unset. The legacy-STS migration\npropagates `cluster.spec.storage.data.paths[i].path` so that on first\nboot Garage's DataLayout sees the same paths it stored under\npre-migration, avoiding partition reassignment and unnecessary\ncross-peer block refetch (../garage src/block/layout.rs).";
@@ -4497,7 +4515,9 @@ let
 
       config = {
         "accessModes" = mkOverride 1002 null;
+        "annotations" = mkOverride 1002 null;
         "existingClaim" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "size" = mkOverride 1002 null;
@@ -4513,9 +4533,17 @@ let
           description = "AccessModes for the dynamically provisioned PVC.\nDefaults to [ReadWriteOnce] if not specified.";
           type = (types.nullOr (types.listOf types.str));
         };
+        "annotations" = mkOption {
+          description = "Annotations to set on dynamically provisioned PVCs.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
         "existingClaim" = mkOption {
           description = "ExistingClaim references a pre-existing PVC by name in the cluster namespace.";
           type = (types.nullOr types.str);
+        };
+        "labels" = mkOption {
+          description = "Labels to set on dynamically provisioned PVCs.";
+          type = (types.nullOr (types.attrsOf types.str));
         };
         "path" = mkOption {
           description = "Path is the in-container mount path for this volume. Only honored on\nmulti-HDD `storage.dataPaths[]` entries — both the K8s volumeMount and\nthe rendered garage.toml `data_dir = [{ path = ... }]` use this value.\nDefaults to `/data/data-<i>` when unset. The legacy-STS migration\npropagates `cluster.spec.storage.data.paths[i].path` so that on first\nboot Garage's DataLayout sees the same paths it stored under\npre-migration, avoiding partition reassignment and unnecessary\ncross-peer block refetch (../garage src/block/layout.rs).";
@@ -4541,7 +4569,9 @@ let
 
       config = {
         "accessModes" = mkOverride 1002 null;
+        "annotations" = mkOverride 1002 null;
         "existingClaim" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "size" = mkOverride 1002 null;

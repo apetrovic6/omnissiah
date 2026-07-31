@@ -1051,6 +1051,10 @@ let
           description = "JWT configures JWT authentication.";
           type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APIAuthSpecJwt"));
         };
+        "keyless" = mkOption {
+          description = "Keyless configures keyless authentication.";
+          type = (types.nullOr types.attrs);
+        };
         "ldap" = mkOption {
           description = "LDAP configures LDAP authentication.";
           type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APIAuthSpecLdap"));
@@ -1060,6 +1064,7 @@ let
       config = {
         "apiKey" = mkOverride 1002 null;
         "jwt" = mkOverride 1002 null;
+        "keyless" = mkOverride 1002 null;
         "ldap" = mkOverride 1002 null;
       };
 
@@ -2304,6 +2309,14 @@ let
           description = "Lastname is the JWT claim for user last name.";
           type = (types.nullOr types.str);
         };
+        "organizationId" = mkOption {
+          description = "OrganizationID is the JWT claim for the ID of the organization the user belongs to.";
+          type = (types.nullOr types.str);
+        };
+        "organizationName" = mkOption {
+          description = "OrganizationName is the JWT claim for the name of the organization the user belongs to.";
+          type = (types.nullOr types.str);
+        };
         "userId" = mkOption {
           description = "UserID is the JWT claim for user ID mapping.";
           type = (types.nullOr types.str);
@@ -2315,6 +2328,8 @@ let
         "email" = mkOverride 1002 null;
         "firstname" = mkOverride 1002 null;
         "lastname" = mkOverride 1002 null;
+        "organizationId" = mkOverride 1002 null;
+        "organizationName" = mkOverride 1002 null;
         "userId" = mkOverride 1002 null;
       };
 
@@ -4446,6 +4461,14 @@ let
           description = "Claims specifies an expression that validate claims in order to authorize the request.";
           type = (types.nullOr types.str);
         };
+        "managedApplicationSelector" = mkOption {
+          description = "ManagedApplicationSelector selects the ManagedApplications that will gain access to the specified APIs.\nMultiple ManagedSubscriptions can select the same ManagedApplication.\nThis field is optional and follows standard label selector semantics.\nAn empty ManagedApplicationSelector matches any ManagedApplication.";
+          type = (
+            types.nullOr (
+              submoduleOf "hub.traefik.io.v1alpha1.ManagedSubscriptionSpecManagedApplicationSelector"
+            )
+          );
+        };
         "managedApplications" = mkOption {
           description = "ManagedApplications references the ManagedApplications that will gain access to the specified APIs.\nMultiple ManagedSubscriptions can select the same ManagedApplication.";
           type = (
@@ -4476,6 +4499,7 @@ let
         "apis" = mkOverride 1002 null;
         "applications" = mkOverride 1002 null;
         "claims" = mkOverride 1002 null;
+        "managedApplicationSelector" = mkOverride 1002 null;
         "managedApplications" = mkOverride 1002 null;
         "operationFilter" = mkOverride 1002 null;
         "weight" = mkOverride 1002 null;
@@ -4577,6 +4601,53 @@ let
       config = { };
 
     };
+    "hub.traefik.io.v1alpha1.ManagedSubscriptionSpecManagedApplicationSelector" = {
+
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "hub.traefik.io.v1alpha1.ManagedSubscriptionSpecManagedApplicationSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.ManagedSubscriptionSpecManagedApplicationSelectorMatchExpressions" = {
+
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+
+    };
     "hub.traefik.io.v1alpha1.ManagedSubscriptionSpecManagedApplications" = {
 
       options = {
@@ -4629,6 +4700,18 @@ let
           );
           apply = attrsToList;
         };
+        "resolvedManagedApplications" = mkOption {
+          description = "ResolvedManagedApplications is the list of ManagedApplications that were successfully resolved.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "hub.traefik.io.v1alpha1.ManagedSubscriptionStatusResolvedManagedApplications"
+                "name"
+                [ ]
+            )
+          );
+          apply = attrsToList;
+        };
         "syncedAt" = mkOption {
           description = "";
           type = (types.nullOr types.str);
@@ -4638,6 +4721,18 @@ let
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "hub.traefik.io.v1alpha1.ManagedSubscriptionStatusUnresolvedApis"
+                "name"
+                [ ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "unresolvedManagedApplications" = mkOption {
+          description = "UnresolvedManagedApplications is the list of ManagedApplications that could not be resolved.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "hub.traefik.io.v1alpha1.ManagedSubscriptionStatusUnresolvedManagedApplications"
                 "name"
                 [ ]
             )
@@ -4654,8 +4749,10 @@ let
         "conditions" = mkOverride 1002 null;
         "hash" = mkOverride 1002 null;
         "resolvedApis" = mkOverride 1002 null;
+        "resolvedManagedApplications" = mkOverride 1002 null;
         "syncedAt" = mkOverride 1002 null;
         "unresolvedApis" = mkOverride 1002 null;
+        "unresolvedManagedApplications" = mkOverride 1002 null;
         "version" = mkOverride 1002 null;
       };
 
@@ -4706,11 +4803,35 @@ let
       config = { };
 
     };
+    "hub.traefik.io.v1alpha1.ManagedSubscriptionStatusResolvedManagedApplications" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the ManagedApplication.";
+          type = types.str;
+        };
+      };
+
+      config = { };
+
+    };
     "hub.traefik.io.v1alpha1.ManagedSubscriptionStatusUnresolvedApis" = {
 
       options = {
         "name" = mkOption {
           description = "Name of the API.";
+          type = types.str;
+        };
+      };
+
+      config = { };
+
+    };
+    "hub.traefik.io.v1alpha1.ManagedSubscriptionStatusUnresolvedManagedApplications" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the ManagedApplication.";
           type = types.str;
         };
       };

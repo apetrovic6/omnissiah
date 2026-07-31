@@ -28,6 +28,23 @@ in {
 
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;
+      # Migrated off the failing NFS-backed `garage` cluster onto the
+      # operator-managed `garage-backup` cluster (its forgejo-backup bucket/key
+      # are provisioned and the creds are reflected as
+      # forgejo-backup-s3-secret-key).
+      awsDefaultRegion = "backup";
+      destinationPath = "s3://forgejo-backup/backups";
+      endpointUrl = "http://garage-backup.garage-operator.svc.cluster.local:3900";
+      S3Credentials = {
+        accessKeyId = {
+          name = "forgejo-backup-s3-secret-key";
+          key = "MINIO_ACCESS_KEY_ID";
+        };
+        secretAccessKey = {
+          name = "forgejo-backup-s3-secret-key";
+          key = "MINIO_SECRET_ACCESS_KEY";
+        };
+      };
     };
     helm.releases.${name} = {
       chart = charts.forgejo-helm.forgejo;

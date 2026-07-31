@@ -189,5 +189,43 @@
         # ];
       };
     };
+
+    # Named `forgejo-backup` rather than `forgejo`: the garage-main cluster
+    # already owns a `forgejo` bucket/key pair (Gitea attachments + LFS) in
+    # this same namespace, and its secret is `forgejo-s3-secret-key`.
+    resources.garageKeys.forgejo-backup = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "forgejo-backup";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
+        secretTemplate = {
+          name = "forgejo-backup-s3-secret-key";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "forgejo";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "forgejo";
+          };
+        };
+      };
+    };
+
+    resources.garageBuckets.forgejo-backup = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+      };
+    };
   };
 }
