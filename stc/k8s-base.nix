@@ -63,8 +63,8 @@
     boot.kernelModules = ["iscsi_tcp" "dm_crypt"];
 
     services.rpcbind.enable = true;
-    systemd.packages = [ pkgs.nfs-utils ];
-    systemd.services.rpc-statd.wantedBy = [ "multi-user.target" ];
+    systemd.packages = [pkgs.nfs-utils];
+    systemd.services.rpc-statd.wantedBy = ["multi-user.target"];
 
     services.openiscsi = {
       enable = true;
@@ -78,7 +78,6 @@
       [keyfile]
       unmanaged-devices=interface-name:enp2s0;interface-name:enp1s0
     '';
-
 
     boot.kernel.sysctl = {
       "net.ipv4.conf.all.rp_filter" = 0;

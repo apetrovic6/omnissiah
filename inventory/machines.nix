@@ -3,11 +3,13 @@
     phalanx = {
       tags = ["base" "workstation" "dev" "gaming"];
       deploy.targetHost = "root@192.168.1.71";
+      deploy.buildHost =  "localhost";
     };
 
     enginseer = {
       tags = ["base" "laptop" "workstation" "dev" "gaming"];
-      deploy.targetHost = "root@192.168.1.159";
+      deploy.targetHost = "root@192.168.1.157";
+      deploy.buildHost =  "localhost";
     };
 
     genetor = {
@@ -34,16 +36,19 @@
     terra = {
       tags = ["base" "k8s-base"];
       deploy.targetHost = "root@192.168.1.138";
+      deploy.buildHost =  "localhost";
     };
 
     luna = {
       tags = ["base" "k8s-base" "k8s-server"];
       deploy.targetHost = "root@192.168.1.232";
+      deploy.buildHost =  "localhost";
     };
 
     sol = {
       tags = ["base" "k8s-base" "k8s-server"];
       deploy.targetHost = "root@192.168.1.42";
+      deploy.buildHost =  "localhost";
     };
   };
 }

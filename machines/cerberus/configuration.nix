@@ -15,6 +15,8 @@ in {
     self.nixosModules.scriptorium
     self.nixosModules.librarium
     self.nixosModules.impermanence
+    ./nopresh.nix
+    ./forgejo-runner.nix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.nixosModules.noosphere
     # self.inputs.magos.nixosModules.default
@@ -26,6 +28,8 @@ in {
     intel-media-driver
     libva-vdpau-driver
   ];
+
+  networking.nameservers = ["192.168.1.105" "9.9.9.9"];
 
   # nixpkgs.overlays = [self.overlays.newt];
   services.qemuGuest.enable = true;

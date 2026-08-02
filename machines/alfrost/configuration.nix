@@ -7,8 +7,11 @@
   domain = "ugalabugala.org";
 in {
   imports = [
-    self.inputs.omnishell.nixosModules.helix
     self.nixosModules.pharos
+  ];
+
+  nixpkgs.overlays = [
+    self.overlays.helix
   ];
 
   disko.devices.disk.main.imageSize = "3500M"; # adjust as needed
@@ -58,6 +61,7 @@ in {
   };
 
   environment.systemPackages = with pkgs; [
+    helix
     vim
     curl
     htop

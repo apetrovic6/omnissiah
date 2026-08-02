@@ -19,6 +19,13 @@ in {
         default = false;
       };
 
+
+      enableDockerCompat = mkOption {
+        type = types.bool;
+        description = "Create an alias mapping docker to podman.";
+        default = false;
+      };
+
       enableNvidia = mkOption {
         type = types.bool;
         description = "Enable use of Nvidia GPUs within podman containers. (Uses hardware.nvidia-container-toolkit.enable)";
@@ -36,6 +43,7 @@ in {
       virtualisation.podman = {
         enable = true;
         dockerSocket.enable = cfgPodman.enableDockerSocket;
+        dockerCompat = cfgPodman.enableDockerCompat;
         autoPrune.enable = false;
         networkSocket.listenAddress = cfgPodman.socketListenAddress;
       };

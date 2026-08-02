@@ -48,6 +48,7 @@
     services.imperium.virtualisation.podman = {
       enable = true;
       enableDockerSocket = true;
+      enableDockerCompat = true;
     };
 
     hardware.keyboard.qmk.enable = true;
@@ -103,7 +104,7 @@
       };
     };
 
-    programs.regreet = {
+    services.displayManager.regreet = {
       enable = true;
 
       settings = {
@@ -175,6 +176,9 @@
       pangolin-cli
       element-desktop
 
+      helix
+      slack
+      
       quickemu
       evtest
       librepods
@@ -183,6 +187,7 @@
       (buildIdeWithPlugins pkgs "idea" commonPlugins)
       (buildIdeWithPlugins pkgs "rust-rover" commonPlugins)
       (buildIdeWithPlugins pkgs "goland" commonPlugins)
+      (buildIdeWithPlugins pkgs "datagrip" commonPlugins)
       jetbrains-toolbox
     ];
 

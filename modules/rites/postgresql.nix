@@ -14,7 +14,7 @@
         default = false;
         description = "Enable Imperium PostgreSQL server with declarative user password management.";
       };
-    package = mkPackageOption pkgs "postgresql" {};
+      package = mkPackageOption pkgs "postgresql" {};
 
       port = mkOption {
         type = types.port;
@@ -127,7 +127,6 @@
               description = "SQL extension names to CREATE EXTENSION IF NOT EXISTS in each of this user's databases. The corresponding packages must be declared in services.imperium.postgresql.extensions.";
               example = ["vchord" "pg_trgm"];
             };
-
           };
         }));
       };
@@ -207,12 +206,15 @@
               commands =
                 mapAttrsToList (userName: u: let
                   passwordFile = config.clan.core.vars.generators."postgresql-${userName}".files.password.path;
-                  extCmds = flatten (map (db:
-                    map (ext: ''
-                      echo "Creating extension '${ext}' in database '${db}'..."
-                      ${psql} -d "${db}" -c "CREATE EXTENSION IF NOT EXISTS \"${ext}\" CASCADE;"
-                    '') u.extensions
-                  ) u.databases);
+                  extCmds = flatten (map (
+                      db:
+                        map (ext: ''
+                          echo "Creating extension '${ext}' in database '${db}'..."
+                          ${psql} -d "${db}" -c "CREATE EXTENSION IF NOT EXISTS \"${ext}\" CASCADE;"
+                        '')
+                        u.extensions
+                    )
+                    u.databases);
                 in ''
                   echo "Setting password for user '${userName}'..."
                   PASSWORD=$(cat "${passwordFile}")

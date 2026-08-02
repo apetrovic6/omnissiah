@@ -19,8 +19,6 @@
 
     # TODO: Setup services so that they listen on localhost
 
-
-
     networking.firewall.allowedTCPPorts = [80 443 2222 53 22 5380 8123];
     networking.firewall.allowedUDPPorts = [80 443 53 222];
     # Or disable the firewall altogether.
@@ -110,7 +108,6 @@
     #   subdomain = "ntfy";
     #   port = 8085;
     # };
-
 
     # services.imperium.nzbhydra2 = {
     #   enable = true;

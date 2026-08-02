@@ -95,6 +95,5 @@
       enable = false;
       openFirewall = true;
     };
-
   };
 }

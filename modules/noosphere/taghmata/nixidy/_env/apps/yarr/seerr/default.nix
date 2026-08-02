@@ -220,6 +220,14 @@ in {
       overrideObjectStore = objectStoreName;
       cluster = {
         spec = {
+          # Previously unset, so these inherited the template's 1Gi default while
+          # the live PVCs had been expanded to 10Gi out of band. Pinned to the
+          # real sizes, with WAL raised to 20Gi: archiving to the dead `garage`
+          # cluster filled the 10Gi WAL volumes completely, which blocks
+          # PostgreSQL startup and leaves no room to drain the backlog.
+          storage.size = "10Gi";
+          walStorage.size = "20Gi";
+
           plugins = [
             {
               isWALArchiver = true;

@@ -34,10 +34,10 @@
     };
 
     systemd.sleep.settings.Sleep = {
-       HibernateDelaySec = "1h";
-        SuspentSTate = "mem";
-        HibernateMode = "shutdown";
-      SuspendEstimationSec=0;
-     };
+      HibernateDelaySec = "1h";
+      SuspentSTate = "mem";
+      HibernateMode = "shutdown";
+      SuspendEstimationSec = 0;
+    };
   };
 }

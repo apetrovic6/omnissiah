@@ -17,7 +17,7 @@
     src = pangolinSrc;
 
     npmDeps = pkgs.fetchNpmDeps {
-      name = "pangolin-1.17.1-npm-deps";
+     name = "pangolin-1.17.1-npm-deps";
       src = pangolinSrc;
       hash = "sha256-DyPfylne9Ku7sEUNN0LLlN0EOnCjcklsh+F6YP+rXv4=";
     };
@@ -80,7 +80,6 @@
   domain = "ugalabugala.org";
 in {
   imports = [
-    # self.inputs.omnishell.nixosModules.helix
     self.nixosModules.postgresql
     self.nixosModules.pharos
     self.nixosModules.vox
@@ -233,6 +232,10 @@ in {
     };
   };
 
+  nixpkgs.overlays = [
+    self.overlays.helix
+  ];
+
   nix = {
     gc = {
       automatic = true;
@@ -246,7 +249,7 @@ in {
   };
 
   # nixpkgs.config.allowUnfree = true;
-
+  
   environment.systemPackages = with pkgs; [
     helix
     vim

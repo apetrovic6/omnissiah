@@ -266,7 +266,11 @@ in {
         spec = {
           imageName = "ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie";
           storage.size = "5Gi";
-          walStorage.size = "5Gi";
+          # Raised from 5Gi to match the PVCs after the 2026-07-31 incident: WAL
+          # archiving to the dead `garage` cluster failed long enough to fill the
+          # 5Gi WAL volumes, blocking PostgreSQL startup. The PVCs were expanded
+          # to 10Gi out of band, so the spec has to say 10Gi or it reads as drift.
+          walStorage.size = "10Gi";
           plugins = [
             {
               isWALArchiver = true;

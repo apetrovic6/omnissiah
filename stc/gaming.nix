@@ -5,7 +5,6 @@
 
   roles.default.description = "Gaming stuff";
 
-
   roles.default.perInstance.nixosModule = {
     self,
     lib,
@@ -16,16 +15,16 @@
       self.nixosModules.steam
     ];
 
-  nixpkgs.overlays = [
-    (_final: prev: let
-      stable = import self.inputs.nixpkgs-stable {
-        inherit (prev.stdenv.hostPlatform) system;
-        config.allowUnfree = true;
-      };
-    in {
-      inherit (stable) bubblewrap;
-    })
-  ];
+    nixpkgs.overlays = [
+      (_final: prev: let
+        stable = import self.inputs.nixpkgs-stable {
+          inherit (prev.stdenv.hostPlatform) system;
+          config.allowUnfree = true;
+        };
+      in {
+        inherit (stable) bubblewrap;
+      })
+    ];
 
     services.imperium.steam.enable = true;
 
