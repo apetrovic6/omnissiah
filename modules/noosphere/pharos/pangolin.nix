@@ -5,7 +5,7 @@ in {
       mkdir -p $out
       tar xzf ${pkgs.fetchurl {
         url = "https://github.com/GitSquared/node-geolite2-redist/raw/refs/heads/master/redist/GeoLite2-Country.tar.gz";
-        hash = "sha256-9OdstBQt/bB9Rr5qT2VwCnlflAHk1xnIgXgBJJrphGs=";
+        hash = "sha256-ygnit66AXrKYD1RXZ1OEUHW3jmq/modTn60y1Kh9x1I=";
       }} --strip-components=1
       cp GeoLite2-Country.mmdb $out/
     '';

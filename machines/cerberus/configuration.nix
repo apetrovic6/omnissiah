@@ -17,6 +17,7 @@ in {
     self.nixosModules.impermanence
     ./nopresh.nix
     ./forgejo-runner.nix
+    ./dagger.nix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.nixosModules.noosphere
     # self.inputs.magos.nixosModules.default
@@ -24,6 +25,11 @@ in {
   boot.kernelModules = ["i915"];
   hardware.graphics.enable = true;
 
+
+environment.systemPackages = [
+      (self.inputs.dagger-cli.packages.${pkgs.system}.dagger)
+];
+  
   hardware.graphics.extraPackages = with pkgs; [
     intel-media-driver
     libva-vdpau-driver
@@ -114,13 +120,29 @@ in {
     settings.endpoint = "https://ugalabugala.org";
     environmentFile = config.clan.core.vars.generators.newt.files."newt.env".path;
 
-    blueprint = {
+    blueprint = let
+      # Must match sites.niceId in Pangolin's DB, otherwise the whole blueprint
+      # silently no-ops with "Blueprint application failed: Site not found".
+      # Check with: sqlite3 /var/lib/pangolin/config/db/db.sqlite 'select niceId from sites;'
+      siteCerberus = "downright-southern-red-backed-salamander";
+    in {
       public-resources = {
+        plex = {
+          name = "Plex";
+          mode = "http";
+          full-domain = "plex.ugalabugala.org";
+          targets = [
+            {
+              site = siteCerberus;
+              hostname = "192.168.1.105";
+              port = 32400;
+              method = "http";
+            }
+          ];
+        };
       };
 
-      private-resources = let
-        siteCerberus = "aromatic-pernambuco-worm-snake";
-      in {
+      private-resources = {
         ugala-bugala = {
           name = "Ugala Bugala";
           mode = "host";
@@ -148,9 +170,26 @@ in {
           mode = "host";
           destination = "192.168.1.105";
           site = siteCerberus;
-          disable-icmp = true;
+          # Do NOT use "*" here. newt 1.16.0 loads a `*` port range as an EMPTY
+          # allow-list ("port ranges: []" in its startup log), which drops all
+          # traffic to the resource including DNS. Keep an explicit list.
+          # Symptom of getting this wrong: a phone on the VPN resolves
+          # *.ugalabugala.org (Olm answers aliases locally, no DNS needed) while
+          # every public name fails, and newt logs zero sessions to .105:53.
+          disable-icmp = false;
           tcp-ports = "443,80,53,2222";
           udp-ports = "443,80,53,2222";
+        };
+
+        plex = {
+          name = "plex";
+          mode = "host";
+          destination = "192.168.1.105";
+          alias = "plex.ugalabugala.org";
+          site = siteCerberus;
+          disable-icmp = true;
+          tcp-ports = "443,32400";
+          udp-ports = "443,32400";
         };
       };
     };

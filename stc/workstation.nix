@@ -138,6 +138,7 @@
       bluetuith
       brave
       librewolf
+      libreoffice-bin
 
       vlc
 
@@ -171,12 +172,17 @@
 
       (self.inputs.dagger-cli.packages.${system}.dagger)
 
-      neomutt
+      herdr
+
+      # neomutt
       proton-vpn-cli
       pangolin-cli
       element-desktop
 
       helix
+
+      google-chrome
+      chromium
       slack
       
       quickemu

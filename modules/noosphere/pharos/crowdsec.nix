@@ -19,8 +19,6 @@
 
         name = config.networking.hostName;
 
-        
-
         autoUpdateService = true;
         hub = {
           scenarios = [];

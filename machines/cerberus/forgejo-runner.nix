@@ -41,6 +41,12 @@
       # and the usual coreutils/git/tar.
       hostPackages =
         [config.nix.package]
+        ++ [
+          # Drives the Dagger pipeline in the `fishing` repo. Must match the
+          # engine container version in ./dagger.nix (v0.21.8) — the SDK
+          # refuses to start a session against a different engine.
+          self.inputs.dagger-cli.packages.${pkgs.stdenv.hostPlatform.system}.dagger
+        ]
         ++ (with pkgs; [
           bash
           coreutils
@@ -50,6 +56,15 @@
           nodejs
           devenv
           cacert
+          # Builds the pipeline driver itself (`cargo run -p ci`). The pipeline
+          # then does all real work inside engine containers, so only a
+          # host-side toolchain new enough for edition 2024 is needed here.
+          cargo
+          rustc
+          # cargo needs a linker for build scripts (proc-macro2, libc, ...).
+          # Without it every build script fails with `linker 'cc' not found`.
+          # This wrapper provides cc/gcc/ld.
+          stdenv.cc
         ]);
     };
   };
