@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: barman-cloud
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: plugin-barman-cloud
-    app.kubernetes.io/version: v0.14.0
-    helm.sh/chart: plugin-barman-cloud-0.7.1
+    app.kubernetes.io/version: v0.15.0
+    helm.sh/chart: plugin-barman-cloud-0.8.0
   name: barman-cloud-plugin-barman-cloud
   namespace: cnpg-system
 spec:
@@ -31,14 +31,14 @@ spec:
             - --client-cert=/client/tls.crt
             - --server-address=:9090
             - --leader-elect
-            - --log-level=debug
+            - --log-level=info
           env:
             - name: SIDECAR_IMAGE
               valueFrom:
                 configMapKeyRef:
                   key: SIDECAR_IMAGE
                   name: plugin-barman-cloud-config
-          image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.14.0
+          image: ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.15.0
           livenessProbe:
             initialDelaySeconds: 10
             periodSeconds: 10

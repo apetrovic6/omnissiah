@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: harbor
     app.kubernetes.io/part-of: harbor
-    app.kubernetes.io/version: 2.15.1
+    app.kubernetes.io/version: 2.15.2
     chart: harbor
     component: exporter
     heritage: Helm
@@ -26,8 +26,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: 31fd9b3438be30f2a499a98aa3e453dc79d413d8da12e5a99d33662905b241aa
-        checksum/secret: c743567cdf7927f07eb7eab00fa6b651632a77019e66307cacc3f71cbbb0a446
+        checksum/configmap: 726366957f6c02483e7a9367d94598615b32554bce15e69bbcc4323c6f26ac6b
+        checksum/secret: 4df8126ecdc001689b58ca4fc578c45798e3bf89f3cdb30abc11e607802134af
       labels:
         app: harbor
         app.kubernetes.io/component: exporter
@@ -35,7 +35,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: harbor
         app.kubernetes.io/part-of: harbor
-        app.kubernetes.io/version: 2.15.1
+        app.kubernetes.io/version: 2.15.2
         chart: harbor
         component: exporter
         heritage: Helm
@@ -62,7 +62,7 @@ spec:
                 name: harbor-exporter-env
             - secretRef:
                 name: harbor-exporter
-          image: docker.io/goharbor/harbor-exporter:v2.15.1
+          image: docker.io/goharbor/harbor-exporter:v2.15.2
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3

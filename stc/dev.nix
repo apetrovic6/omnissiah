@@ -32,6 +32,9 @@
       enable = true;
       enableZshIntegration = true;
       enableBashIntegration = true;
+      direnvrcExtra = ''
+        source <(${pkgs.devenv}/bin/devenv direnvrc)
+      '';
     };
   };
   #};

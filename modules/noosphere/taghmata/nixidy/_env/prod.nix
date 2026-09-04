@@ -37,8 +37,6 @@ in {
     ./apps/dagger
     ./apps/vikunja
     ./apps/pocket-id
-    # ./apps/percona-mongodb
-    # ./apps/unifi-network
   ];
 
   # CRD imports are now auto-discovered by the flake-module

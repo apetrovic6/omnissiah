@@ -31,7 +31,6 @@ in {
         accessKeyId = {
           name = mkOption {
             type = types.str;
-            default = "barman-s3-secret-key";
             description = "Name of the secret";
           };
 
@@ -45,7 +44,6 @@ in {
         secretAccessKey = {
           name = mkOption {
             type = types.str;
-            default = "barman-s3-secret-key";
             description = "Name of the secret";
           };
 

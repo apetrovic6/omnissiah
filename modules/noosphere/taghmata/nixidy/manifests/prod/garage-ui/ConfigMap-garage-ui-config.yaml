@@ -75,10 +75,10 @@ data:
       environment: production
       host: 0.0.0.0
       max_body_size: 314572800
-      max_header_size: 1048576
+      max_header_size: 32768
       port: 8080
       protocol: http
-      read_buffer_size: 4096
+      read_buffer_size: 32768
       root_url: https://ui.garage.noosphere.uk
       write_buffer_size: 4096
     serviceMonitor:
@@ -93,7 +93,7 @@ metadata:
     app.kubernetes.io/instance: garage-ui
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-ui
-    app.kubernetes.io/version: v0.11.1
-    helm.sh/chart: garage-ui-0.11.1
+    app.kubernetes.io/version: v0.12.1
+    helm.sh/chart: garage-ui-0.12.1
   name: garage-ui-config
   namespace: garage

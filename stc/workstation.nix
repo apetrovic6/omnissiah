@@ -22,8 +22,8 @@
 
     nixpkgs.overlays = [
       self.overlays.pangolin-cli
-      self.overlays.openldap
       self.overlays.helix
+      self.overlays.herdr
     ];
     networking.nameservers = ["192.168.1.105"];
     # Prevent NetworkManager from pushing DHCP-provided DNS to systemd-resolved,
@@ -42,6 +42,8 @@
         variant = "";
       };
     };
+
+    systemd.user.services.niri.serviceConfig.CPUWeight = 100;
 
     services.imperium.flatpak.enable = true;
 
@@ -138,7 +140,7 @@
       bluetuith
       brave
       librewolf
-      libreoffice-bin
+      libreoffice
 
       vlc
 
@@ -158,6 +160,7 @@
 
       k9s
       kubectl
+      kubectx
       kubectl-cnpg
 
       signal-desktop
@@ -184,7 +187,7 @@
       google-chrome
       chromium
       slack
-      
+
       quickemu
       evtest
       librepods
@@ -206,6 +209,11 @@
 
     programs.localsend = {
       enable = true;
+    };
+
+    services.tailscale = {
+      enable = true;
+      openFirewall = true;
     };
 
     security.rtkit.enable = true;

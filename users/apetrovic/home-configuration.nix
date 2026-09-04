@@ -94,16 +94,36 @@ in {
     enable = true;
     lfs.enable = true;
 
-    settings.user = {
-      name = "apetrovic";
-      email = "petrovicante6@gmail.com";
+    settings = {
+      user = {
+        name = "apetrovic";
+        email = "petrovicante6@gmail.com";
+      };
+
       init.defaultBranch = "master";
       pull.rebase = true;
       push.autoSetupRemote = true;
+      pull.rebase.autoStash = true
+
+      url."git@github.com:devzero-inc/".insteadOf = "https://github.com/devzero-inc/";
     };
   };
 
   programs.btop.enable = true;
+
+  programs.claude-code = {
+    enable = true;
+    # claude-code itself comes from environment.systemPackages in
+    # stc/workstation.nix; only manage its config here.
+    package = null;
+
+    mcpServers = {
+      opsee = {
+        type = "http";
+        url = "https://mcp.api.opsee.ai/mcp";
+      };
+    };
+  };
 
   programs.yazi = {
     enable = true;

@@ -7,11 +7,30 @@ metadata:
     app.kubernetes.io/instance: garage-operator
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-operator
-    app.kubernetes.io/version: 0.6.29
+    app.kubernetes.io/version: 0.7.8
     control-plane: controller-manager
-    helm.sh/chart: garage-operator-0.6.29
+    helm.sh/chart: garage-operator-0.7.8
   name: garage-operator-validating
 webhooks:
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: garage-operator-webhook
+        namespace: garage-operator
+        path: /validate-core-v1-managed-pvc-finalizer
+    failurePolicy: Fail
+    name: vmanagedpvcfinalizer.kb.io
+    rules:
+      - apiGroups:
+          - ""
+        apiVersions:
+          - v1
+        operations:
+          - UPDATE
+        resources:
+          - persistentvolumeclaims
+    sideEffects: None
   - admissionReviewVersions:
       - v1
     clientConfig:
@@ -69,6 +88,7 @@ webhooks:
         operations:
           - CREATE
           - UPDATE
+          - DELETE
         resources:
           - garageclusters
     sideEffects: None
@@ -89,8 +109,29 @@ webhooks:
         operations:
           - CREATE
           - UPDATE
+          - DELETE
         resources:
           - garageclusters
+    sideEffects: None
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: garage-operator-webhook
+        namespace: garage-operator
+        path: /validate-garage-rajsingh-info-garagecluster-scale
+    failurePolicy: Fail
+    name: vgarageclusterscale.kb.io
+    rules:
+      - apiGroups:
+          - garage.rajsingh.info
+        apiVersions:
+          - v1beta1
+          - v1beta2
+        operations:
+          - UPDATE
+        resources:
+          - garageclusters/scale
     sideEffects: None
   - admissionReviewVersions:
       - v1
@@ -129,6 +170,7 @@ webhooks:
         operations:
           - CREATE
           - UPDATE
+          - DELETE
         resources:
           - garagenodes
     sideEffects: None

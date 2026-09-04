@@ -6,7 +6,6 @@
     ./kubernetes
     ./projects
     ./pocket-id
-    ./barman-cloud
   ];
 
   terraform.backend = {

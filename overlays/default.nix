@@ -95,14 +95,14 @@
     helix = self.inputs.magos.packages.${final.system}.helix;
   };
 
-  flake.overlays.bitwarden-desktop = final: prev: {
-    prev.electron_39 = final.electron_41-bin;
+  flake.overlays.herdr = final: _prev: {
+    # Same deal as helix: the magos-wrapped herdr carries its config.toml via
+    # HERDR_CONFIG_PATH, so it has to replace the package outright.
+    herdr = self.inputs.magos.packages.${final.system}.herdr;
   };
 
-  flake.overlays.openldap = final: prev: {
-    openldap = prev.openldap.overrideAttrs (_: {
-      doCheck = false;
-    });
+  flake.overlays.bitwarden-desktop = final: prev: {
+    prev.electron_39 = final.electron_41-bin;
   };
 
   flake.overlays.rke2 = final: prev: {

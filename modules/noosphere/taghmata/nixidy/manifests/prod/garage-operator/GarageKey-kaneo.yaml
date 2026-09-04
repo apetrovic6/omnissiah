@@ -1,0 +1,18 @@
+apiVersion: garage.rajsingh.info/v1beta1
+kind: GarageKey
+metadata:
+  name: kaneo
+  namespace: garage-operator
+spec:
+  bucketPermissions:
+    - bucketRef:
+        name: kaneo
+      owner: true
+      read: true
+      write: true
+  clusterRef:
+    name: garage-main
+  importKey:
+    secretRef:
+      name: kaneo-s3-import
+      namespace: garage-operator
