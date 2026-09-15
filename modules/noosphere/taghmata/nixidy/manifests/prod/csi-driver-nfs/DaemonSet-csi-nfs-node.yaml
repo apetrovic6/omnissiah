@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: csi-driver-nfs
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: csi-driver-nfs
-    app.kubernetes.io/version: latest
-    helm.sh/chart: csi-driver-nfs-v0.0.0
+    app.kubernetes.io/version: 4.13.4
+    helm.sh/chart: csi-driver-nfs-4.13.4
   name: csi-nfs-node
   namespace: csi-nfs
 spec:
@@ -21,8 +21,8 @@ spec:
         app.kubernetes.io/instance: csi-driver-nfs
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: csi-driver-nfs
-        app.kubernetes.io/version: latest
-        helm.sh/chart: csi-driver-nfs-v0.0.0
+        app.kubernetes.io/version: 4.13.4
+        helm.sh/chart: csi-driver-nfs-4.13.4
     spec:
       containers:
         - args:
@@ -69,7 +69,7 @@ spec:
               path: /healthz
               port: healthz
             initialDelaySeconds: 20
-            periodSeconds: 20
+            periodSeconds: 5
             timeoutSeconds: 10
           name: node-driver-registrar
           ports:
@@ -104,7 +104,7 @@ spec:
                   fieldPath: spec.nodeName
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
-          image: gcr.io/k8s-staging-sig-storage/nfsplugin:canary
+          image: registry.k8s.io/sig-storage/nfsplugin:v4.13.4
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 5

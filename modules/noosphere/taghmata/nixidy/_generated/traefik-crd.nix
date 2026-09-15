@@ -76,6 +76,52 @@ let
           wrapped = finalType;
         };
       };
+
+    # Numeric bounds.
+    withMinimum =
+      min: base:
+      lib.types.addCheck base (x: x >= min)
+      // {
+        description = "${base.description} (minimum ${toString min})";
+      };
+    withMaximum =
+      max: base:
+      lib.types.addCheck base (x: x <= max)
+      // {
+        description = "${base.description} (maximum ${toString max})";
+      };
+    withExclusiveMinimum =
+      min: base:
+      lib.types.addCheck base (x: x > min)
+      // {
+        description = "${base.description} (exclusive minimum ${toString min})";
+      };
+    withExclusiveMaximum =
+      max: base:
+      lib.types.addCheck base (x: x < max)
+      // {
+        description = "${base.description} (exclusive maximum ${toString max})";
+      };
+    withMultipleOf =
+      m: base:
+      lib.types.addCheck base (x: mod x m == 0)
+      // {
+        description = "${base.description} (multiple of ${toString m})";
+      };
+
+    # String constraints.
+    withMinLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x >= n)
+      // {
+        description = "${base.description} (min length ${toString n})";
+      };
+    withMaxLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x <= n)
+      // {
+        description = "${base.description} (max length ${toString n})";
+      };
   };
 
   mkOptionDefault = mkOverride 1001;
@@ -328,7 +374,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -372,7 +418,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -539,7 +585,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -614,7 +660,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -650,7 +696,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -720,7 +766,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -886,7 +932,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -961,7 +1007,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -1136,7 +1182,7 @@ let
         };
         "signingSecretName" = mkOption {
           description = "SigningSecretName is the name of the Kubernetes Secret containing the signing secret.\nThe secret must be of type Opaque and contain a key named 'value'.\nMutually exclusive with PublicKey, JWKSFile, JWKSURL, and TrustedIssuers.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 253 types.str));
         };
         "stripAuthorizationHeader" = mkOption {
           description = "StripAuthorizationHeader determines whether to strip the Authorization header before forwarding the request.";
@@ -1250,7 +1296,7 @@ let
         };
         "bindPasswordSecretName" = mkOption {
           description = "BindPasswordSecretName is the name of the Kubernetes Secret containing the password for the bind DN.\nThe secret must contain a key named 'password'.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 253 types.str));
         };
         "certificateAuthority" = mkOption {
           description = "CertificateAuthority is a PEM-encoded certificate to use to establish a connection with the LDAP server if the\nconnection uses TLS but that the certificate was signed by a custom Certificate Authority.";
@@ -1325,23 +1371,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -1402,7 +1454,7 @@ let
         };
         "title" = mkOption {
           description = "Title is the human-readable name of the APIBundle that will be used on the portal.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 253 types.str));
         };
       };
 
@@ -1463,7 +1515,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the API.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -1531,23 +1583,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -1673,7 +1731,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the APIBundle.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -1685,7 +1743,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the APIPlan.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -1742,7 +1800,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the API.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -1826,23 +1884,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -1942,7 +2006,15 @@ let
       options = {
         "bucket" = mkOption {
           description = "Bucket defines the bucket strategy for the quota.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "subscription"
+                "application-api"
+                "application"
+              ]
+            )
+          );
         };
         "limit" = mkOption {
           description = "Limit is the maximum number of requests per sliding Period.";
@@ -1965,7 +2037,15 @@ let
       options = {
         "bucket" = mkOption {
           description = "Bucket defines the bucket strategy for the rate limit.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "subscription"
+                "application-api"
+                "application"
+              ]
+            )
+          );
         };
         "limit" = mkOption {
           description = "Limit is the number of requests per Period used to calculate the regeneration rate.\nTraffic will converge to this rate over time by delaying requests when possible, and dropping them when throttling alone is not enough.";
@@ -2023,23 +2103,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -2156,7 +2242,7 @@ let
         };
         "bindPasswordSecretName" = mkOption {
           description = "BindPasswordSecretName is the name of the Kubernetes Secret containing the password for the bind DN.\nThe secret must contain a key named 'password'.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 253 types.str));
         };
         "certificateAuthority" = mkOption {
           description = "CertificateAuthority is a PEM-encoded certificate to use to establish a connection with the LDAP server if the\nconnection uses TLS but that the certificate was signed by a custom Certificate Authority.";
@@ -2180,7 +2266,20 @@ let
         };
         "syncedAttributes" = mkOption {
           description = "SyncedAttributes are the user attributes to synchronize with Hub platform.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "groups"
+                  "userId"
+                  "firstname"
+                  "lastname"
+                  "email"
+                  "company"
+                ]
+              )
+            )
+          );
         };
         "url" = mkOption {
           description = "URL is the URL of the LDAP server, including the protocol (ldap or ldaps) and the port.";
@@ -2271,11 +2370,24 @@ let
         };
         "secretName" = mkOption {
           description = "SecretName is the name of the Kubernetes Secret containing clientId and clientSecret keys.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
         "syncedAttributes" = mkOption {
           description = "SyncedAttributes are the user attributes to synchronize with Hub platform.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "groups"
+                  "userId"
+                  "firstname"
+                  "lastname"
+                  "email"
+                  "company"
+                ]
+              )
+            )
+          );
         };
       };
 
@@ -2417,23 +2529,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -2480,7 +2598,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name is the name of the APIPortalAuth resource.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -2546,23 +2664,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -2708,7 +2832,14 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines how the bucket state will be synchronized between the different Traefik Hub instances.\nIt can be, either \"local\" or \"distributed\".";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "local"
+                "distributed"
+              ]
+            )
+          );
         };
       };
 
@@ -2772,7 +2903,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the API.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -2806,6 +2937,15 @@ let
     "hub.traefik.io.v1alpha1.APISpec" = {
 
       options = {
+        "apiAuths" = mkOption {
+          description = "APIAuths defines the API authentication configuration.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey "hub.traefik.io.v1alpha1.APISpecApiAuths" "name" [ ]
+            )
+          );
+          apply = attrsToList;
+        };
         "cors" = mkOption {
           description = "Cors defines the Cross-Origin Resource Sharing configuration.";
           type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APISpecCors"));
@@ -2820,7 +2960,7 @@ let
         };
         "title" = mkOption {
           description = "Title is the human-readable name of the API that will be used on the portal.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 253 types.str));
         };
         "versions" = mkOption {
           description = "Versions are the different APIVersions available.";
@@ -2834,11 +2974,44 @@ let
       };
 
       config = {
+        "apiAuths" = mkOverride 1002 null;
         "cors" = mkOverride 1002 null;
         "description" = mkOverride 1002 null;
         "openApiSpec" = mkOverride 1002 null;
         "title" = mkOverride 1002 null;
         "versions" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.APISpecApiAuths" = {
+
+      options = {
+        "name" = mkOption {
+          description = "";
+          type = types.str;
+        };
+        "operationFilter" = mkOption {
+          description = "OperationFilter specifies the allowed operations on APIs and APIVersions.";
+          type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APISpecApiAuthsOperationFilter"));
+        };
+      };
+
+      config = {
+        "operationFilter" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.APISpecApiAuthsOperationFilter" = {
+
+      options = {
+        "include" = mkOption {
+          description = "Include defines the names of OperationSets that will be accessible.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "include" = mkOverride 1002 null;
       };
 
     };
@@ -2910,7 +3083,7 @@ let
         };
         "path" = mkOption {
           description = "Path specifies the endpoint path within the Kubernetes Service where the OpenAPI specification can be obtained.\nThe Service queried is determined by the associated Ingress, IngressRoute, or HTTPRoute resource to which the API is attached.\nIt's important to note that this option is incompatible if the Ingress or IngressRoute specifies multiple backend services.\nThe Path must be accessible via a GET request method and should serve a YAML or JSON document containing the OpenAPI specification.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 255 types.str));
         };
         "refreshInterval" = mkOption {
           description = "RefreshInterval defines the rate at which the OpenAPI specification is refreshed.";
@@ -2952,7 +3125,7 @@ let
         };
         "name" = mkOption {
           description = "Name is the name of the OperationSet to reference in APICatalogItems or ManagedSubscriptions.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -2968,11 +3141,11 @@ let
         };
         "path" = mkOption {
           description = "Path specifies the exact path of the operations to select.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 255 types.str));
         };
         "pathPrefix" = mkOption {
           description = "PathPrefix specifies the path prefix of the operations to select.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 255 types.str));
         };
         "pathRegex" = mkOption {
           description = "PathRegex specifies a regular expression pattern for matching operations based on their paths.";
@@ -3017,7 +3190,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the APIVersion.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -3062,23 +3235,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -3124,6 +3303,15 @@ let
     "hub.traefik.io.v1alpha1.APIVersionSpec" = {
 
       options = {
+        "apiAuths" = mkOption {
+          description = "APIAuths defines the API authentication configuration.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey "hub.traefik.io.v1alpha1.APIVersionSpecApiAuths" "name" [ ]
+            )
+          );
+          apply = attrsToList;
+        };
         "cors" = mkOption {
           description = "Cors defines the Cross-Origin Resource Sharing configuration.";
           type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APIVersionSpecCors"));
@@ -3138,7 +3326,7 @@ let
         };
         "release" = mkOption {
           description = "Release is the version number of the API.\nThis value must follow the SemVer format: https://semver.org/";
-          type = types.str;
+          type = (types.withMaxLength 100 types.str);
         };
         "title" = mkOption {
           description = "Title is the public facing name of the APIVersion.";
@@ -3147,10 +3335,43 @@ let
       };
 
       config = {
+        "apiAuths" = mkOverride 1002 null;
         "cors" = mkOverride 1002 null;
         "description" = mkOverride 1002 null;
         "openApiSpec" = mkOverride 1002 null;
         "title" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.APIVersionSpecApiAuths" = {
+
+      options = {
+        "name" = mkOption {
+          description = "";
+          type = types.str;
+        };
+        "operationFilter" = mkOption {
+          description = "OperationFilter specifies the allowed operations on APIs and APIVersions.";
+          type = (types.nullOr (submoduleOf "hub.traefik.io.v1alpha1.APIVersionSpecApiAuthsOperationFilter"));
+        };
+      };
+
+      config = {
+        "operationFilter" = mkOverride 1002 null;
+      };
+
+    };
+    "hub.traefik.io.v1alpha1.APIVersionSpecApiAuthsOperationFilter" = {
+
+      options = {
+        "include" = mkOption {
+          description = "Include defines the names of OperationSets that will be accessible.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "include" = mkOverride 1002 null;
       };
 
     };
@@ -3223,7 +3444,7 @@ let
         };
         "path" = mkOption {
           description = "Path specifies the endpoint path within the Kubernetes Service where the OpenAPI specification can be obtained.\nThe Service queried is determined by the associated Ingress, IngressRoute, or HTTPRoute resource to which the API is attached.\nIt's important to note that this option is incompatible if the Ingress or IngressRoute specifies multiple backend services.\nThe Path must be accessible via a GET request method and should serve a YAML or JSON document containing the OpenAPI specification.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 255 types.str));
         };
         "refreshInterval" = mkOption {
           description = "RefreshInterval defines the rate at which the OpenAPI specification is refreshed.";
@@ -3265,7 +3486,7 @@ let
         };
         "name" = mkOption {
           description = "Name is the name of the OperationSet to reference in APICatalogItems or ManagedSubscriptions.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -3281,11 +3502,11 @@ let
         };
         "path" = mkOption {
           description = "Path specifies the exact path of the operations to select.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 255 types.str));
         };
         "pathPrefix" = mkOption {
           description = "PathPrefix specifies the path prefix of the operations to select.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 255 types.str));
         };
         "pathRegex" = mkOption {
           description = "PathRegex specifies a regular expression pattern for matching operations based on their paths.";
@@ -3367,23 +3588,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -4101,7 +4328,7 @@ let
       options = {
         "content" = mkOption {
           description = "Content is the valid markdown content.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 1500000 types.str));
         };
         "link" = mkOption {
           description = "Link is the link to the content.";
@@ -4109,7 +4336,7 @@ let
         };
         "order" = mkOption {
           description = "Order defines the order of the content in the UI.";
-          type = types.int;
+          type = (types.withMinimum 0 types.int);
         };
         "parentRef" = mkOption {
           description = "ParentRef is the reference to the resource that this content belongs to.";
@@ -4117,7 +4344,7 @@ let
         };
         "title" = mkOption {
           description = "Title is the public-facing name of the ContentItem.";
-          type = types.str;
+          type = (types.withMaxLength 253 (types.withMinLength 1 types.str));
         };
       };
 
@@ -4144,11 +4371,17 @@ let
       options = {
         "kind" = mkOption {
           description = "Kind is the kind of the resource that this content belongs to.";
-          type = types.str;
+          type = (
+            types.enum [
+              "APIPortal"
+              "API"
+              "APIBundle"
+            ]
+          );
         };
         "name" = mkOption {
           description = "Name is the name of the resource that this content belongs to.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -4195,23 +4428,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -4265,7 +4504,7 @@ let
         };
         "appId" = mkOption {
           description = "AppID is the identifier of the ManagedApplication.\nIt should be unique.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
         "notes" = mkOption {
           description = "Notes contains notes about application.";
@@ -4273,7 +4512,7 @@ let
         };
         "owner" = mkOption {
           description = "Owner represents the owner of the ManagedApplication.\nIt should be:\n- `sub` when using OIDC\n- `externalID` when using external IDP";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -4288,7 +4527,7 @@ let
       options = {
         "secretName" = mkOption {
           description = "SecretName references the name of the secret containing the API key.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 253 types.str));
         };
         "suspended" = mkOption {
           description = "";
@@ -4300,7 +4539,7 @@ let
         };
         "value" = mkOption {
           description = "Value is the API key value.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 4096 types.str));
         };
       };
 
@@ -4359,23 +4598,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -4511,7 +4756,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the APIBundle.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -4523,7 +4768,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the APIPlan.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -4582,7 +4827,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name of the API.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -4594,7 +4839,7 @@ let
       options = {
         "appId" = mkOption {
           description = "AppID is the public identifier of the application.\nIn the case of OIDC, it corresponds to the clientId.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -4653,7 +4898,7 @@ let
       options = {
         "name" = mkOption {
           description = "Name is the name of the ManagedApplication.";
-          type = types.str;
+          type = (types.withMaxLength 253 types.str);
         };
       };
 
@@ -4766,23 +5011,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -4882,7 +5133,7 @@ let
         };
         "exposeName" = mkOption {
           description = "ExposeName is the name of the service to expose.\nBy default it uses <namespace>-<name>.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMaxLength 253 types.str));
         };
         "healthCheck" = mkOption {
           description = "HealthCheck configures the active health check on the parent cluster for this uplink's load balancer.";
@@ -5018,23 +5269,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -5131,7 +5388,7 @@ let
       options = {
         "kind" = mkOption {
           description = "Kind defines the kind of the route.\nRule is the only supported kind.\nIf not defined, defaults to Rule.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.enum [ "Rule" ]));
         };
         "match" = mkOption {
           description = "Match defines the router's rule.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/routing/rules-and-priority/";
@@ -5153,7 +5410,7 @@ let
         };
         "priority" = mkOption {
           description = "Priority defines the router's priority.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/routing/rules-and-priority/#priority";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 9223372036854775000 types.int));
         };
         "services" = mkOption {
           description = "Services defines the list of Service.\nIt can contain any combination of TraefikService and/or reference to a Kubernetes Service.";
@@ -5211,7 +5468,14 @@ let
         };
         "traceVerbosity" = mkOption {
           description = "TraceVerbosity defines the verbosity level of the tracing for this router.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "minimal"
+                "detailed"
+              ]
+            )
+          );
         };
         "tracing" = mkOption {
           description = "Tracing enables tracing for this router.";
@@ -5236,7 +5500,14 @@ let
         };
         "kind" = mkOption {
           description = "Kind defines the kind of the Service.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
         };
         "middlewares" = mkOption {
           description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
@@ -5299,11 +5570,21 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -5487,7 +5768,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
@@ -5669,7 +5961,7 @@ let
         };
         "priority" = mkOption {
           description = "Priority defines the router's priority.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/routing/rules-and-priority/#priority";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 9223372036854775000 types.int));
         };
         "services" = mkOption {
           description = "Services defines the list of TCP services.";
@@ -5683,7 +5975,14 @@ let
         };
         "syntax" = mkOption {
           description = "Syntax defines the router's rule syntax.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/routing/rules-and-priority/#rulesyntax\n\nDeprecated: Please do not use this field and rewrite the router rules to use the v3 syntax.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "v3"
+                "v2"
+              ]
+            )
+          );
         };
       };
 
@@ -5756,7 +6055,7 @@ let
         };
         "weight" = mkOption {
           description = "Weight defines the weight used when balancing requests between multiple Kubernetes Service.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -5777,7 +6076,7 @@ let
       options = {
         "version" = mkOption {
           description = "Version defines the PROXY Protocol version to use.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 2 (types.withMinimum 1 types.int)));
         };
       };
 
@@ -5977,7 +6276,7 @@ let
         };
         "weight" = mkOption {
           description = "Weight defines the weight used when balancing requests between multiple Kubernetes Service.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -6290,7 +6589,7 @@ let
         };
         "responseCode" = mkOption {
           description = "ResponseCode is the status code that the circuit breaker will return while it is in the open state.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 599 (types.withMinimum 100 types.int)));
         };
       };
 
@@ -6324,7 +6623,7 @@ let
         };
         "minResponseBodyBytes" = mkOption {
           description = "MinResponseBodyBytes defines the minimum amount of bytes a response body must have to be compressed.\nDefault: 1024.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -6427,6 +6726,10 @@ let
     "traefik.io.v1alpha1.MiddlewareSpecErrors" = {
 
       options = {
+        "errorRequestHeaders" = mkOption {
+          description = "ErrorRequestHeaders defines the list of request headers forwarded to the error page service.\nWhen nil (not set), all original request headers are forwarded.\nSet to an empty list to forward no headers, or list specific headers to forward only those.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "query" = mkOption {
           description = "Query defines the URL for the error page (hosted by service).\nThe {status} variable can be used in order to insert the status code in the URL.\nThe {originalStatus} variable can be used in order to insert the upstream status code in the URL.\nThe {url} variable can be used in order to insert the escaped request URL.";
           type = (types.nullOr types.str);
@@ -6446,6 +6749,7 @@ let
       };
 
       config = {
+        "errorRequestHeaders" = mkOverride 1002 null;
         "query" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
         "status" = mkOverride 1002 null;
@@ -6462,7 +6766,14 @@ let
         };
         "kind" = mkOption {
           description = "Kind defines the kind of the Service.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
         };
         "middlewares" = mkOption {
           description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
@@ -6525,11 +6836,21 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -6711,7 +7032,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
@@ -6985,7 +7317,7 @@ let
         };
         "stsSeconds" = mkOption {
           description = "STSSeconds defines the max-age of the Strict-Transport-Security header.\nIf set to 0, the header is not set.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -7031,7 +7363,7 @@ let
       options = {
         "amount" = mkOption {
           description = "Amount defines the maximum amount of allowed simultaneous in-flight request.\nThe middleware responds with HTTP 429 Too Many Requests if there are already amount requests in progress (based on the same sourceCriterion strategy).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "sourceCriterion" = mkOption {
           description = "SourceCriterion defines what criterion is used to group requests as originating from a common source.\nIf several strategies are defined at the same time, an error will be raised.\nIf none are set, the default is to use the requestHost.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/inflightreq/#sourcecriterion";
@@ -7076,7 +7408,7 @@ let
       options = {
         "depth" = mkOption {
           description = "Depth tells Traefik to use the X-Forwarded-For header and take the IP located at the depth position (starting from the right).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "excludedIPs" = mkOption {
           description = "ExcludedIPs configures Traefik to scan the X-Forwarded-For header and select the first IP not in the list.";
@@ -7124,7 +7456,7 @@ let
       options = {
         "depth" = mkOption {
           description = "Depth tells Traefik to use the X-Forwarded-For header and take the IP located at the depth position (starting from the right).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "excludedIPs" = mkOption {
           description = "ExcludedIPs configures Traefik to scan the X-Forwarded-For header and select the first IP not in the list.";
@@ -7167,7 +7499,7 @@ let
       options = {
         "depth" = mkOption {
           description = "Depth tells Traefik to use the X-Forwarded-For header and take the IP located at the depth position (starting from the right).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "excludedIPs" = mkOption {
           description = "ExcludedIPs configures Traefik to scan the X-Forwarded-For header and select the first IP not in the list.";
@@ -7344,11 +7676,11 @@ let
       options = {
         "average" = mkOption {
           description = "Average is the maximum rate, by default in requests/s, allowed for the given source.\nIt defaults to 0, which means no rate limiting.\nThe rate is actually defined by dividing Average by Period. So for a rate below 1req/s,\none needs to define a Period larger than a second.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "burst" = mkOption {
           description = "Burst is the maximum number of requests allowed to arrive in the same arbitrarily small period of time.\nIt defaults to 1.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "period" = mkOption {
           description = "Period, in combination with Average, defines the actual maximum rate, such as:\nr = Average / Period. It defaults to a second.";
@@ -7487,7 +7819,7 @@ let
       options = {
         "depth" = mkOption {
           description = "Depth tells Traefik to use the X-Forwarded-For header and take the IP located at the depth position (starting from the right).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "excludedIPs" = mkOption {
           description = "ExcludedIPs configures Traefik to scan the X-Forwarded-For header and select the first IP not in the list.";
@@ -7592,7 +7924,7 @@ let
       options = {
         "attempts" = mkOption {
           description = "Attempts defines how many times the request should be retried.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "disableRetryOnNetworkError" = mkOption {
           description = "DisableRetryOnNetworkError defines whether to disable the retry if an error occurs when transmitting the request to the server.";
@@ -7604,7 +7936,7 @@ let
         };
         "maxRequestBodyBytes" = mkOption {
           description = "MaxRequestBodyBytes defines the maximum size for the request body.\nDefault is `-1`, which means no limit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum - 1 types.int));
         };
         "retryNonIdempotentMethod" = mkOption {
           description = "RetryNonIdempotentMethod activates the retry for non-idempotent methods (POST, LOCK, PATCH)";
@@ -7720,7 +8052,7 @@ let
       options = {
         "amount" = mkOption {
           description = "Amount defines the maximum amount of allowed simultaneous connections.\nThe middleware closes the connection if there are already amount connections opened.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -7809,7 +8141,7 @@ let
         };
         "maxIdleConnsPerHost" = mkOption {
           description = "MaxIdleConnsPerHost controls the maximum idle (keep-alive) to keep per-host.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum - 1 types.int));
         };
         "maxVersion" = mkOption {
           description = "MaxVersion defines the maximum TLS version to use when contacting backend servers.";
@@ -7998,7 +8330,7 @@ let
       options = {
         "version" = mkOption {
           description = "Version defines the PROXY Protocol version to use.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 2 (types.withMinimum 1 types.int)));
         };
       };
 
@@ -8177,7 +8509,17 @@ let
       options = {
         "clientAuthType" = mkOption {
           description = "ClientAuthType defines the client authentication type to apply.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "NoClientCert"
+                "RequestClientCert"
+                "RequireAnyClientCert"
+                "VerifyClientCertIfGiven"
+                "RequireAndVerifyClientCert"
+              ]
+            )
+          );
         };
         "secretNames" = mkOption {
           description = "SecretNames defines the names of the referenced Kubernetes Secret storing certificate details.";
@@ -8410,7 +8752,14 @@ let
         };
         "kind" = mkOption {
           description = "Kind defines the kind of the Service.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
         };
         "middlewares" = mkOption {
           description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
@@ -8478,11 +8827,21 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -8666,7 +9025,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
@@ -8696,7 +9066,14 @@ let
         };
         "kind" = mkOption {
           description = "Kind defines the kind of the Service.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
         };
         "middlewares" = mkOption {
           description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
@@ -8760,11 +9137,21 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -8948,7 +9335,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
@@ -9002,7 +9400,14 @@ let
         };
         "kind" = mkOption {
           description = "Kind defines the kind of the Service.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
         };
         "middlewares" = mkOption {
           description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
@@ -9072,11 +9477,21 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -9262,7 +9677,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
@@ -9290,7 +9716,14 @@ let
         };
         "kind" = mkOption {
           description = "Kind defines the kind of the Service.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
         };
         "maxBodySize" = mkOption {
           description = "MaxBodySize defines the maximum size allowed for the body of the request.\nIf the body is larger, the request is not mirrored.\nDefault value is -1, which means unlimited size.";
@@ -9371,11 +9804,21 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -9499,7 +9942,14 @@ let
         };
         "kind" = mkOption {
           description = "Kind defines the kind of the Service.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
         };
         "middlewares" = mkOption {
           description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
@@ -9571,11 +10021,21 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -9760,7 +10220,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
@@ -9851,7 +10322,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
@@ -9906,7 +10388,14 @@ let
         };
         "kind" = mkOption {
           description = "Kind defines the kind of the Service.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
         };
         "middlewares" = mkOption {
           description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
@@ -9974,11 +10463,21 @@ let
         };
         "strategy" = mkOption {
           description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -10162,7 +10661,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
@@ -10220,7 +10730,18 @@ let
         };
         "sameSite" = mkOption {
           description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
         };
         "secure" = mkOption {
           description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";

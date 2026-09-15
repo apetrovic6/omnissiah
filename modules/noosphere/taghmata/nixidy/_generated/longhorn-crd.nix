@@ -76,6 +76,52 @@ let
           wrapped = finalType;
         };
       };
+
+    # Numeric bounds.
+    withMinimum =
+      min: base:
+      lib.types.addCheck base (x: x >= min)
+      // {
+        description = "${base.description} (minimum ${toString min})";
+      };
+    withMaximum =
+      max: base:
+      lib.types.addCheck base (x: x <= max)
+      // {
+        description = "${base.description} (maximum ${toString max})";
+      };
+    withExclusiveMinimum =
+      min: base:
+      lib.types.addCheck base (x: x > min)
+      // {
+        description = "${base.description} (exclusive minimum ${toString min})";
+      };
+    withExclusiveMaximum =
+      max: base:
+      lib.types.addCheck base (x: x < max)
+      // {
+        description = "${base.description} (exclusive maximum ${toString max})";
+      };
+    withMultipleOf =
+      m: base:
+      lib.types.addCheck base (x: mod x m == 0)
+      // {
+        description = "${base.description} (multiple of ${toString m})";
+      };
+
+    # String constraints.
+    withMinLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x >= n)
+      // {
+        description = "${base.description} (min length ${toString n})";
+      };
+    withMaxLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x <= n)
+      // {
+        description = "${base.description} (max length ${toString n})";
+      };
   };
 
   mkOptionDefault = mkOverride 1001;
@@ -274,7 +320,17 @@ let
         };
         "sourceType" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "download"
+                "upload"
+                "export-from-volume"
+                "restore"
+                "clone"
+              ]
+            )
+          );
         };
         "uuid" = mkOption {
           description = "";
@@ -469,7 +525,14 @@ let
         };
         "dataEngine" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "v1"
+                "v2"
+              ]
+            )
+          );
         };
         "diskFileSpecMap" = mkOption {
           description = "";
@@ -505,7 +568,17 @@ let
         };
         "sourceType" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "download"
+                "upload"
+                "export-from-volume"
+                "restore"
+                "clone"
+              ]
+            )
+          );
         };
       };
 
@@ -777,11 +850,26 @@ let
       options = {
         "backupBlockSize" = mkOption {
           description = "The backup block size. 0 means the legacy default size 2MiB, and -1 indicate the block size is invalid.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "-1"
+                "2097152"
+                "16777216"
+              ]
+            )
+          );
         };
         "backupMode" = mkOption {
           description = "The backup mode of this backup.\nCan be \"full\" or \"incremental\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "full"
+                "incremental"
+              ]
+            )
+          );
         };
         "labels" = mkOption {
           description = "The labels of snapshot backup.";
@@ -1262,7 +1350,14 @@ let
         };
         "dataEngine" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "v1"
+                "v2"
+              ]
+            )
+          );
         };
         "desireState" = mkOption {
           description = "";
@@ -1278,7 +1373,17 @@ let
         };
         "frontend" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "blockdev"
+                "iscsi"
+                "nvmf"
+                "ublk"
+                ""
+              ]
+            )
+          );
         };
         "image" = mkOption {
           description = "";
@@ -1585,7 +1690,7 @@ let
       options = {
         "image" = mkOption {
           description = "";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -1735,7 +1840,14 @@ let
         };
         "dataEngine" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "v1"
+                "v2"
+              ]
+            )
+          );
         };
         "desireState" = mkOption {
           description = "";
@@ -1747,7 +1859,17 @@ let
         };
         "frontend" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "blockdev"
+                "iscsi"
+                "nvmf"
+                "ublk"
+                ""
+              ]
+            )
+          );
         };
         "image" = mkOption {
           description = "";
@@ -1763,7 +1885,7 @@ let
         };
         "rebuildConcurrentSyncLimit" = mkOption {
           description = "RebuildConcurrentSyncLimit controls the maximum number of file synchronization operations that can run\nconcurrently during a single replica rebuild.\nIt is determined by the global setting or the volume spec field with the same name.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 5 (types.withMinimum 0 types.int)));
         };
         "replicaAddressMap" = mkOption {
           description = "";
@@ -1923,7 +2045,7 @@ let
         };
         "rebuildConcurrentSyncLimit" = mkOption {
           description = "RebuildConcurrentSyncLimit controls the maximum number of file synchronization operations that can run\nconcurrently during a single replica rebuild.\nIt is determined by the global setting or the volume spec field with the same name.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "rebuildStatus" = mkOption {
           description = "";
@@ -2119,7 +2241,15 @@ let
         };
         "type" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "aio"
+                "engine"
+                "replica"
+              ]
+            )
+          );
         };
       };
 
@@ -2149,6 +2279,18 @@ let
     "longhorn.io.v1beta2.InstanceManagerSpecDataEngineSpecV2" = {
 
       options = {
+        "cpuIsolationEnabled" = mkOption {
+          description = "CPUIsolationEnabled overrides the cluster-wide\ndata-engine-cpu-isolation-enabled setting for this instance manager.\n\"true\"  -> pass --enable-irq-affinity and --enable-workqueue-affinity\n           to start-spdk-tgt (steer host IRQs and unbound kernel\n           workqueues away from the SPDK reactor CPUs).\n\"false\" -> do not pass the flags.\n\"\"      -> inherit the global setting value.";
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "true"
+                "false"
+              ]
+            )
+          );
+        };
         "cpuMask" = mkOption {
           description = "";
           type = (types.nullOr types.str);
@@ -2156,6 +2298,7 @@ let
       };
 
       config = {
+        "cpuIsolationEnabled" = mkOverride 1002 null;
         "cpuMask" = mkOverride 1002 null;
       };
 
@@ -2201,6 +2344,14 @@ let
           description = "";
           type = (types.nullOr (types.attrsOf types.attrs));
         };
+        "instanceShardGroups" = mkOption {
+          description = "";
+          type = (types.nullOr (types.attrsOf types.attrs));
+        };
+        "instanceShards" = mkOption {
+          description = "";
+          type = (types.nullOr (types.attrsOf types.attrs));
+        };
         "ip" = mkOption {
           description = "";
           type = (types.nullOr types.str);
@@ -2229,6 +2380,8 @@ let
         "instanceEngineFrontends" = mkOverride 1002 null;
         "instanceEngines" = mkOverride 1002 null;
         "instanceReplicas" = mkOverride 1002 null;
+        "instanceShardGroups" = mkOverride 1002 null;
+        "instanceShards" = mkOverride 1002 null;
         "ip" = mkOverride 1002 null;
         "ownerID" = mkOverride 1002 null;
         "proxyApiMinVersion" = mkOverride 1002 null;
@@ -2292,17 +2445,30 @@ let
     "longhorn.io.v1beta2.InstanceManagerStatusDataEngineStatusV2" = {
 
       options = {
+        "cpuCoreNumber" = mkOption {
+          description = "";
+          type = (types.nullOr types.int);
+        };
         "cpuMask" = mkOption {
           description = "";
           type = (types.nullOr types.str);
         };
         "interruptModeEnabled" = mkOption {
           description = "InterruptModeEnabled indicates whether the V2 data engine is running in\ninterrupt mode (true) or polling mode (false). Set by Longhorn manager;\nread-only to users.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "true"
+                "false"
+              ]
+            )
+          );
         };
       };
 
       config = {
+        "cpuCoreNumber" = mkOverride 1002 null;
         "cpuMask" = mkOverride 1002 null;
         "interruptModeEnabled" = mkOverride 1002 null;
       };
@@ -2392,6 +2558,10 @@ let
           description = "";
           type = (types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.NodeStatusConditions")));
         };
+        "cpuPolicy" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
         "diskStatus" = mkOption {
           description = "";
           type = (types.nullOr (types.attrsOf types.attrs));
@@ -2413,6 +2583,7 @@ let
       config = {
         "autoEvicting" = mkOverride 1002 null;
         "conditions" = mkOverride 1002 null;
+        "cpuPolicy" = mkOverride 1002 null;
         "diskStatus" = mkOverride 1002 null;
         "region" = mkOverride 1002 null;
         "snapshotCheckStatus" = mkOverride 1002 null;
@@ -2512,7 +2683,14 @@ let
       options = {
         "dataEngine" = mkOption {
           description = "The type of data engine for instance orphan.\nCan be \"v1\", \"v2\".";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "v1"
+                "v2"
+              ]
+            )
+          );
         };
         "nodeID" = mkOption {
           description = "The node ID on which the controller is responsible to reconcile this orphan CR.";
@@ -2661,7 +2839,20 @@ let
         };
         "task" = mkOption {
           description = "The recurring job task.\nCan be \"snapshot\", \"snapshot-force-create\", \"snapshot-cleanup\", \"snapshot-delete\", \"backup\", \"backup-force-create\", \"filesystem-trim\" or \"system-backup\".";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "snapshot"
+                "snapshot-force-create"
+                "snapshot-cleanup"
+                "snapshot-delete"
+                "backup"
+                "backup-force-create"
+                "filesystem-trim"
+                "system-backup"
+              ]
+            )
+          );
         };
       };
 
@@ -2747,7 +2938,14 @@ let
         };
         "dataEngine" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "v1"
+                "v2"
+              ]
+            )
+          );
         };
         "desireState" = mkOption {
           description = "";
@@ -2791,6 +2989,10 @@ let
         };
         "lastHealthyAt" = mkOption {
           description = "LastHealthyAt is set every time a replica becomes read/write in an engine. Unlike HealthyAt, LastHealthyAt is\nnever cleared. LastHealthyAt is not a reliable indicator of the state of a replica's data. For example, a\nreplica with LastHealthyAt set may be in the middle of a rebuild. However, because it is never cleared, it can be\ncompared to LastFailedAt to help prevent dangerous replica deletion in some corner cases. LastHealthyAt may be\nlater than the corresponding entry in an engine's replicaTransitionTimeMap because it is set when the volume\ncontroller acknowledges the change.";
+          type = (types.nullOr types.str);
+        };
+        "linkedCloneSrcReplicaName" = mkOption {
+          description = "LinkedCloneSrcReplicaName is the name of the src replica this clone replica is parented to.\nImmutable once set. Non-empty only for linked-clone replicas.";
           type = (types.nullOr types.str);
         };
         "logRequested" = mkOption {
@@ -2855,6 +3057,7 @@ let
         "image" = mkOverride 1002 null;
         "lastFailedAt" = mkOverride 1002 null;
         "lastHealthyAt" = mkOverride 1002 null;
+        "linkedCloneSrcReplicaName" = mkOverride 1002 null;
         "logRequested" = mkOverride 1002 null;
         "migrationEngineName" = mkOverride 1002 null;
         "nodeID" = mkOverride 1002 null;
@@ -3030,6 +3233,377 @@ let
       };
 
       config = { };
+
+    };
+    "longhorn.io.v1beta2.Shard" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "ShardSpec defines the desired state of the Longhorn Shard";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.ShardSpec"));
+        };
+        "status" = mkOption {
+          description = "ShardStatus defines the observed state of the Longhorn Shard";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.ShardStatus"));
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.ShardGroup" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "ShardGroupSpec defines the desired state of the Longhorn ShardGroup";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.ShardGroupSpec"));
+        };
+        "status" = mkOption {
+          description = "ShardGroupStatus defines the observed state of the Longhorn ShardGroup";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.ShardGroupStatus"));
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.ShardGroupSpec" = {
+
+      options = {
+        "creationSize" = mkOption {
+          description = "CreationSize is the volume size in bytes when the lvstore is first\ncreated. The lvstore metadata region is sized from it and never grows,\nso in-place expansion is limited to EcLvstoreMaxGrowthFactor (10x) of\nthis size. Zero means the lvstore does not exist yet; the creation cap\napplies instead. Immutable once set.";
+          type = (types.nullOr types.int);
+        };
+        "dataChunks" = mkOption {
+          description = "DataChunks is the k parameter of the EC array. Immutable after creation.";
+          type = (types.nullOr (types.withMinimum 1 types.int));
+        };
+        "nodeID" = mkOption {
+          description = "NodeID identifies the node hosting the long-lived ShardGroup process that owns the\nEC volume's bdev_ec, lvol store, head lvol, and NVMe-oF export. It is typically equal\nto Engine.Spec.NodeID for engine-process co-location. The Volume controller is the\nsole writer and sets this field at first attach. NodeID is NOT cleared on volume\ndetach (the ShardGroup process keeps running across detach to preserve the lvstore\nand head lvol on the encoded shard blocks for fast re-attach); it only changes on\nengine-node failover or volume deletion.";
+          type = (types.nullOr types.str);
+        };
+        "parityChunks" = mkOption {
+          description = "ParityChunks is the m parameter of the EC array. The ShardGroup tolerates up to m\nsimultaneous shard failures. Immutable after creation.";
+          type = (types.nullOr (types.withMinimum 1 types.int));
+        };
+        "stripSizeKB" = mkOption {
+          description = "StripSizeKB is the EC chunk size in KiB. Must be a power of two in the range [4, 1024].\nImmutable after creation.";
+          type = (types.nullOr (types.withMaximum 1024 (types.withMinimum 4 types.int)));
+        };
+        "volumeName" = mkOption {
+          description = "VolumeName is the name of the owning Volume CR. Immutable after creation.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "creationSize" = mkOverride 1002 null;
+        "dataChunks" = mkOverride 1002 null;
+        "nodeID" = mkOverride 1002 null;
+        "parityChunks" = mkOverride 1002 null;
+        "stripSizeKB" = mkOverride 1002 null;
+        "volumeName" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.ShardGroupStatus" = {
+
+      options = {
+        "conditions" = mkOption {
+          description = "Conditions holds the latest observations of the ShardGroup's state, such as a\ndegraded read that returned EIO.";
+          type = (types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.ShardGroupStatusConditions")));
+        };
+        "ecShardAddressMap" = mkOption {
+          description = "ECShardAddressMap maps shard slot index (as string) to the NVMe-oF address (\"ip:port\")\nof each healthy shard instance (ShardStateNormal with a non-empty StorageIP and Port).\nIt is the base-bdev list for the ShardGroup process's EC array, and acts as the readiness\ngate (together with every Shard CR being in ShardStateNormal) before the ShardGroup\nprocess is provisioned.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+        "evictingSlots" = mkOption {
+          description = "EvictingSlots is the ordered list of slot indices currently in the eviction\npipeline (old Shard CR deleted, replacement not yet rebuilt). Tracked in\nstatus so VolumeEvictionController can observe progress without annotation parsing.";
+          type = (types.nullOr (types.listOf types.int));
+        };
+        "failedCount" = mkOption {
+          description = "FailedCount is the number of slots currently in the failed state. Slots being replaced\n(ShardStateReplacing) are not counted; an active rebuild is tracked separately via\nRebuildInProgress.";
+          type = (types.nullOr types.int);
+        };
+        "growInProgress" = mkOption {
+          description = "GrowInProgress indicates whether a capacity expansion is currently running.";
+          type = (types.nullOr types.bool);
+        };
+        "headLvolUUID" = mkOption {
+          description = "HeadLvolUUID is the UUID of the head lvol on the ShardGroup-process-owned lvol\nstore. Surfaced for observability and debugging only.";
+          type = (types.nullOr types.str);
+        };
+        "instanceManagerName" = mkOption {
+          description = "InstanceManagerName is the InstanceManager currently hosting the ShardGroup process,\nset during provisioning and cleared on teardown. During a re-bind to a new node it may\nstill reference the previous InstanceManager until teardown completes, so consumers must\nvalidate it against Spec.NodeID before trusting the endpoint above.";
+          type = (types.nullOr types.str);
+        };
+        "intentionalDeleteSlots" = mkOption {
+          description = "IntentionalDeleteSlots is the list of slot indices whose old Shard CR was\ndeleted intentionally (admin kubectl delete, eviction, drain). The replacement\nShard CR's failure-recovery debounce is bypassed for these slots so the\nreplace+rebuild sequence runs immediately rather than after the full\nreplica-replenishment-wait-interval. Cleared once the replacement reaches\nShardStateNormal with StorageIP set, and defensively cleared on ShardGroup\nprocess re-bind.";
+          type = (types.nullOr (types.listOf types.int));
+        };
+        "lvstoreUUID" = mkOption {
+          description = "LvstoreUUID is reserved for the UUID of the lvol store created on bdev_ec inside the\nShardGroup process. It is currently unpopulated: the ShardGroup instance does not surface\nthe lvstore UUID over the instance-manager proto yet. Kept for forward-compatible\nobservability; not on the engine data path.";
+          type = (types.nullOr types.str);
+        };
+        "nqn" = mkOption {
+          description = "NQN is the NVMe-oF subsystem NQN of the ShardGroup process's exposed head lvol.";
+          type = (types.nullOr types.str);
+        };
+        "ownerID" = mkOption {
+          description = "OwnerID is the ID of the node that owns this ShardGroup.";
+          type = (types.nullOr types.str);
+        };
+        "port" = mkOption {
+          description = "Port is the NVMe-oF port allocated for the ShardGroup process's exposed head lvol.";
+          type = (types.nullOr types.int);
+        };
+        "processState" = mkOption {
+          description = "ProcessState is the runtime state of the ShardGroup process owned by this CR.";
+          type = (types.nullOr types.str);
+        };
+        "rebuildInProgress" = mkOption {
+          description = "RebuildInProgress indicates whether a background shard rebuild is currently running.";
+          type = (types.nullOr types.bool);
+        };
+        "scrubInProgress" = mkOption {
+          description = "ScrubInProgress indicates whether a background scrub is currently running.";
+          type = (types.nullOr types.bool);
+        };
+        "shardRefs" = mkOption {
+          description = "ShardRefs is an ordered list of Shard CR names, where the list index equals the EC slot index.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "state" = mkOption {
+          description = "State is the aggregate health state of the EC array.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "healthy"
+                "degraded"
+                "offline"
+                "rebuilding"
+                "growing"
+                ""
+              ]
+            )
+          );
+        };
+        "storageIP" = mkOption {
+          description = "StorageIP is the storage-network IP of the InstanceManager pod hosting the ShardGroup\nprocess. Combined with Port and NQN, it forms the NVMe-oF endpoint that an EC volume's\nengine attaches to.";
+          type = (types.nullOr types.str);
+        };
+        "wibDirtyRegion" = mkOption {
+          description = "WIBDirtyRegion is the number of dirty WIB regions reported by the EC bdev.";
+          type = (types.nullOr types.int);
+        };
+      };
+
+      config = {
+        "conditions" = mkOverride 1002 null;
+        "ecShardAddressMap" = mkOverride 1002 null;
+        "evictingSlots" = mkOverride 1002 null;
+        "failedCount" = mkOverride 1002 null;
+        "growInProgress" = mkOverride 1002 null;
+        "headLvolUUID" = mkOverride 1002 null;
+        "instanceManagerName" = mkOverride 1002 null;
+        "intentionalDeleteSlots" = mkOverride 1002 null;
+        "lvstoreUUID" = mkOverride 1002 null;
+        "nqn" = mkOverride 1002 null;
+        "ownerID" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "processState" = mkOverride 1002 null;
+        "rebuildInProgress" = mkOverride 1002 null;
+        "scrubInProgress" = mkOverride 1002 null;
+        "shardRefs" = mkOverride 1002 null;
+        "state" = mkOverride 1002 null;
+        "storageIP" = mkOverride 1002 null;
+        "wibDirtyRegion" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.ShardGroupStatusConditions" = {
+
+      options = {
+        "lastProbeTime" = mkOption {
+          description = "Last time we probed the condition.";
+          type = (types.nullOr types.str);
+        };
+        "lastTransitionTime" = mkOption {
+          description = "Last time the condition transitioned from one status to another.";
+          type = (types.nullOr types.str);
+        };
+        "message" = mkOption {
+          description = "Human-readable message indicating details about last transition.";
+          type = (types.nullOr types.str);
+        };
+        "reason" = mkOption {
+          description = "Unique, one-word, CamelCase reason for the condition's last transition.";
+          type = (types.nullOr types.str);
+        };
+        "status" = mkOption {
+          description = "Status is the status of the condition.\nCan be True, False, Unknown.";
+          type = (types.nullOr types.str);
+        };
+        "type" = mkOption {
+          description = "Type is the type of the condition.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "lastProbeTime" = mkOverride 1002 null;
+        "lastTransitionTime" = mkOverride 1002 null;
+        "message" = mkOverride 1002 null;
+        "reason" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+        "type" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.ShardSpec" = {
+
+      options = {
+        "diskPath" = mkOption {
+          description = "DiskPath is the path of the disk that hosts the shard lvol.";
+          type = (types.nullOr types.str);
+        };
+        "diskUUID" = mkOption {
+          description = "DiskUUID is the UUID of the disk that hosts the shard lvol.";
+          type = (types.nullOr types.str);
+        };
+        "evictionRequested" = mkOption {
+          description = "EvictionRequested indicates this shard should be relocated to a different node or disk.\nSet by the node controller when the shard's node is being drained or its disk is evicted.";
+          type = (types.nullOr types.bool);
+        };
+        "nodeID" = mkOption {
+          description = "NodeID is the node where this shard's lvol resides and its NVMe-oF target runs.";
+          type = (types.nullOr types.str);
+        };
+        "shardGroupName" = mkOption {
+          description = "ShardGroupName is the name of the owning ShardGroup CR. Immutable after creation.";
+          type = (types.nullOr types.str);
+        };
+        "size" = mkOption {
+          description = "Size is the shard lvol size in bytes. Set by the ShardGroup controller at creation time\nand used for idempotent reconciliation.";
+          type = (types.nullOr types.str);
+        };
+        "slotIndex" = mkOption {
+          description = "SlotIndex is the zero-based position of this shard in the EC base-bdev array.\nDetermines the shard's role: indices 0..k-1 are DATA, k..k+m-1 are PARITY.\nImmutable after creation.";
+          type = (types.nullOr (types.withMinimum 0 types.int));
+        };
+      };
+
+      config = {
+        "diskPath" = mkOverride 1002 null;
+        "diskUUID" = mkOverride 1002 null;
+        "evictionRequested" = mkOverride 1002 null;
+        "nodeID" = mkOverride 1002 null;
+        "shardGroupName" = mkOverride 1002 null;
+        "size" = mkOverride 1002 null;
+        "slotIndex" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.ShardStatus" = {
+
+      options = {
+        "lastFailureTimestamp" = mkOption {
+          description = "LastFailureTimestamp is the RFC3339 timestamp of the most recent shard failure.";
+          type = (types.nullOr types.str);
+        };
+        "ownerID" = mkOption {
+          description = "OwnerID is the ID of the node that owns this Shard.";
+          type = (types.nullOr types.str);
+        };
+        "port" = mkOption {
+          description = "Port is the NVMe-oF port of the shard's target export.";
+          type = (types.nullOr types.int);
+        };
+        "rebuildProgress" = mkOption {
+          description = "RebuildProgress is the rebuild completion percentage (0-100).";
+          type = (types.nullOr types.int);
+        };
+        "replaceTriggered" = mkOption {
+          description = "ReplaceTriggered is set to true after shard replacement has been initiated, to prevent\nre-issuing the replace command on subsequent cycles while SPDK advances the slot state.\nCleared when the slot state transitions away from Failed.";
+          type = (types.nullOr types.bool);
+        };
+        "role" = mkOption {
+          description = "Role is the EC role of this slot (data or parity). Derived from SlotIndex and the parent\nShardGroup's DataChunks; stored here for informational purposes only.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "data"
+                "parity"
+                ""
+              ]
+            )
+          );
+        };
+        "state" = mkOption {
+          description = "State is the health state of this EC shard slot.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "normal"
+                "failed"
+                "replacing"
+                ""
+              ]
+            )
+          );
+        };
+        "storageIP" = mkOption {
+          description = "StorageIP is the IP address of the NVMe-oF target exported by the shard's InstanceManager.\nPopulated after the shard instance is running.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "lastFailureTimestamp" = mkOverride 1002 null;
+        "ownerID" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "rebuildProgress" = mkOverride 1002 null;
+        "replaceTriggered" = mkOverride 1002 null;
+        "role" = mkOverride 1002 null;
+        "state" = mkOverride 1002 null;
+        "storageIP" = mkOverride 1002 null;
+      };
 
     };
     "longhorn.io.v1beta2.ShareManager" = {
@@ -3755,7 +4329,15 @@ let
         };
         "accessMode" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "rwo"
+                "rwop"
+                "rwx"
+              ]
+            )
+          );
         };
         "backingImage" = mkOption {
           description = "";
@@ -3763,11 +4345,26 @@ let
         };
         "backupBlockSize" = mkOption {
           description = "BackupBlockSize indicate the block size to create backups. The block size is immutable.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "2097152"
+                "16777216"
+              ]
+            )
+          );
         };
         "backupCompressionMethod" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lz4"
+                "gzip"
+              ]
+            )
+          );
         };
         "backupTargetName" = mkOption {
           description = "The backup target name that the volume will be backed up to or is synced.";
@@ -3775,15 +4372,42 @@ let
         };
         "cloneMode" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "full-copy"
+                "linked-clone"
+              ]
+            )
+          );
         };
         "dataEngine" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "v1"
+                "v2"
+              ]
+            )
+          );
+        };
+        "dataLayout" = mkOption {
+          description = "DataLayout declares the user's intended data layout (topology type, protection mode, and EC parameters).\nThe entire struct is immutable after creation.";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.VolumeSpecDataLayout"));
         };
         "dataLocality" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "disabled"
+                "best-effort"
+                "strict-local"
+              ]
+            )
+          );
         };
         "dataSource" = mkOption {
           description = "";
@@ -3807,7 +4431,15 @@ let
         };
         "freezeFilesystemForSnapshot" = mkOption {
           description = "Setting that freezes the filesystem on the root partition before a snapshot is created.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "enabled"
+                "disabled"
+              ]
+            )
+          );
         };
         "fromBackup" = mkOption {
           description = "";
@@ -3815,7 +4447,17 @@ let
         };
         "frontend" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "blockdev"
+                "iscsi"
+                "nvmf"
+                "ublk"
+                ""
+              ]
+            )
+          );
         };
         "image" = mkOption {
           description = "";
@@ -3847,35 +4489,84 @@ let
         };
         "offlineRebuilding" = mkOption {
           description = "Specifies whether Longhorn should rebuild replicas while the detached volume is degraded.\n- ignored: Use the global setting for offline replica rebuilding.\n- enabled: Enable offline rebuilding for this volume, regardless of the global setting.\n- disabled: Disable offline rebuilding for this volume, regardless of the global setting";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "disabled"
+                "enabled"
+              ]
+            )
+          );
         };
         "rebuildConcurrentSyncLimit" = mkOption {
           description = "RebuildConcurrentSyncLimit controls the maximum number of file synchronization operations that can run\nconcurrently during a single replica rebuild.\nWhen set to 0, it means following the global setting.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 5 (types.withMinimum 0 types.int)));
         };
         "replicaAutoBalance" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "disabled"
+                "least-effort"
+                "best-effort"
+              ]
+            )
+          );
         };
         "replicaDiskSoftAntiAffinity" = mkOption {
           description = "Replica disk soft anti affinity of the volume. Set enabled to allow replicas to be scheduled in the same disk.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "enabled"
+                "disabled"
+              ]
+            )
+          );
         };
         "replicaRebuildingBandwidthLimit" = mkOption {
           description = "ReplicaRebuildingBandwidthLimit controls the maximum write bandwidth (in megabytes per second) allowed on the destination replica during the rebuilding process. Set this value to 0 to disable bandwidth limiting.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "replicaSoftAntiAffinity" = mkOption {
           description = "Replica soft anti affinity of the volume. Set enabled to allow replicas to be scheduled on the same node.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "enabled"
+                "disabled"
+              ]
+            )
+          );
         };
         "replicaZoneSoftAntiAffinity" = mkOption {
           description = "Replica zone soft anti affinity of the volume. Set enabled to allow replicas to be scheduled in the same zone.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "enabled"
+                "disabled"
+              ]
+            )
+          );
         };
         "restoreVolumeRecurringJob" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "enabled"
+                "disabled"
+              ]
+            )
+          );
         };
         "revisionCounterDisabled" = mkOption {
           description = "";
@@ -3887,7 +4578,16 @@ let
         };
         "snapshotDataIntegrity" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "disabled"
+                "enabled"
+                "fast-check"
+              ]
+            )
+          );
         };
         "snapshotHashingRequestedAt" = mkOption {
           description = "SnapshotHashingRequestedAt is the RFC3339 timestamp (e.g., \"2026-03-16T10:30:00Z\") when an on-demand snapshot checksum calculation is requested.\nWhen this value is set and is later than LastOnDemandSnapshotHashingCompleteAt, the system will calculate checksums\nfor all user snapshots.\n\nIf SnapshotHashingRequestedAt differs from LastOnDemandSnapshotHashingCompleteAt, it indicates that a hashing request\nis still in progress, and a new request will be rejected.";
@@ -3915,7 +4615,15 @@ let
         };
         "unmapMarkSnapChainRemoved" = mkOption {
           description = "";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ignored"
+                "disabled"
+                "enabled"
+              ]
+            )
+          );
         };
       };
 
@@ -3928,6 +4636,7 @@ let
         "backupTargetName" = mkOverride 1002 null;
         "cloneMode" = mkOverride 1002 null;
         "dataEngine" = mkOverride 1002 null;
+        "dataLayout" = mkOverride 1002 null;
         "dataLocality" = mkOverride 1002 null;
         "dataSource" = mkOverride 1002 null;
         "disableFrontend" = mkOverride 1002 null;
@@ -3962,6 +4671,56 @@ let
         "ublkNumberOfQueue" = mkOverride 1002 null;
         "ublkQueueDepth" = mkOverride 1002 null;
         "unmapMarkSnapChainRemoved" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.VolumeSpecDataLayout" = {
+
+      options = {
+        "dataChunks" = mkOption {
+          description = "DataChunks is the number of data chunks (k) in the EC array.\nRequired when Type is sharded; must be 0 for replicated volumes.";
+          type = (types.nullOr (types.withMinimum 0 types.int));
+        };
+        "mode" = mkOption {
+          description = "Mode describes the specific data protection mechanism in use.\nEmpty for V1 volumes where no SPDK-level mode applies.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "raid1"
+                "erasureCoding"
+                ""
+              ]
+            )
+          );
+        };
+        "parityChunks" = mkOption {
+          description = "ParityChunks is the number of parity chunks (m) in the EC array.\nThe volume tolerates up to m simultaneous disk failures.\nRequired when Type is sharded; must be 0 for replicated volumes.";
+          type = (types.nullOr (types.withMinimum 0 types.int));
+        };
+        "stripSizeKB" = mkOption {
+          description = "StripSizeKB is the chunk size in KiB used by the EC bdev.\nMust be a power of two in the range [4, 1024].\nRequired when Type is sharded; must be 0 for replicated volumes.";
+          type = (types.nullOr (types.withMinimum 0 types.int));
+        };
+        "type" = mkOption {
+          description = "Type describes how volume data is distributed across nodes.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "replicated"
+                "sharded"
+                ""
+              ]
+            )
+          );
+        };
+      };
+
+      config = {
+        "dataChunks" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
+        "parityChunks" = mkOverride 1002 null;
+        "stripSizeKB" = mkOverride 1002 null;
+        "type" = mkOverride 1002 null;
       };
 
     };
@@ -4422,6 +5181,25 @@ in
         );
         default = { };
       };
+      "longhorn.io"."v1beta2"."Shard" = mkOption {
+        description = "Shard is where Longhorn stores Shard object.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.Shard" "shards" "Shard" "longhorn.io" "v1beta2"
+          )
+        );
+        default = { };
+      };
+      "longhorn.io"."v1beta2"."ShardGroup" = mkOption {
+        description = "ShardGroup is where Longhorn stores ShardGroup object.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.ShardGroup" "shardgroups" "ShardGroup" "longhorn.io"
+              "v1beta2"
+          )
+        );
+        default = { };
+      };
       "longhorn.io"."v1beta2"."ShareManager" = mkOption {
         description = "ShareManager is where Longhorn stores share manager object.";
         type = (
@@ -4664,6 +5442,25 @@ in
         );
         default = { };
       };
+      "longhornShards" = mkOption {
+        description = "Shard is where Longhorn stores Shard object.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.Shard" "shards" "Shard" "longhorn.io" "v1beta2"
+          )
+        );
+        default = { };
+      };
+      "longhornShardGroups" = mkOption {
+        description = "ShardGroup is where Longhorn stores ShardGroup object.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.ShardGroup" "shardgroups" "ShardGroup" "longhorn.io"
+              "v1beta2"
+          )
+        );
+        default = { };
+      };
       "longhornShareManagers" = mkOption {
         description = "ShareManager is where Longhorn stores share manager object.";
         type = (
@@ -4860,6 +5657,20 @@ in
         attrName = "longhornSettings";
       }
       {
+        name = "shards";
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "Shard";
+        attrName = "longhornShards";
+      }
+      {
+        name = "shardgroups";
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "ShardGroup";
+        attrName = "longhornShardGroups";
+      }
+      {
         name = "sharemanagers";
         group = "longhorn.io";
         version = "v1beta2";
@@ -4945,6 +5756,8 @@ in
           options.resources."longhornRecurringJobs";
       "longhorn.io"."v1beta2"."Replica" = mkAliasDefinitions options.resources."longhornReplicas";
       "longhorn.io"."v1beta2"."Setting" = mkAliasDefinitions options.resources."longhornSettings";
+      "longhorn.io"."v1beta2"."Shard" = mkAliasDefinitions options.resources."longhornShards";
+      "longhorn.io"."v1beta2"."ShardGroup" = mkAliasDefinitions options.resources."longhornShardGroups";
       "longhorn.io"."v1beta2"."ShareManager" =
         mkAliasDefinitions
           options.resources."longhornShareManagers";
@@ -5062,6 +5875,18 @@ in
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Setting";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "Shard";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "ShardGroup";
         default.metadata.namespace = lib.mkDefault config.namespace;
       }
       {

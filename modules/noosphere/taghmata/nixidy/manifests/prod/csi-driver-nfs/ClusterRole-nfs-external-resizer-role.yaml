@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: csi-driver-nfs
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: csi-driver-nfs
-    app.kubernetes.io/version: latest
-    helm.sh/chart: csi-driver-nfs-v0.0.0
+    app.kubernetes.io/version: 4.13.4
+    helm.sh/chart: csi-driver-nfs-4.13.4
   name: nfs-external-resizer-role
 rules:
   - apiGroups:

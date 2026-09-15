@@ -76,6 +76,52 @@ let
           wrapped = finalType;
         };
       };
+
+    # Numeric bounds.
+    withMinimum =
+      min: base:
+      lib.types.addCheck base (x: x >= min)
+      // {
+        description = "${base.description} (minimum ${toString min})";
+      };
+    withMaximum =
+      max: base:
+      lib.types.addCheck base (x: x <= max)
+      // {
+        description = "${base.description} (maximum ${toString max})";
+      };
+    withExclusiveMinimum =
+      min: base:
+      lib.types.addCheck base (x: x > min)
+      // {
+        description = "${base.description} (exclusive minimum ${toString min})";
+      };
+    withExclusiveMaximum =
+      max: base:
+      lib.types.addCheck base (x: x < max)
+      // {
+        description = "${base.description} (exclusive maximum ${toString max})";
+      };
+    withMultipleOf =
+      m: base:
+      lib.types.addCheck base (x: mod x m == 0)
+      // {
+        description = "${base.description} (multiple of ${toString m})";
+      };
+
+    # String constraints.
+    withMinLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x >= n)
+      // {
+        description = "${base.description} (min length ${toString n})";
+      };
+    withMaxLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x <= n)
+      // {
+        description = "${base.description} (max length ${toString n})";
+      };
   };
 
   mkOptionDefault = mkOverride 1001;
@@ -336,11 +382,11 @@ let
       options = {
         "detectMultiplier" = mkOption {
           description = "Configures the detection multiplier to determine\npacket loss. The remote transmission interval will be multiplied\nby this value to determine the connection loss detection timer.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 255 (types.withMinimum 2 types.int)));
         };
         "echoInterval" = mkOption {
           description = "Configures the minimal echo receive transmission\ninterval that this system is capable of handling in milliseconds.\nDefaults to 50ms";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 60000 (types.withMinimum 10 types.int)));
         };
         "echoMode" = mkOption {
           description = "Enables or disables the echo transmission mode.\nThis mode is disabled by default, and not supported on multi\nhops setups.";
@@ -348,7 +394,7 @@ let
         };
         "minimumTtl" = mkOption {
           description = "For multi hop sessions only: configure the minimum\nexpected TTL for an incoming BFD control packet.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 254 (types.withMinimum 1 types.int)));
         };
         "name" = mkOption {
           description = "The name of the BFD Profile to be referenced in other parts\nof the configuration.";
@@ -360,11 +406,11 @@ let
         };
         "receiveInterval" = mkOption {
           description = "The minimum interval that this system is capable of\nreceiving control packets in milliseconds.\nDefaults to 300ms.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 60000 (types.withMinimum 10 types.int)));
         };
         "transmitInterval" = mkOption {
           description = "The minimum transmission interval (less jitter)\nthat this system wants to use to send BFD control packets in\nmilliseconds. Defaults to 300ms";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 60000 (types.withMinimum 10 types.int)));
         };
       };
 
@@ -384,7 +430,7 @@ let
       options = {
         "asn" = mkOption {
           description = "ASN is the AS number to use for the local end of the session.";
-          type = types.int;
+          type = (types.withMaximum 4294967295 (types.withMinimum 0 types.int));
         };
         "id" = mkOption {
           description = "ID is the BGP router ID";
@@ -448,7 +494,7 @@ let
         };
         "asn" = mkOption {
           description = "ASN is the AS number to use for the local end of the session.\nASN and DynamicASN are mutually exclusive and one of them must be specified.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 4294967295 (types.withMinimum 0 types.int)));
         };
         "bfdProfile" = mkOption {
           description = "BFDProfile is the name of the BFD Profile to be used for the BFD session associated\nto the BGP session. If not set, the BFD session won't be set up.";
@@ -468,7 +514,14 @@ let
         };
         "dynamicASN" = mkOption {
           description = "DynamicASN detects the AS number to use for the local end of the session\nwithout explicitly setting it via the ASN field. Limited to:\ninternal - if the neighbor's ASN is different than the router's the connection is denied.\nexternal - if the neighbor's ASN is the same as the router's the connection is denied.\nASN and DynamicASN are mutually exclusive and one of them must be specified.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "internal"
+                "external"
+              ]
+            )
+          );
         };
         "ebgpMultiHop" = mkOption {
           description = "EBGPMultiHop indicates if the BGPPeer is multi-hops away.";
@@ -492,7 +545,7 @@ let
         };
         "localASN" = mkOption {
           description = "LocalASN allows advertising a different AS number to the peer using BGP's\nlocal-as feature. When set, FRR will advertise this ASN to the peer\nvia \"neighbor <peer> local-as <ASN> no-prepend replace-as\", overriding\nthe router-level ASN for this specific session.\nNote: this field is only applicable to eBGP sessions (where the peer ASN differs\nfrom the router ASN). Setting it on an iBGP session is rejected.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 4294967295 (types.withMinimum 1 types.int)));
         };
         "password" = mkOption {
           description = "Password to be used for establishing the BGP session.\nPassword and PasswordSecret are mutually exclusive.";
@@ -508,7 +561,7 @@ let
         };
         "port" = mkOption {
           description = "Port is the port to dial when establishing the session.\nDefaults to 179.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 16384 (types.withMinimum 0 types.int)));
         };
         "sourceaddress" = mkOption {
           description = "SourceAddress is the IPv4 or IPv6 source address to use for the BGP\nsession to this neighbour, may be specified as either an IP address\ndirectly or as an interface name";
@@ -619,7 +672,14 @@ let
       options = {
         "mode" = mkOption {
           description = "Mode is the mode to use when handling the prefixes.\nWhen set to \"filtered\", only the prefixes in the given list will be allowed.\nWhen set to \"all\", all the prefixes configured on the router will be allowed.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "all"
+                "filtered"
+              ]
+            )
+          );
         };
         "prefixes" = mkOption {
           description = "";
@@ -694,7 +754,14 @@ let
       options = {
         "mode" = mkOption {
           description = "Mode is the mode to use when handling the prefixes.\nWhen set to \"filtered\", only the prefixes in the given list will be allowed.\nWhen set to \"all\", all the prefixes configured on the router will be allowed.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "all"
+                "filtered"
+              ]
+            )
+          );
         };
         "prefixes" = mkOption {
           description = "";
@@ -719,11 +786,11 @@ let
       options = {
         "ge" = mkOption {
           description = "The prefix length modifier. This selector accepts any matching prefix with length\ngreater or equal the given value.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 128 (types.withMinimum 1 types.int)));
         };
         "le" = mkOption {
           description = "The prefix length modifier. This selector accepts any matching prefix with length\nless or equal the given value.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 128 (types.withMinimum 1 types.int)));
         };
         "prefix" = mkOption {
           description = "";
@@ -843,7 +910,18 @@ let
       options = {
         "logLevel" = mkOption {
           description = "LogLevel sets the logging verbosity for the FRR-K8s components at runtime.\nWhen configured, this value overrides the defaults established by the --log-level CLI flag.\nValid values are: all, debug, info, warn, error, none.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "all"
+                "debug"
+                "info"
+                "warn"
+                "error"
+                "none"
+              ]
+            )
+          );
         };
       };
 
@@ -949,11 +1027,11 @@ let
       options = {
         "detectMultiplier" = mkOption {
           description = "Configures the detection multiplier to determine\npacket loss. The remote transmission interval will be multiplied\nby this value to determine the connection loss detection timer.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 255 (types.withMinimum 2 types.int)));
         };
         "echoInterval" = mkOption {
           description = "Configures the minimal echo receive transmission\ninterval that this system is capable of handling in milliseconds.\nDefaults to 50ms";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 60000 (types.withMinimum 10 types.int)));
         };
         "echoMode" = mkOption {
           description = "Enables or disables the echo transmission mode.\nThis mode is disabled by default, and not supported on multi\nhops setups.";
@@ -961,7 +1039,7 @@ let
         };
         "minimumTtl" = mkOption {
           description = "For multi hop sessions only: configure the minimum\nexpected TTL for an incoming BFD control packet.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 254 (types.withMinimum 1 types.int)));
         };
         "passiveMode" = mkOption {
           description = "Mark session as passive: a passive session will not\nattempt to start the connection and will wait for control packets\nfrom peer before it begins replying.";
@@ -969,11 +1047,11 @@ let
         };
         "receiveInterval" = mkOption {
           description = "The minimum interval that this system is capable of\nreceiving control packets in milliseconds.\nDefaults to 300ms.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 60000 (types.withMinimum 10 types.int)));
         };
         "transmitInterval" = mkOption {
           description = "The minimum transmission interval (less jitter)\nthat this system wants to use to send BFD control packets in\nmilliseconds. Defaults to 300ms";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 60000 (types.withMinimum 10 types.int)));
         };
       };
 
@@ -1027,7 +1105,7 @@ let
       options = {
         "aggregationLength" = mkOption {
           description = "The aggregation-length advertisement option lets you “roll up” the /32s into a larger prefix. Defaults to 32. Works for IPv4 addresses.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 1 types.int));
         };
         "aggregationLengthV6" = mkOption {
           description = "The aggregation-length advertisement option lets you “roll up” the /128s into a larger prefix. Defaults to 128. Works for IPv6 addresses.";
@@ -1337,7 +1415,15 @@ let
         };
         "result" = mkOption {
           description = "Result indicates the configuration validation result.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Valid"
+                "Invalid"
+                "Unknown"
+              ]
+            )
+          );
         };
       };
 
@@ -1357,23 +1443,29 @@ let
         };
         "message" = mkOption {
           description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.str;
+          type = (types.withMaxLength 32768 types.str);
         };
         "observedGeneration" = mkOption {
           description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "reason" = mkOption {
           description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.str;
+          type = (types.withMaxLength 1024 (types.withMinLength 1 types.str));
         };
         "status" = mkOption {
           description = "status of the condition, one of True, False, Unknown.";
-          type = types.str;
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
         };
         "type" = mkOption {
           description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.str;
+          type = (types.withMaxLength 316 types.str);
         };
       };
 
@@ -2011,7 +2103,14 @@ let
         };
         "dynamicASN" = mkOption {
           description = "DynamicASN detects the AS number to use for the remote end of the session\nwithout explicitly setting it via the ASN field. Limited to:\ninternal - if the neighbor's ASN is different than MyASN connection is denied.\nexternal - if the neighbor's ASN is the same as MyASN the connection is denied.\nASN and DynamicASN are mutually exclusive and one of them must be specified.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "internal"
+                "external"
+              ]
+            )
+          );
         };
         "ebgpMultiHop" = mkOption {
           description = "To set if the BGPPeer is multi-hops away. Needed for FRR-based modes (FRR-K8s, FRR) only.";
@@ -2035,11 +2134,11 @@ let
         };
         "localASN" = mkOption {
           description = "LocalASN allows advertising a different AS number to the peer using BGP's\nlocal-as feature. When set, MetalLB will advertise this ASN to the peer\nvia \"neighbor <peer> local-as <ASN> no-prepend replace-as\", overriding\nthe router-level MyASN for this specific session.\nNot supported in native BGP mode.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 4294967295 (types.withMinimum 1 types.int)));
         };
         "myASN" = mkOption {
           description = "AS number to use for the local end of the session.";
-          type = types.int;
+          type = (types.withMaximum 4294967295 (types.withMinimum 0 types.int));
         };
         "nodeSelectors" = mkOption {
           description = "Only connect to this peer on nodes that match one of these\nselectors.";
@@ -2055,7 +2154,7 @@ let
         };
         "peerASN" = mkOption {
           description = "AS number to expect from the remote end of the session.\nASN and DynamicASN are mutually exclusive and one of them must be specified.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 4294967295 (types.withMinimum 0 types.int)));
         };
         "peerAddress" = mkOption {
           description = "Address to dial when establishing the session.";
@@ -2063,7 +2162,7 @@ let
         };
         "peerPort" = mkOption {
           description = "Port to dial when establishing the session.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 16384 (types.withMinimum 1 types.int)));
         };
         "routerID" = mkOption {
           description = "BGP router ID to advertise to the peer";

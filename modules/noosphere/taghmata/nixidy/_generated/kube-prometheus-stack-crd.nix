@@ -76,6 +76,52 @@ let
           wrapped = finalType;
         };
       };
+
+    # Numeric bounds.
+    withMinimum =
+      min: base:
+      lib.types.addCheck base (x: x >= min)
+      // {
+        description = "${base.description} (minimum ${toString min})";
+      };
+    withMaximum =
+      max: base:
+      lib.types.addCheck base (x: x <= max)
+      // {
+        description = "${base.description} (maximum ${toString max})";
+      };
+    withExclusiveMinimum =
+      min: base:
+      lib.types.addCheck base (x: x > min)
+      // {
+        description = "${base.description} (exclusive minimum ${toString min})";
+      };
+    withExclusiveMaximum =
+      max: base:
+      lib.types.addCheck base (x: x < max)
+      // {
+        description = "${base.description} (exclusive maximum ${toString max})";
+      };
+    withMultipleOf =
+      m: base:
+      lib.types.addCheck base (x: mod x m == 0)
+      // {
+        description = "${base.description} (multiple of ${toString m})";
+      };
+
+    # String constraints.
+    withMinLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x >= n)
+      // {
+        description = "${base.description} (min length ${toString n})";
+      };
+    withMaxLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x <= n)
+      // {
+        description = "${base.description} (max length ${toString n})";
+      };
   };
 
   mkOptionDefault = mkOverride 1001;
@@ -279,6 +325,10 @@ let
           description = "clusterLabel defines the identifier that uniquely identifies the Alertmanager cluster.\nYou should only set it when the Alertmanager cluster includes Alertmanager instances which are external to this Alertmanager resource. In practice, the addresses of the external instances are provided via the `.spec.additionalPeers` field.";
           type = (types.nullOr types.str);
         };
+        "clusterPeerName" = mkOption {
+          description = "clusterPeerName defines the name that this Alertmanager instance uses to\nadvertise itself to other cluster peers (the `--cluster.peer-name` flag,\navailable since Alertmanager v0.30.0).\n\nIf not set, the operator defaults to the pod's name (`$(POD_NAME)`),\nwhich is injected via the Kubernetes downward API. Setting this field\nlets you override that default with either a literal value or a string\nreferencing environment variables that are already available in the\nAlertmanager container (for example `$(POD_NAME).$(NAMESPACE)`).\n\n/ It requires Alertmanager >= 0.30.0.";
+          type = (types.nullOr (types.withMinLength 1 types.str));
+        };
         "clusterPeerTimeout" = mkOption {
           description = "clusterPeerTimeout defines the timeout for cluster peering.";
           type = (types.nullOr types.str);
@@ -314,7 +364,16 @@ let
         };
         "dnsPolicy" = mkOption {
           description = "dnsPolicy defines the DNS policy for the pods.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ClusterFirstWithHostNet"
+                "ClusterFirst"
+                "Default"
+                "None"
+              ]
+            )
+          );
         };
         "enableFeatures" = mkOption {
           description = "enableFeatures defines the Alertmanager's feature flags. By default, no features are enabled.\nEnabling features which are disabled by default is entirely outside the\nscope of what the maintainers will support and by doing so, you accept\nthat this behaviour may break at any time without notice.\n\nIt requires Alertmanager >= 0.27.0.";
@@ -352,7 +411,16 @@ let
         };
         "imagePullPolicy" = mkOption {
           description = "imagePullPolicy for the 'alertmanager', 'init-config-reloader' and 'config-reloader' containers.\nSee https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy for more details.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "Always"
+                "Never"
+                "IfNotPresent"
+              ]
+            )
+          );
         };
         "imagePullSecrets" = mkOption {
           description = "imagePullSecrets An optional list of references to secrets in the same namespace\nto use for pulling prometheus and alertmanager images from registries\nsee https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/";
@@ -385,15 +453,33 @@ let
         };
         "logFormat" = mkOption {
           description = "logFormat for Alertmanager to be configured with.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "logfmt"
+                "json"
+              ]
+            )
+          );
         };
         "logLevel" = mkOption {
           description = "logLevel for Alertmanager to be configured with.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "debug"
+                "info"
+                "warn"
+                "error"
+              ]
+            )
+          );
         };
         "minReadySeconds" = mkOption {
           description = "minReadySeconds defines the minimum number of seconds for which a newly\ncreated pod should be ready without any of its container crashing for it\nto be considered available.\n\nIf unset, pods will be considered available as soon as they are ready.\n\nWhen the Alertmanager version is greater than or equal to v0.30.0, the\nduration is also used to delay the first flush of the aggregation\ngroups. This delay helps ensuring that all alerts have been resent by\nthe Prometheus instances to Alertmanager after a roll-out. It is\npossible to override this behavior passing a custom value via\n`.spec.additionalArgs`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "nodeSelector" = mkOption {
           description = "nodeSelector defines which Nodes the Pods are scheduled on.";
@@ -413,7 +499,14 @@ let
         };
         "podManagementPolicy" = mkOption {
           description = "podManagementPolicy defines the policy for creating/deleting pods when\nscaling up and down.\n\nUnlike the default StatefulSet behavior, the default policy is\n`Parallel` to avoid manual intervention in case a pod gets stuck during\na rollout.\n\nNote that updating this value implies the recreation of the StatefulSet\nwhich incurs a service outage.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "OrderedReady"
+                "Parallel"
+              ]
+            )
+          );
         };
         "podMetadata" = mkOption {
           description = "podMetadata defines labels and annotations which are propagated to the Alertmanager pods.\n\nThe following items are reserved and cannot be overridden:\n* \"alertmanager\" label, set to the name of the Alertmanager instance.\n* \"app.kubernetes.io/instance\" label, set to the name of the Alertmanager instance.\n* \"app.kubernetes.io/managed-by\" label, set to \"prometheus-operator\".\n* \"app.kubernetes.io/name\" label, set to \"alertmanager\".\n* \"app.kubernetes.io/version\" label, set to the Alertmanager version.\n* \"kubectl.kubernetes.io/default-container\" annotation, set to \"alertmanager\".";
@@ -445,7 +538,7 @@ let
         };
         "schedulerName" = mkOption {
           description = "schedulerName defines the scheduler to use for Pod scheduling. If not specified, the default scheduler is used.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "secrets" = mkOption {
           description = "secrets is a list of Secrets in the same namespace as the Alertmanager\nobject, which shall be mounted into the Alertmanager Pods.\nEach Secret is added to the StatefulSet definition as a volume named `secret-<secret-name>`.\nThe Secrets are mounted into `/etc/alertmanager/secrets/<secret-name>` in the 'alertmanager' container.";
@@ -461,7 +554,7 @@ let
         };
         "serviceName" = mkOption {
           description = "serviceName defines the service name used by the underlying StatefulSet(s) as the governing service.\nIf defined, the Service  must be created before the Alertmanager resource in the same namespace and it must define a selector that matches the pod labels.\nIf empty, the operator will create and manage a headless service named `alertmanager-operated` for Alertmanager resources.\nWhen deploying multiple Alertmanager resources in the same namespace, it is recommended to specify a different value for each.\nSee https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#stable-network-id for more details.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "sha" = mkOption {
           description = "sha of Alertmanager container image to be deployed. Defaults to the value of `version`.\nSimilar to a tag, but the SHA explicitly deploys an immutable container image.\nVersion and Tag are ignored if SHA is set.\nDeprecated: use 'image' instead. The image digest can be specified as part of the image URL.";
@@ -477,7 +570,7 @@ let
         };
         "terminationGracePeriodSeconds" = mkOption {
           description = "terminationGracePeriodSeconds defines the Optional duration in seconds the pod needs to terminate gracefully.\nValue must be non-negative integer. The value zero indicates stop immediately via\nthe kill signal (no opportunity to shut down) which may lead to data corruption.\n\nDefaults to 120 seconds.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "tolerations" = mkOption {
           description = "tolerations defines the pod's tolerations.";
@@ -539,6 +632,7 @@ let
         "clusterAdvertiseAddress" = mkOverride 1002 null;
         "clusterGossipInterval" = mkOverride 1002 null;
         "clusterLabel" = mkOverride 1002 null;
+        "clusterPeerName" = mkOverride 1002 null;
         "clusterPeerTimeout" = mkOverride 1002 null;
         "clusterPushpullInterval" = mkOverride 1002 null;
         "clusterTLS" = mkOverride 1002 null;
@@ -598,7 +692,7 @@ let
       options = {
         "name" = mkOption {
           description = "name of the argument, e.g. \"scrape.discovery-reload-interval\".";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the argument value, e.g. 30s. Can be empty for name-only arguments (e.g. --storage.tsdb.no-lockfile)";
@@ -1543,7 +1637,15 @@ let
       options = {
         "type" = mkOption {
           description = "type defines the strategy used by\nAlertmanagerConfig objects to match alerts in the routes and inhibition\nrules.\n\nThe default value is `OnNamespace`.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "OnNamespace"
+                "OnNamespaceExceptForAlertmanagerNamespace"
+                "None"
+              ]
+            )
+          );
         };
       };
 
@@ -1659,7 +1761,7 @@ let
         };
         "name" = mkOption {
           description = "name defines the name of the AlertmanagerConfig custom resource which is used to generate the Alertmanager configuration.\nIt must be defined in the same namespace as the Alertmanager object.\nThe operator will not enforce a `namespace` label for routes and inhibition rules.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "templates" = mkOption {
           description = "templates defines the custom notification templates.";
@@ -2135,7 +2237,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -2236,11 +2338,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -2292,7 +2412,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -2368,7 +2488,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -2468,11 +2588,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -2523,7 +2661,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -2599,7 +2737,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -2994,11 +3132,11 @@ let
       options = {
         "host" = mkOption {
           description = "host defines the host's address, it can be a DNS name or a literal IP address.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "port" = mkOption {
           description = "port defines the host's port, it can be a literal port number or a port name.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -3038,11 +3176,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -3093,7 +3249,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -3167,7 +3323,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -3312,7 +3468,7 @@ let
       options = {
         "apiCorpID" = mkOption {
           description = "apiCorpID defines the default WeChat API Corporate ID.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "apiSecret" = mkOption {
           description = "apiSecret defines the default WeChat API Secret.";
@@ -3389,7 +3545,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -3470,11 +3626,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -3520,7 +3694,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -3589,7 +3763,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -3754,7 +3928,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -3827,7 +4001,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -4223,7 +4397,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -4446,6 +4620,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -4456,6 +4634,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -4590,6 +4769,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -4600,6 +4783,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -4736,6 +4920,10 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecContainersLivenessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -4747,6 +4935,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -4778,6 +4967,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -4788,6 +4981,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -4947,6 +5141,10 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecContainersReadinessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -4958,6 +5156,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -4989,6 +5188,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -4999,6 +5202,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -5431,6 +5635,10 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecContainersStartupProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -5442,6 +5650,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -5473,6 +5682,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -5483,6 +5696,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -5540,8 +5754,12 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecContainersVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -5571,6 +5789,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -5584,7 +5803,7 @@ let
       options = {
         "nameservers" = mkOption {
           description = "nameservers defines the list of DNS name server IP addresses.\nThis will be appended to the base nameservers generated from DNSPolicy.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "options" = mkOption {
           description = "options defines the list of DNS resolver options.\nThis will be merged with the base options generated from DNSPolicy.\nResolution options given in Options\nwill override those that appear in the base DNSPolicy.";
@@ -5599,7 +5818,7 @@ let
         };
         "searches" = mkOption {
           description = "searches defines the list of DNS search domains for host-name lookup.\nThis will be appended to the base search paths generated from DNSPolicy.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
       };
 
@@ -5615,7 +5834,7 @@ let
       options = {
         "name" = mkOption {
           description = "name is required and must be unique.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value is optional.";
@@ -6001,7 +6220,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -6226,6 +6445,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -6236,6 +6459,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -6372,6 +6596,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -6382,6 +6610,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -6524,6 +6753,10 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecInitContainersLivenessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -6535,6 +6768,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -6566,6 +6800,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -6576,6 +6814,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -6739,6 +6978,10 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecInitContainersReadinessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -6750,6 +6993,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -6781,6 +7025,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -6791,6 +7039,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -7225,6 +7474,10 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecInitContainersStartupProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -7236,6 +7489,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -7267,6 +7521,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -7277,6 +7535,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -7334,8 +7593,12 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecInitContainersVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -7365,6 +7628,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -7382,7 +7646,7 @@ let
         };
         "maxSilences" = mkOption {
           description = "maxSilences defines the maximum number active and pending silences. This corresponds to the\nAlertmanager's `--silences.max-silences` flag.\nIt requires Alertmanager >= v0.28.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -7513,7 +7777,7 @@ let
           type = (types.nullOr types.int);
         };
         "seLinuxChangePolicy" = mkOption {
-          description = "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with `-o context` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\"MountOption\" value is allowed only when SELinuxMount feature gate is enabled.\n\nIf not specified and SELinuxMount feature gate is enabled, \"MountOption\" is used.\nIf not specified and SELinuxMount feature gate is disabled, \"MountOption\" is used for ReadWriteOncePod volumes\nand \"Recursive\" for all other volumes.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with `-o context` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\nIf not specified, \"MountOption\" is used.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "seLinuxOptions" = mkOption {
@@ -7720,6 +7984,10 @@ let
           description = "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr types.str);
         };
+        "mode" = mkOption {
+          description = "mode specifies the permission bits for the emptyDir directory, in numeric\nnotation (e.g., 0755, 01777). Must be a value between 0000 and 01777.\nIf not specified, defaults to 0777.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup. If fsGroup is specified, the fsGroup permissions\nwill override the mode specified here.\nThis field has no effect on Windows.\nThis field is alpha and requires EmptyDirVolumeMode featuregate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sizeLimit" = mkOption {
           description = "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr (types.either types.int types.str));
@@ -7728,6 +7996,7 @@ let
 
       config = {
         "medium" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
         "sizeLimit" = mkOverride 1002 null;
       };
 
@@ -7778,7 +8047,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecStorageEphemeralVolumeClaimTemplateSpecDataSource"
@@ -7786,7 +8055,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecStorageEphemeralVolumeClaimTemplateSpecDataSourceRef"
@@ -8032,7 +8301,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecStorageVolumeClaimTemplateSpecDataSource"
@@ -8040,7 +8309,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecStorageVolumeClaimTemplateSpecDataSourceRef"
@@ -8243,6 +8512,14 @@ let
           description = "currentVolumeAttributesClassName is the current name of the VolumeAttributesClass the PVC is using.\nWhen unset, there is no VolumeAttributeClass applied to this PersistentVolumeClaim";
           type = (types.nullOr types.str);
         };
+        "healthStatus" = mkOption {
+          description = "healthStatus contains the latest controller-reported health information\nfor the volume bound to this claim.";
+          type = (
+            types.nullOr (
+              submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecStorageVolumeClaimTemplateStatusHealthStatus"
+            )
+          );
+        };
         "modifyVolumeStatus" = mkOption {
           description = "ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.\nWhen this is unset, there is no ModifyVolume operation being attempted.";
           type = (
@@ -8264,6 +8541,7 @@ let
         "capacity" = mkOverride 1002 null;
         "conditions" = mkOverride 1002 null;
         "currentVolumeAttributesClassName" = mkOverride 1002 null;
+        "healthStatus" = mkOverride 1002 null;
         "modifyVolumeStatus" = mkOverride 1002 null;
         "phase" = mkOverride 1002 null;
       };
@@ -8306,6 +8584,60 @@ let
       };
 
     };
+    "monitoring.coreos.com.v1.AlertmanagerSpecStorageVolumeClaimTemplateStatusHealthStatus" = {
+
+      options = {
+        "healthConditions" = mkOption {
+          description = "conditions is the set of adverse conditions reported by\nthe CSI controller plugin. An empty list means no adverse condition.\nAt most 16 conditions may be reported.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecStorageVolumeClaimTemplateStatusHealthStatusHealthConditions"
+              )
+            )
+          );
+        };
+        "lastTransitionTime" = mkOption {
+          description = "lastTransitionTime is when the current set of conditions first appeared.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "healthConditions" = mkOverride 1002 null;
+        "lastTransitionTime" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1.AlertmanagerSpecStorageVolumeClaimTemplateStatusHealthStatusHealthConditions" =
+      {
+
+        options = {
+          "message" = mkOption {
+            description = "message is a human-readable description.\nMaximum permitted length of a message is 1024 bytes.";
+            type = (types.nullOr types.str);
+          };
+          "reason" = mkOption {
+            description = "reason is a brief CamelCase machine-parseable reason.\nTogether with status it forms the unique identity of a condition entry.\nMaximum permitted length of a reason is 256 bytes.";
+            type = types.str;
+          };
+          "status" = mkOption {
+            description = "status is the machine-parseable health category.\nPossible values:\n- \"Inaccessible\": the volume cannot be accessed.\n- \"DataLoss\": data loss has been detected on the volume.\n- \"Degraded\": the volume is functioning with reduced capability.";
+            type = (
+              types.enum [
+                "DataLoss"
+                "Degraded"
+                "Inaccessible"
+              ]
+            );
+          };
+        };
+
+        config = {
+          "message" = mkOverride 1002 null;
+        };
+
+      };
     "monitoring.coreos.com.v1.AlertmanagerSpecStorageVolumeClaimTemplateStatusModifyVolumeStatus" = {
 
       options = {
@@ -8467,7 +8799,12 @@ let
         };
         "type" = mkOption {
           description = "type indicates the type of the StatefulSetUpdateStrategy.\n\nDefault is RollingUpdate.";
-          type = types.str;
+          type = (
+            types.enum [
+              "OnDelete"
+              "RollingUpdate"
+            ]
+          );
         };
       };
 
@@ -8493,8 +8830,12 @@ let
     "monitoring.coreos.com.v1.AlertmanagerSpecVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -8524,6 +8865,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -8897,6 +9239,10 @@ let
           description = "defaultMode is optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "items if unspecified, each key-value pair in the Data field of the referenced\nConfigMap will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the ConfigMap,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.";
           type = (
@@ -8917,6 +9263,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
@@ -8938,10 +9285,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -9001,6 +9353,10 @@ let
           description = "Optional: mode bits to use on created files by default. Must be a\nOptional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "Items is a list of downward API volume file";
           type = (
@@ -9013,6 +9369,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
       };
 
@@ -9044,12 +9401,17 @@ let
             )
           );
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "fieldRef" = mkOverride 1002 null;
         "mode" = mkOverride 1002 null;
         "resourceFieldRef" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -9101,6 +9463,10 @@ let
           description = "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr types.str);
         };
+        "mode" = mkOption {
+          description = "mode specifies the permission bits for the emptyDir directory, in numeric\nnotation (e.g., 0755, 01777). Must be a value between 0000 and 01777.\nIf not specified, defaults to 0777.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup. If fsGroup is specified, the fsGroup permissions\nwill override the mode specified here.\nThis field has no effect on Windows.\nThis field is alpha and requires EmptyDirVolumeMode featuregate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sizeLimit" = mkOption {
           description = "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr (types.either types.int types.str));
@@ -9109,6 +9475,7 @@ let
 
       config = {
         "medium" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
         "sizeLimit" = mkOverride 1002 null;
       };
 
@@ -9159,7 +9526,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecVolumesEphemeralVolumeClaimTemplateSpecDataSource"
@@ -9167,7 +9534,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.AlertmanagerSpecVolumesEphemeralVolumeClaimTemplateSpecDataSourceRef"
@@ -9714,6 +10081,10 @@ let
           description = "defaultMode are the mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sources" = mkOption {
           description = "sources is the list of volume projections. Each entry in this list\nhandles one source.";
           type = (
@@ -9726,6 +10097,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "sources" = mkOverride 1002 null;
       };
 
@@ -9818,6 +10190,10 @@ let
           description = "Select all ClusterTrustBundles that match this signer name.\nMutually-exclusive with name.  The contents of all selected\nClusterTrustBundles will be unified and deduplicated.";
           type = (types.nullOr types.str);
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
@@ -9825,6 +10201,7 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
         "signerName" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -9922,10 +10299,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -9976,12 +10358,17 @@ let
             )
           );
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "fieldRef" = mkOverride 1002 null;
         "mode" = mkOverride 1002 null;
         "resourceFieldRef" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -10054,6 +10441,10 @@ let
           description = "Kubelet's generated CSRs will be addressed to this signer.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "userAnnotations" = mkOption {
           description = "userAnnotations allow pod authors to pass additional information to\nthe signer implementation.  Kubernetes does not restrict or validate this\nmetadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of\nthe PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations,\nwith the addition that all keys must be domain-prefixed. No restrictions\nare placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should\ndeny requests that contain keys they do not recognize.";
           type = (types.nullOr (types.attrsOf types.str));
@@ -10065,6 +10456,7 @@ let
         "credentialBundlePath" = mkOverride 1002 null;
         "keyPath" = mkOverride 1002 null;
         "maxExpirationSeconds" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
         "userAnnotations" = mkOverride 1002 null;
       };
 
@@ -10114,10 +10506,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -10136,11 +10533,16 @@ let
           description = "path is the path relative to the mount point of the file to project the\ntoken into.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "audience" = mkOverride 1002 null;
         "expirationSeconds" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -10319,6 +10721,10 @@ let
           description = "defaultMode is Optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values\nfor mode bits. Defaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "items If unspecified, each key-value pair in the Data field of the referenced\nSecret will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the Secret,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.";
           type = (
@@ -10339,6 +10745,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
         "secretName" = mkOverride 1002 null;
@@ -10360,10 +10767,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -10450,7 +10862,7 @@ let
       options = {
         "getConcurrency" = mkOption {
           description = "getConcurrency defines the maximum number of GET requests processed concurrently. This corresponds to the\nAlertmanager's `--web.get-concurrency` flag.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "httpConfig" = mkOption {
           description = "httpConfig defines HTTP parameters for web server.";
@@ -10458,7 +10870,7 @@ let
         };
         "timeout" = mkOption {
           description = "timeout for HTTP requests. This corresponds to the Alertmanager's\n`--web.timeout` flag.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS parameters for HTTPS.";
@@ -10506,11 +10918,26 @@ let
         };
         "xContentTypeOptions" = mkOption {
           description = "xContentTypeOptions defines the X-Content-Type-Options header to HTTP responses.\nUnset if blank. Accepted value is nosniff.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "NoSniff"
+              ]
+            )
+          );
         };
         "xFrameOptions" = mkOption {
           description = "xFrameOptions defines the X-Frame-Options header to HTTP responses.\nUnset if blank. Accepted values are deny and sameorigin.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "Deny"
+                "SameOrigin"
+              ]
+            )
+          );
         };
         "xXSSProtection" = mkOption {
           description = "xXSSProtection defines the X-XSS-Protection header to all responses.\nUnset if blank.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection";
@@ -10627,7 +11054,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -10696,7 +11123,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -10828,11 +11255,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -10893,7 +11320,17 @@ let
         };
         "fallbackScrapeProtocol" = mkOption {
           description = "fallbackScrapeProtocol defines the protocol to use if a scrape returns blank, unparseable, or otherwise invalid Content-Type.\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "PrometheusProto"
+                "OpenMetricsText0.0.1"
+                "OpenMetricsText1.0.0"
+                "PrometheusText0.0.4"
+                "PrometheusText1.0.0"
+              ]
+            )
+          );
         };
         "jobLabel" = mkOption {
           description = "jobLabel defines the label to use to retrieve the job name from.\n`jobLabel` selects the label from the associated Kubernetes `Pod`\nobject which will be used as the `job` label for all metrics.\n\nFor example if `jobLabel` is set to `foo` and the Kubernetes `Pod`\nobject is labeled with `foo: bar`, then Prometheus adds the `job=\"bar\"`\nlabel to all ingested metrics.\n\nIf the value of this field is empty, the `job` label of the metrics\ndefaults to the namespace and name of the PodMonitor object (e.g. `<namespace>/<name>`).";
@@ -10901,19 +11338,19 @@ let
         };
         "keepDroppedTargets" = mkOption {
           description = "keepDroppedTargets defines the per-scrape limit on the number of targets dropped by relabeling\nthat will be kept in memory. 0 means no limit.\n\nIt requires Prometheus >= v2.47.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelLimit" = mkOption {
           description = "labelLimit defines the per-scrape limit on number of labels that will be accepted for a sample.\n\nIt requires Prometheus >= v2.27.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelNameLengthLimit" = mkOption {
           description = "labelNameLengthLimit defines the per-scrape limit on length of labels name that will be accepted for a sample.\n\nIt requires Prometheus >= v2.27.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelValueLengthLimit" = mkOption {
           description = "labelValueLengthLimit defines the per-scrape limit on length of labels value that will be accepted for a sample.\n\nIt requires Prometheus >= v2.27.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "namespaceSelector" = mkOption {
           description = "namespaceSelector defines in which namespace(s) Prometheus should discover the pods.\nBy default, the pods are discovered in the same namespace as the `PodMonitor` object but it is possible to select pods across different/all namespaces.";
@@ -10921,7 +11358,7 @@ let
         };
         "nativeHistogramBucketLimit" = mkOption {
           description = "nativeHistogramBucketLimit defines ff there are more than this many buckets in a native histogram,\nbuckets will be merged to stay within the limit.\nIt requires Prometheus >= v2.45.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "nativeHistogramMinBucketFactor" = mkOption {
           description = "nativeHistogramMinBucketFactor defines if the growth factor of one bucket to the next is smaller than this,\nbuckets will be merged to increase the factor sufficiently.\nIt requires Prometheus >= v2.50.0.";
@@ -10941,11 +11378,11 @@ let
         };
         "sampleLimit" = mkOption {
           description = "sampleLimit defines a per-scrape limit on the number of scraped samples\nthat will be accepted.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "scrapeClass" = mkOption {
           description = "scrapeClass defines the scrape class to apply.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "scrapeClassicHistograms" = mkOption {
           description = "scrapeClassicHistograms defines whether to scrape a classic histogram that is also exposed as a native histogram.\nIt requires Prometheus >= v2.45.0.\n\nNotice: `scrapeClassicHistograms` corresponds to the `always_scrape_classic_histograms` field in the Prometheus configuration.";
@@ -10957,7 +11394,19 @@ let
         };
         "scrapeProtocols" = mkOption {
           description = "scrapeProtocols defines the protocols to negotiate during a scrape. It tells clients the\nprotocols supported by Prometheus in order of preference (from most to least preferred).\n\nIf unset, Prometheus uses its default value.\n\nIt requires Prometheus >= v2.49.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "PrometheusProto"
+                  "OpenMetricsText0.0.1"
+                  "OpenMetricsText1.0.0"
+                  "PrometheusText0.0.4"
+                  "PrometheusText1.0.0"
+                ]
+              )
+            )
+          );
         };
         "selector" = mkOption {
           description = "selector defines the label selector to select the Kubernetes `Pod` objects to scrape metrics from.";
@@ -10965,11 +11414,18 @@ let
         };
         "selectorMechanism" = mkOption {
           description = "selectorMechanism defines the mechanism used to select the endpoints to scrape.\nBy default, the selection process relies on relabel configurations to filter the discovered targets.\nAlternatively, you can opt in for role selectors, which may offer better efficiency in large clusters.\nWhich strategy is best for your use case needs to be carefully evaluated.\n\nIt requires Prometheus >= v2.17.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "RelabelConfig"
+                "RoleSelector"
+              ]
+            )
+          );
         };
         "targetLimit" = mkOption {
           description = "targetLimit defines a limit on the number of scraped targets that will\nbe accepted.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -11112,7 +11568,7 @@ let
         };
         "portNumber" = mkOption {
           description = "portNumber defines the `Pod` port number which exposes the endpoint.\n\nThe `Pod` must declare the specified `Port` in its spec or the\ntarget will be dropped by Prometheus.\n\nThis cannot be used to enable scraping of an undeclared port.\nTo scrape targets on a port which isn't exposed, you need to use\nrelabeling to override the `__address__` label (but beware of\nduplicate targets if the `Pod` has other declared ports).\n\nIn practice Prometheus will select targets for which the\nmatches the target's __meta_kubernetes_pod_container_port_number.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 1 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -11136,7 +11592,16 @@ let
         };
         "scheme" = mkOption {
           description = "scheme defines the HTTP scheme to use for scraping.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "https"
+                "HTTP"
+                "HTTPS"
+              ]
+            )
+          );
         };
         "scrapeTimeout" = mkOption {
           description = "scrapeTimeout defines the timeout after which Prometheus considers the scrape to be failed.\n\nIf empty, Prometheus uses the global scrape timeout unless it is less\nthan the target's scrape interval value in which the latter is used.\nThe value cannot be greater than the scrape interval otherwise the operator will reject the resource.";
@@ -11334,11 +11799,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -11464,7 +11956,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -11562,11 +12054,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -11616,7 +12126,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -11689,7 +12199,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -11759,11 +12269,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -11827,11 +12364,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -11881,7 +12436,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -11954,7 +12509,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -12101,19 +12656,26 @@ let
         };
         "group" = mkOption {
           description = "group defines the group of the referenced resource.";
-          type = types.str;
+          type = (types.enum [ "monitoring.coreos.com" ]);
         };
         "name" = mkOption {
           description = "name defines the name of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "namespace" = mkOption {
           description = "namespace defines the namespace of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource defines the type of resource being referenced (e.g. Prometheus, PrometheusAgent, ThanosRuler or Alertmanager).";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheuses"
+              "prometheusagents"
+              "thanosrulers"
+              "alertmanagers"
+            ]
+          );
         };
       };
 
@@ -12143,11 +12705,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.\nCurrently, only \"Accepted\" is supported.";
-          type = types.str;
+          type = (types.enum [ "Accepted" ]);
         };
       };
 
@@ -12216,7 +12778,17 @@ let
         };
         "fallbackScrapeProtocol" = mkOption {
           description = "fallbackScrapeProtocol defines the protocol to use if a scrape returns blank, unparseable, or otherwise invalid Content-Type.\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "PrometheusProto"
+                "OpenMetricsText0.0.1"
+                "OpenMetricsText1.0.0"
+                "PrometheusText0.0.4"
+                "PrometheusText1.0.0"
+              ]
+            )
+          );
         };
         "followRedirects" = mkOption {
           description = "followRedirects defines whether the client should follow HTTP 3xx\nredirects.";
@@ -12232,19 +12804,19 @@ let
         };
         "keepDroppedTargets" = mkOption {
           description = "keepDroppedTargets defines the per-scrape limit on the number of targets dropped by relabeling\nthat will be kept in memory. 0 means no limit.\n\nIt requires Prometheus >= v2.47.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelLimit" = mkOption {
           description = "labelLimit defines the per-scrape limit on number of labels that will be accepted for a sample.\nOnly valid in Prometheus versions 2.27.0 and newer.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelNameLengthLimit" = mkOption {
           description = "labelNameLengthLimit defines the per-scrape limit on length of labels name that will be accepted for a sample.\nOnly valid in Prometheus versions 2.27.0 and newer.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelValueLengthLimit" = mkOption {
           description = "labelValueLengthLimit defines the per-scrape limit on length of labels value that will be accepted for a sample.\nOnly valid in Prometheus versions 2.27.0 and newer.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "metricRelabelings" = mkOption {
           description = "metricRelabelings defines the RelabelConfig to apply to samples before ingestion.";
@@ -12258,7 +12830,7 @@ let
         };
         "nativeHistogramBucketLimit" = mkOption {
           description = "nativeHistogramBucketLimit defines ff there are more than this many buckets in a native histogram,\nbuckets will be merged to stay within the limit.\nIt requires Prometheus >= v2.45.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "nativeHistogramMinBucketFactor" = mkOption {
           description = "nativeHistogramMinBucketFactor defines if the growth factor of one bucket to the next is smaller than this,\nbuckets will be merged to increase the factor sufficiently.\nIt requires Prometheus >= v2.50.0.";
@@ -12283,11 +12855,11 @@ let
         };
         "sampleLimit" = mkOption {
           description = "sampleLimit defines per-scrape limit on number of scraped samples that will be accepted.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "scrapeClass" = mkOption {
           description = "scrapeClass defines the scrape class to apply.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "scrapeClassicHistograms" = mkOption {
           description = "scrapeClassicHistograms defines whether to scrape a classic histogram that is also exposed as a native histogram.\nIt requires Prometheus >= v2.45.0.\n\nNotice: `scrapeClassicHistograms` corresponds to the `always_scrape_classic_histograms` field in the Prometheus configuration.";
@@ -12299,7 +12871,19 @@ let
         };
         "scrapeProtocols" = mkOption {
           description = "scrapeProtocols defines the protocols to negotiate during a scrape. It tells clients the\nprotocols supported by Prometheus in order of preference (from most to least preferred).\n\nIf unset, Prometheus uses its default value.\n\nIt requires Prometheus >= v2.49.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "PrometheusProto"
+                  "OpenMetricsText0.0.1"
+                  "OpenMetricsText1.0.0"
+                  "PrometheusText0.0.4"
+                  "PrometheusText1.0.0"
+                ]
+              )
+            )
+          );
         };
         "scrapeTimeout" = mkOption {
           description = "scrapeTimeout defines the timeout for scraping metrics from the Prometheus exporter.\nIf not specified, the Prometheus global scrape timeout is used.\nThe value cannot be greater than the scrape interval otherwise the operator will reject the resource.";
@@ -12307,7 +12891,7 @@ let
         };
         "targetLimit" = mkOption {
           description = "targetLimit defines a limit on the number of scraped targets that will be accepted.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "targets" = mkOption {
           description = "targets defines a set of static or dynamically discovered targets to probe.";
@@ -12487,11 +13071,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -12605,7 +13216,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -12691,11 +13302,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -12737,7 +13366,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -12804,7 +13433,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -12874,11 +13503,11 @@ let
       options = {
         "name" = mkOption {
           description = "name defines the parameter name";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "values" = mkOption {
           description = "values defines the parameter values";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
       };
 
@@ -12912,11 +13541,20 @@ let
         };
         "scheme" = mkOption {
           description = "scheme defines the HTTP scheme to use when scraping the prober.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "https"
+                "HTTP"
+                "HTTPS"
+              ]
+            )
+          );
         };
         "url" = mkOption {
           description = "url defines the address of the prober.\n\nUnlike what the name indicates, the value should be in the form of\n`address:port` without any scheme which should be specified in the\n`scheme` field.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -13003,11 +13641,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -13122,11 +13787,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -13182,11 +13874,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -13228,7 +13938,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -13293,7 +14003,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -13393,19 +14103,26 @@ let
         };
         "group" = mkOption {
           description = "group defines the group of the referenced resource.";
-          type = types.str;
+          type = (types.enum [ "monitoring.coreos.com" ]);
         };
         "name" = mkOption {
           description = "name defines the name of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "namespace" = mkOption {
           description = "namespace defines the namespace of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource defines the type of resource being referenced (e.g. Prometheus, PrometheusAgent, ThanosRuler or Alertmanager).";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheuses"
+              "prometheusagents"
+              "thanosrulers"
+              "alertmanagers"
+            ]
+          );
         };
       };
 
@@ -13435,11 +14152,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.\nCurrently, only \"Accepted\" is supported.";
-          type = types.str;
+          type = (types.enum [ "Accepted" ]);
         };
       };
 
@@ -13554,7 +14271,7 @@ let
         };
         "name" = mkOption {
           description = "name defines the name of the rule group.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "partial_response_strategy" = mkOption {
           description = "partial_response_strategy is only used by ThanosRuler and will\nbe ignored by Prometheus instances.\nMore info: https://github.com/thanos-io/thanos/blob/main/docs/components/rule.md#partial-response";
@@ -13603,7 +14320,7 @@ let
         };
         "keep_firing_for" = mkOption {
           description = "keep_firing_for defines how long an alert will continue firing after the condition that triggered it has cleared.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "labels" = mkOption {
           description = "labels defines labels to add or overwrite.";
@@ -13662,19 +14379,26 @@ let
         };
         "group" = mkOption {
           description = "group defines the group of the referenced resource.";
-          type = types.str;
+          type = (types.enum [ "monitoring.coreos.com" ]);
         };
         "name" = mkOption {
           description = "name defines the name of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "namespace" = mkOption {
           description = "namespace defines the namespace of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource defines the type of resource being referenced (e.g. Prometheus, PrometheusAgent, ThanosRuler or Alertmanager).";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheuses"
+              "prometheusagents"
+              "thanosrulers"
+              "alertmanagers"
+            ]
+          );
         };
       };
 
@@ -13704,11 +14428,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.\nCurrently, only \"Accepted\" is supported.";
-          type = types.str;
+          type = (types.enum [ "Accepted" ]);
         };
       };
 
@@ -13802,7 +14526,7 @@ let
           type = (types.nullOr types.bool);
         };
         "disableCompaction" = mkOption {
-          description = "disableCompaction when true, the Prometheus compaction is disabled.\nWhen `spec.thanos.objectStorageConfig` or `spec.objectStorageConfigFile` are defined, the operator automatically\ndisables block compaction to avoid race conditions during block uploads (as the Thanos documentation recommends).";
+          description = "disableCompaction when true, the Prometheus compaction is disabled.\n\nWhen `spec.thanos.objectStorageConfig` or `spec.thanos.objectStorageConfigFile` are defined, the operator's\ndefault handling depends on the Prometheus and Thanos sidecar versions:\n  - With Prometheus < v3.9.0 or a Thanos sidecar < v0.42.0, block compaction is disabled to avoid race\n    conditions during block uploads (as the Thanos documentation recommends).\n  - With Prometheus >= v3.9.0 and a Thanos sidecar >= v0.42.0, local compaction is kept enabled and coordinated\n    with the sidecar through the shipper meta file (`--storage.tsdb.delay-compact-file.path`), so blocks are only\n    compacted after they have been uploaded.\nSetting this field to true always disables local compaction regardless of the versions.";
           type = (types.nullOr types.bool);
         };
         "dnsConfig" = mkOption {
@@ -13811,7 +14535,16 @@ let
         };
         "dnsPolicy" = mkOption {
           description = "dnsPolicy defines the DNS policy for the pods.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ClusterFirstWithHostNet"
+                "ClusterFirst"
+                "Default"
+                "None"
+              ]
+            )
+          );
         };
         "enableAdminAPI" = mkOption {
           description = "enableAdminAPI defines access to the Prometheus web admin API.\n\nWARNING: Enabling the admin APIs enables mutating endpoints, to delete data,\nshutdown Prometheus, and more. Enabling this should be done with care and the\nuser is advised to add additional authentication authorization via a proxy to\nensure only clients authorized to perform these actions can do so.\n\nFor more information:\nhttps://prometheus.io/docs/prometheus/latest/querying/api/#tsdb-admin-apis";
@@ -13819,7 +14552,7 @@ let
         };
         "enableFeatures" = mkOption {
           description = "enableFeatures enables access to Prometheus feature flags. By default, no features are enabled.\n\nEnabling features which are disabled by default is entirely outside the\nscope of what the maintainers will support and by doing so, you accept\nthat this behaviour may break at any time without notice.\n\nFor more information see https://prometheus.io/docs/prometheus/latest/feature_flags/";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "enableOTLPReceiver" = mkOption {
           description = "enableOTLPReceiver defines the Prometheus to be used as a receiver for the OTLP Metrics protocol.\n\nNote that the OTLP receiver endpoint is automatically enabled if `.spec.otlpConfig` is defined.\n\nIt requires Prometheus >= v2.47.0.";
@@ -13839,19 +14572,19 @@ let
         };
         "enforcedKeepDroppedTargets" = mkOption {
           description = "enforcedKeepDroppedTargets when defined specifies a global limit on the number of targets\ndropped by relabeling that will be kept in memory. The value overrides\nany `spec.keepDroppedTargets` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.keepDroppedTargets` is\ngreater than zero and less than `spec.enforcedKeepDroppedTargets`.\n\nIt requires Prometheus >= v2.47.0.\n\nWhen both `enforcedKeepDroppedTargets` and `keepDroppedTargets` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined keepDroppedTargets value will inherit the global keepDroppedTargets value (Prometheus >= 2.45.0) or the enforcedKeepDroppedTargets value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedKeepDroppedTargets` is greater than the `keepDroppedTargets`, the `keepDroppedTargets` will be set to `enforcedKeepDroppedTargets`.\n* Scrape objects with a keepDroppedTargets value less than or equal to enforcedKeepDroppedTargets keep their specific value.\n* Scrape objects with a keepDroppedTargets value greater than enforcedKeepDroppedTargets are set to enforcedKeepDroppedTargets.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedLabelLimit" = mkOption {
           description = "enforcedLabelLimit when defined specifies a global limit on the number\nof labels per sample. The value overrides any `spec.labelLimit` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.labelLimit` is\ngreater than zero and less than `spec.enforcedLabelLimit`.\n\nIt requires Prometheus >= v2.27.0.\n\nWhen both `enforcedLabelLimit` and `labelLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined labelLimit value will inherit the global labelLimit value (Prometheus >= 2.45.0) or the enforcedLabelLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedLabelLimit` is greater than the `labelLimit`, the `labelLimit` will be set to `enforcedLabelLimit`.\n* Scrape objects with a labelLimit value less than or equal to enforcedLabelLimit keep their specific value.\n* Scrape objects with a labelLimit value greater than enforcedLabelLimit are set to enforcedLabelLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedLabelNameLengthLimit" = mkOption {
           description = "enforcedLabelNameLengthLimit when defined specifies a global limit on the length\nof labels name per sample. The value overrides any `spec.labelNameLengthLimit` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.labelNameLengthLimit` is\ngreater than zero and less than `spec.enforcedLabelNameLengthLimit`.\n\nIt requires Prometheus >= v2.27.0.\n\nWhen both `enforcedLabelNameLengthLimit` and `labelNameLengthLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined labelNameLengthLimit value will inherit the global labelNameLengthLimit value (Prometheus >= 2.45.0) or the enforcedLabelNameLengthLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedLabelNameLengthLimit` is greater than the `labelNameLengthLimit`, the `labelNameLengthLimit` will be set to `enforcedLabelNameLengthLimit`.\n* Scrape objects with a labelNameLengthLimit value less than or equal to enforcedLabelNameLengthLimit keep their specific value.\n* Scrape objects with a labelNameLengthLimit value greater than enforcedLabelNameLengthLimit are set to enforcedLabelNameLengthLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedLabelValueLengthLimit" = mkOption {
           description = "enforcedLabelValueLengthLimit when not null defines a global limit on the length\nof labels value per sample. The value overrides any `spec.labelValueLengthLimit` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.labelValueLengthLimit` is\ngreater than zero and less than `spec.enforcedLabelValueLengthLimit`.\n\nIt requires Prometheus >= v2.27.0.\n\nWhen both `enforcedLabelValueLengthLimit` and `labelValueLengthLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined labelValueLengthLimit value will inherit the global labelValueLengthLimit value (Prometheus >= 2.45.0) or the enforcedLabelValueLengthLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedLabelValueLengthLimit` is greater than the `labelValueLengthLimit`, the `labelValueLengthLimit` will be set to `enforcedLabelValueLengthLimit`.\n* Scrape objects with a labelValueLengthLimit value less than or equal to enforcedLabelValueLengthLimit keep their specific value.\n* Scrape objects with a labelValueLengthLimit value greater than enforcedLabelValueLengthLimit are set to enforcedLabelValueLengthLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedNamespaceLabel" = mkOption {
           description = "enforcedNamespaceLabel when not empty, a label will be added to:\n\n1. All metrics scraped from `ServiceMonitor`, `PodMonitor`, `Probe` and `ScrapeConfig` objects.\n2. All metrics generated from recording rules defined in `PrometheusRule` objects.\n3. All alerts generated from alerting rules defined in `PrometheusRule` objects.\n4. All vector selectors of PromQL expressions defined in `PrometheusRule` objects.\n\nThe label will not added for objects referenced in `spec.excludedFromEnforcement`.\n\nThe label's name is this field's value.\nThe label's value is the namespace of the `ServiceMonitor`,\n`PodMonitor`, `Probe`, `PrometheusRule` or `ScrapeConfig` object.";
@@ -13859,11 +14592,11 @@ let
         };
         "enforcedSampleLimit" = mkOption {
           description = "enforcedSampleLimit when defined specifies a global limit on the number\nof scraped samples that will be accepted. This overrides any\n`spec.sampleLimit` set by ServiceMonitor, PodMonitor, Probe objects\nunless `spec.sampleLimit` is greater than zero and less than\n`spec.enforcedSampleLimit`.\n\nIt is meant to be used by admins to keep the overall number of\nsamples/series under a desired limit.\n\nWhen both `enforcedSampleLimit` and `sampleLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined sampleLimit value will inherit the global sampleLimit value (Prometheus >= 2.45.0) or the enforcedSampleLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedSampleLimit` is greater than the `sampleLimit`, the `sampleLimit` will be set to `enforcedSampleLimit`.\n* Scrape objects with a sampleLimit value less than or equal to enforcedSampleLimit keep their specific value.\n* Scrape objects with a sampleLimit value greater than enforcedSampleLimit are set to enforcedSampleLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedTargetLimit" = mkOption {
           description = "enforcedTargetLimit when defined specifies a global limit on the number\nof scraped targets. The value overrides any `spec.targetLimit` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.targetLimit` is\ngreater than zero and less than `spec.enforcedTargetLimit`.\n\nIt is meant to be used by admins to to keep the overall number of\ntargets under a desired limit.\n\nWhen both `enforcedTargetLimit` and `targetLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined targetLimit value will inherit the global targetLimit value (Prometheus >= 2.45.0) or the enforcedTargetLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedTargetLimit` is greater than the `targetLimit`, the `targetLimit` will be set to `enforcedTargetLimit`.\n* Scrape objects with a targetLimit value less than or equal to enforcedTargetLimit keep their specific value.\n* Scrape objects with a targetLimit value greater than enforcedTargetLimit are set to enforcedTargetLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "evaluationInterval" = mkOption {
           description = "evaluationInterval defines the interval between rule evaluations.\nDefault: \"30s\"";
@@ -13916,7 +14649,16 @@ let
         };
         "imagePullPolicy" = mkOption {
           description = "imagePullPolicy defines the image pull policy for the 'prometheus', 'init-config-reloader' and 'config-reloader' containers.\nSee https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy for more details.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "Always"
+                "Never"
+                "IfNotPresent"
+              ]
+            )
+          );
         };
         "imagePullSecrets" = mkOption {
           description = "imagePullSecrets defines an optional list of references to Secrets in the same namespace\nto use for pulling images from registries.\nSee http://kubernetes.io/docs/user-guide/images#specifying-imagepullsecrets-on-a-pod";
@@ -13940,19 +14682,19 @@ let
         };
         "keepDroppedTargets" = mkOption {
           description = "keepDroppedTargets defines the per-scrape limit on the number of targets dropped by relabeling\nthat will be kept in memory. 0 means no limit.\n\nIt requires Prometheus >= v2.47.0.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedKeepDroppedTargets.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelLimit" = mkOption {
           description = "labelLimit defines per-scrape limit on number of labels that will be accepted for a sample.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelNameLengthLimit" = mkOption {
           description = "labelNameLengthLimit defines the per-scrape limit on length of labels name that will be accepted for a sample.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelNameLengthLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelValueLengthLimit" = mkOption {
           description = "labelValueLengthLimit defines the per-scrape limit on length of labels value that will be accepted for a sample.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelValueLengthLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "listenLocal" = mkOption {
           description = "listenLocal when true, the Prometheus server listens on the loopback address\ninstead of the Pod IP's address.";
@@ -13960,27 +14702,61 @@ let
         };
         "logFormat" = mkOption {
           description = "logFormat for Log level for Prometheus and the config-reloader sidecar.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "logfmt"
+                "json"
+              ]
+            )
+          );
         };
         "logLevel" = mkOption {
           description = "logLevel for Prometheus and the config-reloader sidecar.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "debug"
+                "info"
+                "warn"
+                "error"
+              ]
+            )
+          );
         };
         "maximumStartupDurationSeconds" = mkOption {
           description = "maximumStartupDurationSeconds defines the maximum time that the `prometheus` container's startup probe will wait before being considered failed. The startup probe will return success after the WAL replay is complete.\nIf set, the value should be greater than 60 (seconds). Otherwise it will be equal to 900 seconds (15 minutes).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 60 types.int));
         };
         "minReadySeconds" = mkOption {
           description = "minReadySeconds defines the minimum number of seconds for which a newly created Pod should be ready\nwithout any of its container crashing for it to be considered available.\n\nIf unset, pods will be considered available as soon as they are ready.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "nameEscapingScheme" = mkOption {
           description = "nameEscapingScheme defines the character escaping scheme that will be requested when scraping\nfor metric and label names that do not conform to the legacy Prometheus\ncharacter set.\n\nIt requires Prometheus >= v3.4.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "AllowUTF8"
+                "Underscores"
+                "Dots"
+                "Values"
+              ]
+            )
+          );
         };
         "nameValidationScheme" = mkOption {
           description = "nameValidationScheme defines the validation scheme for metric and label names.\n\nIt requires Prometheus >= v2.55.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "UTF8"
+                "Legacy"
+              ]
+            )
+          );
         };
         "nodeSelector" = mkOption {
           description = "nodeSelector defines on which Nodes the Pods are scheduled.";
@@ -14012,7 +14788,14 @@ let
         };
         "podManagementPolicy" = mkOption {
           description = "podManagementPolicy defines the policy for creating/deleting pods when\nscaling up and down.\n\nUnlike the default StatefulSet behavior, the default policy is\n`Parallel` to avoid manual intervention in case a pod gets stuck during\na rollout.\n\nNote that updating this value implies the recreation of the StatefulSet\nwhich incurs a service outage.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "OrderedReady"
+                "Parallel"
+              ]
+            )
+          );
         };
         "podMetadata" = mkOption {
           description = "podMetadata defines labels and annotations which are propagated to the Prometheus pods.\n\nThe following items are reserved and cannot be overridden:\n* \"prometheus\" label, set to the name of the Prometheus object.\n* \"app.kubernetes.io/instance\" label, set to the name of the Prometheus object.\n* \"app.kubernetes.io/managed-by\" label, set to \"prometheus-operator\".\n* \"app.kubernetes.io/name\" label, set to \"prometheus\".\n* \"app.kubernetes.io/version\" label, set to the Prometheus version.\n* \"operator.prometheus.io/name\" label, set to the name of the Prometheus object.\n* \"operator.prometheus.io/shard\" label, set to the shard number of the Prometheus object.\n* \"kubectl.kubernetes.io/default-container\" annotation, set to \"prometheus\".";
@@ -14072,7 +14855,14 @@ let
         };
         "reloadStrategy" = mkOption {
           description = "reloadStrategy defines the strategy used to reload the Prometheus configuration.\nIf not specified, the configuration is reloaded using the /-/reload HTTP endpoint.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "HTTP"
+                "ProcessSignal"
+              ]
+            )
+          );
         };
         "remoteRead" = mkOption {
           description = "remoteRead defines the list of remote read configurations.";
@@ -14094,7 +14884,16 @@ let
         };
         "remoteWriteReceiverMessageVersions" = mkOption {
           description = "remoteWriteReceiverMessageVersions list of the protobuf message versions to accept when receiving the\nremote writes.\n\nIt requires Prometheus >= v2.54.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "V1.0"
+                  "V2.0"
+                ]
+              )
+            )
+          );
         };
         "replicaExternalLabelName" = mkOption {
           description = "replicaExternalLabelName defines the name of Prometheus external label used to denote the replica name.\nThe external label will _not_ be added when the field is set to the\nempty string (`\"\"`).\n\nDefault: \"prometheus_replica\"";
@@ -14109,8 +14908,12 @@ let
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecResources"));
         };
         "retention" = mkOption {
-          description = "retention defines how long to retain the Prometheus data.\n\nDefault: \"24h\" if `spec.retention` and `spec.retentionSize` are empty.";
+          description = "retention defines how long to retain the Prometheus data.\n\nDefault: \"24h\" if `spec.retention`, `spec.retentionSize` and\n`spec.retentionPercentage` are empty.";
           type = (types.nullOr types.str);
+        };
+        "retentionPercentage" = mkOption {
+          description = "retentionPercentage defines the maximum percentage of the data volume's\ncapacity used by the Prometheus data.\n\nThe value is a number between 0 and 100. If set to 0, percentage-based\nretention is disabled.\n\nIt requires Prometheus >= v3.11.0 and is ignored by older versions.";
+          type = (types.nullOr (types.either types.int types.str));
         };
         "retentionSize" = mkOption {
           description = "retentionSize defines the maximum number of bytes used by the Prometheus data.";
@@ -14142,11 +14945,11 @@ let
         };
         "sampleLimit" = mkOption {
           description = "sampleLimit defines per-scrape limit on number of scraped samples that will be accepted.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedSampleLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "schedulerName" = mkOption {
           description = "schedulerName defines the scheduler to use for Pod scheduling. If not specified, the default scheduler is used.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "scrapeClasses" = mkOption {
           description = "scrapeClasses defines the list of scrape classes to expose to scraping objects such as\nPodMonitors, ServiceMonitors, Probes and ScrapeConfigs.\n\nThis is an *experimental feature*, it may change in any upcoming release\nin a breaking way.";
@@ -14175,7 +14978,7 @@ let
         };
         "scrapeFailureLogFile" = mkOption {
           description = "scrapeFailureLogFile defines the file to which scrape failures are logged.\nReloading the configuration will reopen the file.\n\nIf the filename has an empty path, e.g. 'file.log', The Prometheus Pods\nwill mount the file into an emptyDir volume at `/var/log/prometheus`.\nIf a full path is provided, e.g. '/var/log/prometheus/file.log', you\nmust mount a volume in the specified directory and it must be writable.\nIt requires Prometheus >= v2.55.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "scrapeInterval" = mkOption {
           description = "scrapeInterval defines interval between consecutive scrapes.\n\nDefault: \"30s\"";
@@ -14187,7 +14990,19 @@ let
         };
         "scrapeProtocols" = mkOption {
           description = "scrapeProtocols defines the protocols to negotiate during a scrape. It tells clients the\nprotocols supported by Prometheus in order of preference (from most to least preferred).\n\nIf unset, Prometheus uses its default value.\n\nIt requires Prometheus >= v2.49.0.\n\n`PrometheusText1.0.0` requires Prometheus >= v3.0.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "PrometheusProto"
+                  "OpenMetricsText0.0.1"
+                  "OpenMetricsText1.0.0"
+                  "PrometheusText0.0.4"
+                  "PrometheusText1.0.0"
+                ]
+              )
+            )
+          );
         };
         "scrapeTimeout" = mkOption {
           description = "scrapeTimeout defines the number of seconds to wait until a scrape request times out.\nThe value cannot be greater than the scrape interval otherwise the operator will reject the resource.";
@@ -14207,7 +15022,14 @@ let
         };
         "serviceDiscoveryRole" = mkOption {
           description = "serviceDiscoveryRole defines the service discovery role used to discover targets from\n`ServiceMonitor` objects and Alertmanager endpoints.\n\nIf set, the value should be either \"Endpoints\" or \"EndpointSlice\".\nIf unset, the operator assumes the \"Endpoints\" role.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Endpoints"
+                "EndpointSlice"
+              ]
+            )
+          );
         };
         "serviceMonitorNamespaceSelector" = mkOption {
           description = "serviceMonitorNamespaceSelector defines the namespaces to match for ServicedMonitors discovery. An empty label selector\nmatches all namespaces. A null label selector (default value) matches the current\nnamespace only.";
@@ -14221,7 +15043,7 @@ let
         };
         "serviceName" = mkOption {
           description = "serviceName defines the name of the service name used by the underlying StatefulSet(s) as the governing service.\nIf defined, the Service  must be created before the Prometheus/PrometheusAgent resource in the same namespace and it must define a selector that matches the pod labels.\nIf empty, the operator will create and manage a headless service named `prometheus-operated` for Prometheus resources,\nor `prometheus-agent-operated` for PrometheusAgent resources.\nWhen deploying multiple Prometheus/PrometheusAgent resources in the same namespace, it is recommended to specify a different value for each.\nSee https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#stable-network-id for more details.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "sha" = mkOption {
           description = "sha is deprecated: use 'spec.image' instead. The image's digest can be specified as part of the image name.";
@@ -14236,7 +15058,7 @@ let
           type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecShardingStrategy"));
         };
         "shards" = mkOption {
-          description = "shards defines the number of shards to distribute the scraped targets onto.\n\n`spec.replicas` multiplied by `spec.shards` is the total number of Pods\nbeing created.\n\nWhen not defined, the operator assumes only one shard.\n\nNote that scaling down shards will not reshard data onto the remaining\ninstances, it must be manually moved. Increasing shards will not reshard\ndata either but it will continue to be available from the same\ninstances. To query globally, use either\n* Thanos sidecar + querier for query federation and Thanos Ruler for rules.\n* Remote-write to send metrics to a central location.\n\nBy default, the sharding of targets is performed on:\n* The `__address__` target's metadata label for PodMonitor,\nServiceMonitor and ScrapeConfig resources.\n* The `__param_target__` label for Probe resources.\n\nUsers can define their own sharding implementation by setting the\n`__tmp_hash` label during the target discovery with relabeling\nconfiguration (either in the monitoring resources or via scrape class).\n\nYou can also disable sharding on a specific target by setting the\n`__tmp_disable_sharding` label with relabeling configuration. When\nthe label value isn't empty, all Prometheus shards will scrape the target.";
+          description = "shards defines the number of shards to distribute the scraped targets onto.\n\n`spec.replicas` multiplied by `spec.shards` is the total number of Pods\nbeing created.\n\nWhen not defined, the operator assumes only one shard.\n\nNote that scaling down shards will not reshard data onto the remaining\ninstances, it must be manually moved. Increasing shards will not reshard\ndata either but it will continue to be available from the same\ninstances. To query globally, use either\n* Thanos sidecar + querier for query federation and Thanos Ruler for rules.\n* Remote-write to send metrics to a central location.\n\nBy default, the sharding of targets is performed on:\n* The `__address__` target's metadata label for PodMonitor,\nServiceMonitor and ScrapeConfig resources.\n* The `__param_target__` label for Probe resources.\n\nUsers can define their own sharding implementation by setting the\n`__tmp_hash` label during the target discovery with relabeling\nconfiguration (either in the monitoring resources or via scrape class).\n\nYou can also disable sharding on a specific target by setting the\n`__tmp_disable_sharding` label with relabeling configuration. When\nthe label value isn't empty, all Prometheus shards will scrape the target.\n\nDefault: 1";
           type = (types.nullOr types.int);
         };
         "storage" = mkOption {
@@ -14249,11 +15071,11 @@ let
         };
         "targetLimit" = mkOption {
           description = "targetLimit defines a limit on the number of scraped targets that will be accepted.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedTargetLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "terminationGracePeriodSeconds" = mkOption {
           description = "terminationGracePeriodSeconds defines the optional duration in seconds the pod needs to terminate gracefully.\nValue must be non-negative integer. The value zero indicates stop immediately via\nthe kill signal (no opportunity to shut down) which may lead to data corruption.\n\nDefaults to 600 seconds.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "thanos" = mkOption {
           description = "thanos defines the configuration of the optional Thanos sidecar.";
@@ -14400,6 +15222,7 @@ let
         "replicas" = mkOverride 1002 null;
         "resources" = mkOverride 1002 null;
         "retention" = mkOverride 1002 null;
+        "retentionPercentage" = mkOverride 1002 null;
         "retentionSize" = mkOverride 1002 null;
         "routePrefix" = mkOverride 1002 null;
         "ruleNamespaceSelector" = mkOverride 1002 null;
@@ -14498,7 +15321,7 @@ let
       options = {
         "name" = mkOption {
           description = "name of the argument, e.g. \"scrape.discovery-reload-interval\".";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the argument value, e.g. 30s. Can be empty for name-only arguments (e.g. --storage.tsdb.no-lockfile)";
@@ -15493,7 +16316,16 @@ let
         };
         "apiVersion" = mkOption {
           description = "apiVersion defines the version of the Alertmanager API that Prometheus uses to send alerts.\nIt can be \"V1\" or \"V2\".\nThe field has no effect for Prometheus >= v3.0.0 because only the v2 API is supported.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "v1"
+                "V1"
+                "v2"
+                "V2"
+              ]
+            )
+          );
         };
         "authorization" = mkOption {
           description = "authorization section for Alertmanager.\n\nCannot be set at the same time as `basicAuth`, `bearerTokenFile` or `sigv4`.";
@@ -15519,11 +16351,11 @@ let
         };
         "name" = mkOption {
           description = "name of the Endpoints object in the namespace.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "namespace" = mkOption {
           description = "namespace of the Endpoints object.\n\nIf not set, the object will be discovered in the namespace of the\nPrometheus object.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "noProxy" = mkOption {
           description = "noProxy defines a comma-separated string that can contain IPs, CIDR notation, domain names\nthat should be excluded from proxying. IP and domain names can\ncontain port numbers.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -15531,7 +16363,7 @@ let
         };
         "pathPrefix" = mkOption {
           description = "pathPrefix defines the prefix for the HTTP path alerts are pushed to.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "port" = mkOption {
           description = "port on which the Alertmanager API is exposed.";
@@ -15559,7 +16391,16 @@ let
         };
         "scheme" = mkOption {
           description = "scheme defines the HTTP scheme to use when sending alerts.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "https"
+                "HTTP"
+                "HTTPS"
+              ]
+            )
+          );
         };
         "sigv4" = mkOption {
           description = "sigv4 defines AWS's Signature Verification 4 for the URL.\n\nIt requires Prometheus >= v2.48.0.\n\nCannot be set at the same time as `basicAuth`, `bearerTokenFile` or `authorization`.";
@@ -15605,11 +16446,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -15768,11 +16636,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -15819,8 +16714,8 @@ let
           );
         };
         "externalId" = mkOption {
-          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
-          type = (types.nullOr types.str);
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.34.0. Currently not supported by Thanos.";
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
@@ -15948,11 +16843,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -16005,7 +16918,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -16078,7 +16991,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -16368,11 +17281,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -16423,7 +17354,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -16496,7 +17427,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -16896,7 +17827,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -17117,6 +18048,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -17127,6 +18062,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -17259,6 +18195,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -17269,6 +18209,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -17403,6 +18344,10 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecContainersLivenessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -17414,6 +18359,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -17445,6 +18391,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -17455,6 +18405,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -17612,6 +18563,10 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecContainersReadinessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -17623,6 +18578,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -17654,6 +18610,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -17664,6 +18624,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -18094,6 +19055,10 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecContainersStartupProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -18105,6 +19070,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -18136,6 +19102,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -18146,6 +19116,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -18203,8 +19174,12 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecContainersVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -18234,6 +19209,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -18247,7 +19223,7 @@ let
       options = {
         "nameservers" = mkOption {
           description = "nameservers defines the list of DNS name server IP addresses.\nThis will be appended to the base nameservers generated from DNSPolicy.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "options" = mkOption {
           description = "options defines the list of DNS resolver options.\nThis will be merged with the base options generated from DNSPolicy.\nResolution options given in Options\nwill override those that appear in the base DNSPolicy.";
@@ -18261,7 +19237,7 @@ let
         };
         "searches" = mkOption {
           description = "searches defines the list of DNS search domains for host-name lookup.\nThis will be appended to the base search paths generated from DNSPolicy.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
       };
 
@@ -18277,7 +19253,7 @@ let
       options = {
         "name" = mkOption {
           description = "name is required and must be unique.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value is optional.";
@@ -18295,7 +19271,7 @@ let
       options = {
         "group" = mkOption {
           description = "group of the referent. When not specified, it defaults to `monitoring.coreos.com`";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.enum [ "monitoring.coreos.com" ]));
         };
         "name" = mkOption {
           description = "name of the referent. When not set, all resources in the namespace are matched.";
@@ -18303,11 +19279,19 @@ let
         };
         "namespace" = mkOption {
           description = "namespace of the referent.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource of the referent.";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheusrules"
+              "servicemonitors"
+              "podmonitors"
+              "probes"
+              "scrapeconfigs"
+            ]
+          );
         };
       };
 
@@ -18701,7 +19685,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -18924,6 +19908,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -18934,6 +19922,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -19070,6 +20059,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -19080,6 +20073,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -19218,6 +20212,10 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecInitContainersLivenessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -19229,6 +20227,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -19260,6 +20259,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -19270,6 +20273,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -19429,6 +20433,10 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecInitContainersReadinessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -19440,6 +20448,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -19471,6 +20480,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -19481,6 +20494,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -19915,6 +20929,10 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecInitContainersStartupProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -19926,6 +20944,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -19957,6 +20976,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -19967,6 +20990,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -20024,8 +21048,12 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecInitContainersVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -20055,6 +21083,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -20072,7 +21101,7 @@ let
         };
         "ignoreResourceAttributes" = mkOption {
           description = "ignoreResourceAttributes defines the list of OpenTelemetry resource attributes to ignore when `promoteAllResourceAttributes` is true.\n\nIt requires `promoteAllResourceAttributes` to be true.\nIt requires Prometheus >= v3.5.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "keepIdentifyingResourceAttributes" = mkOption {
           description = "keepIdentifyingResourceAttributes enables adding `service.name`, `service.namespace` and `service.instance.id`\nresource attributes to the `target_info` metric, on top of converting them into the `instance` and `job` labels.\n\nIt requires Prometheus >= v3.1.0.";
@@ -20092,7 +21121,7 @@ let
         };
         "promoteResourceAttributes" = mkOption {
           description = "promoteResourceAttributes defines the list of OpenTelemetry Attributes that should be promoted to metric labels, defaults to none.\nCannot be defined when `promoteAllResourceAttributes` is true.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "promoteScopeMetadata" = mkOption {
           description = "promoteScopeMetadata controls whether to promote OpenTelemetry scope metadata (i.e. name, version, schema URL, and attributes) to metric labels.\nAs per the OpenTelemetry specification, the aforementioned scope metadata should be identifying, i.e. made into metric labels.\nIt requires Prometheus >= v3.6.0.";
@@ -20100,7 +21129,16 @@ let
         };
         "translationStrategy" = mkOption {
           description = "translationStrategy defines how the OTLP receiver endpoint translates the incoming metrics.\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "NoUTF8EscapingWithSuffixes"
+                "UnderscoreEscapingWithSuffixes"
+                "NoTranslation"
+                "UnderscoreEscapingWithoutSuffixes"
+              ]
+            )
+          );
         };
       };
 
@@ -20371,7 +21409,7 @@ let
         };
         "maxConcurrency" = mkOption {
           description = "maxConcurrency defines the number of concurrent queries that can be run at once.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 1 types.int));
         };
         "maxSamples" = mkOption {
           description = "maxSamples defines the maximum number of samples a single query can load into memory. Note that\nqueries will fail if they would load more samples than this into memory,\nso this also limits the number of samples a query can return.";
@@ -20698,7 +21736,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -20792,11 +21830,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -20846,7 +21902,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -20919,7 +21975,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -21021,11 +22077,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -21074,7 +22148,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -21143,7 +22217,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -21247,7 +22321,14 @@ let
         };
         "messageVersion" = mkOption {
           description = "messageVersion defines the Remote Write message's version to use when writing to the endpoint.\n\n`Version1.0` corresponds to the `prometheus.WriteRequest` protobuf message introduced in Remote Write 1.0.\n`Version2.0` corresponds to the `io.prometheus.write.v2.Request` protobuf message introduced in Remote Write 2.0.\n\nWhen `Version2.0` is selected, Prometheus will automatically be\nconfigured to append the metadata of scraped metrics to the WAL.\n\nBefore setting this field, consult with your remote storage provider\nwhat message version it supports.\n\nIt requires Prometheus >= v2.54.0 or Thanos >= v0.37.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "V1.0"
+                "V2.0"
+              ]
+            )
+          );
         };
         "metadataConfig" = mkOption {
           description = "metadataConfig defines how to send a series metadata to the remote storage.\n\nWhen the field is empty, **no metadata** is sent. But when the field is\nnull, metadata is sent.";
@@ -21405,7 +22486,15 @@ let
       options = {
         "cloud" = mkOption {
           description = "cloud defines the Azure Cloud. Options are 'AzurePublic', 'AzureChina', or 'AzureGovernment'.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "AzureChina"
+                "AzureGovernment"
+                "AzurePublic"
+              ]
+            )
+          );
         };
         "managedIdentity" = mkOption {
           description = "managedIdentity defines the Azure User-assigned Managed identity.\nCannot be set at the same time as `oauth`, `sdk` or `workloadIdentity`.";
@@ -21454,7 +22543,7 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId defines the Azure User-assigned Managed identity.\n\nFor Prometheus >= 3.5.0 and Thanos >= 0.40.0, this field is allowed to be empty to support system-assigned managed identities.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -21468,7 +22557,7 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId defines the clientId of the Azure Active Directory application that is being used to authenticate.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "clientSecret" = mkOption {
           description = "clientSecret specifies a key of a Secret containing the client secret of the Azure Active Directory application that is being used to authenticate.";
@@ -21476,7 +22565,7 @@ let
         };
         "tenantId" = mkOption {
           description = "tenantId is the tenant ID of the Azure Active Directory application that is being used to authenticate.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -21525,11 +22614,11 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId is the clientID of the Azure Active Directory application.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "tenantId" = mkOption {
           description = "tenantId is the tenant ID of the Azure Active Directory application.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -21610,10 +22699,10 @@ let
       options = {
         "maxSamplesPerSend" = mkOption {
           description = "maxSamplesPerSend defines the maximum number of metadata samples per send.\n\nIt requires Prometheus >= v2.29.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum - 1 types.int));
         };
         "send" = mkOption {
-          description = "send defines whether metric metadata is sent to the remote storage or not.";
+          description = "send defines whether metric metadata is sent to the remote storage or not.\n\nThe setting is ignored when Remote Write message's version 2.0 is used.";
           type = (types.nullOr types.bool);
         };
         "sendInterval" = mkOption {
@@ -21716,7 +22805,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -21810,11 +22899,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -21864,7 +22971,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -21937,7 +23044,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -22071,8 +23178,8 @@ let
           );
         };
         "externalId" = mkOption {
-          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
-          type = (types.nullOr types.str);
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.34.0. Currently not supported by Thanos.";
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
@@ -22192,11 +23299,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -22245,7 +23370,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -22316,7 +23441,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -22386,11 +23511,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -22609,7 +23761,7 @@ let
       options = {
         "goGC" = mkOption {
           description = "goGC defines the Go garbage collection target percentage. Lowering this number may increase the CPU usage.\nSee: https://tip.golang.org/doc/gc-guide#GOGC";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum - 1 types.int));
         };
       };
 
@@ -22639,7 +23791,17 @@ let
         };
         "fallbackScrapeProtocol" = mkOption {
           description = "fallbackScrapeProtocol defines the protocol to use if a scrape returns blank, unparseable, or otherwise invalid Content-Type.\nIt will only apply if the scrape resource doesn't specify any FallbackScrapeProtocol\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "PrometheusProto"
+                "OpenMetricsText0.0.1"
+                "OpenMetricsText1.0.0"
+                "PrometheusText0.0.4"
+                "PrometheusText1.0.0"
+              ]
+            )
+          );
         };
         "metricRelabelings" = mkOption {
           description = "metricRelabelings defines the relabeling rules to apply to all samples before ingestion.\n\nThe Operator adds the scrape class metric relabelings defined here.\nThen the Operator adds the target-specific metric relabelings defined in ServiceMonitors, PodMonitors, Probes and ScrapeConfigs.\nThen the Operator adds namespace enforcement relabeling rule, specified in '.spec.enforcedNamespaceLabel'.\n\nMore info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs";
@@ -22651,7 +23813,7 @@ let
         };
         "name" = mkOption {
           description = "name of the scrape class.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "relabelings" = mkOption {
           description = "relabelings defines the relabeling rules to apply to all scrape targets.\n\nThe Operator automatically adds relabelings for a few standard Kubernetes fields\nlike `__meta_kubernetes_namespace` and `__meta_kubernetes_service_name`.\nThen the Operator adds the scrape class relabelings defined here.\nThen the Operator adds the target-specific relabelings defined in the scrape object.\n\nMore info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config";
@@ -22748,11 +23910,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -22792,11 +23981,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -22870,11 +24086,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -22925,7 +24159,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -22996,7 +24230,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -23185,7 +24419,7 @@ let
           type = (types.nullOr types.int);
         };
         "seLinuxChangePolicy" = mkOption {
-          description = "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with `-o context` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\"MountOption\" value is allowed only when SELinuxMount feature gate is enabled.\n\nIf not specified and SELinuxMount feature gate is enabled, \"MountOption\" is used.\nIf not specified and SELinuxMount feature gate is disabled, \"MountOption\" is used for ReadWriteOncePod volumes\nand \"Recursive\" for all other volumes.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with `-o context` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\nIf not specified, \"MountOption\" is used.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "seLinuxOptions" = mkOption {
@@ -23459,7 +24693,14 @@ let
         };
         "whenScaled" = mkOption {
           description = "whenScaled defines the retention policy when the Prometheus shards are scaled down.\n* `Delete`, the operator will delete the pods from the scaled-down shard(s).\n* `Retain`, the operator will keep the pods from the scaled-down shard(s), so the data can still be queried.\n\nIf not defined, the operator assumes the `Delete` value.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Retain"
+                "Delete"
+              ]
+            )
+          );
         };
       };
 
@@ -23486,7 +24727,14 @@ let
       options = {
         "mode" = mkOption {
           description = "mode defines the sharding mode. Can be 'Address' or 'Topology'.\n\n'Address' is the default mode and distributes targets across shards\nbased on a hash of the target address.\n\n'Topology' enables zone-aware sharding where each shard is assigned to a\nspecific topology zone and only scrapes targets in that zone.\n(Alpha) Using the 'Topology' mode requires the `PrometheusTopologySharding`\nfeature gate to be enabled.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Address"
+                "Topology"
+              ]
+            )
+          );
         };
         "topology" = mkOption {
           description = "topology defines the configuration for topology-aware sharding.\nThis field is only valid when mode is set to 'Topology'.";
@@ -23559,6 +24807,10 @@ let
           description = "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr types.str);
         };
+        "mode" = mkOption {
+          description = "mode specifies the permission bits for the emptyDir directory, in numeric\nnotation (e.g., 0755, 01777). Must be a value between 0000 and 01777.\nIf not specified, defaults to 0777.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup. If fsGroup is specified, the fsGroup permissions\nwill override the mode specified here.\nThis field has no effect on Windows.\nThis field is alpha and requires EmptyDirVolumeMode featuregate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sizeLimit" = mkOption {
           description = "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr (types.either types.int types.str));
@@ -23567,6 +24819,7 @@ let
 
       config = {
         "medium" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
         "sizeLimit" = mkOverride 1002 null;
       };
 
@@ -23617,7 +24870,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecStorageEphemeralVolumeClaimTemplateSpecDataSource"
@@ -23625,7 +24878,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecStorageEphemeralVolumeClaimTemplateSpecDataSourceRef"
@@ -23869,7 +25122,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecStorageVolumeClaimTemplateSpecDataSource"
@@ -23877,7 +25130,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecStorageVolumeClaimTemplateSpecDataSourceRef"
@@ -24079,6 +25332,14 @@ let
           description = "currentVolumeAttributesClassName is the current name of the VolumeAttributesClass the PVC is using.\nWhen unset, there is no VolumeAttributeClass applied to this PersistentVolumeClaim";
           type = (types.nullOr types.str);
         };
+        "healthStatus" = mkOption {
+          description = "healthStatus contains the latest controller-reported health information\nfor the volume bound to this claim.";
+          type = (
+            types.nullOr (
+              submoduleOf "monitoring.coreos.com.v1.PrometheusSpecStorageVolumeClaimTemplateStatusHealthStatus"
+            )
+          );
+        };
         "modifyVolumeStatus" = mkOption {
           description = "ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.\nWhen this is unset, there is no ModifyVolume operation being attempted.";
           type = (
@@ -24100,6 +25361,7 @@ let
         "capacity" = mkOverride 1002 null;
         "conditions" = mkOverride 1002 null;
         "currentVolumeAttributesClassName" = mkOverride 1002 null;
+        "healthStatus" = mkOverride 1002 null;
         "modifyVolumeStatus" = mkOverride 1002 null;
         "phase" = mkOverride 1002 null;
       };
@@ -24142,6 +25404,60 @@ let
       };
 
     };
+    "monitoring.coreos.com.v1.PrometheusSpecStorageVolumeClaimTemplateStatusHealthStatus" = {
+
+      options = {
+        "healthConditions" = mkOption {
+          description = "conditions is the set of adverse conditions reported by\nthe CSI controller plugin. An empty list means no adverse condition.\nAt most 16 conditions may be reported.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "monitoring.coreos.com.v1.PrometheusSpecStorageVolumeClaimTemplateStatusHealthStatusHealthConditions"
+              )
+            )
+          );
+        };
+        "lastTransitionTime" = mkOption {
+          description = "lastTransitionTime is when the current set of conditions first appeared.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "healthConditions" = mkOverride 1002 null;
+        "lastTransitionTime" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1.PrometheusSpecStorageVolumeClaimTemplateStatusHealthStatusHealthConditions" =
+      {
+
+        options = {
+          "message" = mkOption {
+            description = "message is a human-readable description.\nMaximum permitted length of a message is 1024 bytes.";
+            type = (types.nullOr types.str);
+          };
+          "reason" = mkOption {
+            description = "reason is a brief CamelCase machine-parseable reason.\nTogether with status it forms the unique identity of a condition entry.\nMaximum permitted length of a reason is 256 bytes.";
+            type = types.str;
+          };
+          "status" = mkOption {
+            description = "status is the machine-parseable health category.\nPossible values:\n- \"Inaccessible\": the volume cannot be accessed.\n- \"DataLoss\": data loss has been detected on the volume.\n- \"Degraded\": the volume is functioning with reduced capability.";
+            type = (
+              types.enum [
+                "DataLoss"
+                "Degraded"
+                "Inaccessible"
+              ]
+            );
+          };
+        };
+
+        config = {
+          "message" = mkOverride 1002 null;
+        };
+
+      };
     "monitoring.coreos.com.v1.PrometheusSpecStorageVolumeClaimTemplateStatusModifyVolumeStatus" = {
 
       options = {
@@ -24214,11 +25530,29 @@ let
         };
         "logFormat" = mkOption {
           description = "logFormat for the Thanos sidecar.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "logfmt"
+                "json"
+              ]
+            )
+          );
         };
         "logLevel" = mkOption {
           description = "logLevel for the Thanos sidecar.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "debug"
+                "info"
+                "warn"
+                "error"
+              ]
+            )
+          );
         };
         "minTime" = mkOption {
           description = "minTime defines the start of time range limit served by the Thanos sidecar's StoreAPI.\nThe field's value should be a constant time in RFC3339 format or a time\nduration relative to current time, such as -1d or 2h45m. Valid duration\nunits are ms, s, m, h, d, w, y.";
@@ -24307,7 +25641,7 @@ let
       options = {
         "name" = mkOption {
           description = "name of the argument, e.g. \"scrape.discovery-reload-interval\".";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the argument value, e.g. 30s. Can be empty for name-only arguments (e.g. --storage.tsdb.no-lockfile)";
@@ -24369,11 +25703,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -24428,7 +25780,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -24501,7 +25853,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -24664,8 +26016,12 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecThanosVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -24695,6 +26051,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -24742,7 +26099,14 @@ let
       options = {
         "additionalLabelSelectors" = mkOption {
           description = "additionalLabelSelectors Defines what Prometheus Operator managed labels should be added to labelSelector on the topologySpreadConstraint.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "OnResource"
+                "OnShard"
+              ]
+            )
+          );
         };
         "labelSelector" = mkOption {
           description = "LabelSelector is used to find matching pods.\nPods that match this label selector are counted to determine the number of pods\nin their corresponding topology domain.";
@@ -24844,15 +26208,31 @@ let
       options = {
         "clientType" = mkOption {
           description = "clientType defines the client used to export the traces. Supported values are `HTTP` and `GRPC`.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "grpc"
+                "HTTP"
+                "GRPC"
+              ]
+            )
+          );
         };
         "compression" = mkOption {
           description = "compression key for supported compression types. The only supported value is `Gzip`.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "gzip"
+                "Gzip"
+              ]
+            )
+          );
         };
         "endpoint" = mkOption {
           description = "endpoint to send the traces to. Should be provided in format <host>:<port>.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "headers" = mkOption {
           description = "headers defines the key-value pairs to be used as headers associated with gRPC or HTTP requests.";
@@ -24926,11 +26306,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -24981,7 +26379,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -25052,7 +26450,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -25120,6 +26518,10 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecTsdb" = {
 
       options = {
+        "chunkEncoding" = mkOption {
+          description = "chunkEncoding configures per-chunk-type encoding overrides.\n\nIt requires Prometheus >= v3.13.0.\n\nNotice: Setting \"Xor\" is incompatible with --enable-feature=st-storage\n(XOR chunks do not store start timestamps).";
+          type = (types.nullOr (submoduleOf "monitoring.coreos.com.v1.PrometheusSpecTsdbChunkEncoding"));
+        };
         "outOfOrderTimeWindow" = mkOption {
           description = "outOfOrderTimeWindow defines how old an out-of-order/out-of-bounds sample can be with\nrespect to the TSDB max time.\n\nAn out-of-order/out-of-bounds sample is ingested into the TSDB as long as\nthe timestamp of the sample is >= (TSDB.MaxTime - outOfOrderTimeWindow).\n\nThis is an *experimental feature*, it may change in any upcoming release\nin a breaking way.\n\nIt requires Prometheus >= v2.39.0 or PrometheusAgent >= v2.54.0.";
           type = (types.nullOr types.str);
@@ -25131,8 +26533,30 @@ let
       };
 
       config = {
+        "chunkEncoding" = mkOverride 1002 null;
         "outOfOrderTimeWindow" = mkOverride 1002 null;
         "staleSeriesCompactionThreshold" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1.PrometheusSpecTsdbChunkEncoding" = {
+
+      options = {
+        "floats" = mkOption {
+          description = "floats selects the encoding used for float chunks.\nValid values are \"Xor\" and \"Xor2\".\n\nNotice:\n * Setting \"Xor\" is incompatible with --enable-feature=st-storage\n(XOR chunks do not store start timestamps).\n * Setting \"Xor2\" automatically adds the `xor2-encoding` feature flag.\n\nIt requires Prometheus >= v3.13.0.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Xor"
+                "Xor2"
+              ]
+            )
+          );
+        };
+      };
+
+      config = {
+        "floats" = mkOverride 1002 null;
       };
 
     };
@@ -25147,7 +26571,12 @@ let
         };
         "type" = mkOption {
           description = "type indicates the type of the StatefulSetUpdateStrategy.\n\nDefault is RollingUpdate.";
-          type = types.str;
+          type = (
+            types.enum [
+              "OnDelete"
+              "RollingUpdate"
+            ]
+          );
         };
       };
 
@@ -25173,8 +26602,12 @@ let
     "monitoring.coreos.com.v1.PrometheusSpecVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -25204,6 +26637,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -25571,6 +27005,10 @@ let
           description = "defaultMode is optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "items if unspecified, each key-value pair in the Data field of the referenced\nConfigMap will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the ConfigMap,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.";
           type = (
@@ -25591,6 +27029,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
@@ -25612,10 +27051,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -25675,6 +27119,10 @@ let
           description = "Optional: mode bits to use on created files by default. Must be a\nOptional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "Items is a list of downward API volume file";
           type = (
@@ -25687,6 +27135,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
       };
 
@@ -25716,12 +27165,17 @@ let
             )
           );
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "fieldRef" = mkOverride 1002 null;
         "mode" = mkOverride 1002 null;
         "resourceFieldRef" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -25773,6 +27227,10 @@ let
           description = "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr types.str);
         };
+        "mode" = mkOption {
+          description = "mode specifies the permission bits for the emptyDir directory, in numeric\nnotation (e.g., 0755, 01777). Must be a value between 0000 and 01777.\nIf not specified, defaults to 0777.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup. If fsGroup is specified, the fsGroup permissions\nwill override the mode specified here.\nThis field has no effect on Windows.\nThis field is alpha and requires EmptyDirVolumeMode featuregate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sizeLimit" = mkOption {
           description = "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr (types.either types.int types.str));
@@ -25781,6 +27239,7 @@ let
 
       config = {
         "medium" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
         "sizeLimit" = mkOverride 1002 null;
       };
 
@@ -25831,7 +27290,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecVolumesEphemeralVolumeClaimTemplateSpecDataSource"
@@ -25839,7 +27298,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.PrometheusSpecVolumesEphemeralVolumeClaimTemplateSpecDataSourceRef"
@@ -26384,6 +27843,10 @@ let
           description = "defaultMode are the mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sources" = mkOption {
           description = "sources is the list of volume projections. Each entry in this list\nhandles one source.";
           type = (
@@ -26396,6 +27859,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "sources" = mkOverride 1002 null;
       };
 
@@ -26486,6 +27950,10 @@ let
           description = "Select all ClusterTrustBundles that match this signer name.\nMutually-exclusive with name.  The contents of all selected\nClusterTrustBundles will be unified and deduplicated.";
           type = (types.nullOr types.str);
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
@@ -26493,6 +27961,7 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
         "signerName" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -26589,10 +28058,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -26643,12 +28117,17 @@ let
             )
           );
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "fieldRef" = mkOverride 1002 null;
         "mode" = mkOverride 1002 null;
         "resourceFieldRef" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -26720,6 +28199,10 @@ let
           description = "Kubelet's generated CSRs will be addressed to this signer.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "userAnnotations" = mkOption {
           description = "userAnnotations allow pod authors to pass additional information to\nthe signer implementation.  Kubernetes does not restrict or validate this\nmetadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of\nthe PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations,\nwith the addition that all keys must be domain-prefixed. No restrictions\nare placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should\ndeny requests that contain keys they do not recognize.";
           type = (types.nullOr (types.attrsOf types.str));
@@ -26731,6 +28214,7 @@ let
         "credentialBundlePath" = mkOverride 1002 null;
         "keyPath" = mkOverride 1002 null;
         "maxExpirationSeconds" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
         "userAnnotations" = mkOverride 1002 null;
       };
 
@@ -26780,10 +28264,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -26802,11 +28291,16 @@ let
           description = "path is the path relative to the mount point of the file to project the\ntoken into.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "audience" = mkOverride 1002 null;
         "expirationSeconds" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -26985,6 +28479,10 @@ let
           description = "defaultMode is Optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values\nfor mode bits. Defaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "items If unspecified, each key-value pair in the Data field of the referenced\nSecret will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the Secret,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.";
           type = (
@@ -27005,6 +28503,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
         "secretName" = mkOverride 1002 null;
@@ -27026,10 +28525,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -27120,7 +28624,7 @@ let
         };
         "maxConnections" = mkOption {
           description = "maxConnections defines the maximum number of simultaneous connections\nA zero value means that Prometheus doesn't accept any incoming connection.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "pageTitle" = mkOption {
           description = "pageTitle defines the prometheus web page title.";
@@ -27172,11 +28676,26 @@ let
         };
         "xContentTypeOptions" = mkOption {
           description = "xContentTypeOptions defines the X-Content-Type-Options header to HTTP responses.\nUnset if blank. Accepted value is nosniff.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "NoSniff"
+              ]
+            )
+          );
         };
         "xFrameOptions" = mkOption {
           description = "xFrameOptions defines the X-Frame-Options header to HTTP responses.\nUnset if blank. Accepted values are deny and sameorigin.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "Deny"
+                "SameOrigin"
+              ]
+            )
+          );
         };
         "xXSSProtection" = mkOption {
           description = "xXSSProtection defines the X-XSS-Protection header to all responses.\nUnset if blank.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection";
@@ -27287,7 +28806,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -27356,7 +28875,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -27500,11 +29019,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -27597,7 +29116,17 @@ let
         };
         "fallbackScrapeProtocol" = mkOption {
           description = "fallbackScrapeProtocol defines the protocol to use if a scrape returns blank, unparseable, or otherwise invalid Content-Type.\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "PrometheusProto"
+                "OpenMetricsText0.0.1"
+                "OpenMetricsText1.0.0"
+                "PrometheusText0.0.4"
+                "PrometheusText1.0.0"
+              ]
+            )
+          );
         };
         "jobLabel" = mkOption {
           description = "jobLabel selects the label from the associated Kubernetes `Service`\nobject which will be used as the `job` label for all metrics.\n\nFor example if `jobLabel` is set to `foo` and the Kubernetes `Service`\nobject is labeled with `foo: bar`, then Prometheus adds the `job=\"bar\"`\nlabel to all ingested metrics.\n\nIf the value of this field is empty or if the label doesn't exist for\nthe given Service, the `job` label of the metrics defaults to the name\nof the associated Kubernetes `Service`.";
@@ -27605,19 +29134,19 @@ let
         };
         "keepDroppedTargets" = mkOption {
           description = "keepDroppedTargets defines the per-scrape limit on the number of targets dropped by relabeling\nthat will be kept in memory. 0 means no limit.\n\nIt requires Prometheus >= v2.47.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelLimit" = mkOption {
           description = "labelLimit defines the per-scrape limit on number of labels that will be accepted for a sample.\n\nIt requires Prometheus >= v2.27.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelNameLengthLimit" = mkOption {
           description = "labelNameLengthLimit defines the per-scrape limit on length of labels name that will be accepted for a sample.\n\nIt requires Prometheus >= v2.27.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelValueLengthLimit" = mkOption {
           description = "labelValueLengthLimit defines the per-scrape limit on length of labels value that will be accepted for a sample.\n\nIt requires Prometheus >= v2.27.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "namespaceSelector" = mkOption {
           description = "namespaceSelector defines in which namespace(s) Prometheus should discover the services.\nBy default, the services are discovered in the same namespace as the `ServiceMonitor` object but it is possible to select pods across different/all namespaces.";
@@ -27625,7 +29154,7 @@ let
         };
         "nativeHistogramBucketLimit" = mkOption {
           description = "nativeHistogramBucketLimit defines ff there are more than this many buckets in a native histogram,\nbuckets will be merged to stay within the limit.\nIt requires Prometheus >= v2.45.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "nativeHistogramMinBucketFactor" = mkOption {
           description = "nativeHistogramMinBucketFactor defines if the growth factor of one bucket to the next is smaller than this,\nbuckets will be merged to increase the factor sufficiently.\nIt requires Prometheus >= v2.50.0.";
@@ -27637,11 +29166,11 @@ let
         };
         "sampleLimit" = mkOption {
           description = "sampleLimit defines a per-scrape limit on the number of scraped samples\nthat will be accepted.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "scrapeClass" = mkOption {
           description = "scrapeClass defines the scrape class to apply.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "scrapeClassicHistograms" = mkOption {
           description = "scrapeClassicHistograms defines whether to scrape a classic histogram that is also exposed as a native histogram.\nIt requires Prometheus >= v2.45.0.\n\nNotice: `scrapeClassicHistograms` corresponds to the `always_scrape_classic_histograms` field in the Prometheus configuration.";
@@ -27653,7 +29182,19 @@ let
         };
         "scrapeProtocols" = mkOption {
           description = "scrapeProtocols defines the protocols to negotiate during a scrape. It tells clients the\nprotocols supported by Prometheus in order of preference (from most to least preferred).\n\nIf unset, Prometheus uses its default value.\n\nIt requires Prometheus >= v2.49.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "PrometheusProto"
+                  "OpenMetricsText0.0.1"
+                  "OpenMetricsText1.0.0"
+                  "PrometheusText0.0.4"
+                  "PrometheusText1.0.0"
+                ]
+              )
+            )
+          );
         };
         "selector" = mkOption {
           description = "selector defines the label selector to select the Kubernetes `Endpoints` objects to scrape metrics from.";
@@ -27661,11 +29202,25 @@ let
         };
         "selectorMechanism" = mkOption {
           description = "selectorMechanism defines the mechanism used to select the endpoints to scrape.\nBy default, the selection process relies on relabel configurations to filter the discovered targets.\nAlternatively, you can opt in for role selectors, which may offer better efficiency in large clusters.\nWhich strategy is best for your use case needs to be carefully evaluated.\n\nIt requires Prometheus >= v2.17.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "RelabelConfig"
+                "RoleSelector"
+              ]
+            )
+          );
         };
         "serviceDiscoveryRole" = mkOption {
           description = "serviceDiscoveryRole defines the service discovery role used to discover targets.\n\nIf set, the value should be either \"Endpoints\" or \"EndpointSlice\".\nOtherwise it defaults to the value defined in the\nPrometheus/PrometheusAgent resource.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Endpoints"
+                "EndpointSlice"
+              ]
+            )
+          );
         };
         "targetLabels" = mkOption {
           description = "targetLabels defines the labels which are transferred from the\nassociated Kubernetes `Service` object onto the ingested metrics.";
@@ -27673,7 +29228,7 @@ let
         };
         "targetLimit" = mkOption {
           description = "targetLimit defines a limit on the number of scraped targets that will\nbe accepted.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
       };
 
@@ -27814,7 +29369,16 @@ let
         };
         "scheme" = mkOption {
           description = "scheme defines the HTTP scheme to use when scraping the metrics.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "https"
+                "HTTP"
+                "HTTPS"
+              ]
+            )
+          );
         };
         "scrapeTimeout" = mkOption {
           description = "scrapeTimeout defines the timeout after which Prometheus considers the scrape to be failed.\n\nIf empty, Prometheus uses the global scrape timeout unless it is less\nthan the target's scrape interval value in which the latter is used.\nThe value cannot be greater than the scrape interval otherwise the operator will reject the resource.";
@@ -28006,11 +29570,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -28134,7 +29725,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -28228,11 +29819,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -28282,7 +29891,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -28355,7 +29964,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -28425,11 +30034,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -28503,11 +30139,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -28558,7 +30212,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -28629,7 +30283,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -28795,19 +30449,26 @@ let
         };
         "group" = mkOption {
           description = "group defines the group of the referenced resource.";
-          type = types.str;
+          type = (types.enum [ "monitoring.coreos.com" ]);
         };
         "name" = mkOption {
           description = "name defines the name of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "namespace" = mkOption {
           description = "namespace defines the namespace of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource defines the type of resource being referenced (e.g. Prometheus, PrometheusAgent, ThanosRuler or Alertmanager).";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheuses"
+              "prometheusagents"
+              "thanosrulers"
+              "alertmanagers"
+            ]
+          );
         };
       };
 
@@ -28837,11 +30498,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.\nCurrently, only \"Accepted\" is supported.";
-          type = types.str;
+          type = (types.enum [ "Accepted" ]);
         };
       };
 
@@ -28941,11 +30602,20 @@ let
         };
         "dnsPolicy" = mkOption {
           description = "dnsPolicy defines the DNS policy for the pods.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ClusterFirstWithHostNet"
+                "ClusterFirst"
+                "Default"
+                "None"
+              ]
+            )
+          );
         };
         "enableFeatures" = mkOption {
           description = "enableFeatures defines how to setup Thanos Ruler feature flags. By default, no features are enabled.\n\nEnabling features which are disabled by default is entirely outside the\nscope of what the maintainers will support and by doing so, you accept\nthat this behaviour may break at any time without notice.\n\nFor more information see https://thanos.io/tip/components/rule.md/\n\nIt requires Thanos >= 0.39.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "enableServiceLinks" = mkOption {
           description = "enableServiceLinks defines whether information about services should be injected into pod's environment variables";
@@ -28994,7 +30664,16 @@ let
         };
         "imagePullPolicy" = mkOption {
           description = "imagePullPolicy defines for the 'thanos', 'init-config-reloader' and 'config-reloader' containers.\nSee https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy for more details.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "Always"
+                "Never"
+                "IfNotPresent"
+              ]
+            )
+          );
         };
         "imagePullSecrets" = mkOption {
           description = "imagePullSecrets defines an optional list of references to secrets in the same namespace\nto use for pulling thanos images from registries\nsee http://kubernetes.io/docs/user-guide/images#specifying-imagepullsecrets-on-a-pod";
@@ -29026,15 +30705,33 @@ let
         };
         "logFormat" = mkOption {
           description = "logFormat for ThanosRuler to be configured with.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "logfmt"
+                "json"
+              ]
+            )
+          );
         };
         "logLevel" = mkOption {
           description = "logLevel for ThanosRuler to be configured with.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "debug"
+                "info"
+                "warn"
+                "error"
+              ]
+            )
+          );
         };
         "minReadySeconds" = mkOption {
           description = "minReadySeconds defines the minimum number of seconds for which a newly created pod should be ready\nwithout any of its container crashing for it to be considered available.\n\nIf unset, pods will be considered available as soon as they are ready.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "nodeSelector" = mkOption {
           description = "nodeSelector defines which Nodes the Pods are scheduled on.";
@@ -29054,7 +30751,14 @@ let
         };
         "podManagementPolicy" = mkOption {
           description = "podManagementPolicy defines the policy for creating/deleting pods when\nscaling up and down.\n\nUnlike the default StatefulSet behavior, the default policy is\n`Parallel` to avoid manual intervention in case a pod gets stuck during\na rollout.\n\nNote that updating this value implies the recreation of the StatefulSet\nwhich incurs a service outage.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "OrderedReady"
+                "Parallel"
+              ]
+            )
+          );
         };
         "podMetadata" = mkOption {
           description = "podMetadata defines labels and annotations which are propagated to the ThanosRuler pods.\n\nThe following items are reserved and cannot be overridden:\n* \"app.kubernetes.io/name\" label, set to \"thanos-ruler\".\n* \"app.kubernetes.io/managed-by\" label, set to \"prometheus-operator\".\n* \"app.kubernetes.io/instance\" label, set to the name of the ThanosRuler instance.\n* \"thanos-ruler\" label, set to the name of the ThanosRuler instance.\n* \"kubectl.kubernetes.io/default-container\" annotation, set to \"thanos-ruler\".";
@@ -29117,7 +30821,7 @@ let
         };
         "ruleConcurrentEval" = mkOption {
           description = "ruleConcurrentEval defines how many rules can be evaluated concurrently.\nIt requires Thanos >= v0.37.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 1 types.int));
         };
         "ruleGracePeriod" = mkOption {
           description = "ruleGracePeriod defines the minimum duration between alert and restored \"for\" state.\nThis is maintained only for alerts with configured \"for\" time greater than grace period.\nIt requires Thanos >= v0.30.0.";
@@ -29141,7 +30845,7 @@ let
         };
         "schedulerName" = mkOption {
           description = "schedulerName defines the scheduler to use for Pod scheduling. If not specified, the default scheduler is used.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "securityContext" = mkOption {
           description = "securityContext defines the pod-level security attributes and common container settings.\nThis defaults to the default PodSecurityContext.";
@@ -29153,7 +30857,7 @@ let
         };
         "serviceName" = mkOption {
           description = "serviceName defines the name of the service name used by the underlying StatefulSet(s) as the governing service.\nIf defined, the Service  must be created before the ThanosRuler resource in the same namespace and it must define a selector that matches the pod labels.\nIf empty, the operator will create and manage a headless service named `thanos-ruler-operated` for ThanosRuler resources.\nWhen deploying multiple ThanosRuler resources in the same namespace, it is recommended to specify a different value for each.\nSee https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#stable-network-id for more details.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "storage" = mkOption {
           description = "storage defines the specification of how storage shall be used.";
@@ -29161,7 +30865,7 @@ let
         };
         "terminationGracePeriodSeconds" = mkOption {
           description = "terminationGracePeriodSeconds defines the optional duration in seconds the pod needs to terminate gracefully.\nValue must be non-negative integer. The value zero indicates stop immediately via\nthe kill signal (no opportunity to shut down) which may lead to data corruption.\n\nDefaults to 120 seconds.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "tolerations" = mkOption {
           description = "tolerations defines when specified, the pod's tolerations.";
@@ -29293,7 +30997,7 @@ let
       options = {
         "name" = mkOption {
           description = "name of the argument, e.g. \"scrape.discovery-reload-interval\".";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the argument value, e.g. 30s. Can be empty for name-only arguments (e.g. --storage.tsdb.no-lockfile)";
@@ -30609,7 +32313,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -30832,6 +32536,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -30842,6 +32550,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -30974,6 +32683,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -30984,6 +32697,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -31120,6 +32834,10 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecContainersLivenessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -31131,6 +32849,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -31162,6 +32881,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -31172,6 +32895,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -31329,6 +33053,10 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecContainersReadinessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -31340,6 +33068,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -31371,6 +33100,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -31381,6 +33114,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -31811,6 +33545,10 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecContainersStartupProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -31822,6 +33560,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -31853,6 +33592,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -31863,6 +33606,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -31920,8 +33664,12 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecContainersVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -31951,6 +33699,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -31964,7 +33713,7 @@ let
       options = {
         "nameservers" = mkOption {
           description = "nameservers defines the list of DNS name server IP addresses.\nThis will be appended to the base nameservers generated from DNSPolicy.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "options" = mkOption {
           description = "options defines the list of DNS resolver options.\nThis will be merged with the base options generated from DNSPolicy.\nResolution options given in Options\nwill override those that appear in the base DNSPolicy.";
@@ -31978,7 +33727,7 @@ let
         };
         "searches" = mkOption {
           description = "searches defines the list of DNS search domains for host-name lookup.\nThis will be appended to the base search paths generated from DNSPolicy.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
       };
 
@@ -31994,7 +33743,7 @@ let
       options = {
         "name" = mkOption {
           description = "name is required and must be unique.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value is optional.";
@@ -32012,7 +33761,7 @@ let
       options = {
         "group" = mkOption {
           description = "group of the referent. When not specified, it defaults to `monitoring.coreos.com`";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.enum [ "monitoring.coreos.com" ]));
         };
         "name" = mkOption {
           description = "name of the referent. When not set, all resources in the namespace are matched.";
@@ -32020,11 +33769,19 @@ let
         };
         "namespace" = mkOption {
           description = "namespace of the referent.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource of the referent.";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheusrules"
+              "servicemonitors"
+              "podmonitors"
+              "probes"
+              "scrapeconfigs"
+            ]
+          );
         };
       };
 
@@ -32079,11 +33836,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -32134,7 +33909,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -32205,7 +33980,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -32643,7 +34418,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -32868,6 +34643,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -32878,6 +34657,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -33014,6 +34794,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -33024,6 +34808,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -33162,6 +34947,10 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecInitContainersLivenessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -33173,6 +34962,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -33204,6 +34994,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -33214,6 +35008,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -33377,6 +35172,10 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecInitContainersReadinessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -33388,6 +35187,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -33419,6 +35219,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -33429,6 +35233,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -33863,6 +35668,10 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecInitContainersStartupProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -33874,6 +35683,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -33905,6 +35715,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -33915,6 +35729,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -33972,8 +35787,12 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecInitContainersVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -34003,6 +35822,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -34136,7 +35956,14 @@ let
         };
         "messageVersion" = mkOption {
           description = "messageVersion defines the Remote Write message's version to use when writing to the endpoint.\n\n`Version1.0` corresponds to the `prometheus.WriteRequest` protobuf message introduced in Remote Write 1.0.\n`Version2.0` corresponds to the `io.prometheus.write.v2.Request` protobuf message introduced in Remote Write 2.0.\n\nWhen `Version2.0` is selected, Prometheus will automatically be\nconfigured to append the metadata of scraped metrics to the WAL.\n\nBefore setting this field, consult with your remote storage provider\nwhat message version it supports.\n\nIt requires Prometheus >= v2.54.0 or Thanos >= v0.37.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "V1.0"
+                "V2.0"
+              ]
+            )
+          );
         };
         "metadataConfig" = mkOption {
           description = "metadataConfig defines how to send a series metadata to the remote storage.\n\nWhen the field is empty, **no metadata** is sent. But when the field is\nnull, metadata is sent.";
@@ -34296,7 +36123,15 @@ let
       options = {
         "cloud" = mkOption {
           description = "cloud defines the Azure Cloud. Options are 'AzurePublic', 'AzureChina', or 'AzureGovernment'.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "AzureChina"
+                "AzureGovernment"
+                "AzurePublic"
+              ]
+            )
+          );
         };
         "managedIdentity" = mkOption {
           description = "managedIdentity defines the Azure User-assigned Managed identity.\nCannot be set at the same time as `oauth`, `sdk` or `workloadIdentity`.";
@@ -34345,7 +36180,7 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId defines the Azure User-assigned Managed identity.\n\nFor Prometheus >= 3.5.0 and Thanos >= 0.40.0, this field is allowed to be empty to support system-assigned managed identities.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -34359,7 +36194,7 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId defines the clientId of the Azure Active Directory application that is being used to authenticate.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "clientSecret" = mkOption {
           description = "clientSecret specifies a key of a Secret containing the client secret of the Azure Active Directory application that is being used to authenticate.";
@@ -34367,7 +36202,7 @@ let
         };
         "tenantId" = mkOption {
           description = "tenantId is the tenant ID of the Azure Active Directory application that is being used to authenticate.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -34416,11 +36251,11 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId is the clientID of the Azure Active Directory application.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "tenantId" = mkOption {
           description = "tenantId is the tenant ID of the Azure Active Directory application.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -34501,10 +36336,10 @@ let
       options = {
         "maxSamplesPerSend" = mkOption {
           description = "maxSamplesPerSend defines the maximum number of metadata samples per send.\n\nIt requires Prometheus >= v2.29.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum - 1 types.int));
         };
         "send" = mkOption {
-          description = "send defines whether metric metadata is sent to the remote storage or not.";
+          description = "send defines whether metric metadata is sent to the remote storage or not.\n\nThe setting is ignored when Remote Write message's version 2.0 is used.";
           type = (types.nullOr types.bool);
         };
         "sendInterval" = mkOption {
@@ -34607,7 +36442,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -34701,11 +36536,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -34755,7 +36608,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -34828,7 +36681,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -34962,8 +36815,8 @@ let
           );
         };
         "externalId" = mkOption {
-          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
-          type = (types.nullOr types.str);
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.34.0. Currently not supported by Thanos.";
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
@@ -35085,11 +36938,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -35138,7 +37009,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -35209,7 +37080,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -35279,11 +37150,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -35488,7 +37386,7 @@ let
           type = (types.nullOr types.int);
         };
         "seLinuxChangePolicy" = mkOption {
-          description = "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with `-o context` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\"MountOption\" value is allowed only when SELinuxMount feature gate is enabled.\n\nIf not specified and SELinuxMount feature gate is enabled, \"MountOption\" is used.\nIf not specified and SELinuxMount feature gate is disabled, \"MountOption\" is used for ReadWriteOncePod volumes\nand \"Recursive\" for all other volumes.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with `-o context` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\nIf not specified, \"MountOption\" is used.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "seLinuxOptions" = mkOption {
@@ -35695,6 +37593,10 @@ let
           description = "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr types.str);
         };
+        "mode" = mkOption {
+          description = "mode specifies the permission bits for the emptyDir directory, in numeric\nnotation (e.g., 0755, 01777). Must be a value between 0000 and 01777.\nIf not specified, defaults to 0777.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup. If fsGroup is specified, the fsGroup permissions\nwill override the mode specified here.\nThis field has no effect on Windows.\nThis field is alpha and requires EmptyDirVolumeMode featuregate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sizeLimit" = mkOption {
           description = "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr (types.either types.int types.str));
@@ -35703,6 +37605,7 @@ let
 
       config = {
         "medium" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
         "sizeLimit" = mkOverride 1002 null;
       };
 
@@ -35753,7 +37656,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecStorageEphemeralVolumeClaimTemplateSpecDataSource"
@@ -35761,7 +37664,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecStorageEphemeralVolumeClaimTemplateSpecDataSourceRef"
@@ -36007,7 +37910,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecStorageVolumeClaimTemplateSpecDataSource"
@@ -36015,7 +37918,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecStorageVolumeClaimTemplateSpecDataSourceRef"
@@ -36217,6 +38120,14 @@ let
           description = "currentVolumeAttributesClassName is the current name of the VolumeAttributesClass the PVC is using.\nWhen unset, there is no VolumeAttributeClass applied to this PersistentVolumeClaim";
           type = (types.nullOr types.str);
         };
+        "healthStatus" = mkOption {
+          description = "healthStatus contains the latest controller-reported health information\nfor the volume bound to this claim.";
+          type = (
+            types.nullOr (
+              submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecStorageVolumeClaimTemplateStatusHealthStatus"
+            )
+          );
+        };
         "modifyVolumeStatus" = mkOption {
           description = "ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.\nWhen this is unset, there is no ModifyVolume operation being attempted.";
           type = (
@@ -36238,6 +38149,7 @@ let
         "capacity" = mkOverride 1002 null;
         "conditions" = mkOverride 1002 null;
         "currentVolumeAttributesClassName" = mkOverride 1002 null;
+        "healthStatus" = mkOverride 1002 null;
         "modifyVolumeStatus" = mkOverride 1002 null;
         "phase" = mkOverride 1002 null;
       };
@@ -36280,6 +38192,60 @@ let
       };
 
     };
+    "monitoring.coreos.com.v1.ThanosRulerSpecStorageVolumeClaimTemplateStatusHealthStatus" = {
+
+      options = {
+        "healthConditions" = mkOption {
+          description = "conditions is the set of adverse conditions reported by\nthe CSI controller plugin. An empty list means no adverse condition.\nAt most 16 conditions may be reported.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecStorageVolumeClaimTemplateStatusHealthStatusHealthConditions"
+              )
+            )
+          );
+        };
+        "lastTransitionTime" = mkOption {
+          description = "lastTransitionTime is when the current set of conditions first appeared.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "healthConditions" = mkOverride 1002 null;
+        "lastTransitionTime" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1.ThanosRulerSpecStorageVolumeClaimTemplateStatusHealthStatusHealthConditions" =
+      {
+
+        options = {
+          "message" = mkOption {
+            description = "message is a human-readable description.\nMaximum permitted length of a message is 1024 bytes.";
+            type = (types.nullOr types.str);
+          };
+          "reason" = mkOption {
+            description = "reason is a brief CamelCase machine-parseable reason.\nTogether with status it forms the unique identity of a condition entry.\nMaximum permitted length of a reason is 256 bytes.";
+            type = types.str;
+          };
+          "status" = mkOption {
+            description = "status is the machine-parseable health category.\nPossible values:\n- \"Inaccessible\": the volume cannot be accessed.\n- \"DataLoss\": data loss has been detected on the volume.\n- \"Degraded\": the volume is functioning with reduced capability.";
+            type = (
+              types.enum [
+                "DataLoss"
+                "Degraded"
+                "Inaccessible"
+              ]
+            );
+          };
+        };
+
+        config = {
+          "message" = mkOverride 1002 null;
+        };
+
+      };
     "monitoring.coreos.com.v1.ThanosRulerSpecStorageVolumeClaimTemplateStatusModifyVolumeStatus" = {
 
       options = {
@@ -36463,7 +38429,12 @@ let
         };
         "type" = mkOption {
           description = "type indicates the type of the StatefulSetUpdateStrategy.\n\nDefault is RollingUpdate.";
-          type = types.str;
+          type = (
+            types.enum [
+              "OnDelete"
+              "RollingUpdate"
+            ]
+          );
         };
       };
 
@@ -36489,8 +38460,12 @@ let
     "monitoring.coreos.com.v1.ThanosRulerSpecVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -36520,6 +38495,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -36891,6 +38867,10 @@ let
           description = "defaultMode is optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "items if unspecified, each key-value pair in the Data field of the referenced\nConfigMap will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the ConfigMap,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.";
           type = (
@@ -36911,6 +38891,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
@@ -36932,10 +38913,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -36995,6 +38981,10 @@ let
           description = "Optional: mode bits to use on created files by default. Must be a\nOptional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "Items is a list of downward API volume file";
           type = (
@@ -37007,6 +38997,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
       };
 
@@ -37036,12 +39027,17 @@ let
             )
           );
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "fieldRef" = mkOverride 1002 null;
         "mode" = mkOverride 1002 null;
         "resourceFieldRef" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -37093,6 +39089,10 @@ let
           description = "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr types.str);
         };
+        "mode" = mkOption {
+          description = "mode specifies the permission bits for the emptyDir directory, in numeric\nnotation (e.g., 0755, 01777). Must be a value between 0000 and 01777.\nIf not specified, defaults to 0777.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup. If fsGroup is specified, the fsGroup permissions\nwill override the mode specified here.\nThis field has no effect on Windows.\nThis field is alpha and requires EmptyDirVolumeMode featuregate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sizeLimit" = mkOption {
           description = "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr (types.either types.int types.str));
@@ -37101,6 +39101,7 @@ let
 
       config = {
         "medium" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
         "sizeLimit" = mkOverride 1002 null;
       };
 
@@ -37151,7 +39152,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecVolumesEphemeralVolumeClaimTemplateSpecDataSource"
@@ -37159,7 +39160,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1.ThanosRulerSpecVolumesEphemeralVolumeClaimTemplateSpecDataSourceRef"
@@ -37704,6 +39705,10 @@ let
           description = "defaultMode are the mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sources" = mkOption {
           description = "sources is the list of volume projections. Each entry in this list\nhandles one source.";
           type = (
@@ -37716,6 +39721,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "sources" = mkOverride 1002 null;
       };
 
@@ -37808,6 +39814,10 @@ let
           description = "Select all ClusterTrustBundles that match this signer name.\nMutually-exclusive with name.  The contents of all selected\nClusterTrustBundles will be unified and deduplicated.";
           type = (types.nullOr types.str);
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
@@ -37815,6 +39825,7 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
         "signerName" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -37911,10 +39922,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -37965,12 +39981,17 @@ let
             )
           );
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "fieldRef" = mkOverride 1002 null;
         "mode" = mkOverride 1002 null;
         "resourceFieldRef" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -38043,6 +40064,10 @@ let
           description = "Kubelet's generated CSRs will be addressed to this signer.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "userAnnotations" = mkOption {
           description = "userAnnotations allow pod authors to pass additional information to\nthe signer implementation.  Kubernetes does not restrict or validate this\nmetadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of\nthe PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations,\nwith the addition that all keys must be domain-prefixed. No restrictions\nare placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should\ndeny requests that contain keys they do not recognize.";
           type = (types.nullOr (types.attrsOf types.str));
@@ -38054,6 +40079,7 @@ let
         "credentialBundlePath" = mkOverride 1002 null;
         "keyPath" = mkOverride 1002 null;
         "maxExpirationSeconds" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
         "userAnnotations" = mkOverride 1002 null;
       };
 
@@ -38103,10 +40129,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -38125,11 +40156,16 @@ let
           description = "path is the path relative to the mount point of the file to project the\ntoken into.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "audience" = mkOverride 1002 null;
         "expirationSeconds" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -38308,6 +40344,10 @@ let
           description = "defaultMode is Optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values\nfor mode bits. Defaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "items If unspecified, each key-value pair in the Data field of the referenced\nSecret will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the Secret,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.";
           type = (
@@ -38328,6 +40368,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
         "secretName" = mkOverride 1002 null;
@@ -38349,10 +40390,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -38485,11 +40531,26 @@ let
         };
         "xContentTypeOptions" = mkOption {
           description = "xContentTypeOptions defines the X-Content-Type-Options header to HTTP responses.\nUnset if blank. Accepted value is nosniff.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "NoSniff"
+              ]
+            )
+          );
         };
         "xFrameOptions" = mkOption {
           description = "xFrameOptions defines the X-Frame-Options header to HTTP responses.\nUnset if blank. Accepted values are deny and sameorigin.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "Deny"
+                "SameOrigin"
+              ]
+            )
+          );
         };
         "xXSSProtection" = mkOption {
           description = "xXSSProtection defines the X-XSS-Protection header to all responses.\nUnset if blank.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection";
@@ -38602,7 +40663,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -38671,7 +40732,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -38798,11 +40859,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -38939,11 +41000,20 @@ let
       options = {
         "matchType" = mkOption {
           description = "matchType defines the match operation available with AlertManager >= v0.22.0.\nTakes precedence over Regex (deprecated) if non-empty.\nValid values: \"=\" (equality), \"!=\" (inequality), \"=~\" (regex match), \"!~\" (regex non-match).";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "!="
+                "="
+                "=~"
+                "!~"
+              ]
+            )
+          );
         };
         "name" = mkOption {
           description = "name defines the label to match.\nThis specifies which alert label should be evaluated.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "regex" = mkOption {
           description = "regex defines whether to match on equality (false) or regular-expression (true).\nDeprecated: for AlertManager >= v0.22.0, `matchType` should be used instead.";
@@ -38967,11 +41037,20 @@ let
       options = {
         "matchType" = mkOption {
           description = "matchType defines the match operation available with AlertManager >= v0.22.0.\nTakes precedence over Regex (deprecated) if non-empty.\nValid values: \"=\" (equality), \"!=\" (inequality), \"=~\" (regex match), \"!~\" (regex non-match).";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "!="
+                "="
+                "=~"
+                "!~"
+              ]
+            )
+          );
         };
         "name" = mkOption {
           description = "name defines the label to match.\nThis specifies which alert label should be evaluated.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "regex" = mkOption {
           description = "regex defines whether to match on equality (false) or regular-expression (true).\nDeprecated: for AlertManager >= v0.22.0, `matchType` should be used instead.";
@@ -39065,11 +41144,11 @@ let
       options = {
         "end" = mkOption {
           description = "end of the inclusive range";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 31 (types.withMinimum - 31 types.int)));
         };
         "start" = mkOption {
           description = "start of the inclusive range";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 31 (types.withMinimum - 31 types.int)));
         };
       };
 
@@ -39143,7 +41222,7 @@ let
         };
         "name" = mkOption {
           description = "name defines the name of the receiver. Must be unique across all items from the list.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "opsgenieConfigs" = mkOption {
           description = "opsgenieConfigs defines the list of OpsGenie configurations.";
@@ -39291,7 +41370,7 @@ let
         };
         "content" = mkOption {
           description = "content defines the template of the content's body.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "httpConfig" = mkOption {
           description = "httpConfig defines the HTTP client configuration.";
@@ -39315,7 +41394,7 @@ let
         };
         "username" = mkOption {
           description = "username defines the username of the message sender.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -39687,7 +41766,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -39788,11 +41867,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -39844,7 +41941,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -39920,7 +42017,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -40021,11 +42118,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -40077,7 +42192,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -40153,7 +42268,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -40225,7 +42340,7 @@ let
       options = {
         "authIdentity" = mkOption {
           description = "authIdentity defines the identity to use for SMTP authentication.\nThis is typically used with PLAIN authentication mechanism.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "authPassword" = mkOption {
           description = "authPassword defines the secret's key that contains the password to use for authentication.\nThe secret needs to be in the same namespace as the AlertmanagerConfig\nobject and accessible by the Prometheus Operator.";
@@ -40245,7 +42360,7 @@ let
         };
         "authUsername" = mkOption {
           description = "authUsername defines the username to use for SMTP authentication.\nThis is used for SMTP AUTH when the server requires authentication.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "forceImplicitTLS" = mkOption {
           description = "forceImplicitTLS defines whether to force use of implicit TLS (direct TLS connection) for better security.\ntrue: force use of implicit TLS (direct TLS connection on any port)\nfalse: force disable implicit TLS (use explicit TLS/STARTTLS if required)\nnil (default): auto-detect based on port (465=implicit, other=explicit) for backward compatibility\nIt requires Alertmanager >= v0.31.0.";
@@ -40253,7 +42368,7 @@ let
         };
         "from" = mkOption {
           description = "from defines the sender address for email notifications.\nThis appears as the \"From\" field in the email header.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "headers" = mkOption {
           description = "headers defines additional email header key/value pairs.\nThese override any headers previously set by the notification implementation.";
@@ -40267,7 +42382,7 @@ let
         };
         "hello" = mkOption {
           description = "hello defines the hostname to identify to the SMTP server.\nThis is used in the SMTP HELO/EHLO command during the connection handshake.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "html" = mkOption {
           description = "html defines the HTML body of the email notification.\nThis allows for rich formatting in the email content.";
@@ -40283,11 +42398,11 @@ let
         };
         "smarthost" = mkOption {
           description = "smarthost defines the SMTP host and port through which emails are sent.\nFormat should be \"hostname:port\", e.g. \"smtp.example.com:587\".";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "text" = mkOption {
           description = "text defines the plain text body of the email notification.\nThis provides a fallback for email clients that don't support HTML.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "threading" = mkOption {
           description = "threading defines the threading configuration for email receiver.\nIt requires Alertmanager >= v0.30.0.";
@@ -40307,7 +42422,7 @@ let
         };
         "to" = mkOption {
           description = "to defines the email address to send notifications to.\nThis is the recipient address for alert notifications.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -40382,7 +42497,7 @@ let
       options = {
         "key" = mkOption {
           description = "key defines the key of the tuple.\nThis is the identifier or name part of the key-value pair.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the value of the tuple.\nThis is the data or content associated with the key.";
@@ -40398,7 +42513,12 @@ let
       options = {
         "threadByDate" = mkOption {
           description = "threadByDate defines what granularity of current date to thread by. Accepted values: Daily, None.\n(None means group by alert group key, no date).";
-          type = types.str;
+          type = (
+            types.enum [
+              "Daily"
+              "None"
+            ]
+          );
         };
       };
 
@@ -40438,11 +42558,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -40492,7 +42630,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -40566,7 +42704,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -41009,7 +43147,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -41110,11 +43248,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -41166,7 +43322,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -41242,7 +43398,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -41343,11 +43499,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -41399,7 +43573,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -41475,7 +43649,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -41582,11 +43756,11 @@ let
         };
         "text" = mkOption {
           description = "text defines the message body template for adaptive card notifications.\nThis contains the detailed content displayed in the Teams adaptive card format.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "title" = mkOption {
           description = "title defines the message title template for adaptive card notifications.\nThis appears as the main heading in the Teams adaptive card.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "webhookURL" = mkOption {
           description = "webhookURL defines the MSTeams incoming webhook URL for adaptive card notifications.\nThis webhook must support the newer adaptive cards format required by Teams flows.";
@@ -41941,7 +44115,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -42042,11 +44216,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -42098,7 +44290,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -42174,7 +44366,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -42275,11 +44467,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -42331,7 +44541,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -42407,7 +44617,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -42502,7 +44712,7 @@ let
       options = {
         "actions" = mkOption {
           description = "actions defines a comma separated list of actions that will be available for the alert.\nThese appear as action buttons in the OpsGenie interface.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "apiKey" = mkOption {
           description = "apiKey defines the secret's key that contains the OpsGenie API key.\nThe secret needs to be in the same namespace as the AlertmanagerConfig\nobject and accessible by the Prometheus Operator.";
@@ -42518,7 +44728,7 @@ let
         };
         "description" = mkOption {
           description = "description defines the detailed description of the incident.\nThis provides additional context beyond the message field.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "details" = mkOption {
           description = "details defines a set of arbitrary key/value pairs that provide further detail about the incident.\nThese appear as additional fields in the OpsGenie alert.";
@@ -42532,7 +44742,7 @@ let
         };
         "entity" = mkOption {
           description = "entity defines an optional field that can be used to specify which domain alert is related to.\nThis helps group related alerts together in OpsGenie.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "httpConfig" = mkOption {
           description = "httpConfig defines the HTTP client configuration for OpsGenie API requests.";
@@ -42544,15 +44754,15 @@ let
         };
         "message" = mkOption {
           description = "message defines the alert text limited to 130 characters.\nThis appears as the main alert title in OpsGenie.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "note" = mkOption {
           description = "note defines an additional alert note.\nThis provides supplementary information about the alert.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "priority" = mkOption {
           description = "priority defines the priority level of alert.\nPossible values are P1, P2, P3, P4, and P5, where P1 is highest priority.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "responders" = mkOption {
           description = "responders defines the list of responders responsible for notifications.\nThese determine who gets notified when the alert is created.";
@@ -42572,11 +44782,11 @@ let
         };
         "source" = mkOption {
           description = "source defines the backlink to the sender of the notification.\nThis helps identify where the alert originated from.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "tags" = mkOption {
           description = "tags defines a comma separated list of tags attached to the notifications.\nThese help categorize and filter alerts within OpsGenie.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "updateAlerts" = mkOption {
           description = "updateAlerts defines Whether to update message and description of the alert in OpsGenie if it already exists\nBy default, the alert is never updated in OpsGenie, the new message only appears in activity log.";
@@ -42631,7 +44841,7 @@ let
       options = {
         "key" = mkOption {
           description = "key defines the key of the tuple.\nThis is the identifier or name part of the key-value pair.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the value of the tuple.\nThis is the data or content associated with the key.";
@@ -42976,7 +45186,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -43077,11 +45287,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -43133,7 +45361,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -43209,7 +45437,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -43310,11 +45538,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -43366,7 +45612,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -43442,7 +45688,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -43514,19 +45760,27 @@ let
       options = {
         "id" = mkOption {
           description = "id defines the unique identifier of the responder.\nThis corresponds to the responder's ID within OpsGenie.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "name" = mkOption {
           description = "name defines the display name of the responder.\nThis is used when the responder is identified by name rather than ID.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "type" = mkOption {
           description = "type defines the type of responder.\nValid values include \"user\", \"team\", \"schedule\", and \"escalation\".\nThis determines how OpsGenie interprets the other identifier fields.";
-          type = types.str;
+          type = (
+            types.enum [
+              "team"
+              "teams"
+              "user"
+              "escalation"
+              "schedule"
+            ]
+          );
         };
         "username" = mkOption {
           description = "username defines the username of the responder.\nThis is typically used for user-type responders when identifying by username.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -43542,11 +45796,11 @@ let
       options = {
         "class" = mkOption {
           description = "class defines the class/type of the event.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "client" = mkOption {
           description = "client defines the client identification.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "clientURL" = mkOption {
           description = "clientURL defines the backlink to the sender of notification.";
@@ -43554,11 +45808,11 @@ let
         };
         "component" = mkOption {
           description = "component defines the part or component of the affected system that is broken.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "description" = mkOption {
           description = "description of the incident.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "details" = mkOption {
           description = "details defines the arbitrary key/value pairs that provide further detail about the incident.";
@@ -43572,7 +45826,7 @@ let
         };
         "group" = mkOption {
           description = "group defines a cluster or grouping of sources.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "httpConfig" = mkOption {
           description = "httpConfig defines the HTTP client configuration.";
@@ -43624,11 +45878,11 @@ let
         };
         "severity" = mkOption {
           description = "severity of the incident.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "source" = mkOption {
           description = "source defines the unique location of the affected system.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "timeout" = mkOption {
           description = "timeout is the maximum time allowed to invoke the pagerduty\nIt requires Alertmanager >= v0.30.0.";
@@ -43666,7 +45920,7 @@ let
       options = {
         "key" = mkOption {
           description = "key defines the key of the tuple.\nThis is the identifier or name part of the key-value pair.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the value of the tuple.\nThis is the data or content associated with the key.";
@@ -44011,7 +46265,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -44112,11 +46366,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -44168,7 +46440,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -44244,7 +46516,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -44345,11 +46617,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -44401,7 +46691,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -44477,7 +46767,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -44550,7 +46840,7 @@ let
         options = {
           "alt" = mkOption {
             description = "alt is the optional alternative text for the image.";
-            type = (types.nullOr types.str);
+            type = (types.nullOr (types.withMinLength 1 types.str));
           };
           "href" = mkOption {
             description = "href defines the optional URL; makes the image a clickable link.";
@@ -44558,7 +46848,7 @@ let
           };
           "src" = mkOption {
             description = "src of the image being attached to the incident";
-            type = (types.nullOr types.str);
+            type = (types.nullOr (types.withMinLength 1 types.str));
           };
         };
 
@@ -44575,7 +46865,7 @@ let
         options = {
           "alt" = mkOption {
             description = "alt defines the text that describes the purpose of the link, and can be used as the link's text.";
-            type = (types.nullOr types.str);
+            type = (types.nullOr (types.withMinLength 1 types.str));
           };
           "href" = mkOption {
             description = "href defines the URL of the link to be attached";
@@ -44640,7 +46930,7 @@ let
       options = {
         "device" = mkOption {
           description = "device defines the name of a specific device to send the notification to.\nIf not specified, the notification is sent to all user's devices.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "expire" = mkOption {
           description = "expire defines how long your notification will continue to be retried for,\nunless the user acknowledges the notification. Only applies to priority 2 notifications.";
@@ -44660,7 +46950,7 @@ let
         };
         "message" = mkOption {
           description = "message defines the notification message content.\nThis is the main body text of the Pushover notification.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "monospace" = mkOption {
           description = "monospace optional HTML/monospace formatting for the message, see https://pushover.net/api#html\nhtml and monospace formatting are mutually exclusive.";
@@ -44668,7 +46958,7 @@ let
         };
         "priority" = mkOption {
           description = "priority defines the notification priority level.\nSee https://pushover.net/api#priority for valid values and behavior.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "retry" = mkOption {
           description = "retry defines how often the Pushover servers will send the same notification to the user.\nMust be at least 30 seconds. Only applies to priority 2 notifications.";
@@ -44680,11 +46970,11 @@ let
         };
         "sound" = mkOption {
           description = "sound defines the name of one of the sounds supported by device clients.\nThis overrides the user's default sound choice for this notification.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "title" = mkOption {
           description = "title defines the notification title displayed in the Pushover message.\nThis appears as the bold header text in the notification.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "token" = mkOption {
           description = "token defines the secret's key that contains the registered application's API token.\nSee https://pushover.net/apps for application registration.\nThe secret needs to be in the same namespace as the AlertmanagerConfig\nobject and accessible by the Prometheus Operator.\nEither `token` or `tokenFile` is required.";
@@ -44696,7 +46986,7 @@ let
         };
         "tokenFile" = mkOption {
           description = "tokenFile defines the token file that contains the registered application's API token.\nSee https://pushover.net/apps for application registration.\nEither `token` or `tokenFile` is required.\nIt requires Alertmanager >= v0.26.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "ttl" = mkOption {
           description = "ttl defines the time to live for the alert notification.\nThis determines how long the notification remains active before expiring.";
@@ -44708,7 +46998,7 @@ let
         };
         "urlTitle" = mkOption {
           description = "urlTitle defines a title for the supplementary URL.\nIf not specified, the raw URL is shown instead.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "userKey" = mkOption {
           description = "userKey defines the secret's key that contains the recipient user's user key.\nThe secret needs to be in the same namespace as the AlertmanagerConfig\nobject and accessible by the Prometheus Operator.\nEither `userKey` or `userKeyFile` is required.";
@@ -44720,7 +47010,7 @@ let
         };
         "userKeyFile" = mkOption {
           description = "userKeyFile defines the user key file that contains the recipient user's user key.\nEither `userKey` or `userKeyFile` is required.\nIt requires Alertmanager >= v0.26.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -45080,7 +47370,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -45181,11 +47471,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -45237,7 +47545,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -45313,7 +47621,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -45414,11 +47722,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -45470,7 +47796,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -45546,7 +47872,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -45678,15 +48004,15 @@ let
         };
         "channel" = mkOption {
           description = "channel defines the channel to send alerts to.\nThis can be a channel name (e.g., \"#alerts\") or a direct message recipient.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "color" = mkOption {
           description = "color defines the message color displayed in RocketChat.\nThis appears as a colored bar alongside the message.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "emoji" = mkOption {
           description = "emoji defines the emoji to be displayed as an avatar.\nIf provided, this emoji will be used instead of the default avatar or iconURL.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "fields" = mkOption {
           description = "fields defines additional fields for the message attachment.\nThese appear as structured key-value pairs within the message.";
@@ -45728,7 +48054,7 @@ let
         };
         "text" = mkOption {
           description = "text defines the message text to send.\nThis is optional because attachments can be used instead of or alongside text.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "thumbURL" = mkOption {
           description = "thumbURL defines the thumbnail URL for the message.\nThis displays a small thumbnail image alongside the message content.";
@@ -45736,11 +48062,11 @@ let
         };
         "title" = mkOption {
           description = "title defines the message title displayed prominently in the message.\nThis appears as bold text at the top of the message attachment.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "titleLink" = mkOption {
           description = "titleLink defines the URL that the title will link to when clicked.\nThis makes the message title clickable in the RocketChat interface.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "token" = mkOption {
           description = "token defines the sender token for RocketChat authentication.\nThis is the personal access token or bot token used to authenticate API requests.\nThe secret needs to be in the same namespace as the AlertmanagerConfig\nobject and accessible by the Prometheus Operator.";
@@ -45781,11 +48107,11 @@ let
       options = {
         "msg" = mkOption {
           description = "msg defines the message to send when the button is clicked.\nThis allows the button to post a predefined message to the channel.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "text" = mkOption {
           description = "text defines the button text displayed to users.\nThis is the label that appears on the interactive button.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "url" = mkOption {
           description = "url defines the URL the button links to when clicked.\nThis creates a clickable button that opens the specified URL.";
@@ -45809,11 +48135,11 @@ let
         };
         "title" = mkOption {
           description = "title defines the title of this field.\nThis appears as bold text labeling the field content.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "value" = mkOption {
           description = "value defines the value of this field, displayed underneath the title.\nThis contains the actual data or content for the field.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -46159,7 +48485,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -46260,11 +48586,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -46316,7 +48660,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -46392,7 +48736,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -46493,11 +48837,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -46549,7 +48911,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -46625,7 +48987,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -46763,19 +49125,19 @@ let
         };
         "callbackId" = mkOption {
           description = "callbackId defines an identifier for the message used in interactive components.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "channel" = mkOption {
           description = "channel defines the channel or user to send notifications to.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "color" = mkOption {
           description = "color defines the color of the left border of the Slack message attachment.\nCan be a hex color code (e.g., \"#ff0000\") or a predefined color name.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "fallback" = mkOption {
           description = "fallback defines a plain-text summary of the attachment for clients that don't support attachments.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "fields" = mkOption {
           description = "fields defines a list of Slack fields that are sent with each notification.";
@@ -46789,7 +49151,7 @@ let
         };
         "footer" = mkOption {
           description = "footer defines small text displayed at the bottom of the message attachment.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "httpConfig" = mkOption {
           description = "httpConfig defines the HTTP client configuration.";
@@ -46801,7 +49163,7 @@ let
         };
         "iconEmoji" = mkOption {
           description = "iconEmoji defines the emoji to use as the bot's avatar (e.g., \":ghost:\").";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "iconURL" = mkOption {
           description = "iconURL defines the URL to an image to use as the bot's avatar.";
@@ -46817,15 +49179,15 @@ let
         };
         "messageText" = mkOption {
           description = "messageText defines text content of the Slack message.\nIf set, this is sent as the top-level 'text' field in the Slack payload.\nIt requires Alertmanager >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "mrkdwnIn" = mkOption {
           description = "mrkdwnIn defines which fields should be parsed as Slack markdown.\nValid values include \"pretext\", \"text\", and \"fields\".";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "pretext" = mkOption {
           description = "pretext defines optional text that appears above the message attachment block.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "sendResolved" = mkOption {
           description = "sendResolved defines whether or not to notify about resolved alerts.";
@@ -46837,7 +49199,7 @@ let
         };
         "text" = mkOption {
           description = "text defines the main text content of the Slack message attachment.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "thumbURL" = mkOption {
           description = "thumbURL defines the URL to an image file that will be displayed as a thumbnail\non the right side of the message attachment.";
@@ -46849,15 +49211,19 @@ let
         };
         "title" = mkOption {
           description = "title defines the title text displayed in the Slack message attachment.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "titleLink" = mkOption {
           description = "titleLink defines the URL that the title will link to when clicked.";
           type = (types.nullOr types.str);
         };
+        "updateMessage" = mkOption {
+          description = "updateMessage enables updating existing Slack messages instead of creating new ones\nwhen alert state changes. Please note that Webhook URLs do not support updates.\nIt requires Alertmanager >= v0.32.0.";
+          type = (types.nullOr types.bool);
+        };
         "username" = mkOption {
           description = "username defines the slack bot user name.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -46885,6 +49251,7 @@ let
         "timeout" = mkOverride 1002 null;
         "title" = mkOverride 1002 null;
         "titleLink" = mkOverride 1002 null;
+        "updateMessage" = mkOverride 1002 null;
         "username" = mkOverride 1002 null;
       };
 
@@ -46902,19 +49269,19 @@ let
         };
         "name" = mkOption {
           description = "name defines a unique identifier for the action within the message.\nThis value is sent back to your application when the action is triggered.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "style" = mkOption {
           description = "style defines the visual appearance of the action element.\nValid values include \"default\", \"primary\" (green), and \"danger\" (red).";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "text" = mkOption {
           description = "text defines the user-visible label displayed on the action element.\nFor buttons, this is the button text. For select menus, this is the placeholder text.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type defines the type of interactive component.\nCommon values include \"button\" for clickable buttons and \"select\" for dropdown menus.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "url" = mkOption {
           description = "url defines the URL to open when the action is triggered.\nOnly applicable for button-type actions. When set, clicking the button opens this URL.";
@@ -46922,7 +49289,7 @@ let
         };
         "value" = mkOption {
           description = "value defines the payload sent when the action is triggered.\nThis data is included in the callback sent to your application.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -46940,19 +49307,19 @@ let
       options = {
         "dismissText" = mkOption {
           description = "dismissText defines the label for the cancel button in the dialog.\nWhen not specified, defaults to \"Cancel\". This button cancels the action.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "okText" = mkOption {
           description = "okText defines the label for the confirmation button in the dialog.\nWhen not specified, defaults to \"Okay\". This button proceeds with the action.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "text" = mkOption {
           description = "text defines the main message displayed in the confirmation dialog.\nThis should be a clear question or statement asking the user to confirm their action.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "title" = mkOption {
           description = "title defines the title text displayed at the top of the confirmation dialog.\nWhen not specified, a default title will be used.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -46995,11 +49362,11 @@ let
         };
         "title" = mkOption {
           description = "title defines the label or header text displayed for this field.\nThis appears as bold text above the field value in the Slack message.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the content or data displayed for this field.\nThis appears below the title and can contain plain text or Slack markdown.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -47341,7 +49708,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -47442,11 +49809,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -47498,7 +49883,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -47574,7 +49959,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -47674,11 +50059,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -47730,7 +50133,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -47806,7 +50209,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -47894,11 +50297,11 @@ let
         };
         "message" = mkOption {
           description = "message defines the message content of the SNS notification.\nThis is the actual notification text that will be sent to subscribers.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "phoneNumber" = mkOption {
           description = "phoneNumber defines the phone number if message is delivered via SMS in E.164 format.\nIf you don't specify this value, you must specify a value for the TopicARN or TargetARN.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "sendResolved" = mkOption {
           description = "sendResolved defines whether or not to notify about resolved alerts.";
@@ -47914,15 +50317,19 @@ let
         };
         "subject" = mkOption {
           description = "subject defines the subject line when the message is delivered to email endpoints.\nThis field is only used when sending to email subscribers of an SNS topic.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "targetARN" = mkOption {
           description = "targetARN defines the mobile platform endpoint ARN if message is delivered via mobile notifications.\nIf you don't specify this value, you must specify a value for the TopicARN or PhoneNumber.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "topicARN" = mkOption {
           description = "topicARN defines the SNS topic ARN, e.g. arn:aws:sns:us-east-2:698519295917:My-Topic.\nIf you don't specify this value, you must specify a value for the PhoneNumber or TargetARN.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
+        };
+        "useAWSHTTPClient" = mkOption {
+          description = "useAWSHTTPClient forces the AWS SDK's BuildableClient instead of\nalertmanager's tracing-wrapped HTTP client. Auto-enabled when AWS_CA_BUNDLE\nis set; set explicitly when configuring ca_bundle via shared AWS config.\n\nIt requires Alertmanager >= 0.33.0.";
+          type = (types.nullOr types.bool);
         };
       };
 
@@ -47937,6 +50344,7 @@ let
         "subject" = mkOverride 1002 null;
         "targetARN" = mkOverride 1002 null;
         "topicARN" = mkOverride 1002 null;
+        "useAWSHTTPClient" = mkOverride 1002 null;
       };
 
     };
@@ -48273,7 +50681,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -48374,11 +50782,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -48430,7 +50856,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -48506,7 +50932,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -48606,11 +51032,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -48661,7 +51105,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -48737,7 +51181,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -48816,8 +51260,8 @@ let
           );
         };
         "externalId" = mkOption {
-          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
-          type = (types.nullOr types.str);
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.34.0. Currently not supported by Thanos.";
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
@@ -48947,7 +51391,15 @@ let
         };
         "parseMode" = mkOption {
           description = "parseMode defines the parse mode for telegram message formatting.\nValid values are \"MarkdownV2\", \"Markdown\", and \"HTML\".\nThis determines how text formatting is interpreted in the message.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "MarkdownV2"
+                "Markdown"
+                "HTML"
+              ]
+            )
+          );
         };
         "sendResolved" = mkOption {
           description = "sendResolved defines whether or not to notify about resolved alerts.";
@@ -49325,7 +51777,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -49426,11 +51878,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -49482,7 +51952,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -49558,7 +52028,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -49659,11 +52129,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -49715,7 +52203,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -49791,7 +52279,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -49885,7 +52373,7 @@ let
         };
         "entityDisplayName" = mkOption {
           description = "entityDisplayName contains a summary of the alerted problem.\nThis appears as the main title or identifier for the incident.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "httpConfig" = mkOption {
           description = "httpConfig defines the HTTP client's configuration for VictorOps API requests.";
@@ -49897,15 +52385,15 @@ let
         };
         "messageType" = mkOption {
           description = "messageType describes the behavior of the alert.\nValid values are \"CRITICAL\", \"WARNING\", and \"INFO\".";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "monitoringTool" = mkOption {
           description = "monitoringTool defines the monitoring tool the state message is from.\nThis helps identify the source system that generated the alert.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "routingKey" = mkOption {
           description = "routingKey defines a key used to map the alert to a team.\nThis determines which VictorOps team will receive the alert notification.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "sendResolved" = mkOption {
           description = "sendResolved defines whether or not to notify about resolved alerts.";
@@ -49913,7 +52401,7 @@ let
         };
         "stateMessage" = mkOption {
           description = "stateMessage contains a long explanation of the alerted problem.\nThis provides detailed context about the incident.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -49958,7 +52446,7 @@ let
       options = {
         "key" = mkOption {
           description = "key defines the key of the tuple.\nThis is the identifier or name part of the key-value pair.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the value of the tuple.\nThis is the data or content associated with the key.";
@@ -50303,7 +52791,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -50404,11 +52892,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -50460,7 +52966,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -50536,7 +53042,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -50637,11 +53143,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -50693,7 +53217,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -50769,7 +53293,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -50857,7 +53381,7 @@ let
         };
         "roomID" = mkOption {
           description = "roomID defines the ID of the Webex Teams room where to send the messages.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "sendResolved" = mkOption {
           description = "sendResolved defines whether or not to notify about resolved alerts.";
@@ -51206,7 +53730,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -51307,11 +53831,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -51363,7 +53905,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -51439,7 +53981,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -51539,11 +54081,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -51595,7 +54155,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -51671,7 +54231,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -51751,11 +54311,11 @@ let
         };
         "maxAlerts" = mkOption {
           description = "maxAlerts defines the maximum number of alerts to be sent per webhook message.\nWhen 0, all alerts are included in the webhook payload.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "payload" = mkOption {
           description = "payload define custom payload to be sent to the webhook endpoint.\nThis is an advanced configuration option that allows you\nto define a custom payload using Go templates.\nIt requires Alertmanager >= v0.32.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "sendResolved" = mkOption {
           description = "sendResolved defines whether or not to notify about resolved alerts.";
@@ -52124,7 +54684,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -52225,11 +54785,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -52281,7 +54859,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -52357,7 +54935,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -52458,11 +55036,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -52514,7 +55110,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -52590,7 +55186,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -52685,7 +55281,7 @@ let
       options = {
         "agentID" = mkOption {
           description = "agentID defines the application agent ID within WeChat Work.\nThis identifies which WeChat Work application will send the notifications.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "apiSecret" = mkOption {
           description = "apiSecret defines the secret's key that contains the WeChat API key.\nThe secret needs to be in the same namespace as the AlertmanagerConfig\nobject and accessible by the Prometheus Operator.";
@@ -52701,7 +55297,7 @@ let
         };
         "corpID" = mkOption {
           description = "corpID defines the corp id for authentication.\nThis is the unique identifier for your WeChat Work organization.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "httpConfig" = mkOption {
           description = "httpConfig defines the HTTP client configuration for WeChat API requests.";
@@ -52713,11 +55309,11 @@ let
         };
         "message" = mkOption {
           description = "message defines the API request data as defined by the WeChat API.\nThis contains the actual notification content to be sent.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "messageType" = mkOption {
           description = "messageType defines the type of message to send.\nValid values include \"text\", \"markdown\", and other WeChat Work supported message types.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "sendResolved" = mkOption {
           description = "sendResolved defines whether or not to notify about resolved alerts.";
@@ -52725,15 +55321,15 @@ let
         };
         "toParty" = mkOption {
           description = "toParty defines the target department(s) to receive the notification.\nCan be a single department ID or multiple department IDs separated by '|'.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "toTag" = mkOption {
           description = "toTag defines the target tag(s) to receive the notification.\nCan be a single tag ID or multiple tag IDs separated by '|'.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "toUser" = mkOption {
           description = "toUser defines the target user(s) to receive the notification.\nCan be a single user ID or multiple user IDs separated by '|'.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -53108,7 +55704,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -53209,11 +55805,29 @@ let
           };
           "maxVersion" = mkOption {
             description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "minVersion" = mkOption {
             description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-            type = (types.nullOr types.str);
+            type = (
+              types.nullOr (
+                types.enum [
+                  "TLS10"
+                  "TLS11"
+                  "TLS12"
+                  "TLS13"
+                ]
+              )
+            );
           };
           "serverName" = mkOption {
             description = "serverName is used to verify the hostname for the targets.";
@@ -53265,7 +55879,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -53341,7 +55955,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -53441,11 +56055,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -53497,7 +56129,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -53573,7 +56205,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -53657,11 +56289,11 @@ let
         };
         "groupInterval" = mkOption {
           description = "groupInterval defines how long to wait before sending an updated notification.\nMust be greater than 0.\nExample: \"5m\"";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "groupWait" = mkOption {
           description = "groupWait defines how long to wait before sending the initial notification.\nExample: \"30s\"";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "matchers" = mkOption {
           description = "matchers defines the list of matchers that the alert's labels should match. For the first\nlevel route, the operator removes any existing equality and regexp\nmatcher on the `namespace` label and adds a `namespace: <object\nnamespace>` matcher.";
@@ -53685,7 +56317,7 @@ let
         };
         "repeatInterval" = mkOption {
           description = "repeatInterval defines how long to wait before repeating the last notification.\nMust be greater than 0.\nExample: \"4h\"";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "routes" = mkOption {
           description = "routes defines the child routes.";
@@ -53712,11 +56344,20 @@ let
       options = {
         "matchType" = mkOption {
           description = "matchType defines the match operation available with AlertManager >= v0.22.0.\nTakes precedence over Regex (deprecated) if non-empty.\nValid values: \"=\" (equality), \"!=\" (inequality), \"=~\" (regex match), \"!~\" (regex non-match).";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "!="
+                "="
+                "=~"
+                "!~"
+              ]
+            )
+          );
         };
         "name" = mkOption {
           description = "name defines the label to match.\nThis specifies which alert label should be evaluated.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "regex" = mkOption {
           description = "regex defines whether to match on equality (false) or regular-expression (true).\nDeprecated: for AlertManager >= v0.22.0, `matchType` should be used instead.";
@@ -53776,19 +56417,26 @@ let
         };
         "group" = mkOption {
           description = "group defines the group of the referenced resource.";
-          type = types.str;
+          type = (types.enum [ "monitoring.coreos.com" ]);
         };
         "name" = mkOption {
           description = "name defines the name of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "namespace" = mkOption {
           description = "namespace defines the namespace of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource defines the type of resource being referenced (e.g. Prometheus, PrometheusAgent, ThanosRuler or Alertmanager).";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheuses"
+              "prometheusagents"
+              "thanosrulers"
+              "alertmanagers"
+            ]
+          );
         };
       };
 
@@ -53818,11 +56466,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.\nCurrently, only \"Accepted\" is supported.";
-          type = types.str;
+          type = (types.enum [ "Accepted" ]);
         };
       };
 
@@ -53940,11 +56588,20 @@ let
         };
         "dnsPolicy" = mkOption {
           description = "dnsPolicy defines the DNS policy for the pods.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "ClusterFirstWithHostNet"
+                "ClusterFirst"
+                "Default"
+                "None"
+              ]
+            )
+          );
         };
         "enableFeatures" = mkOption {
           description = "enableFeatures enables access to Prometheus feature flags. By default, no features are enabled.\n\nEnabling features which are disabled by default is entirely outside the\nscope of what the maintainers will support and by doing so, you accept\nthat this behaviour may break at any time without notice.\n\nFor more information see https://prometheus.io/docs/prometheus/latest/feature_flags/";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "enableOTLPReceiver" = mkOption {
           description = "enableOTLPReceiver defines the Prometheus to be used as a receiver for the OTLP Metrics protocol.\n\nNote that the OTLP receiver endpoint is automatically enabled if `.spec.otlpConfig` is defined.\n\nIt requires Prometheus >= v2.47.0.";
@@ -53964,19 +56621,19 @@ let
         };
         "enforcedKeepDroppedTargets" = mkOption {
           description = "enforcedKeepDroppedTargets when defined specifies a global limit on the number of targets\ndropped by relabeling that will be kept in memory. The value overrides\nany `spec.keepDroppedTargets` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.keepDroppedTargets` is\ngreater than zero and less than `spec.enforcedKeepDroppedTargets`.\n\nIt requires Prometheus >= v2.47.0.\n\nWhen both `enforcedKeepDroppedTargets` and `keepDroppedTargets` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined keepDroppedTargets value will inherit the global keepDroppedTargets value (Prometheus >= 2.45.0) or the enforcedKeepDroppedTargets value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedKeepDroppedTargets` is greater than the `keepDroppedTargets`, the `keepDroppedTargets` will be set to `enforcedKeepDroppedTargets`.\n* Scrape objects with a keepDroppedTargets value less than or equal to enforcedKeepDroppedTargets keep their specific value.\n* Scrape objects with a keepDroppedTargets value greater than enforcedKeepDroppedTargets are set to enforcedKeepDroppedTargets.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedLabelLimit" = mkOption {
           description = "enforcedLabelLimit when defined specifies a global limit on the number\nof labels per sample. The value overrides any `spec.labelLimit` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.labelLimit` is\ngreater than zero and less than `spec.enforcedLabelLimit`.\n\nIt requires Prometheus >= v2.27.0.\n\nWhen both `enforcedLabelLimit` and `labelLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined labelLimit value will inherit the global labelLimit value (Prometheus >= 2.45.0) or the enforcedLabelLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedLabelLimit` is greater than the `labelLimit`, the `labelLimit` will be set to `enforcedLabelLimit`.\n* Scrape objects with a labelLimit value less than or equal to enforcedLabelLimit keep their specific value.\n* Scrape objects with a labelLimit value greater than enforcedLabelLimit are set to enforcedLabelLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedLabelNameLengthLimit" = mkOption {
           description = "enforcedLabelNameLengthLimit when defined specifies a global limit on the length\nof labels name per sample. The value overrides any `spec.labelNameLengthLimit` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.labelNameLengthLimit` is\ngreater than zero and less than `spec.enforcedLabelNameLengthLimit`.\n\nIt requires Prometheus >= v2.27.0.\n\nWhen both `enforcedLabelNameLengthLimit` and `labelNameLengthLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined labelNameLengthLimit value will inherit the global labelNameLengthLimit value (Prometheus >= 2.45.0) or the enforcedLabelNameLengthLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedLabelNameLengthLimit` is greater than the `labelNameLengthLimit`, the `labelNameLengthLimit` will be set to `enforcedLabelNameLengthLimit`.\n* Scrape objects with a labelNameLengthLimit value less than or equal to enforcedLabelNameLengthLimit keep their specific value.\n* Scrape objects with a labelNameLengthLimit value greater than enforcedLabelNameLengthLimit are set to enforcedLabelNameLengthLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedLabelValueLengthLimit" = mkOption {
           description = "enforcedLabelValueLengthLimit when not null defines a global limit on the length\nof labels value per sample. The value overrides any `spec.labelValueLengthLimit` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.labelValueLengthLimit` is\ngreater than zero and less than `spec.enforcedLabelValueLengthLimit`.\n\nIt requires Prometheus >= v2.27.0.\n\nWhen both `enforcedLabelValueLengthLimit` and `labelValueLengthLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined labelValueLengthLimit value will inherit the global labelValueLengthLimit value (Prometheus >= 2.45.0) or the enforcedLabelValueLengthLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedLabelValueLengthLimit` is greater than the `labelValueLengthLimit`, the `labelValueLengthLimit` will be set to `enforcedLabelValueLengthLimit`.\n* Scrape objects with a labelValueLengthLimit value less than or equal to enforcedLabelValueLengthLimit keep their specific value.\n* Scrape objects with a labelValueLengthLimit value greater than enforcedLabelValueLengthLimit are set to enforcedLabelValueLengthLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedNamespaceLabel" = mkOption {
           description = "enforcedNamespaceLabel when not empty, a label will be added to:\n\n1. All metrics scraped from `ServiceMonitor`, `PodMonitor`, `Probe` and `ScrapeConfig` objects.\n2. All metrics generated from recording rules defined in `PrometheusRule` objects.\n3. All alerts generated from alerting rules defined in `PrometheusRule` objects.\n4. All vector selectors of PromQL expressions defined in `PrometheusRule` objects.\n\nThe label will not added for objects referenced in `spec.excludedFromEnforcement`.\n\nThe label's name is this field's value.\nThe label's value is the namespace of the `ServiceMonitor`,\n`PodMonitor`, `Probe`, `PrometheusRule` or `ScrapeConfig` object.";
@@ -53984,11 +56641,11 @@ let
         };
         "enforcedSampleLimit" = mkOption {
           description = "enforcedSampleLimit when defined specifies a global limit on the number\nof scraped samples that will be accepted. This overrides any\n`spec.sampleLimit` set by ServiceMonitor, PodMonitor, Probe objects\nunless `spec.sampleLimit` is greater than zero and less than\n`spec.enforcedSampleLimit`.\n\nIt is meant to be used by admins to keep the overall number of\nsamples/series under a desired limit.\n\nWhen both `enforcedSampleLimit` and `sampleLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined sampleLimit value will inherit the global sampleLimit value (Prometheus >= 2.45.0) or the enforcedSampleLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedSampleLimit` is greater than the `sampleLimit`, the `sampleLimit` will be set to `enforcedSampleLimit`.\n* Scrape objects with a sampleLimit value less than or equal to enforcedSampleLimit keep their specific value.\n* Scrape objects with a sampleLimit value greater than enforcedSampleLimit are set to enforcedSampleLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "enforcedTargetLimit" = mkOption {
           description = "enforcedTargetLimit when defined specifies a global limit on the number\nof scraped targets. The value overrides any `spec.targetLimit` set by\nServiceMonitor, PodMonitor, Probe objects unless `spec.targetLimit` is\ngreater than zero and less than `spec.enforcedTargetLimit`.\n\nIt is meant to be used by admins to to keep the overall number of\ntargets under a desired limit.\n\nWhen both `enforcedTargetLimit` and `targetLimit` are defined and greater than zero, the following rules apply:\n* Scrape objects without a defined targetLimit value will inherit the global targetLimit value (Prometheus >= 2.45.0) or the enforcedTargetLimit value (Prometheus < v2.45.0).\n  If Prometheus version is >= 2.45.0 and the `enforcedTargetLimit` is greater than the `targetLimit`, the `targetLimit` will be set to `enforcedTargetLimit`.\n* Scrape objects with a targetLimit value less than or equal to enforcedTargetLimit keep their specific value.\n* Scrape objects with a targetLimit value greater than enforcedTargetLimit are set to enforcedTargetLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "excludedFromEnforcement" = mkOption {
           description = "excludedFromEnforcement defines the list of references to PodMonitor, ServiceMonitor, Probe and PrometheusRule objects\nto be excluded from enforcing a namespace label of origin.\n\nIt is only applicable if `spec.enforcedNamespaceLabel` set to true.";
@@ -54036,7 +56693,16 @@ let
         };
         "imagePullPolicy" = mkOption {
           description = "imagePullPolicy defines the image pull policy for the 'prometheus', 'init-config-reloader' and 'config-reloader' containers.\nSee https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy for more details.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "Always"
+                "Never"
+                "IfNotPresent"
+              ]
+            )
+          );
         };
         "imagePullSecrets" = mkOption {
           description = "imagePullSecrets defines an optional list of references to Secrets in the same namespace\nto use for pulling images from registries.\nSee http://kubernetes.io/docs/user-guide/images#specifying-imagepullsecrets-on-a-pod";
@@ -54064,19 +56730,19 @@ let
         };
         "keepDroppedTargets" = mkOption {
           description = "keepDroppedTargets defines the per-scrape limit on the number of targets dropped by relabeling\nthat will be kept in memory. 0 means no limit.\n\nIt requires Prometheus >= v2.47.0.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedKeepDroppedTargets.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelLimit" = mkOption {
           description = "labelLimit defines per-scrape limit on number of labels that will be accepted for a sample.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelNameLengthLimit" = mkOption {
           description = "labelNameLengthLimit defines the per-scrape limit on length of labels name that will be accepted for a sample.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelNameLengthLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelValueLengthLimit" = mkOption {
           description = "labelValueLengthLimit defines the per-scrape limit on length of labels value that will be accepted for a sample.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelValueLengthLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "listenLocal" = mkOption {
           description = "listenLocal when true, the Prometheus server listens on the loopback address\ninstead of the Pod IP's address.";
@@ -54084,31 +56750,72 @@ let
         };
         "logFormat" = mkOption {
           description = "logFormat for Log level for Prometheus and the config-reloader sidecar.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "logfmt"
+                "json"
+              ]
+            )
+          );
         };
         "logLevel" = mkOption {
           description = "logLevel for Prometheus and the config-reloader sidecar.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "debug"
+                "info"
+                "warn"
+                "error"
+              ]
+            )
+          );
         };
         "maximumStartupDurationSeconds" = mkOption {
           description = "maximumStartupDurationSeconds defines the maximum time that the `prometheus` container's startup probe will wait before being considered failed. The startup probe will return success after the WAL replay is complete.\nIf set, the value should be greater than 60 (seconds). Otherwise it will be equal to 900 seconds (15 minutes).";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 60 types.int));
         };
         "minReadySeconds" = mkOption {
           description = "minReadySeconds defines the minimum number of seconds for which a newly created Pod should be ready\nwithout any of its container crashing for it to be considered available.\n\nIf unset, pods will be considered available as soon as they are ready.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "mode" = mkOption {
           description = "mode defines how the Prometheus operator deploys the PrometheusAgent pod(s).\n\n(Alpha) Using this field requires the `PrometheusAgentDaemonSet` feature gate to be enabled.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "StatefulSet"
+                "DaemonSet"
+              ]
+            )
+          );
         };
         "nameEscapingScheme" = mkOption {
           description = "nameEscapingScheme defines the character escaping scheme that will be requested when scraping\nfor metric and label names that do not conform to the legacy Prometheus\ncharacter set.\n\nIt requires Prometheus >= v3.4.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "AllowUTF8"
+                "Underscores"
+                "Dots"
+                "Values"
+              ]
+            )
+          );
         };
         "nameValidationScheme" = mkOption {
           description = "nameValidationScheme defines the validation scheme for metric and label names.\n\nIt requires Prometheus >= v2.55.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "UTF8"
+                "Legacy"
+              ]
+            )
+          );
         };
         "nodeSelector" = mkOption {
           description = "nodeSelector defines on which Nodes the Pods are scheduled.";
@@ -54140,7 +56847,14 @@ let
         };
         "podManagementPolicy" = mkOption {
           description = "podManagementPolicy defines the policy for creating/deleting pods when\nscaling up and down.\n\nUnlike the default StatefulSet behavior, the default policy is\n`Parallel` to avoid manual intervention in case a pod gets stuck during\na rollout.\n\nNote that updating this value implies the recreation of the StatefulSet\nwhich incurs a service outage.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "OrderedReady"
+                "Parallel"
+              ]
+            )
+          );
         };
         "podMetadata" = mkOption {
           description = "podMetadata defines labels and annotations which are propagated to the Prometheus pods.\n\nThe following items are reserved and cannot be overridden:\n* \"prometheus\" label, set to the name of the Prometheus object.\n* \"app.kubernetes.io/instance\" label, set to the name of the Prometheus object.\n* \"app.kubernetes.io/managed-by\" label, set to \"prometheus-operator\".\n* \"app.kubernetes.io/name\" label, set to \"prometheus\".\n* \"app.kubernetes.io/version\" label, set to the Prometheus version.\n* \"operator.prometheus.io/name\" label, set to the name of the Prometheus object.\n* \"operator.prometheus.io/shard\" label, set to the shard number of the Prometheus object.\n* \"kubectl.kubernetes.io/default-container\" annotation, set to \"prometheus\".";
@@ -54192,7 +56906,14 @@ let
         };
         "reloadStrategy" = mkOption {
           description = "reloadStrategy defines the strategy used to reload the Prometheus configuration.\nIf not specified, the configuration is reloaded using the /-/reload HTTP endpoint.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "HTTP"
+                "ProcessSignal"
+              ]
+            )
+          );
         };
         "remoteWrite" = mkOption {
           description = "remoteWrite defines the list of remote write configurations.";
@@ -54207,7 +56928,16 @@ let
         };
         "remoteWriteReceiverMessageVersions" = mkOption {
           description = "remoteWriteReceiverMessageVersions list of the protobuf message versions to accept when receiving the\nremote writes.\n\nIt requires Prometheus >= v2.54.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "V1.0"
+                  "V2.0"
+                ]
+              )
+            )
+          );
         };
         "replicaExternalLabelName" = mkOption {
           description = "replicaExternalLabelName defines the name of Prometheus external label used to denote the replica name.\nThe external label will _not_ be added when the field is set to the\nempty string (`\"\"`).\n\nDefault: \"prometheus_replica\"";
@@ -54231,11 +56961,11 @@ let
         };
         "sampleLimit" = mkOption {
           description = "sampleLimit defines per-scrape limit on number of scraped samples that will be accepted.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedSampleLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "schedulerName" = mkOption {
           description = "schedulerName defines the scheduler to use for Pod scheduling. If not specified, the default scheduler is used.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "scrapeClasses" = mkOption {
           description = "scrapeClasses defines the list of scrape classes to expose to scraping objects such as\nPodMonitors, ServiceMonitors, Probes and ScrapeConfigs.\n\nThis is an *experimental feature*, it may change in any upcoming release\nin a breaking way.";
@@ -54268,7 +56998,7 @@ let
         };
         "scrapeFailureLogFile" = mkOption {
           description = "scrapeFailureLogFile defines the file to which scrape failures are logged.\nReloading the configuration will reopen the file.\n\nIf the filename has an empty path, e.g. 'file.log', The Prometheus Pods\nwill mount the file into an emptyDir volume at `/var/log/prometheus`.\nIf a full path is provided, e.g. '/var/log/prometheus/file.log', you\nmust mount a volume in the specified directory and it must be writable.\nIt requires Prometheus >= v2.55.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "scrapeInterval" = mkOption {
           description = "scrapeInterval defines interval between consecutive scrapes.\n\nDefault: \"30s\"";
@@ -54280,7 +57010,19 @@ let
         };
         "scrapeProtocols" = mkOption {
           description = "scrapeProtocols defines the protocols to negotiate during a scrape. It tells clients the\nprotocols supported by Prometheus in order of preference (from most to least preferred).\n\nIf unset, Prometheus uses its default value.\n\nIt requires Prometheus >= v2.49.0.\n\n`PrometheusText1.0.0` requires Prometheus >= v3.0.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "PrometheusProto"
+                  "OpenMetricsText0.0.1"
+                  "OpenMetricsText1.0.0"
+                  "PrometheusText0.0.4"
+                  "PrometheusText1.0.0"
+                ]
+              )
+            )
+          );
         };
         "scrapeTimeout" = mkOption {
           description = "scrapeTimeout defines the number of seconds to wait until a scrape request times out.\nThe value cannot be greater than the scrape interval otherwise the operator will reject the resource.";
@@ -54302,7 +57044,14 @@ let
         };
         "serviceDiscoveryRole" = mkOption {
           description = "serviceDiscoveryRole defines the service discovery role used to discover targets from\n`ServiceMonitor` objects and Alertmanager endpoints.\n\nIf set, the value should be either \"Endpoints\" or \"EndpointSlice\".\nIf unset, the operator assumes the \"Endpoints\" role.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Endpoints"
+                "EndpointSlice"
+              ]
+            )
+          );
         };
         "serviceMonitorNamespaceSelector" = mkOption {
           description = "serviceMonitorNamespaceSelector defines the namespaces to match for ServicedMonitors discovery. An empty label selector\nmatches all namespaces. A null label selector (default value) matches the current\nnamespace only.";
@@ -54322,7 +57071,7 @@ let
         };
         "serviceName" = mkOption {
           description = "serviceName defines the name of the service name used by the underlying StatefulSet(s) as the governing service.\nIf defined, the Service  must be created before the Prometheus/PrometheusAgent resource in the same namespace and it must define a selector that matches the pod labels.\nIf empty, the operator will create and manage a headless service named `prometheus-operated` for Prometheus resources,\nor `prometheus-agent-operated` for PrometheusAgent resources.\nWhen deploying multiple Prometheus/PrometheusAgent resources in the same namespace, it is recommended to specify a different value for each.\nSee https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#stable-network-id for more details.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "shardingStrategy" = mkOption {
           description = "shardingStrategy defines the sharding strategy for distributing scraped targets across Prometheus shards.\n\nWhen not defined, the operator defaults to the 'Address' mode which distributes\ntargets based on a hash of the target address.";
@@ -54331,7 +57080,7 @@ let
           );
         };
         "shards" = mkOption {
-          description = "shards defines the number of shards to distribute the scraped targets onto.\n\n`spec.replicas` multiplied by `spec.shards` is the total number of Pods\nbeing created.\n\nWhen not defined, the operator assumes only one shard.\n\nNote that scaling down shards will not reshard data onto the remaining\ninstances, it must be manually moved. Increasing shards will not reshard\ndata either but it will continue to be available from the same\ninstances. To query globally, use either\n* Thanos sidecar + querier for query federation and Thanos Ruler for rules.\n* Remote-write to send metrics to a central location.\n\nBy default, the sharding of targets is performed on:\n* The `__address__` target's metadata label for PodMonitor,\nServiceMonitor and ScrapeConfig resources.\n* The `__param_target__` label for Probe resources.\n\nUsers can define their own sharding implementation by setting the\n`__tmp_hash` label during the target discovery with relabeling\nconfiguration (either in the monitoring resources or via scrape class).\n\nYou can also disable sharding on a specific target by setting the\n`__tmp_disable_sharding` label with relabeling configuration. When\nthe label value isn't empty, all Prometheus shards will scrape the target.";
+          description = "shards defines the number of shards to distribute the scraped targets onto.\n\n`spec.replicas` multiplied by `spec.shards` is the total number of Pods\nbeing created.\n\nWhen not defined, the operator assumes only one shard.\n\nNote that scaling down shards will not reshard data onto the remaining\ninstances, it must be manually moved. Increasing shards will not reshard\ndata either but it will continue to be available from the same\ninstances. To query globally, use either\n* Thanos sidecar + querier for query federation and Thanos Ruler for rules.\n* Remote-write to send metrics to a central location.\n\nBy default, the sharding of targets is performed on:\n* The `__address__` target's metadata label for PodMonitor,\nServiceMonitor and ScrapeConfig resources.\n* The `__param_target__` label for Probe resources.\n\nUsers can define their own sharding implementation by setting the\n`__tmp_hash` label during the target discovery with relabeling\nconfiguration (either in the monitoring resources or via scrape class).\n\nYou can also disable sharding on a specific target by setting the\n`__tmp_disable_sharding` label with relabeling configuration. When\nthe label value isn't empty, all Prometheus shards will scrape the target.\n\nDefault: 1";
           type = (types.nullOr types.int);
         };
         "storage" = mkOption {
@@ -54340,11 +57089,11 @@ let
         };
         "targetLimit" = mkOption {
           description = "targetLimit defines a limit on the number of scraped targets that will be accepted.\nOnly valid in Prometheus versions 2.45.0 and newer.\n\nNote that the global limit only applies to scrape objects that don't specify an explicit limit value.\nIf you want to enforce a maximum limit for all scrape objects, refer to enforcedTargetLimit.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "terminationGracePeriodSeconds" = mkOption {
           description = "terminationGracePeriodSeconds defines the optional duration in seconds the pod needs to terminate gracefully.\nValue must be non-negative integer. The value zero indicates stop immediately via\nthe kill signal (no opportunity to shut down) which may lead to data corruption.\n\nDefaults to 600 seconds.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "tolerations" = mkOption {
           description = "tolerations defines the Pods' tolerations if specified.";
@@ -54529,7 +57278,7 @@ let
       options = {
         "name" = mkOption {
           description = "name of the argument, e.g. \"scrape.discovery-reload-interval\".";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value defines the argument value, e.g. 30s. Can be empty for name-only arguments (e.g. --storage.tsdb.no-lockfile)";
@@ -55737,11 +58486,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -55794,7 +58561,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -55867,7 +58634,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -56304,7 +59071,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -56531,6 +59298,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -56541,6 +59312,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -56678,6 +59450,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -56688,6 +59464,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -56830,6 +59607,10 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecContainersLivenessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -56841,6 +59622,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -56872,6 +59654,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -56882,6 +59668,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -57045,6 +59832,10 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecContainersReadinessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -57056,6 +59847,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -57087,6 +59879,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -57097,6 +59893,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -57535,6 +60332,10 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecContainersStartupProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -57546,6 +60347,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -57577,6 +60379,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -57587,6 +60393,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -57644,8 +60451,12 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecContainersVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -57675,6 +60486,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -57688,7 +60500,7 @@ let
       options = {
         "nameservers" = mkOption {
           description = "nameservers defines the list of DNS name server IP addresses.\nThis will be appended to the base nameservers generated from DNSPolicy.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "options" = mkOption {
           description = "options defines the list of DNS resolver options.\nThis will be merged with the base options generated from DNSPolicy.\nResolution options given in Options\nwill override those that appear in the base DNSPolicy.";
@@ -57704,7 +60516,7 @@ let
         };
         "searches" = mkOption {
           description = "searches defines the list of DNS search domains for host-name lookup.\nThis will be appended to the base search paths generated from DNSPolicy.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
       };
 
@@ -57720,7 +60532,7 @@ let
       options = {
         "name" = mkOption {
           description = "name is required and must be unique.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "value" = mkOption {
           description = "value is optional.";
@@ -57738,7 +60550,7 @@ let
       options = {
         "group" = mkOption {
           description = "group of the referent. When not specified, it defaults to `monitoring.coreos.com`";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.enum [ "monitoring.coreos.com" ]));
         };
         "name" = mkOption {
           description = "name of the referent. When not set, all resources in the namespace are matched.";
@@ -57746,11 +60558,19 @@ let
         };
         "namespace" = mkOption {
           description = "namespace of the referent.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource of the referent.";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheusrules"
+              "servicemonitors"
+              "podmonitors"
+              "probes"
+              "scrapeconfigs"
+            ]
+          );
         };
       };
 
@@ -58153,7 +60973,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -58380,6 +61200,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -58390,6 +61214,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -58527,6 +61352,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -58537,6 +61366,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -58680,6 +61510,10 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecInitContainersLivenessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -58691,6 +61525,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -58722,6 +61557,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -58732,6 +61571,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -58896,6 +61736,10 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecInitContainersReadinessProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -58907,6 +61751,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -58938,6 +61783,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -58948,6 +61797,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -59387,6 +62237,10 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecInitContainersStartupProbeGrpc" = {
 
       options = {
+        "mode" = mkOption {
+          description = "mode specifies the connection mode for the gRPC health probe.\nSet to \"TLS\" to use TLS without certificate verification.\nSet to \"Plaintext\" to use a plaintext (insecure) connection explicitly.\nIf not specified, the probe uses a plaintext (insecure) connection.";
+          type = (types.nullOr types.str);
+        };
         "port" = mkOption {
           description = "Port number of the gRPC service. Number must be in the range 1 to 65535.";
           type = types.int;
@@ -59398,6 +62252,7 @@ let
       };
 
       config = {
+        "mode" = mkOverride 1002 null;
         "service" = mkOverride 1002 null;
       };
 
@@ -59429,6 +62284,10 @@ let
           description = "Name or number of the port to access on the container.\nNumber must be in the range 1 to 65535.\nName must be an IANA_SVC_NAME.";
           type = (types.either types.int types.str);
         };
+        "protocol" = mkOption {
+          description = "Protocol selects the wire protocol for the probe connection.\nNil defaults to HTTP/1.1.";
+          type = (types.nullOr types.str);
+        };
         "scheme" = mkOption {
           description = "Scheme to use for connecting to the host.\nDefaults to HTTP.";
           type = (types.nullOr types.str);
@@ -59439,6 +62298,7 @@ let
         "host" = mkOverride 1002 null;
         "httpHeaders" = mkOverride 1002 null;
         "path" = mkOverride 1002 null;
+        "protocol" = mkOverride 1002 null;
         "scheme" = mkOverride 1002 null;
       };
 
@@ -59496,8 +62356,12 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecInitContainersVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -59527,6 +62391,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -59544,7 +62409,7 @@ let
         };
         "ignoreResourceAttributes" = mkOption {
           description = "ignoreResourceAttributes defines the list of OpenTelemetry resource attributes to ignore when `promoteAllResourceAttributes` is true.\n\nIt requires `promoteAllResourceAttributes` to be true.\nIt requires Prometheus >= v3.5.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "keepIdentifyingResourceAttributes" = mkOption {
           description = "keepIdentifyingResourceAttributes enables adding `service.name`, `service.namespace` and `service.instance.id`\nresource attributes to the `target_info` metric, on top of converting them into the `instance` and `job` labels.\n\nIt requires Prometheus >= v3.1.0.";
@@ -59564,7 +62429,7 @@ let
         };
         "promoteResourceAttributes" = mkOption {
           description = "promoteResourceAttributes defines the list of OpenTelemetry Attributes that should be promoted to metric labels, defaults to none.\nCannot be defined when `promoteAllResourceAttributes` is true.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "promoteScopeMetadata" = mkOption {
           description = "promoteScopeMetadata controls whether to promote OpenTelemetry scope metadata (i.e. name, version, schema URL, and attributes) to metric labels.\nAs per the OpenTelemetry specification, the aforementioned scope metadata should be identifying, i.e. made into metric labels.\nIt requires Prometheus >= v3.6.0.";
@@ -59572,7 +62437,16 @@ let
         };
         "translationStrategy" = mkOption {
           description = "translationStrategy defines how the OTLP receiver endpoint translates the incoming metrics.\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "NoUTF8EscapingWithSuffixes"
+                "UnderscoreEscapingWithSuffixes"
+                "NoTranslation"
+                "UnderscoreEscapingWithoutSuffixes"
+              ]
+            )
+          );
         };
       };
 
@@ -59865,7 +62739,14 @@ let
         };
         "messageVersion" = mkOption {
           description = "messageVersion defines the Remote Write message's version to use when writing to the endpoint.\n\n`Version1.0` corresponds to the `prometheus.WriteRequest` protobuf message introduced in Remote Write 1.0.\n`Version2.0` corresponds to the `io.prometheus.write.v2.Request` protobuf message introduced in Remote Write 2.0.\n\nWhen `Version2.0` is selected, Prometheus will automatically be\nconfigured to append the metadata of scraped metrics to the WAL.\n\nBefore setting this field, consult with your remote storage provider\nwhat message version it supports.\n\nIt requires Prometheus >= v2.54.0 or Thanos >= v0.37.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "V1.0"
+                "V2.0"
+              ]
+            )
+          );
         };
         "metadataConfig" = mkOption {
           description = "metadataConfig defines how to send a series metadata to the remote storage.\n\nWhen the field is empty, **no metadata** is sent. But when the field is\nnull, metadata is sent.";
@@ -60037,7 +62918,15 @@ let
       options = {
         "cloud" = mkOption {
           description = "cloud defines the Azure Cloud. Options are 'AzurePublic', 'AzureChina', or 'AzureGovernment'.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "AzureChina"
+                "AzureGovernment"
+                "AzurePublic"
+              ]
+            )
+          );
         };
         "managedIdentity" = mkOption {
           description = "managedIdentity defines the Azure User-assigned Managed identity.\nCannot be set at the same time as `oauth`, `sdk` or `workloadIdentity`.";
@@ -60090,7 +62979,7 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId defines the Azure User-assigned Managed identity.\n\nFor Prometheus >= 3.5.0 and Thanos >= 0.40.0, this field is allowed to be empty to support system-assigned managed identities.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -60104,7 +62993,7 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId defines the clientId of the Azure Active Directory application that is being used to authenticate.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "clientSecret" = mkOption {
           description = "clientSecret specifies a key of a Secret containing the client secret of the Azure Active Directory application that is being used to authenticate.";
@@ -60114,7 +63003,7 @@ let
         };
         "tenantId" = mkOption {
           description = "tenantId is the tenant ID of the Azure Active Directory application that is being used to authenticate.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -60163,11 +63052,11 @@ let
       options = {
         "clientId" = mkOption {
           description = "clientId is the clientID of the Azure Active Directory application.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "tenantId" = mkOption {
           description = "tenantId is the tenant ID of the Azure Active Directory application.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -60252,10 +63141,10 @@ let
       options = {
         "maxSamplesPerSend" = mkOption {
           description = "maxSamplesPerSend defines the maximum number of metadata samples per send.\n\nIt requires Prometheus >= v2.29.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum - 1 types.int));
         };
         "send" = mkOption {
-          description = "send defines whether metric metadata is sent to the remote storage or not.";
+          description = "send defines whether metric metadata is sent to the remote storage or not.\n\nThe setting is ignored when Remote Write message's version 2.0 is used.";
           type = (types.nullOr types.bool);
         };
         "sendInterval" = mkOption {
@@ -60364,7 +63253,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -60462,11 +63351,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -60516,7 +63423,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -60589,7 +63496,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -60725,8 +63632,8 @@ let
           );
         };
         "externalId" = mkOption {
-          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.33.0. Currently not supported by Thanos.";
-          type = (types.nullOr types.str);
+          description = "externalId defines the external ID used when assuming an AWS role. Can only be used with roleArn.\nIt requires Prometheus >= v3.11.0 or Alertmanager >= v0.34.0. Currently not supported by Thanos.";
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "profile" = mkOption {
           description = "profile defines the named AWS profile used to authenticate.";
@@ -60856,11 +63763,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -60913,7 +63838,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -60986,7 +63911,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -61056,11 +63981,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -61150,7 +64102,7 @@ let
       options = {
         "goGC" = mkOption {
           description = "goGC defines the Go garbage collection target percentage. Lowering this number may increase the CPU usage.\nSee: https://tip.golang.org/doc/gc-guide#GOGC";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum - 1 types.int));
         };
       };
 
@@ -61184,7 +64136,17 @@ let
         };
         "fallbackScrapeProtocol" = mkOption {
           description = "fallbackScrapeProtocol defines the protocol to use if a scrape returns blank, unparseable, or otherwise invalid Content-Type.\nIt will only apply if the scrape resource doesn't specify any FallbackScrapeProtocol\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "PrometheusProto"
+                "OpenMetricsText0.0.1"
+                "OpenMetricsText1.0.0"
+                "PrometheusText0.0.4"
+                "PrometheusText1.0.0"
+              ]
+            )
+          );
         };
         "metricRelabelings" = mkOption {
           description = "metricRelabelings defines the relabeling rules to apply to all samples before ingestion.\n\nThe Operator adds the scrape class metric relabelings defined here.\nThen the Operator adds the target-specific metric relabelings defined in ServiceMonitors, PodMonitors, Probes and ScrapeConfigs.\nThen the Operator adds namespace enforcement relabeling rule, specified in '.spec.enforcedNamespaceLabel'.\n\nMore info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs";
@@ -61198,7 +64160,7 @@ let
         };
         "name" = mkOption {
           description = "name of the scrape class.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "relabelings" = mkOption {
           description = "relabelings defines the relabeling rules to apply to all scrape targets.\n\nThe Operator automatically adds relabelings for a few standard Kubernetes fields\nlike `__meta_kubernetes_namespace` and `__meta_kubernetes_service_name`.\nThen the Operator adds the scrape class relabelings defined here.\nThen the Operator adds the target-specific relabelings defined in the scrape object.\n\nMore info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config";
@@ -61301,11 +64263,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -61345,11 +64334,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -61429,11 +64445,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -61486,7 +64520,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -61559,7 +64593,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -61751,7 +64785,7 @@ let
           type = (types.nullOr types.int);
         };
         "seLinuxChangePolicy" = mkOption {
-          description = "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with `-o context` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\"MountOption\" value is allowed only when SELinuxMount feature gate is enabled.\n\nIf not specified and SELinuxMount feature gate is enabled, \"MountOption\" is used.\nIf not specified and SELinuxMount feature gate is disabled, \"MountOption\" is used for ReadWriteOncePod volumes\nand \"Recursive\" for all other volumes.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.";
+          description = "seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.\nIt has no effect on nodes that do not support SELinux or to volumes does not support SELinux.\nValid values are \"MountOption\" and \"Recursive\".\n\n\"Recursive\" means relabeling of all files on all Pod volumes by the container runtime.\nThis may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.\n\n\"MountOption\" mounts all eligible Pod volumes with `-o context` mount option.\nThis requires all Pods that share the same volume to use the same SELinux label.\nIt is not possible to share the same volume among privileged and unprivileged Pods.\nEligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes\nwhose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their\nCSIDriver instance. Other volumes are always re-labelled recursively.\n\nIf not specified, \"MountOption\" is used.\n\nThis field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.\n\nAll Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.\nNote that this field cannot be set when spec.os.name is windows.";
           type = (types.nullOr types.str);
         };
         "seLinuxOptions" = mkOption {
@@ -62027,7 +65061,14 @@ let
       options = {
         "mode" = mkOption {
           description = "mode defines the sharding mode. Can be 'Address' or 'Topology'.\n\n'Address' is the default mode and distributes targets across shards\nbased on a hash of the target address.\n\n'Topology' enables zone-aware sharding where each shard is assigned to a\nspecific topology zone and only scrapes targets in that zone.\n(Alpha) Using the 'Topology' mode requires the `PrometheusTopologySharding`\nfeature gate to be enabled.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Address"
+                "Topology"
+              ]
+            )
+          );
         };
         "topology" = mkOption {
           description = "topology defines the configuration for topology-aware sharding.\nThis field is only valid when mode is set to 'Topology'.";
@@ -62108,6 +65149,10 @@ let
           description = "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr types.str);
         };
+        "mode" = mkOption {
+          description = "mode specifies the permission bits for the emptyDir directory, in numeric\nnotation (e.g., 0755, 01777). Must be a value between 0000 and 01777.\nIf not specified, defaults to 0777.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup. If fsGroup is specified, the fsGroup permissions\nwill override the mode specified here.\nThis field has no effect on Windows.\nThis field is alpha and requires EmptyDirVolumeMode featuregate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sizeLimit" = mkOption {
           description = "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr (types.either types.int types.str));
@@ -62116,6 +65161,7 @@ let
 
       config = {
         "medium" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
         "sizeLimit" = mkOverride 1002 null;
       };
 
@@ -62166,7 +65212,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageEphemeralVolumeClaimTemplateSpecDataSource"
@@ -62174,7 +65220,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageEphemeralVolumeClaimTemplateSpecDataSourceRef"
@@ -62426,7 +65472,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageVolumeClaimTemplateSpecDataSource"
@@ -62434,7 +65480,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageVolumeClaimTemplateSpecDataSourceRef"
@@ -62637,6 +65683,14 @@ let
           description = "currentVolumeAttributesClassName is the current name of the VolumeAttributesClass the PVC is using.\nWhen unset, there is no VolumeAttributeClass applied to this PersistentVolumeClaim";
           type = (types.nullOr types.str);
         };
+        "healthStatus" = mkOption {
+          description = "healthStatus contains the latest controller-reported health information\nfor the volume bound to this claim.";
+          type = (
+            types.nullOr (
+              submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageVolumeClaimTemplateStatusHealthStatus"
+            )
+          );
+        };
         "modifyVolumeStatus" = mkOption {
           description = "ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.\nWhen this is unset, there is no ModifyVolume operation being attempted.";
           type = (
@@ -62658,6 +65712,7 @@ let
         "capacity" = mkOverride 1002 null;
         "conditions" = mkOverride 1002 null;
         "currentVolumeAttributesClassName" = mkOverride 1002 null;
+        "healthStatus" = mkOverride 1002 null;
         "modifyVolumeStatus" = mkOverride 1002 null;
         "phase" = mkOverride 1002 null;
       };
@@ -62700,6 +65755,60 @@ let
       };
 
     };
+    "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageVolumeClaimTemplateStatusHealthStatus" = {
+
+      options = {
+        "healthConditions" = mkOption {
+          description = "conditions is the set of adverse conditions reported by\nthe CSI controller plugin. An empty list means no adverse condition.\nAt most 16 conditions may be reported.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageVolumeClaimTemplateStatusHealthStatusHealthConditions"
+              )
+            )
+          );
+        };
+        "lastTransitionTime" = mkOption {
+          description = "lastTransitionTime is when the current set of conditions first appeared.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "healthConditions" = mkOverride 1002 null;
+        "lastTransitionTime" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageVolumeClaimTemplateStatusHealthStatusHealthConditions" =
+      {
+
+        options = {
+          "message" = mkOption {
+            description = "message is a human-readable description.\nMaximum permitted length of a message is 1024 bytes.";
+            type = (types.nullOr types.str);
+          };
+          "reason" = mkOption {
+            description = "reason is a brief CamelCase machine-parseable reason.\nTogether with status it forms the unique identity of a condition entry.\nMaximum permitted length of a reason is 256 bytes.";
+            type = types.str;
+          };
+          "status" = mkOption {
+            description = "status is the machine-parseable health category.\nPossible values:\n- \"Inaccessible\": the volume cannot be accessed.\n- \"DataLoss\": data loss has been detected on the volume.\n- \"Degraded\": the volume is functioning with reduced capability.";
+            type = (
+              types.enum [
+                "DataLoss"
+                "Degraded"
+                "Inaccessible"
+              ]
+            );
+          };
+        };
+
+        config = {
+          "message" = mkOverride 1002 null;
+        };
+
+      };
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecStorageVolumeClaimTemplateStatusModifyVolumeStatus" =
       {
 
@@ -62758,7 +65867,14 @@ let
       options = {
         "additionalLabelSelectors" = mkOption {
           description = "additionalLabelSelectors Defines what Prometheus Operator managed labels should be added to labelSelector on the topologySpreadConstraint.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "OnResource"
+                "OnShard"
+              ]
+            )
+          );
         };
         "labelSelector" = mkOption {
           description = "LabelSelector is used to find matching pods.\nPods that match this label selector are counted to determine the number of pods\nin their corresponding topology domain.";
@@ -62861,15 +65977,31 @@ let
       options = {
         "clientType" = mkOption {
           description = "clientType defines the client used to export the traces. Supported values are `HTTP` and `GRPC`.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "grpc"
+                "HTTP"
+                "GRPC"
+              ]
+            )
+          );
         };
         "compression" = mkOption {
           description = "compression key for supported compression types. The only supported value is `Gzip`.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "gzip"
+                "Gzip"
+              ]
+            )
+          );
         };
         "endpoint" = mkOption {
           description = "endpoint to send the traces to. Should be provided in format <host>:<port>.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "headers" = mkOption {
           description = "headers defines the key-value pairs to be used as headers associated with gRPC or HTTP requests.";
@@ -62953,11 +66085,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -63010,7 +66160,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -63083,7 +66233,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -63151,6 +66301,12 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecTsdb" = {
 
       options = {
+        "chunkEncoding" = mkOption {
+          description = "chunkEncoding configures per-chunk-type encoding overrides.\n\nIt requires Prometheus >= v3.13.0.\n\nNotice: Setting \"Xor\" is incompatible with --enable-feature=st-storage\n(XOR chunks do not store start timestamps).";
+          type = (
+            types.nullOr (submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecTsdbChunkEncoding")
+          );
+        };
         "outOfOrderTimeWindow" = mkOption {
           description = "outOfOrderTimeWindow defines how old an out-of-order/out-of-bounds sample can be with\nrespect to the TSDB max time.\n\nAn out-of-order/out-of-bounds sample is ingested into the TSDB as long as\nthe timestamp of the sample is >= (TSDB.MaxTime - outOfOrderTimeWindow).\n\nThis is an *experimental feature*, it may change in any upcoming release\nin a breaking way.\n\nIt requires Prometheus >= v2.39.0 or PrometheusAgent >= v2.54.0.";
           type = (types.nullOr types.str);
@@ -63162,8 +66318,30 @@ let
       };
 
       config = {
+        "chunkEncoding" = mkOverride 1002 null;
         "outOfOrderTimeWindow" = mkOverride 1002 null;
         "staleSeriesCompactionThreshold" = mkOverride 1002 null;
+      };
+
+    };
+    "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecTsdbChunkEncoding" = {
+
+      options = {
+        "floats" = mkOption {
+          description = "floats selects the encoding used for float chunks.\nValid values are \"Xor\" and \"Xor2\".\n\nNotice:\n * Setting \"Xor\" is incompatible with --enable-feature=st-storage\n(XOR chunks do not store start timestamps).\n * Setting \"Xor2\" automatically adds the `xor2-encoding` feature flag.\n\nIt requires Prometheus >= v3.13.0.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Xor"
+                "Xor2"
+              ]
+            )
+          );
+        };
+      };
+
+      config = {
+        "floats" = mkOverride 1002 null;
       };
 
     };
@@ -63180,7 +66358,12 @@ let
         };
         "type" = mkOption {
           description = "type indicates the type of the StatefulSetUpdateStrategy.\n\nDefault is RollingUpdate.";
-          type = types.str;
+          type = (
+            types.enum [
+              "OnDelete"
+              "RollingUpdate"
+            ]
+          );
         };
       };
 
@@ -63206,8 +66389,12 @@ let
     "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecVolumeMounts" = {
 
       options = {
+        "bindMountOptions" = mkOption {
+          description = "bindMountOptions is the list of additional bind mount options to apply when\nmounting this volume into the container. Allowed values are noexec,\nnodev, and nosuid. These are Linux mount options and have no effect on\nWindows nodes.\nThis field is not supported with image volumes.\nThis is an alpha field and requires enabling the VolumeBindMountOptions feature gate.";
+          type = (types.nullOr (types.listOf types.str));
+        };
         "mountPath" = mkOption {
-          description = "Path within the container at which the volume should be mounted.  Must\nnot contain ':'.";
+          description = "Path within the container at which the volume should be mounted.";
           type = types.str;
         };
         "mountPropagation" = mkOption {
@@ -63237,6 +66424,7 @@ let
       };
 
       config = {
+        "bindMountOptions" = mkOverride 1002 null;
         "mountPropagation" = mkOverride 1002 null;
         "readOnly" = mkOverride 1002 null;
         "recursiveReadOnly" = mkOverride 1002 null;
@@ -63664,6 +66852,10 @@ let
           description = "defaultMode is optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "items if unspecified, each key-value pair in the Data field of the referenced\nConfigMap will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the ConfigMap,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.";
           type = (
@@ -63684,6 +66876,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
@@ -63705,10 +66898,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -63770,6 +66968,10 @@ let
           description = "Optional: mode bits to use on created files by default. Must be a\nOptional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDefaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "Items is a list of downward API volume file";
           type = (
@@ -63784,6 +66986,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
       };
 
@@ -63815,12 +67018,17 @@ let
             )
           );
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "fieldRef" = mkOverride 1002 null;
         "mode" = mkOverride 1002 null;
         "resourceFieldRef" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -63872,6 +67080,10 @@ let
           description = "medium represents what type of storage medium should back this directory.\nThe default is \"\" which means to use the node's default medium.\nMust be an empty string (default) or Memory.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr types.str);
         };
+        "mode" = mkOption {
+          description = "mode specifies the permission bits for the emptyDir directory, in numeric\nnotation (e.g., 0755, 01777). Must be a value between 0000 and 01777.\nIf not specified, defaults to 0777.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup. If fsGroup is specified, the fsGroup permissions\nwill override the mode specified here.\nThis field has no effect on Windows.\nThis field is alpha and requires EmptyDirVolumeMode featuregate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sizeLimit" = mkOption {
           description = "sizeLimit is the total amount of local storage required for this EmptyDir volume.\nThe size limit is also applicable for memory medium.\nThe maximum usage on memory medium EmptyDir would be the minimum value between\nthe SizeLimit specified here and the sum of memory limits of all containers in a pod.\nThe default is nil which means that the limit is undefined.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir";
           type = (types.nullOr (types.either types.int types.str));
@@ -63880,6 +67092,7 @@ let
 
       config = {
         "medium" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
         "sizeLimit" = mkOverride 1002 null;
       };
 
@@ -63930,7 +67143,7 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "dataSource" = mkOption {
-          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\nWhen the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef,\nand dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
+          description = "dataSource field can be used to specify either:\n* An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot)\n* An existing PVC (PersistentVolumeClaim)\nIf the provisioner or an external controller can support the specified data source,\nit will create a new volume based on the contents of the specified data source.\ndataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be\ncopied to dataSource when dataSourceRef.namespace is not specified.\nIf the namespace is specified, then dataSourceRef will not be copied to dataSource.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecVolumesEphemeralVolumeClaimTemplateSpecDataSource"
@@ -63938,7 +67151,7 @@ let
           );
         };
         "dataSourceRef" = mkOption {
-          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
+          description = "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty\nvolume is desired. This may be any object from a non-empty API group (non\ncore object) or a PersistentVolumeClaim object.\nWhen this field is specified, volume binding will only succeed if the type of\nthe specified object matches some installed volume populator or dynamic\nprovisioner.\nThis field will replace the functionality of the dataSource field and as such\nif both fields are non-empty, they must have the same value. For backwards\ncompatibility, when namespace isn't specified in dataSourceRef,\nboth fields (dataSource and dataSourceRef) will be set to the same\nvalue automatically if one of them is empty and the other is non-empty.\nWhen namespace is specified in dataSourceRef,\ndataSource isn't set to the same value and must be empty.\nThere are three important differences between dataSource and dataSourceRef:\n* While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.";
           type = (
             types.nullOr (
               submoduleOf "monitoring.coreos.com.v1alpha1.PrometheusAgentSpecVolumesEphemeralVolumeClaimTemplateSpecDataSourceRef"
@@ -64491,6 +67704,10 @@ let
           description = "defaultMode are the mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values for mode bits.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "sources" = mkOption {
           description = "sources is the list of volume projections. Each entry in this list\nhandles one source.";
           type = (
@@ -64505,6 +67722,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "sources" = mkOverride 1002 null;
       };
 
@@ -64599,6 +67817,10 @@ let
           description = "Select all ClusterTrustBundles that match this signer name.\nMutually-exclusive with name.  The contents of all selected\nClusterTrustBundles will be unified and deduplicated.";
           type = (types.nullOr types.str);
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
@@ -64606,6 +67828,7 @@ let
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
         "signerName" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -64703,10 +67926,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -64757,12 +67985,17 @@ let
             )
           );
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "fieldRef" = mkOverride 1002 null;
         "mode" = mkOverride 1002 null;
         "resourceFieldRef" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -64836,6 +68069,10 @@ let
           description = "Kubelet's generated CSRs will be addressed to this signer.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "userAnnotations" = mkOption {
           description = "userAnnotations allow pod authors to pass additional information to\nthe signer implementation.  Kubernetes does not restrict or validate this\nmetadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of\nthe PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations,\nwith the addition that all keys must be domain-prefixed. No restrictions\nare placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should\ndeny requests that contain keys they do not recognize.";
           type = (types.nullOr (types.attrsOf types.str));
@@ -64847,6 +68084,7 @@ let
         "credentialBundlePath" = mkOverride 1002 null;
         "keyPath" = mkOverride 1002 null;
         "maxExpirationSeconds" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
         "userAnnotations" = mkOverride 1002 null;
       };
 
@@ -64896,10 +68134,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -64918,11 +68161,16 @@ let
           description = "path is the path relative to the mount point of the file to project the\ntoken into.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "audience" = mkOverride 1002 null;
         "expirationSeconds" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -65103,6 +68351,10 @@ let
           description = "defaultMode is Optional: mode bits used to set permissions on created files by default.\nMust be an octal value between 0000 and 0777 or a decimal value between 0 and 511.\nYAML accepts both octal and decimal values, JSON requires decimal values\nfor mode bits. Defaults to 0644.\nDirectories within the path are not affected by this setting.\nThis might be in conflict with other options that affect the file\nmode, like fsGroup, and the result can be other mode bits set.";
           type = (types.nullOr types.int);
         };
+        "defaultUser" = mkOption {
+          description = "defaultUser is Optional: The owner UID of the created files by default.\nThe defaultUser field is only used as a fallback when the item-level user field is unset.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
         "items" = mkOption {
           description = "items If unspecified, each key-value pair in the Data field of the referenced\nSecret will be projected into the volume as a file whose name is the\nkey and content is the value. If specified, the listed keys will be\nprojected into the specified paths, and unlisted keys will not be\npresent. If a key is specified which is not present in the Secret,\nthe volume setup will error unless it is marked optional. Paths must be\nrelative and may not contain the '..' path or start with '..'.";
           type = (
@@ -65123,6 +68375,7 @@ let
 
       config = {
         "defaultMode" = mkOverride 1002 null;
+        "defaultUser" = mkOverride 1002 null;
         "items" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
         "secretName" = mkOverride 1002 null;
@@ -65144,10 +68397,15 @@ let
           description = "path is the relative path of the file to map the key to.\nMay not be an absolute path.\nMay not contain the path element '..'.\nMay not start with the string '..'.";
           type = types.str;
         };
+        "user" = mkOption {
+          description = "user is Optional: The owner UID of the created file.\nIf specified, the item-level user field takes precedence over defaultUser.\n(Alpha) This field requires the AtomicWriteVolumeUserFields feature gate to be enabled.";
+          type = (types.nullOr types.int);
+        };
       };
 
       config = {
         "mode" = mkOverride 1002 null;
+        "user" = mkOverride 1002 null;
       };
 
     };
@@ -65242,7 +68500,7 @@ let
         };
         "maxConnections" = mkOption {
           description = "maxConnections defines the maximum number of simultaneous connections\nA zero value means that Prometheus doesn't accept any incoming connection.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "pageTitle" = mkOption {
           description = "pageTitle defines the prometheus web page title.";
@@ -65298,11 +68556,26 @@ let
         };
         "xContentTypeOptions" = mkOption {
           description = "xContentTypeOptions defines the X-Content-Type-Options header to HTTP responses.\nUnset if blank. Accepted value is nosniff.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "NoSniff"
+              ]
+            )
+          );
         };
         "xFrameOptions" = mkOption {
           description = "xFrameOptions defines the X-Frame-Options header to HTTP responses.\nUnset if blank. Accepted values are deny and sameorigin.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "Deny"
+                "SameOrigin"
+              ]
+            )
+          );
         };
         "xXSSProtection" = mkOption {
           description = "xXSSProtection defines the X-XSS-Protection header to all responses.\nUnset if blank.\nhttps://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection";
@@ -65425,7 +68698,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -65498,7 +68771,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -65646,11 +68919,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -65815,7 +69088,17 @@ let
         };
         "fallbackScrapeProtocol" = mkOption {
           description = "fallbackScrapeProtocol defines the protocol to use if a scrape returns blank, unparseable, or otherwise invalid Content-Type.\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "PrometheusProto"
+                "OpenMetricsText0.0.1"
+                "OpenMetricsText1.0.0"
+                "PrometheusText0.0.4"
+                "PrometheusText1.0.0"
+              ]
+            )
+          );
         };
         "fileSDConfigs" = mkOption {
           description = "fileSDConfigs defines a list of file service discovery configurations.";
@@ -65867,11 +69150,11 @@ let
         };
         "jobName" = mkOption {
           description = "jobName defines the value of the `job` label assigned to the scraped metrics by default.\n\nThe `job_name` field in the rendered scrape configuration is always controlled by the\noperator to prevent duplicate job names, which Prometheus does not allow. Instead the\n`job` label is set by means of relabeling configs.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "keepDroppedTargets" = mkOption {
           description = "keepDroppedTargets defines the per-scrape limit on the number of targets dropped by relabeling\nthat will be kept in memory. 0 means no limit.\n\nIt requires Prometheus >= v2.47.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "kubernetesSDConfigs" = mkOption {
           description = "kubernetesSDConfigs defines a list of Kubernetes service discovery configurations.";
@@ -65891,15 +69174,15 @@ let
         };
         "labelLimit" = mkOption {
           description = "labelLimit defines the per-scrape limit on number of labels that will be accepted for a sample.\nOnly valid in Prometheus versions 2.27.0 and newer.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelNameLengthLimit" = mkOption {
           description = "labelNameLengthLimit defines the per-scrape limit on length of labels name that will be accepted for a sample.\nOnly valid in Prometheus versions 2.27.0 and newer.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "labelValueLengthLimit" = mkOption {
           description = "labelValueLengthLimit defines the per-scrape limit on length of labels value that will be accepted for a sample.\nOnly valid in Prometheus versions 2.27.0 and newer.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "lightSailSDConfigs" = mkOption {
           description = "lightSailSDConfigs defines a list of Lightsail service discovery configurations.";
@@ -65927,19 +69210,35 @@ let
         };
         "metricsPath" = mkOption {
           description = "metricsPath defines the HTTP path to scrape for metrics. If empty, Prometheus uses the default value (e.g. /metrics).";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "nameEscapingScheme" = mkOption {
           description = "nameEscapingScheme defines the metric name escaping mode to request through content negotiation.\n\nIt requires Prometheus >= v3.4.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "AllowUTF8"
+                "Underscores"
+                "Dots"
+                "Values"
+              ]
+            )
+          );
         };
         "nameValidationScheme" = mkOption {
           description = "nameValidationScheme defines the validation scheme for metric and label names.\n\nIt requires Prometheus >= v3.0.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "UTF8"
+                "Legacy"
+              ]
+            )
+          );
         };
         "nativeHistogramBucketLimit" = mkOption {
           description = "nativeHistogramBucketLimit defines ff there are more than this many buckets in a native histogram,\nbuckets will be merged to stay within the limit.\nIt requires Prometheus >= v2.45.0.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "nativeHistogramMinBucketFactor" = mkOption {
           description = "nativeHistogramMinBucketFactor defines if the growth factor of one bucket to the next is smaller than this,\nbuckets will be merged to increase the factor sufficiently.\nIt requires Prometheus >= v2.50.0.";
@@ -66011,7 +69310,7 @@ let
         };
         "sampleLimit" = mkOption {
           description = "sampleLimit defines per-scrape limit on number of scraped samples that will be accepted.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "scalewaySDConfigs" = mkOption {
           description = "scalewaySDConfigs defines a list of Scaleway instances and baremetal service discovery configurations.";
@@ -66023,11 +69322,20 @@ let
         };
         "scheme" = mkOption {
           description = "scheme defines the protocol scheme used for requests.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "https"
+                "HTTP"
+                "HTTPS"
+              ]
+            )
+          );
         };
         "scrapeClass" = mkOption {
           description = "scrapeClass defines the scrape class to apply.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "scrapeClassicHistograms" = mkOption {
           description = "scrapeClassicHistograms defines whether to scrape a classic histogram that is also exposed as a native histogram.\nIt requires Prometheus >= v2.45.0.\n\nNotice: `scrapeClassicHistograms` corresponds to the `always_scrape_classic_histograms` field in the Prometheus configuration.";
@@ -66043,7 +69351,19 @@ let
         };
         "scrapeProtocols" = mkOption {
           description = "scrapeProtocols defines the protocols to negotiate during a scrape. It tells clients the\nprotocols supported by Prometheus in order of preference (from most to least preferred).\n\nIf unset, Prometheus uses its default value.\n\nIt requires Prometheus >= v2.49.0.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "PrometheusProto"
+                  "OpenMetricsText0.0.1"
+                  "OpenMetricsText1.0.0"
+                  "PrometheusText0.0.4"
+                  "PrometheusText1.0.0"
+                ]
+              )
+            )
+          );
         };
         "scrapeTimeout" = mkOption {
           description = "scrapeTimeout defines the number of seconds to wait until a scrape request times out.\nThe value cannot be greater than the scrape interval otherwise the operator will reject the resource.";
@@ -66059,7 +69379,7 @@ let
         };
         "targetLimit" = mkOption {
           description = "targetLimit defines a limit on the number of scraped targets that will be accepted.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration to use on every scrape request";
@@ -66185,7 +69505,16 @@ let
       options = {
         "authenticationMethod" = mkOption {
           description = "authenticationMethod defines the authentication method, either `OAuth` or `ManagedIdentity` or `SDK`.\nSee https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview\nSDK authentication method uses environment variables by default.\nSee https://learn.microsoft.com/en-us/azure/developer/go/azure-sdk-authentication";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "OAuth"
+                "ManagedIdentity"
+                "SDK"
+                "WorkloadIdentity"
+              ]
+            )
+          );
         };
         "authorization" = mkOption {
           description = "authorization defines the authorization header configuration to authenticate against the target HTTP endpoint.\nCannot be set at the same time as `oAuth2`, or `basicAuth`.";
@@ -66203,7 +69532,7 @@ let
         };
         "clientID" = mkOption {
           description = "clientID defines client ID. Only required with the OAuth authentication method.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "clientSecret" = mkOption {
           description = "clientSecret defines client secret. Only required with the OAuth authentication method.";
@@ -66219,7 +69548,7 @@ let
         };
         "environment" = mkOption {
           description = "environment defines the Azure environment.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "followRedirects" = mkOption {
           description = "followRedirects defines whether HTTP requests follow HTTP 3xx redirects.";
@@ -66237,7 +69566,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must\ninstead be specified in the relabeling rule.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -66257,15 +69586,15 @@ let
         };
         "resourceGroup" = mkOption {
           description = "resourceGroup defines resource group name. Limits discovery to this resource group.\nRequires  Prometheus v2.35.0 and above";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "subscriptionID" = mkOption {
           description = "subscriptionID defines subscription ID. Always required.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "tenantID" = mkOption {
           description = "tenantID defines tenant ID. Only required with the OAuth authentication method.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration applying to the target HTTP endpoint.";
@@ -66532,7 +69861,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -66630,11 +69959,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -66684,7 +70031,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -66757,7 +70104,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -66855,11 +70202,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -66909,7 +70274,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -66982,7 +70347,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -67139,7 +70504,7 @@ let
         };
         "datacenter" = mkOption {
           description = "datacenter defines the consul Datacenter name, if not provided it will use the local Consul Agent Datacenter.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "enableHTTP2" = mkOption {
           description = "enableHTTP2 defines whether to enable HTTP2.";
@@ -67147,7 +70512,7 @@ let
         };
         "filter" = mkOption {
           description = "filter defines the filter expression used to filter the catalog results.\nSee https://developer.hashicorp.com/consul/api-docs/catalog#filtering\nIt requires Prometheus >= 3.0.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "followRedirects" = mkOption {
           description = "followRedirects defines whether HTTP requests follow HTTP 3xx redirects.";
@@ -67155,11 +70520,11 @@ let
         };
         "healthFilter" = mkOption {
           description = "healthFilter defines the filter expression used to filter the health results.\nSee https://developer.hashicorp.com/consul/api-docs/health#filtering\nIt requires Prometheus >= 3.11.2.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "namespace" = mkOption {
           description = "namespace are only supported in Consul Enterprise.\n\nIt requires Prometheus >= 2.28.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "noProxy" = mkOption {
           description = "noProxy defines a comma-separated string that can contain IPs, CIDR notation, domain names\nthat should be excluded from proxying. IP and domain names can\ncontain port numbers.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -67177,11 +70542,11 @@ let
         };
         "partition" = mkOption {
           description = "partition defines the admin Partitions are only supported in Consul Enterprise.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "pathPrefix" = mkOption {
           description = "pathPrefix defines the prefix for URIs for when consul is behind an API gateway (reverse proxy).\n\nIt requires Prometheus >= 2.45.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -67201,23 +70566,32 @@ let
         };
         "scheme" = mkOption {
           description = "scheme defines the HTTP Scheme.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "https"
+                "HTTP"
+                "HTTPS"
+              ]
+            )
+          );
         };
         "server" = mkOption {
           description = "server defines the consul server address. A valid string consisting of a hostname or IP followed by an optional port number.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "services" = mkOption {
           description = "services defines a list of services for which targets are retrieved. If omitted, all services are scraped.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "tagSeparator" = mkOption {
           description = "tagSeparator defines the string by which Consul tags are joined into the tag label.\nIf unset, Prometheus uses its default value.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "tags" = mkOption {
           description = "tags defines an optional list of tags used to filter nodes for a given service. Services must contain all tags in the list.\nStarting with Consul 1.14, it is recommended to use `filter` with the `ServiceTags` selector instead.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration to connect to the Consul API.";
@@ -67473,7 +70847,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -67571,11 +70945,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -67625,7 +71017,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -67698,7 +71090,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -67796,11 +71188,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -67850,7 +71260,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -67923,7 +71333,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -68044,7 +71454,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -68228,7 +71638,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -68326,11 +71736,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -68380,7 +71808,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -68454,7 +71882,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -68552,11 +71980,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -68606,7 +72052,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -68679,7 +72125,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -68749,11 +72195,11 @@ let
       options = {
         "names" = mkOption {
           description = "names defines a list of DNS domain names to be queried.";
-          type = (types.listOf types.str);
+          type = (types.listOf (types.withMinLength 1 types.str));
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must\nIgnored for SRV records";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "refreshInterval" = mkOption {
           description = "refreshInterval defines the time after which the provided names are refreshed.\nIf not set, Prometheus uses its default value.";
@@ -68761,7 +72207,17 @@ let
         };
         "type" = mkOption {
           description = "type defines the type of DNS query to perform. One of SRV, A, AAAA, MX or NS.\nIf not set, Prometheus uses its default value.\n\nWhen set to NS, it requires Prometheus >= v2.49.0.\nWhen set to MX, it requires Prometheus >= v2.38.0";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "A"
+                "AAAA"
+                "MX"
+                "NS"
+                "SRV"
+              ]
+            )
+          );
         };
       };
 
@@ -68815,7 +72271,7 @@ let
         };
         "hostNetworkingHost" = mkOption {
           description = "hostNetworkingHost defines the host to use if the container is in host networking mode.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "matchFirstNetwork" = mkOption {
           description = "matchFirstNetwork defines whether to match the first network if the container has multiple networks defined.\nIf unset, Prometheus uses true by default.\nIt requires Prometheus >= v2.54.1.";
@@ -68833,7 +72289,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -69002,11 +72458,11 @@ let
       options = {
         "name" = mkOption {
           description = "name of the Filter.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "values" = mkOption {
           description = "values defines values to filter on.";
-          type = (types.listOf types.str);
+          type = (types.listOf (types.withMinLength 1 types.str));
         };
       };
 
@@ -69106,7 +72562,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -69204,11 +72660,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -69258,7 +72732,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -69331,7 +72805,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -69429,11 +72903,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -69483,7 +72975,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -69556,7 +73048,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -69678,7 +73170,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must\ntasks and services that don't have published ports.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -69698,7 +73190,13 @@ let
         };
         "role" = mkOption {
           description = "role of the targets to retrieve. Must be `Services`, `Tasks`, or `Nodes`.";
-          type = types.str;
+          type = (
+            types.enum [
+              "Services"
+              "Tasks"
+              "Nodes"
+            ]
+          );
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration to connect to the Docker Swarm daemon.";
@@ -69851,11 +73349,11 @@ let
       options = {
         "name" = mkOption {
           description = "name of the Filter.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "values" = mkOption {
           description = "values defines values to filter on.";
-          type = (types.listOf types.str);
+          type = (types.listOf (types.withMinLength 1 types.str));
         };
       };
 
@@ -69957,7 +73455,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -70055,11 +73553,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -70109,7 +73625,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -70183,7 +73699,7 @@ let
 
         options = {
           "key" = mkOption {
-            description = "The key to select.";
+            description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
             type = types.str;
           };
           "name" = mkOption {
@@ -70281,11 +73797,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -70335,7 +73869,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -70408,7 +73942,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -70508,7 +74042,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must\ninstead be specified in the relabeling rule.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -70528,11 +74062,11 @@ let
         };
         "region" = mkOption {
           description = "region defines the AWS region.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "roleARN" = mkOption {
           description = "roleARN defines an alternative to using AWS API keys.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "secretKey" = mkOption {
           description = "secretKey defines the AWS API secret.";
@@ -70594,11 +74128,11 @@ let
       options = {
         "name" = mkOption {
           description = "name of the Filter.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "values" = mkOption {
           description = "values defines values to filter on.";
-          type = (types.listOf types.str);
+          type = (types.listOf (types.withMinLength 1 types.str));
         };
       };
 
@@ -70659,11 +74193,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -70713,7 +74265,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -70786,7 +74338,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -71141,7 +74693,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -71239,11 +74791,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -71293,7 +74863,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -71366,7 +74936,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -71464,11 +75034,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -71518,7 +75106,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -71591,7 +75179,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -71679,15 +75267,15 @@ let
       options = {
         "filter" = mkOption {
           description = "filter defines the filter that can be used optionally to filter the instance list by other criteria\nSyntax of this filter is described in the filter query parameter section:\nhttps://cloud.google.com/compute/docs/reference/latest/instances/list";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must\ninstead be specified in the relabeling rule.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "project" = mkOption {
           description = "project defines the Google Cloud Project ID";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "refreshInterval" = mkOption {
           description = "refreshInterval defines the time after which the provided names are refreshed.\nIf not set, Prometheus uses its default value.";
@@ -71695,11 +75283,11 @@ let
         };
         "tagSeparator" = mkOption {
           description = "tagSeparator defines the tag separator is used to separate the tags on concatenation";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "zone" = mkOption {
           description = "zone defines the zone of the scrape targets. If you need multiple zones use multiple GCESDConfigs.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
       };
 
@@ -71740,7 +75328,7 @@ let
         };
         "labelSelector" = mkOption {
           description = "labelSelector defines the label selector used to filter the servers when fetching them from the API.\nIt requires Prometheus >= v3.5.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "noProxy" = mkOption {
           description = "noProxy defines a comma-separated string that can contain IPs, CIDR notation, domain names\nthat should be excluded from proxying. IP and domain names can\ncontain port numbers.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -71754,7 +75342,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -71774,7 +75362,12 @@ let
         };
         "role" = mkOption {
           description = "role defines the Hetzner role of entities that should be discovered.";
-          type = types.str;
+          type = (
+            types.enum [
+              "Hcloud"
+              "Robot"
+            ]
+          );
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration to connect to the Hetzner API.";
@@ -72017,7 +75610,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -72115,11 +75708,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -72169,7 +75780,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -72242,7 +75853,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -72340,11 +75951,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -72394,7 +76023,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -72467,7 +76096,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -72822,7 +76451,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -72920,11 +76549,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -72974,7 +76621,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -73047,7 +76694,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -73143,11 +76790,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -73197,7 +76862,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -73270,7 +76935,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -73344,7 +77009,7 @@ let
         };
         "datacenterID" = mkOption {
           description = "datacenterID defines the unique ID of the IONOS data center.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "enableHTTP2" = mkOption {
           description = "enableHTTP2 defines whether to enable HTTP2.";
@@ -73366,7 +77031,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -73545,7 +77210,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -73643,11 +77308,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -73697,7 +77380,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -73770,7 +77453,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -73868,11 +77551,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -73922,7 +77623,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -73995,7 +77696,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -74065,7 +77766,7 @@ let
       options = {
         "apiServer" = mkOption {
           description = "apiServer defines the API server address consisting of a hostname or IP address followed\nby an optional port number.\nIf left empty, Prometheus is assumed to run inside\nof the cluster. It will discover API servers automatically and use the pod's\nCA certificate and bearer token file at /var/run/secrets/kubernetes.io/serviceaccount/.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "attachMetadata" = mkOption {
           description = "attachMetadata defines the metadata to attach to discovered targets.\nIt requires Prometheus >= v2.35.0 when using the `Pod` role and\nPrometheus >= v2.37.0 for `Endpoints` and `Endpointslice` roles.";
@@ -74133,7 +77834,16 @@ let
         };
         "role" = mkOption {
           description = "role defines the Kubernetes role of the entities that should be discovered.\nRole `Endpointslice` requires Prometheus >= v2.21.0";
-          type = types.str;
+          type = (
+            types.enum [
+              "Pod"
+              "Endpoints"
+              "Ingress"
+              "Service"
+              "Node"
+              "EndpointSlice"
+            ]
+          );
         };
         "selectors" = mkOption {
           description = "selectors defines the selector to select objects.\nIt requires Prometheus >= v2.17.0";
@@ -74311,7 +78021,7 @@ let
       options = {
         "names" = mkOption {
           description = "names defines a list of namespaces where to watch for resources.\nIf empty and `ownNamespace` isn't true, Prometheus watches for resources in all namespaces.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "ownNamespace" = mkOption {
           description = "ownNamespace includes the namespace in which the Prometheus pod runs to the list of watched namespaces.";
@@ -74420,7 +78130,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -74518,11 +78228,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -74572,7 +78300,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -74645,7 +78373,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -74715,15 +78443,24 @@ let
       options = {
         "field" = mkOption {
           description = "field defines an optional field selector to limit the service discovery to resources which have fields with specific values.\ne.g: `metadata.name=foobar`";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "label" = mkOption {
           description = "label defines an optional label selector to limit the service discovery to resources with specific labels and label values.\ne.g: `node.kubernetes.io/instance-type=master`";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "role" = mkOption {
           description = "role defines the type of Kubernetes resource to limit the service discovery to.\nAccepted values are: Node, Pod, Endpoints, EndpointSlice, Service, Ingress.";
-          type = types.str;
+          type = (
+            types.enum [
+              "Pod"
+              "Endpoints"
+              "Ingress"
+              "Service"
+              "Node"
+              "EndpointSlice"
+            ]
+          );
         };
       };
 
@@ -74766,11 +78503,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -74820,7 +78575,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -74893,7 +78648,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -74977,7 +78732,7 @@ let
         };
         "clientID" = mkOption {
           description = "clientID is used by Kuma Control Plane to compute Monitoring Assignment for specific Prometheus backend.\nIt requires Prometheus >= v2.50.0.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "enableHTTP2" = mkOption {
           description = "enableHTTP2 defines whether to enable HTTP2.";
@@ -75258,7 +79013,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -75356,11 +79111,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -75410,7 +79183,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -75483,7 +79256,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -75579,11 +79352,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -75633,7 +79424,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -75706,7 +79497,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -75804,7 +79595,7 @@ let
         };
         "endpoint" = mkOption {
           description = "endpoint defines the custom endpoint to be used.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "followRedirects" = mkOption {
           description = "followRedirects defines whether HTTP requests follow HTTP 3xx redirects.";
@@ -75822,7 +79613,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -75842,11 +79633,11 @@ let
         };
         "region" = mkOption {
           description = "region defines the AWS region.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "roleARN" = mkOption {
           description = "roleARN defines the AWS Role ARN, an alternative to using AWS API keys.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "secretKey" = mkOption {
           description = "secretKey defines the AWS API secret.";
@@ -76124,7 +79915,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -76222,11 +80013,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -76276,7 +80085,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -76349,7 +80158,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -76470,11 +80279,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -76524,7 +80351,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -76597,7 +80424,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -76693,7 +80520,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -76713,11 +80540,11 @@ let
         };
         "region" = mkOption {
           description = "region defines the region to filter on.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "tagSeparator" = mkOption {
           description = "tagSeparator defines the string by which Linode Instance tags are joined into the tag label.el.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration to connect to the Linode API.";
@@ -76883,7 +80710,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -76981,11 +80808,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -77035,7 +80880,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -77108,7 +80953,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -77206,11 +81051,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -77260,7 +81123,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -77333,7 +81196,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -77403,11 +81266,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -77473,7 +81363,7 @@ let
         };
         "namespace" = mkOption {
           description = "namespace defines the Nomad namespace to query for service discovery.\nWhen specified, only resources within this namespace will be discovered.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "noProxy" = mkOption {
           description = "noProxy defines a comma-separated string that can contain IPs, CIDR notation, domain names\nthat should be excluded from proxying. IP and domain names can\ncontain port numbers.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -77503,7 +81393,7 @@ let
         };
         "region" = mkOption {
           description = "region defines the Nomad region to query for service discovery.\nWhen specified, only resources within this region will be discovered.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "server" = mkOption {
           description = "server defines the Nomad server address to connect to for service discovery.\nThis should be the full URL including protocol (e.g., \"https://nomad.example.com:4646\").";
@@ -77511,7 +81401,7 @@ let
         };
         "tagSeparator" = mkOption {
           description = "tagSeparator defines the separator used to join multiple tags.\nThis determines how Nomad service tags are concatenated into Prometheus labels.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration to connect to the Nomad API.";
@@ -77752,7 +81642,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -77850,11 +81740,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -77904,7 +81812,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -77977,7 +81885,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -78075,11 +81983,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -78129,7 +82055,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -78202,7 +82128,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -78352,7 +82278,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -78444,11 +82370,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -78496,7 +82440,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -78569,7 +82513,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -78643,11 +82587,11 @@ let
         };
         "applicationCredentialId" = mkOption {
           description = "applicationCredentialId defines the OpenStack applicationCredentialId.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "applicationCredentialName" = mkOption {
           description = "applicationCredentialName defines the ApplicationCredentialID or ApplicationCredentialName fields are\nrequired if using an application credential to authenticate. Some providers\nallow you to create an application credential to authenticate rather than a\npassword.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "applicationCredentialSecret" = mkOption {
           description = "applicationCredentialSecret defines the required field if using an application\ncredential to authenticate.";
@@ -78659,15 +82603,23 @@ let
         };
         "availability" = mkOption {
           description = "availability defines the availability of the endpoint to connect to.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "Public"
+                "Admin"
+                "Internal"
+              ]
+            )
+          );
         };
         "domainID" = mkOption {
           description = "domainID defines The OpenStack domainID.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "domainName" = mkOption {
           description = "domainName defines at most one of domainId and domainName that must be provided if using username\nwith Identity V3. Otherwise, either are optional.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "identityEndpoint" = mkOption {
           description = "identityEndpoint defines the HTTP endpoint that is required to work with\nthe Identity API of the appropriate version.";
@@ -78683,15 +82635,15 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must\ninstead be specified in the relabeling rule.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "projectID" = mkOption {
           description = "projectID defines the OpenStack projectID.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "projectName" = mkOption {
           description = "projectName defines an optional field for the Identity V2 API.\nSome providers allow you to specify a ProjectName instead of the ProjectId.\nSome require both. Your provider's authentication policies will determine\nhow these fields influence authentication.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "refreshInterval" = mkOption {
           description = "refreshInterval defines the time after which the provided names are refreshed.\nIf not set, Prometheus uses its default value.";
@@ -78699,11 +82651,17 @@ let
         };
         "region" = mkOption {
           description = "region defines the OpenStack Region.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "role" = mkOption {
           description = "role defines the OpenStack role of entities that should be discovered.\n\nNote: The `LoadBalancer` role requires Prometheus >= v3.2.0.";
-          type = types.str;
+          type = (
+            types.enum [
+              "Instance"
+              "Hypervisor"
+              "LoadBalancer"
+            ]
+          );
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration applying to the target HTTP endpoint.";
@@ -78715,11 +82673,11 @@ let
         };
         "userid" = mkOption {
           description = "userid defines the OpenStack userid.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "username" = mkOption {
           description = "username defines the username required if using Identity V2 API. Consult with your provider's\ncontrol panel to discover your account's username.\nIn Identity V3, either userid or a combination of username\nand domainId or domainName are needed";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -78822,11 +82780,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -78876,7 +82852,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -78949,7 +82925,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -79019,7 +82995,7 @@ let
       options = {
         "applicationKey" = mkOption {
           description = "applicationKey defines the access key to use for OVHCloud API authentication.\nThis is obtained from the OVHCloud API credentials at https://api.ovh.com.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "applicationSecret" = mkOption {
           description = "applicationSecret defines the secret key for OVHCloud API authentication.\nThis contains the application secret obtained during OVHCloud API credential creation.";
@@ -79033,7 +83009,7 @@ let
         };
         "endpoint" = mkOption {
           description = "endpoint defines a custom API endpoint to be used.\nWhen not specified, defaults to the standard OVHCloud API endpoint for the region.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "refreshInterval" = mkOption {
           description = "refreshInterval defines the time after which the provided names are refreshed.\nIf not set, Prometheus uses its default value.";
@@ -79041,7 +83017,12 @@ let
         };
         "service" = mkOption {
           description = "service defines the service type of the targets to retrieve.\nMust be either `VPS` or `DedicatedServer` to specify which OVHCloud resources to discover.";
-          type = types.str;
+          type = (
+            types.enum [
+              "VPS"
+              "DedicatedServer"
+            ]
+          );
         };
       };
 
@@ -79140,7 +83121,7 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -79156,7 +83137,7 @@ let
         };
         "query" = mkOption {
           description = "query defines the Puppet Query Language (PQL) query. Only resources are supported.\nhttps://puppet.com/docs/puppetdb/latest/api/query/v4/pql.html";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "refreshInterval" = mkOption {
           description = "refreshInterval defines the time after which the provided names are refreshed.\nIf not set, Prometheus uses its default value.";
@@ -79407,7 +83388,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -79505,11 +83486,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -79559,7 +83558,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -79632,7 +83631,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -79730,11 +83729,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -79784,7 +83801,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -79857,7 +83874,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -79927,11 +83944,38 @@ let
       options = {
         "action" = mkOption {
           description = "action to perform based on the regex matching.\n\n`Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.\n`DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.\n\nDefault: \"Replace\"";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "replace"
+                "Replace"
+                "keep"
+                "Keep"
+                "drop"
+                "Drop"
+                "hashmod"
+                "HashMod"
+                "labelmap"
+                "LabelMap"
+                "labeldrop"
+                "LabelDrop"
+                "labelkeep"
+                "LabelKeep"
+                "lowercase"
+                "Lowercase"
+                "uppercase"
+                "Uppercase"
+                "keepequal"
+                "KeepEqual"
+                "dropequal"
+                "DropEqual"
+              ]
+            )
+          );
         };
         "modulus" = mkOption {
           description = "modulus to take of the hash of the source label values.\n\nOnly applicable when the action is `HashMod`.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 0 types.int));
         };
         "regex" = mkOption {
           description = "regex defines the regular expression against which the extracted value is matched.";
@@ -79971,7 +84015,7 @@ let
       options = {
         "accessKey" = mkOption {
           description = "accessKey defines the access key to use. https://console.scaleway.com/project/credentials";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "apiURL" = mkOption {
           description = "apiURL defines the API URL to use when doing the server listing requests.";
@@ -79987,7 +84031,7 @@ let
         };
         "nameFilter" = mkOption {
           description = "nameFilter defines a name filter (works as a LIKE) to apply on the server listing request.";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
         "noProxy" = mkOption {
           description = "noProxy defines a comma-separated string that can contain IPs, CIDR notation, domain names\nthat should be excluded from proxying. IP and domain names can\ncontain port numbers.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -79995,11 +84039,11 @@ let
         };
         "port" = mkOption {
           description = "port defines the port to scrape metrics from. If using the public IP address, this must";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 0 types.int)));
         };
         "projectID" = mkOption {
           description = "projectID defines the Project ID of the targets.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "proxyConnectHeader" = mkOption {
           description = "proxyConnectHeader optionally specifies headers to send to\nproxies during CONNECT requests.\n\nIt requires Prometheus >= v2.43.0, Alertmanager >= v0.25.0 or Thanos >= v0.32.0.";
@@ -80019,7 +84063,12 @@ let
         };
         "role" = mkOption {
           description = "role defines the service of the targets to retrieve. Must be `Instance` or `Baremetal`.";
-          type = types.str;
+          type = (
+            types.enum [
+              "Instance"
+              "Baremetal"
+            ]
+          );
         };
         "secretKey" = mkOption {
           description = "secretKey defines the secret key to use when listing targets.";
@@ -80027,7 +84076,7 @@ let
         };
         "tagsFilter" = mkOption {
           description = "tagsFilter defines a tag filter (a server needs to have all defined tags to be listed) to apply on the server listing request.";
-          type = (types.nullOr (types.listOf types.str));
+          type = (types.nullOr (types.listOf (types.withMinLength 1 types.str)));
         };
         "tlsConfig" = mkOption {
           description = "tlsConfig defines the TLS configuration to connect to the Scaleway API.";
@@ -80039,7 +84088,7 @@ let
         };
         "zone" = mkOption {
           description = "zone defines the availability zone of your targets (e.g. fr-par-1).";
-          type = (types.nullOr types.str);
+          type = (types.nullOr (types.withMinLength 1 types.str));
         };
       };
 
@@ -80116,11 +84165,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -80170,7 +84237,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -80243,7 +84310,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -80317,7 +84384,7 @@ let
         };
         "targets" = mkOption {
           description = "targets defines the list of targets for this static configuration.";
-          type = (types.listOf types.str);
+          type = (types.listOf (types.withMinLength 1 types.str));
         };
       };
 
@@ -80349,11 +84416,29 @@ let
         };
         "maxVersion" = mkOption {
           description = "maxVersion defines the maximum acceptable TLS version.\n\nIt requires Prometheus >= v2.41.0 or Thanos >= v0.31.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "minVersion" = mkOption {
           description = "minVersion defines the minimum acceptable TLS version.\n\nIt requires Prometheus >= v2.35.0 or Thanos >= v0.28.0.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "TLS10"
+                "TLS11"
+                "TLS12"
+                "TLS13"
+              ]
+            )
+          );
         };
         "serverName" = mkOption {
           description = "serverName is used to verify the hostname for the targets.";
@@ -80399,7 +84484,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -80468,7 +84553,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
@@ -80572,19 +84657,26 @@ let
         };
         "group" = mkOption {
           description = "group defines the group of the referenced resource.";
-          type = types.str;
+          type = (types.enum [ "monitoring.coreos.com" ]);
         };
         "name" = mkOption {
           description = "name defines the name of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "namespace" = mkOption {
           description = "namespace defines the namespace of the referenced object.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "resource" = mkOption {
           description = "resource defines the type of resource being referenced (e.g. Prometheus, PrometheusAgent, ThanosRuler or Alertmanager).";
-          type = types.str;
+          type = (
+            types.enum [
+              "prometheuses"
+              "prometheusagents"
+              "thanosrulers"
+              "alertmanagers"
+            ]
+          );
         };
       };
 
@@ -80614,11 +84706,11 @@ let
         };
         "status" = mkOption {
           description = "status of the condition.";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "type" = mkOption {
           description = "type of the condition being reported.\nCurrently, only \"Accepted\" is supported.";
-          type = types.str;
+          type = (types.enum [ "Accepted" ]);
         };
       };
 

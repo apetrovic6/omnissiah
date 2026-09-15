@@ -22,6 +22,12 @@
 
   mkConfigFile = fileNameToGenerate: configFile: yaml.generate fileNameToGenerate (importConfig configFile);
 
+  # pkgs.formats.yaml emits a "%YAML 1.1" directive plus a "---" document start.
+  # glance splices $include'd files into the middle of glance.yml, where a
+  # directive is not a valid token ("found character that cannot start any
+  # token"), so drop the header before embedding.
+  readPage = file: lib.removePrefix "%YAML 1.1\n---\n" (builtins.readFile file);
+
   servicesFile = mkConfigFile "services.yml" "services";
   homeFile = mkConfigFile "home.yml" "home";
 in {
@@ -33,8 +39,8 @@ in {
     resources.configMaps.glance-config = {
       data = {
         "glance.yml" = builtins.readFile (cfgDir + "/glance.yml");
-        "home.yml" = builtins.readFile homeFile;
-        "services.yml" = builtins.readFile servicesFile;
+        "home.yml" = readPage homeFile;
+        "services.yml" = readPage servicesFile;
       };
     };
 

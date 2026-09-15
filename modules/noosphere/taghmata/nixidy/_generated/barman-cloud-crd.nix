@@ -76,6 +76,52 @@ let
           wrapped = finalType;
         };
       };
+
+    # Numeric bounds.
+    withMinimum =
+      min: base:
+      lib.types.addCheck base (x: x >= min)
+      // {
+        description = "${base.description} (minimum ${toString min})";
+      };
+    withMaximum =
+      max: base:
+      lib.types.addCheck base (x: x <= max)
+      // {
+        description = "${base.description} (maximum ${toString max})";
+      };
+    withExclusiveMinimum =
+      min: base:
+      lib.types.addCheck base (x: x > min)
+      // {
+        description = "${base.description} (exclusive minimum ${toString min})";
+      };
+    withExclusiveMaximum =
+      max: base:
+      lib.types.addCheck base (x: x < max)
+      // {
+        description = "${base.description} (exclusive maximum ${toString max})";
+      };
+    withMultipleOf =
+      m: base:
+      lib.types.addCheck base (x: mod x m == 0)
+      // {
+        description = "${base.description} (multiple of ${toString m})";
+      };
+
+    # String constraints.
+    withMinLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x >= n)
+      // {
+        description = "${base.description} (min length ${toString n})";
+      };
+    withMaxLength =
+      n: base:
+      lib.types.addCheck base (x: stringLength x <= n)
+      // {
+        description = "${base.description} (max length ${toString n})";
+      };
   };
 
   mkOptionDefault = mkOverride 1001;
@@ -249,7 +295,7 @@ let
         };
         "destinationPath" = mkOption {
           description = "The path where to store the backup (i.e. s3://bucket/path/to/folder)\nthis path, with different destination folders, will be used for WALs\nand for data";
-          type = types.str;
+          type = (types.withMinLength 1 types.str);
         };
         "endpointCA" = mkOption {
           description = "EndpointCA store the CA bundle of the barman endpoint.\nUseful when using self-signed certificates to avoid\nerrors with certificate issuer and barman-cloud-wal-archive";
@@ -431,11 +477,27 @@ let
         };
         "compression" = mkOption {
           description = "Compress a backup file (a tar file per tablespace) while streaming it\nto the object store. Available options are empty string (no\ncompression, default), `gzip`, `bzip2`, `lz4`, and `snappy`.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "bzip2"
+                "gzip"
+                "lz4"
+                "snappy"
+              ]
+            )
+          );
         };
         "encryption" = mkOption {
           description = "Whenever to force the encryption of files (if the bucket is\nnot already configured for that).\nAllowed options are empty string (use the bucket policy, default),\n`AES256` and `aws:kms`";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "AES256"
+                "aws:kms"
+              ]
+            )
+          );
         };
         "immediateCheckpoint" = mkOption {
           description = "Control whether the I/O workload for the backup initial checkpoint will\nbe limited, according to the `checkpoint_completion_target` setting on\nthe PostgreSQL server. If set to true, an immediate checkpoint will be\nused, meaning PostgreSQL will complete the checkpoint as soon as\npossible. `false` by default.";
@@ -443,7 +505,7 @@ let
         };
         "jobs" = mkOption {
           description = "The number of parallel jobs to be used to upload the backup, defaults\nto 2";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 1 types.int));
         };
         "restoreAdditionalCommandArgs" = mkOption {
           description = "Additional arguments that can be appended to the 'barman-cloud-restore'\ncommand-line invocation. These arguments provide flexibility to customize\nthe data restore process further, according to specific requirements or\nconfigurations.\n\nExample:\nIn a scenario where specialized restore options are required, such as setting\na specific read timeout or defining custom behavior, users can use this field\nto specify additional command arguments.\n\nNote:\nIt's essential to ensure that the provided arguments are valid and supported\nby the 'barman-cloud-restore' command, to avoid potential errors or unintended\nbehavior during execution.";
@@ -637,15 +699,33 @@ let
         };
         "compression" = mkOption {
           description = "Compress a WAL file before sending it to the object store. Available\noptions are empty string (no compression, default), `gzip`, `bzip2`,\n`lz4`, `snappy`, `xz`, and `zstd`.";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "bzip2"
+                "gzip"
+                "lz4"
+                "snappy"
+                "xz"
+                "zstd"
+              ]
+            )
+          );
         };
         "encryption" = mkOption {
           description = "Whenever to force the encryption of files (if the bucket is\nnot already configured for that).\nAllowed options are empty string (use the bucket policy, default),\n`AES256` and `aws:kms`";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "AES256"
+                "aws:kms"
+              ]
+            )
+          );
         };
         "maxParallel" = mkOption {
           description = "Number of WAL files to be either archived in parallel (when the\nPostgreSQL instance is archiving to a backup object store) or\nrestored in parallel (when a PostgreSQL standby is fetching WAL\nfiles from a recovery object store). If not specified, WAL files\nwill be processed one at a time. It accepts a positive integer as a\nvalue - with 1 being the minimum accepted value.";
-          type = (types.nullOr types.int);
+          type = (types.nullOr (types.withMinimum 1 types.int));
         };
         "restoreAdditionalCommandArgs" = mkOption {
           description = "Additional arguments that can be appended to the 'barman-cloud-wal-restore'\ncommand-line invocation. These arguments provide flexibility to customize\nthe WAL restore process further, according to specific requirements or configurations.\n\nExample:\nIn a scenario where specialized backup options are required, such as setting\na specific timeout or defining custom behavior, users can use this field\nto specify additional command arguments.\n\nNote:\nIt's essential to ensure that the provided arguments are valid and supported\nby the 'barman-cloud-wal-restore' command, to avoid potential errors or unintended\nbehavior during execution.";
@@ -683,7 +763,17 @@ let
         };
         "logLevel" = mkOption {
           description = "The log level for PostgreSQL instances. Valid values are: `error`, `warning`, `info` (default), `debug`, `trace`";
-          type = (types.nullOr types.str);
+          type = (
+            types.nullOr (
+              types.enum [
+                "error"
+                "warning"
+                "info"
+                "debug"
+                "trace"
+              ]
+            )
+          );
         };
         "resources" = mkOption {
           description = "Resources define cpu/memory requests and limits for the sidecar that runs in the instance pods.";
@@ -793,7 +883,7 @@ let
 
       options = {
         "key" = mkOption {
-          description = "The key to select.";
+          description = "The key to select from the ConfigMap's Data field.\nKeys in the BinaryData field are not currently propagated to container env vars.";
           type = types.str;
         };
         "name" = mkOption {
