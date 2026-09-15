@@ -103,7 +103,7 @@ in {
             containers = [
               {
                 name = "glance";
-                image = "glanceapp/glance:v0.8.5";
+                image = "glanceapp/glance:v0.8.6";
                 ports = [
                   {
                     containerPort = 8080;
