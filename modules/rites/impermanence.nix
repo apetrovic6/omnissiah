@@ -52,6 +52,7 @@
             "Games"
             ".android"
             ".config/attic"
+            ".config/herdr"
             ".config/pangolin"
             ".config/secretspec"
             ".config/Bitwarden"

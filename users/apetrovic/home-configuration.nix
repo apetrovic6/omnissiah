@@ -103,7 +103,7 @@ in {
       init.defaultBranch = "master";
       pull.rebase = true;
       push.autoSetupRemote = true;
-      pull.rebase.autoStash = true
+      rebase.autoStash = true;
 
       url."git@github.com:devzero-inc/".insteadOf = "https://github.com/devzero-inc/";
     };
@@ -121,6 +121,16 @@ in {
       opsee = {
         type = "http";
         url = "https://mcp.api.opsee.ai/mcp";
+      };
+
+      # Kaneo task tracker on cerberus (machines/cerberus/kaneo.nix). Auth is
+      # OAuth 2.1 + PKCE with dynamic client registration, so there is no token
+      # to store here -- run `/mcp` once to authorise. LAN/VPN only: the vhost
+      # is deliberately not published through Pangolin, so this server shows as
+      # failed when off-network.
+      kaneo = {
+        type = "http";
+        url = "https://kaneo.ugalabugala.org/api/mcp";
       };
     };
   };

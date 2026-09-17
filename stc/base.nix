@@ -39,6 +39,8 @@
       )
     ];
 
+    services.openssh.settings.MaxAuthTries = 10;
+
     programs.nix-index-database.comma.enable = true;
     # Firmware updates (UEFI / TB / docks, etc.)
     services.fwupd.enable = true;
