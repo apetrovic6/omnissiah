@@ -7936,7 +7936,7 @@ let
         };
         "maxRequestBodyBytes" = mkOption {
           description = "MaxRequestBodyBytes defines the maximum size for the request body.\nDefault is `-1`, which means no limit.";
-          type = (types.nullOr (types.withMinimum - 1 types.int));
+          type = (types.nullOr (types.withMinimum (-1) types.int));
         };
         "retryNonIdempotentMethod" = mkOption {
           description = "RetryNonIdempotentMethod activates the retry for non-idempotent methods (POST, LOCK, PATCH)";
@@ -8141,7 +8141,7 @@ let
         };
         "maxIdleConnsPerHost" = mkOption {
           description = "MaxIdleConnsPerHost controls the maximum idle (keep-alive) to keep per-host.";
-          type = (types.nullOr (types.withMinimum - 1 types.int));
+          type = (types.nullOr (types.withMinimum (-1) types.int));
         };
         "maxVersion" = mkOption {
           description = "MaxVersion defines the maximum TLS version to use when contacting backend servers.";

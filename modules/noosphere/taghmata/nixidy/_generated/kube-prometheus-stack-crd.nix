@@ -22699,7 +22699,7 @@ let
       options = {
         "maxSamplesPerSend" = mkOption {
           description = "maxSamplesPerSend defines the maximum number of metadata samples per send.\n\nIt requires Prometheus >= v2.29.0.";
-          type = (types.nullOr (types.withMinimum - 1 types.int));
+          type = (types.nullOr (types.withMinimum (-1) types.int));
         };
         "send" = mkOption {
           description = "send defines whether metric metadata is sent to the remote storage or not.\n\nThe setting is ignored when Remote Write message's version 2.0 is used.";
@@ -23761,7 +23761,7 @@ let
       options = {
         "goGC" = mkOption {
           description = "goGC defines the Go garbage collection target percentage. Lowering this number may increase the CPU usage.\nSee: https://tip.golang.org/doc/gc-guide#GOGC";
-          type = (types.nullOr (types.withMinimum - 1 types.int));
+          type = (types.nullOr (types.withMinimum (-1) types.int));
         };
       };
 
@@ -36336,7 +36336,7 @@ let
       options = {
         "maxSamplesPerSend" = mkOption {
           description = "maxSamplesPerSend defines the maximum number of metadata samples per send.\n\nIt requires Prometheus >= v2.29.0.";
-          type = (types.nullOr (types.withMinimum - 1 types.int));
+          type = (types.nullOr (types.withMinimum (-1) types.int));
         };
         "send" = mkOption {
           description = "send defines whether metric metadata is sent to the remote storage or not.\n\nThe setting is ignored when Remote Write message's version 2.0 is used.";
@@ -41144,11 +41144,11 @@ let
       options = {
         "end" = mkOption {
           description = "end of the inclusive range";
-          type = (types.nullOr (types.withMaximum 31 (types.withMinimum - 31 types.int)));
+          type = (types.nullOr (types.withMaximum 31 (types.withMinimum (-31) types.int)));
         };
         "start" = mkOption {
           description = "start of the inclusive range";
-          type = (types.nullOr (types.withMaximum 31 (types.withMinimum - 31 types.int)));
+          type = (types.nullOr (types.withMaximum 31 (types.withMinimum (-31) types.int)));
         };
       };
 
@@ -63141,7 +63141,7 @@ let
       options = {
         "maxSamplesPerSend" = mkOption {
           description = "maxSamplesPerSend defines the maximum number of metadata samples per send.\n\nIt requires Prometheus >= v2.29.0.";
-          type = (types.nullOr (types.withMinimum - 1 types.int));
+          type = (types.nullOr (types.withMinimum (-1) types.int));
         };
         "send" = mkOption {
           description = "send defines whether metric metadata is sent to the remote storage or not.\n\nThe setting is ignored when Remote Write message's version 2.0 is used.";
@@ -64102,7 +64102,7 @@ let
       options = {
         "goGC" = mkOption {
           description = "goGC defines the Go garbage collection target percentage. Lowering this number may increase the CPU usage.\nSee: https://tip.golang.org/doc/gc-guide#GOGC";
-          type = (types.nullOr (types.withMinimum - 1 types.int));
+          type = (types.nullOr (types.withMinimum (-1) types.int));
         };
       };
 
