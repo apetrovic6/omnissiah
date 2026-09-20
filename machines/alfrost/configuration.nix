@@ -12,6 +12,7 @@ in {
 
   nixpkgs.overlays = [
     self.overlays.helix
+    self.overlays.go125-shim
   ];
 
   disko.devices.disk.main.imageSize = "3500M"; # adjust as needed

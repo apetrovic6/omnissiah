@@ -224,6 +224,20 @@ in {
     allowedUDPPorts = [80 443 21820];
   };
 
+  # The provider's firewall is stateless and matches only on destination port,
+  # so systemd-timesyncd's replies — which come back to a random ephemeral port,
+  # not 123 — were silently dropped. NTP never synced and the clock drifted
+  # unchecked (31s by 2026-08-29, which broke Pangolin's TOTP login: TOTP uses
+  # 30s windows, so a >30s offset rejects every code).
+  #
+  # Classic ntpd sends *from* port 123 as well as to it, so the provider's
+  # "incoming UDP 123 ACCEPT" rule matches the replies. Deliberately NOT adding
+  # 123 to allowedUDPPorts: the local firewall's conntrack already lets the
+  # replies through as ESTABLISHED, and opening it would expose ntpd as an
+  # amplification reflector.
+  services.timesyncd.enable = false;
+  services.ntp.enable = true;
+
   services.openssh = {
     enable = true;
     ports = [22];
@@ -234,6 +248,7 @@ in {
 
   nixpkgs.overlays = [
     self.overlays.helix
+    self.overlays.go125-shim
   ];
 
   nix = {

@@ -149,4 +149,12 @@
       vendorHash = "sha256-+zMSzNbqmWm/DXL2xMUd5uPP5tSIybsRokwJ2zd0pf0=";
     });
   };
+
+  # sops-nix's sops-install-secrets still asks for buildGo125Module, which
+  # nixpkgs removed on 2026-09-15 (Go 1.25 EOL). Upstream has not bumped it
+  # yet, and it comes in transitively via clan-core, so shim the alias back.
+  # Drop this once sops-nix builds with a current Go.
+  flake.overlays.go125-shim = final: _prev: {
+    buildGo125Module = final.buildGo126Module;
+  };
 }
