@@ -190,6 +190,43 @@
       };
     };
 
+    # Named `ncps-backup` for the same reason as `forgejo-backup` below:
+    # garage-main already owns an `ncps` bucket/key pair (the binary cache's
+    # own NAR storage) in this namespace. This one only holds CNPG backups and
+    # WAL for pg-ncps-rev1.
+    resources.garageKeys.ncps-backup = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "ncps-backup";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
+        secretTemplate = {
+          name = "ncps-backup-s3-secret-key";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "ncps";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "ncps";
+          };
+        };
+      };
+    };
+
+    resources.garageBuckets.ncps-backup = {
+      metadata = {inherit namespace;};
+      spec.clusterRef.name = "garage-backup";
+    };
+
     # Named `forgejo-backup` rather than `forgejo`: the garage-main cluster
     # already owns a `forgejo` bucket/key pair (Gitea attachments + LFS) in
     # this same namespace, and its secret is `forgejo-s3-secret-key`.

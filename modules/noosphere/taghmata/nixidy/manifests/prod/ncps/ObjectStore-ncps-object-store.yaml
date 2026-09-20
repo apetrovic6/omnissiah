@@ -1,0 +1,26 @@
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: ncps-object-store
+  namespace: ncps
+spec:
+  configuration:
+    destinationPath: s3://ncps-backup/backups
+    endpointURL: http://garage-backup.garage-operator.svc.cluster.local:3900
+    s3Credentials:
+      accessKeyId:
+        key: MINIO_ACCESS_KEY_ID
+        name: ncps-backup-s3-secret-key
+      secretAccessKey:
+        key: MINIO_SECRET_ACCESS_KEY
+        name: ncps-backup-s3-secret-key
+    wal:
+      compression: gzip
+  instanceSidecarConfiguration:
+    env:
+      - name: AWS_DEFAULT_REGION
+        value: backup
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required

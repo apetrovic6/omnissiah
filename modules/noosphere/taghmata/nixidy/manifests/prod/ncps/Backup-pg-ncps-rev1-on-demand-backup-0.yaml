@@ -1,0 +1,11 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: pg-ncps-rev1-on-demand-backup-0
+  namespace: ncps
+spec:
+  cluster:
+    name: pg-ncps-rev1
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

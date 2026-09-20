@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    category: storage
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Nix Binary Cache
+    glance/icon: di:ncps
+    glance/id: ncps
+    glance/name: Ncps
+    glance/parent: ncps
+    glance/url: https://ncps.noosphere.uk
+  labels:
+    app.kubernetes.io/instance: ncps
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: ncps
+    app.kubernetes.io/version: v0.9.4
+    helm.sh/chart: ncps-v0.9.4
+  name: ncps
+  namespace: ncps
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ncps.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: ncps
+                port:
+                  number: 8501
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - ncps.noosphere.uk
+      secretName: ncps-tls

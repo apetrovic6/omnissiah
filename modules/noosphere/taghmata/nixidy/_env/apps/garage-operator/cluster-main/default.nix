@@ -87,6 +87,38 @@
       };
     };
 
+    resources.garageBuckets.ncps = {
+      metadata = {inherit namespace;};
+      spec.clusterRef.name = "garage-main";
+    };
+
+    resources.garageKeys.ncps = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-main";
+        bucketPermissions = [
+          {
+            bucketRef.name = "ncps";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+        # The key names are left at the operator's defaults (access-key-id /
+        # secret-access-key) on purpose: those are exactly the two keys the
+        # ncps chart reads when config.storage.s3.existingSecret is set.
+        secretTemplate = {
+          name = "ncps-s3-secret-key";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "ncps";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "ncps";
+          };
+        };
+      };
+    };
+
     resources.garageKeys.forgejo = {
       metadata = {inherit namespace;};
       spec = {

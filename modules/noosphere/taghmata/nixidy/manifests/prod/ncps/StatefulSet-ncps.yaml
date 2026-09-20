@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/instance: ncps
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: ncps
+    app.kubernetes.io/version: v0.9.4
+    helm.sh/chart: ncps-v0.9.4
+  name: ncps
+  namespace: ncps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: ncps
+      app.kubernetes.io/name: ncps
+  serviceName: ncps
+  template:
+    metadata:
+      annotations:
+        checksum/config: 478c1a9429c5a56f0f1a3685baa9b48423542048ed1b909ca7e5699fe6b0ed07
+        checksum/secret: 383f8c854d24e578cee91ea1e0ad61c6d88f3ba249c41a04af78080872f255af
+        checksum/signing-key-secret: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+      labels:
+        app.kubernetes.io/instance: ncps
+        app.kubernetes.io/name: ncps
+    spec:
+      containers:
+        - args:
+            - --config
+            - /etc/ncps/config.yaml
+            - serve
+            - --cache-secret-key-path
+            - /etc/ncps/secrets/signing-key
+          command:
+            - /bin/ncps
+          env:
+            - name: CACHE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  key: uri
+                  name: pg-ncps-rev1-app
+            - name: CACHE_STORAGE_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: access-key-id
+                  name: ncps-s3-secret-key
+            - name: CACHE_STORAGE_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: secret-access-key
+                  name: ncps-s3-secret-key
+          image: ghcr.io/kalbasit/ncps:v0.9.4
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          name: ncps
+          ports:
+            - containerPort: 8501
+              name: http
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources: {}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - mountPath: /etc/ncps/config.yaml
+              name: config
+              readOnly: true
+              subPath: config.yaml
+            - mountPath: /tmp/ncps
+              name: tmp
+            - mountPath: /etc/ncps/secrets/signing-key
+              name: signing-key
+              readOnly: true
+              subPath: signing-key
+      initContainers:
+        - args:
+            - up
+          command:
+            - /bin/dbmate
+          env:
+            - name: CACHE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  key: uri
+                  name: pg-ncps-rev1-app
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  key: uri
+                  name: pg-ncps-rev1-app
+          image: ghcr.io/kalbasit/ncps:v0.9.4
+          imagePullPolicy: IfNotPresent
+          name: migration
+          resources: {}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - mountPath: /tmp/ncps
+              name: tmp
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: ncps
+      volumes:
+        - configMap:
+            name: ncps
+          name: config
+        - emptyDir: {}
+          name: tmp
+        - name: signing-key
+          secret:
+            secretName: ncps-signing-key
