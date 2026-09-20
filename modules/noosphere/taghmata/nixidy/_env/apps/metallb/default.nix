@@ -23,8 +23,14 @@
           };
         };
         spec = {
+          # Starts at .251, not .250: an unidentified LAN device has
+          # 192.168.1.250 set as a static IP and answers ARP for it with a
+          # randomly-changing locally-administered (privacy) MAC whenever it
+          # wakes. That intermittently blackholed every *.noosphere.uk service
+          # for whichever clients cached the wrong MAC. Do not put .250 back in
+          # the pool unless that device has actually been found and fixed.
           addresses = [
-            "192.168.1.250-192.168.1.253"
+            "192.168.1.251-192.168.1.253"
           ];
         };
       };

@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage
     app.kubernetes.io/version: v2.4.1
-    helm.sh/chart: garage-0.10.2
+    helm.sh/chart: garage-0.10.3
   name: garage-s3-api
   namespace: garage
 spec:
