@@ -18,7 +18,12 @@ in {
     self.nixosModules.vars
     self.nixosModules.smb
     self.inputs.nixvirt.nixosModules.default
+
+    ./vllm.nix
+    ./llama-swap.nix
   ];
+
+  nixpkgs.config.cudaCapabilities = ["8.6"];
 
   nixpkgs = {
     overlays = [
