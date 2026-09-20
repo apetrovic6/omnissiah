@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: ncps-signing-key
+    namespace: ncps
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:DshMkic99FlUcBds/a0DSQ==,iv:G9HUnyB1ZAQWUElx5qQIv3te5GoLO2dxZhuM9MIue2g=,tag:ylkg8Phh5ueiFFUmJoGDWg==,type:str]
+          type: ENC[AES256_GCM,data:2uLCYBKc,iv:JnQiTOTegmtIN3iktLDXsXdQjXkjwQNkiWPUt8UjDNM=,tag:9jOqKNTkJQ/lPh8qLqnB7g==,type:str]
+          stringData:
+            signing-key: ENC[AES256_GCM,data:kzDqTu9t6l72q9vkYyVPO9FjGKr5eKFbQ5KvCW1/bt0Qiqf6EWzhQxuChKSa69Qj2VFFgoCNXqCg+ovwlj6sNQxZDt9MdDprGrnoA3aisqJBA/NhObqUC2wP41UFv0DX7NPJfaaMfhJUXBUi,iv:JHPRFZuAEJGOY1fDzoGTuwDpcfN5GfioL1eOHR8ilRY=,tag:OuE44kx68sJYQt+OUwpiHA==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSB2ZHJyNjc0RlZMbjlpVHM1
+            azBHQ2hBQlpWSGJoMlRsNGNhdkFzdHJRelJnCkpncEZOeUVTRjJkb2d6d1VYSjJU
+            c0RrcG5MaG1zNmpSRW5EZHp6RW82RVkKLS0tIERFZ0VsUkJPL3h5Q0w2c040WmhI
+            cGVRQldrVFRMV0VSMEJFMzYxOEhOcDQKb/ROm3W5rOsBdwp9wxxvre1CrAtRSQVc
+            ZHv65HSSaB741ARwIbRBTKvy1NZo9X3FmGzs+IAuIBUJRCgYpvvT/g==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+    encrypted_suffix: Templates
+    lastmodified: "2026-09-20T10:23:44Z"
+    mac: ENC[AES256_GCM,data:xLRXopil/Utu0hbGsVkoRSbXci/mWCb10dWQHV2aW1SjaFVV7D+hatvPk8gqKDFhct50euhLvyr8o1CrFW63Skcs6gMjRKZUMenZTaLQqbSmkVGfQR63PHUCaqJI4lRyn7oQSqq0Uq41nznqAvoxO5JHwDdCVm7N9rDDyY26AKg=,iv:5+6HTAsyIng1mLkmiGdJnIYx4eLW1CH6UD4Uk0i8Na0=,tag:/2FGhnrbC/BAg9IwrjvGlg==,type:str]
+    version: 3.13.3
