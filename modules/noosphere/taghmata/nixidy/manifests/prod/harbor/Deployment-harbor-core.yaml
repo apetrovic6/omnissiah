@@ -81,7 +81,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: CONFIG_OVERWRITE_JSON
-                  name: harbor-oidc-config
+                  name: harbor-oidc
           envFrom:
             - configMapRef:
                 name: harbor-core

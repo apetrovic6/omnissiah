@@ -181,15 +181,33 @@ in {
     launch_url = baseUrl;
   };
 
+  # Harbor takes its whole OIDC config as a single JSON blob in
+  # CONFIG_OVERWRITE_JSON, which harbor-core reads once at startup. Rendering
+  # that blob here keeps the client secret inside OpenTofu. It used to be
+  # exported as plain client-id/client-secret keys and then re-typed by hand
+  # into the `harbor-oidc-secret` clan var prompt, which is how a stray `-d`
+  # ended up prefixed to the secret and broke the token exchange.
   resource.kubernetes_secret_v1.harbor-oidc = {
     metadata = {
       name = "harbor-oidc";
       namespace = "harbor";
     };
 
-    data = {
-      client-id = ref.pocketid_client.harbor.id;
-      client-secret = ref.pocketid_client.harbor.client_secret;
-    };
+    # `''` opens the Nix string; the `''${` on the next line escapes down to a
+    # literal `${`, so OpenTofu (not Nix) evaluates the interpolation.
+    data.CONFIG_OVERWRITE_JSON = ''
+      ''${jsonencode({
+        auth_mode          = "oidc_auth"
+        oidc_name          = "Pocket ID"
+        oidc_endpoint      = "https://id.${domain}"
+        oidc_client_id     = pocketid_client.harbor.id
+        oidc_client_secret = pocketid_client.harbor.client_secret
+        oidc_groups_claim  = "groups"
+        oidc_admin_group   = "Admin"
+        oidc_scope         = "openid,profile,email"
+        oidc_verify_cert   = true
+        oidc_auto_onboard  = true
+        oidc_user_claim    = "preferred_username"
+      })}'';
   };
 }

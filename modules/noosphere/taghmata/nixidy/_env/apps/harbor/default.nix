@@ -31,7 +31,6 @@ in {
       (builtins.readFile ../../../../../../../vars/shared/harbor-redis-password-secret/harbor-redis-password-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/pg-harbor-postgres-secret/pg-harbor-postgres-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/harbor-core-secret/harbor-core-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/harbor-oidc-secret/harbor-oidc-secret/value)
 
       ''
         apiVersion: networking.k8s.io/v1
@@ -233,12 +232,14 @@ in {
         core = let
           harborCoreSecret = "harbor-core-secret";
         in {
-          # OIDC Configuration via CONFIG_OVERWRITE_JSON
+          # OIDC config. The secret is rendered and owned by OpenTofu
+          # (modules/noosphere/taghmata/_tofunix/pocket-id/default.nix) so the
+          # Pocket ID client secret is never copied by hand.
           extraEnvVars = [
             {
               name = "CONFIG_OVERWRITE_JSON";
               valueFrom.secretKeyRef = {
-                name = "harbor-oidc-config";
+                name = "harbor-oidc";
                 key = "CONFIG_OVERWRITE_JSON";
               };
             }

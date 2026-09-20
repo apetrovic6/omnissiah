@@ -42,7 +42,7 @@ in {
     name = "chirp-client";
     description = "Chirp client";
     private = false;
-    default_branch = "master";
+    default_branch = "main";
     has_pull_requests = true;
     has_actions = true;
     has_issues = true;

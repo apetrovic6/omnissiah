@@ -27,7 +27,7 @@ in {
     ./apps/harbor
     ./apps/glances
     ./apps/reflector
-    ./apps/keycloak-operator
+    # ./apps/keycloak-operator
     ./apps/forgejo
     ./apps/searxng
     ./apps/garage-operator
