@@ -10,7 +10,7 @@
     };
 
     lanzaboote = {
-      url = "github:nix-community/lanzaboote/v0.4.3";
+      url = "github:nix-community/lanzaboote/v1.1.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -78,8 +78,7 @@
     };
 
     nixhelm = {
-      # url = "path:/home/apetrovic/clan/nixhelm";
-      url = "github:apetrovic6/nixhelm";
+      url = "github:nix-community/nixhelm";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -89,11 +88,6 @@
     };
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
-
-    nvf = {
-      url = "github:apetrovic6/nvf";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
 
     darwin = {
       url = "github:nix-darwin/nix-darwin";
@@ -159,7 +153,12 @@
         pkgsForSystem = system:
           import inputs.nixpkgs {
             inherit system;
-            config.allowUnfree = true;
+            config = {
+              allowUnfree = true;
+              allowInsecurePredicate = pkg: inputs.nixpkgs.lib.getName pkg == "librewolf";
+              permittedInsecurePackages = ["librewolf-151.0.2-1"];
+            };
+            nix.settings.extra-experimental-features = ["pipe-operators"];
           };
       };
 
@@ -170,7 +169,54 @@
         system,
         lib,
         ...
-      }: {
+      }: let
+        # nixhelm's kubernetes-csi/csi-driver-nfs pin is unusable:
+        #   - its default (version 0.0.0) is the master *dev* chart, which
+        #     defaults to gcr.io/k8s-staging-sig-storage/nfsplugin:canary and
+        #     passes --max-snapshot-* flags the cached canary binary rejects,
+        #     crashlooping csi-nfs-controller;
+        #   - its 4.13.4 pin records a chartHash that doesn't match the
+        #     published tarball.
+        # Fetch the released chart directly instead.
+        csi-driver-nfs-chart = pkgs.fetchzip {
+          url = "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts/v4.13.4/csi-driver-nfs-4.13.4.tgz";
+          hash = "sha256-4WszOpzLQ5tMIWgLQRLfBQVgf3hBOxYqsEpDyy3/lE4=";
+        };
+
+        # nixhelm pins dagger-helm to the vanity host oci://registry.dagger.io,
+        # which is a proxy in front of ghcr.io. Its 401 challenge advertises
+        #   scope="repository:dagger-helm:pull"
+        # with no owner segment, so ghcr.io's token endpoint rejects it:
+        #   GET https://ghcr.io/token?scope=repository%3Adagger-helm%3Apull
+        #   -> 400 name invalid: invalid repository name
+        # That makes charts.dagger-helm.dagger-helm unfetchable and fails the
+        # whole prod env. The identical artifact is served from the real
+        # repository, so pull it from there. Same body as nix-kube-generators'
+        # downloadHelmChart; inlined to avoid taking on another flake input.
+        dagger-helm-chart = pkgs.stdenv.mkDerivation {
+          name = "helm-chart-ghcr.io-dagger-dagger-helm-0.21.9";
+          nativeBuildInputs = [pkgs.cacert];
+
+          phases = ["installPhase"];
+          installPhase = ''
+            export HELM_CACHE_HOME="$TMP/.nix-helm-build-cache"
+            out_dir="$TMP/temp-chart-output"
+            mkdir -p "$out_dir"
+
+            ${pkgs.kubernetes-helm}/bin/helm pull \
+              --version 0.21.9 \
+              oci://ghcr.io/dagger/dagger-helm \
+              -d "$out_dir" \
+              --untar
+
+            mv "$out_dir/dagger-helm" "$out"
+          '';
+
+          outputHashMode = "recursive";
+          outputHashAlgo = "sha256";
+          outputHash = "sha256-TubGkb8PB79zLFfcEuqm4AFzxW0SmMZumubTlCS7GWY=";
+        };
+      in {
         checks = {
           enginseer =
             self.nixosConfigurations.enginseer.config.system.build.toplevel;
@@ -203,7 +249,10 @@
             alloy-operator.chart = nixhelm.chartsDerivations.${system}.grafana.alloy-operator;
             kube-prometheus-stack.chart = nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
             prometheus.chart = nixhelm.chartsDerivations.${system}.prometheus-community.prometheus;
-            csi-driver-nfs.chart = nixhelm.chartsDerivations.${system}.kubernetes-csi.csi-driver-nfs;
+            csi-driver-nfs.chart = csi-driver-nfs-chart;
+            ncps = {
+              chart = nixhelm.chartsDerivations.${system}.kalbasit.ncps;
+            };
 
             barman-cloud.chart = nixhelm.chartsDerivations.${system}.cloudnative-pg.plugin-barman-cloud;
             garage-operator.chart = pkgs.runCommand "garage-operator-chart" {} ''
@@ -213,6 +262,8 @@
 
           # Extra charts beyond nixhelm
           extraCharts = with self.inputs; {
+            "kubernetes-csi/csi-driver-nfs" = csi-driver-nfs-chart;
+            "dagger-helm/dagger-helm" = dagger-helm-chart;
             "deuxfleurs/garage" = "${garage}/script/helm/garage";
             "lukasdietrich/glance-k8s" = "${glance-k8s}/charts/glance-k8s";
             "woodpecker-ci/woodpecker" = "${woodpecker-ci}/charts/woodpecker";
@@ -256,14 +307,14 @@
               (tofu.mkOpentofuProvider {
                 owner = "hashicorp";
                 repo = "local";
-                version = "2.6.2";
-                hash = "sha256-c2a7HtL1XePZs5WMLsrJ5sSdk/6VSjky37OkQpsYO8s=";
+                version = "2.9.1";
+                hash = "sha256-awO5iaFNVaN3CYjS0ZauX+E7uuQ19tgZPPSSVTuOjq0=";
               })
               (tofu.mkOpentofuProvider {
                 owner = "goharbor";
                 repo = "harbor";
-                version = "3.11.3";
-                hash = "sha256-jBRXIBX80PdaP3urDXsBE98QkyFB14ZwUOdZ2E33pVo=";
+                version = "3.12.5";
+                hash = "sha256-DuGy/HBCVR4HKn9dwHzLeQbIakAOYndGvogX6RILmyc=";
               })
 
               # (tofu.mkOpentofuProvider {
@@ -276,8 +327,8 @@
               (tofu.mkOpentofuProvider {
                 owner = "adyxax";
                 repo = "forgejo";
-                version = "1.5.0";
-                hash = "sha256-dCK3Po8Tk+UKo2Ey4ewVdkP6l4LdCNdX8aQe+NuS824=";
+                version = "1.5.8";
+                hash = "sha256-SCw6/yyBlwRNPA3J2gcb/0WIQMxgtFSLnMvDs9besLE=";
               })
 
               # (tofu.mkOpentofuProvider {
@@ -290,22 +341,22 @@
               (tofu.mkOpentofuProvider {
                 owner = "carlpett";
                 repo = "sops";
-                version = "1.3.0";
-                hash = "sha256-fs+RFt8afdzv8wyMUl+zxgGSxKOdGEerL3k3TTjio/g=";
+                version = "1.4.1";
+                hash = "sha256-56pJdj4qrcCpZ3BoB5Uw5NEZ1x6fH+uIV39UOkPKpg4=";
               })
 
               (tofu.mkOpentofuProvider {
                 owner = "trozz";
                 repo = "pocketid";
-                version = "0.1.7";
-                hash = "sha256-3mz7sig4GJZyI4hdnt4QaYnuPM/IbhdA1Wh7Ww1raCE=";
+                version = "2.3.0";
+                hash = "sha256-splZqWbXZHqXBTz0eNiKYE7QlCPPOlyMt40+5mFlF88=";
               })
 
               (tofu.mkOpentofuProvider {
                 owner = "hashicorp";
                 repo = "kubernetes";
-                version = "3.0.1";
-                hash = "sha256-0276D/0RxbMLcwXF8sl/j1BDk8NEv6Orm/Y/98EhK2o=";
+                version = "3.2.1";
+                hash = "sha256-Sh2s1fyGrtSQG/V2yT1wQxT32j+vlYVpTFeJmFcxMzo=";
               })
             ];
             moduleConfig = ./modules/noosphere/taghmata/_tofunix/default.nix;

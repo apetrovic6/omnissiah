@@ -16,6 +16,7 @@ in {
     self.nixosModules.librarium
     self.nixosModules.impermanence
     ./nopresh.nix
+    ./kaneo.nix
     ./forgejo-runner.nix
     ./dagger.nix
     # self.inputs.impermanence.nixosModules.impermanence
@@ -25,11 +26,10 @@ in {
   boot.kernelModules = ["i915"];
   hardware.graphics.enable = true;
 
+  environment.systemPackages = [
+    (self.inputs.dagger-cli.packages.${pkgs.system}.dagger)
+  ];
 
-environment.systemPackages = [
-      (self.inputs.dagger-cli.packages.${pkgs.system}.dagger)
-];
-  
   hardware.graphics.extraPackages = with pkgs; [
     intel-media-driver
     libva-vdpau-driver
@@ -114,10 +114,30 @@ environment.systemPackages = [
 
   users.users.plex.extraGroups = ["media"];
 
+  # Pin the client WireGuard port so remote clients have a STABLE endpoint.
+  #
+  # This router does symmetric NAT: it hands out a different external port per
+  # destination and stops preserving the internal port under load. Pangolin
+  # learns the site endpoint from newt's packets to gerbil and advertises that
+  # to clients, so on 2026-08-29 it was telling phones to dial
+  # 89.172.33.226:57404 while newt's live external port was 51211 — every remote
+  # handshake vanished and olm clients re-registered in a loop every ~7 min.
+  # LAN clients (e.g. phalanx) were unaffected because they never traverse NAT,
+  # which makes this look client-specific when it is not.
+  #
+  # REQUIRES a matching static port-forward on the router:
+  #   UDP 51820 -> 192.168.1.105:51820
+  # Diagnose recurrence with:
+  #   sqlite3 db.sqlite 'SELECT endpoint, listenPort FROM sites;'
+  # and compare against the live source port gerbil sees:
+  #   tcpdump -ni ens3 'udp port 21820 and src host <home-wan-ip>'
+  networking.firewall.allowedUDPPorts = [51820];
+
   services.newt = {
     enable = true;
     # package = newtOverride;
     settings.endpoint = "https://ugalabugala.org";
+    settings.port = "51820";
     environmentFile = config.clan.core.vars.generators.newt.files."newt.env".path;
 
     blueprint = let
@@ -126,23 +146,19 @@ environment.systemPackages = [
       # Check with: sqlite3 /var/lib/pangolin/config/db/db.sqlite 'select niceId from sites;'
       siteCerberus = "downright-southern-red-backed-salamander";
     in {
-      public-resources = {
-        plex = {
-          name = "Plex";
-          mode = "http";
-          full-domain = "plex.ugalabugala.org";
-          targets = [
-            {
-              site = siteCerberus;
-              hostname = "192.168.1.105";
-              port = 32400;
-              method = "http";
-            }
-          ];
-        };
-      };
-
       private-resources = {
+        # THE ONLY `mode = "host"` resource for 192.168.1.105 — keep it that way.
+        # newt keeps exactly ONE route per destination IP and the last one
+        # written wins, so a second resource on this destination silently
+        # shadows this one with its own (narrower) port list. On 2026-08-29 a
+        # `plex` host resource with ports 443,32400 won and blackholed 53/80/22
+        # /2222: clients get 192.168.1.105 as their DNS server and olm installs
+        # a /32 route for it through the tunnel, so every public lookup died
+        # while *.ugalabugala.org kept working (olm answers aliases locally).
+        # Which resource wins flips on newt's next FULL resource fetch, so it
+        # can look healthy for days. Verify with:
+        #   for p in 443 32400 2222 80; do bash -c "</dev/tcp/192.168.1.105/$p"; done
+        # Ports below are the union of everything that host serves.
         ugala-bugala = {
           name = "Ugala Bugala";
           mode = "host";
@@ -154,33 +170,12 @@ environment.systemPackages = [
           udp-ports = "443,80,53,2222,22,32400";
         };
 
-        noosphere = {
-          name = "Noosphere";
-          mode = "host";
-          destination = "192.168.1.250";
-          alias = "*.noosphere.uk";
-          site = siteCerberus;
-          disable-icmp = true;
-          tcp-ports = "443,80,22";
-          udp-ports = "443,80,22";
-        };
-
-        technitium = {
-          name = "Technitium";
-          mode = "host";
-          destination = "192.168.1.105";
-          site = siteCerberus;
-          # Do NOT use "*" here. newt 1.16.0 loads a `*` port range as an EMPTY
-          # allow-list ("port ranges: []" in its startup log), which drops all
-          # traffic to the resource including DNS. Keep an explicit list.
-          # Symptom of getting this wrong: a phone on the VPN resolves
-          # *.ugalabugala.org (Olm answers aliases locally, no DNS needed) while
-          # every public name fails, and newt logs zero sessions to .105:53.
-          disable-icmp = false;
-          tcp-ports = "443,80,53,2222";
-          udp-ports = "443,80,53,2222";
-        };
-
+        # Shares destination 192.168.1.105 with ugala-bugala, so its port list
+        # MUST stay identical to that one — newt keeps a single route per
+        # (client, destination) and the last write wins, so a narrower list here
+        # silently blackholes whatever it omits. This resource previously had
+        # 443,32400 and took out DNS (53), http (80) and ssh (22/2222) on
+        # 2026-08-29. If you change ugala-bugala's ports, change these too.
         plex = {
           name = "plex";
           mode = "host";
@@ -188,8 +183,20 @@ environment.systemPackages = [
           alias = "plex.ugalabugala.org";
           site = siteCerberus;
           disable-icmp = true;
-          tcp-ports = "443,32400";
-          udp-ports = "443,32400";
+          tcp-ports = "443,80,53,2222,22,32400";
+          udp-ports = "443,80,53,2222,22,32400";
+          roles = ["plex"];
+        };
+
+        noosphere = {
+          name = "Noosphere";
+          mode = "host";
+          destination = "192.168.1.251";
+          alias = "*.noosphere.uk";
+          site = siteCerberus;
+          disable-icmp = true;
+          tcp-ports = "443,80,22";
+          udp-ports = "443,80,22";
         };
       };
     };
@@ -595,7 +602,7 @@ environment.systemPackages = [
   services.caddy.virtualHosts = {
     "*.noosphere.uk" = {
       extraConfig = ''
-        reverse_proxy https://192.168.1.250 {
+        reverse_proxy https://192.168.1.251 {
           header_up Host {http.request.host}
           transport http {
             tls_server_name {http.request.host}

@@ -24,7 +24,7 @@
 
   # garage-main, reached over its Traefik ingress. Must be the PUBLIC hostname,
   # not the in-cluster Service: Kaneo hands out presigned URLs that the browser
-  # itself uploads to. Technitium resolves this to the MetalLB VIP 192.168.1.250
+  # itself uploads to. Technitium resolves this to the MetalLB VIP 192.168.1.251
   # directly, so it does not hairpin through this machine's Caddy.
   s3Endpoint = "https://s3.main.garage.noosphere.uk";
   s3Bucket = "kaneo";

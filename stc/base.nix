@@ -15,6 +15,10 @@
       self.inputs.nix-index-database.nixosModules.default
     ];
 
+    nixpkgs.overlays = [
+      self.overlays.go125-shim
+    ];
+
     environment.systemPackages = with pkgs; [
       attic-client
       tree
@@ -54,6 +58,15 @@
       settings = {
         trusted-users = ["apetrovic"];
         auto-optimise-store = true;
+
+        # cache.nixos.org is deliberately absent: nixos/modules/config/nix.nix
+        # appends it (and its key) unconditionally, and these are list options
+        # whose definitions concatenate rather than override. Listing it here
+        # too would just make Nix query the same cache twice on every miss.
+        substituters = ["https://ncps.noosphere.uk"];
+        trusted-public-keys = [
+          (builtins.readFile ../vars/shared/ncps-signing-key/ncps-signing-key.pub/value)
+        ];
       };
     };
 
@@ -92,6 +105,5 @@
         variant = "";
       };
     };
-
   };
 }

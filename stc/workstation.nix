@@ -25,6 +25,7 @@
       self.overlays.helix
       self.overlays.herdr
     ];
+
     networking.nameservers = ["192.168.1.105"];
     # Prevent NetworkManager from pushing DHCP-provided DNS to systemd-resolved,
     # which would override Technitium and cause intermittent split-horizon failures.
@@ -95,6 +96,15 @@
     boot.plymouth = {
       enable = true;
     };
+
+    # Workaround for stylix 5b298f7, which renamed ImageMagick `convert` to
+    # `magick` in modules/plymouth/nixos.nix without reordering the arguments.
+    # IM7's parser needs an image on the stack before an image operator, and
+    # `-border 42%` is still emitted ahead of the logo, so the theme fails to
+    # build with "no images found for operation `-border'". The border is only
+    # emitted when logoAnimated is set, so turning it off sidesteps it; we lose
+    # the spinner but keep the themed splash. Revert once stylix is fixed.
+    stylix.targets.plymouth.logoAnimated = false;
 
     services.greetd = {
       enable = true;
@@ -176,6 +186,8 @@
       (self.inputs.dagger-cli.packages.${system}.dagger)
 
       herdr
+      (self.inputs.magos.packages.${system}.opencode)
+      python3Packages.huggingface-hub
 
       # neomutt
       proton-vpn-cli
