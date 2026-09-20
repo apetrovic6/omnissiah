@@ -6,7 +6,7 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: Code Snipet Solution
     glance/icon: di:bytestash
-    glance/id: longhorn
+    glance/id: bytestash
     glance/name: ByteStash
     glance/parent: bytestash
     glance/url: https://bytestash.noosphere.uk

@@ -5,7 +5,7 @@ metadata:
     category: storage
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     glance/description: Nix Binary Cache
-    glance/icon: di:ncps
+    glance/icon: di:nixos
     glance/id: ncps
     glance/name: Ncps
     glance/parent: ncps

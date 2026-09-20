@@ -48,7 +48,7 @@ in {
             "glance/icon" = "di:bytestash";
             "glance/url" = "https://bytestash.${domain}";
             "glance/description" = "Code Snipet Solution";
-            "glance/id" = "longhorn";
+            "glance/id" = "bytestash";
             "glance/parent" = "bytestash";
             "category" = "utils";
           };

@@ -126,7 +126,7 @@ in {
           annotations = {
             "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
             "glance/name" = "Ncps";
-            "glance/icon" = "di:ncps";
+            "glance/icon" = "di:nixos";
             "glance/url" = "https://ncps.${domain}";
             "glance/description" = "Nix Binary Cache";
             "glance/id" = "ncps";
