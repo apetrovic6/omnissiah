@@ -50,6 +50,7 @@
             "Videos"
             "programming"
             "Games"
+            "models"
             ".android"
             ".config/attic"
             ".config/herdr"
