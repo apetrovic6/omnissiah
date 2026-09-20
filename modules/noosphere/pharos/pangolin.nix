@@ -1,11 +1,16 @@
 {config, ...}: let
 in {
-  flake.nixosModules.pharos = {pkgs, lib, config, ...}: let
+  flake.nixosModules.pharos = {
+    pkgs,
+    lib,
+    config,
+    ...
+  }: let
     geolite2-country-db = pkgs.runCommand "geolite2-country-db" {} ''
       mkdir -p $out
       tar xzf ${pkgs.fetchurl {
         url = "https://github.com/GitSquared/node-geolite2-redist/raw/refs/heads/master/redist/GeoLite2-Country.tar.gz";
-        hash = "sha256-XknakxuETYez8FaM1kdvGr+bXvLEvGD3evayp3oRaWE=";
+        hash = "sha256-RKtxVgrR4HidNydppHUjPBg7WDOp6esJTVeMolz9Qz0=";
       }} --strip-components=1
       cp GeoLite2-Country.mmdb $out/
     '';
