@@ -1327,8 +1327,8 @@
         "wrapper-modules": "wrapper-modules"
       },
       "locked": {
-        "lastModified": 1789902602,
-        "narHash": "sha256-FIkIXMr3AMOT6Dui9NkLhXXTW9Xmwh8b4eSYMrE0o0g=",
+        "lastModified": 1790077984,
+        "narHash": "sha256-VpvdZHEX9CyoL9UV+lkvrkM2bGFnb2jd6FS1T3d8FOE=",
         "path": "/home/apetrovic/clan/magos",
         "type": "path"
       },

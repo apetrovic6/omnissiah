@@ -166,27 +166,75 @@ in {
           # extraFlags = "--n-cpu-moe 16";
         };
 
-        # Dense 24B, Apache 2.0, purpose-built with All Hands AI for agentic
-        # coding scaffolds. At 13.5GB it fits the same budget coder-30b uses at
-        # Q3_K_M, but at a higher effective quant -- this is the entry that
-        # tests whether Q3 quantization damage is what limits the 30B, rather
-        # than the model generation itself.
+        # DISABLED -- does not fit this hardware. Measured with a 28k
+        # prompt, cold, against the same prompt the other entries ran:
         #
-        # Expect it to be markedly slower: 24B dense activates all 24B per
-        # token, against ~3B for the A3B models above. Quality-per-token versus
-        # tokens-per-second is the whole trade being measured here.
+        #   ctxSize 65536:  573 tok/s prefill, 2.8 tok/s decode
+        #   ctxSize 32768:  778 tok/s prefill, 3.7 tok/s decode
+        #   qwen36-35b-q4:  960 tok/s prefill,  67 tok/s decode
         #
-        # Filename has no UD- prefix, unlike the Qwen quants -- unsloth only
-        # prefixes some of Devstral's. Verified against the HF file listing.
-        "devstral-24b" = mkModel {
-          file = "Devstral-Small-2-24B-Instruct-2512-Q4_K_S.gguf";
-          # Matches the Qwen3.6 entries. Not a hardware limit at any point:
-          # 32768 was an early guess carried forward, and it is what made those
-          # models look broken -- opencode died with "request (34169 tokens)
-          # exceeds the available context size" on a routine task. At 13.5GB
-          # this model has MORE headroom than -q4 does at 16.5GB.
-          #
-          # Keep in sync with limit.context in magos modules/features/opencode.nix.
+        # It spills even at 32768: ~13.5GB of weights plus a dense
+        # 40-layer full-attention KV cache does not fit in ~17.5GB of
+        # VRAM with a desktop on GPU0. Being dense, EVERY param is read
+        # per token, so spilled weights stream over PCIe constantly --
+        # an MoE only touches its ~3B active params and shrugs it off.
+        # An earlier 15 tok/s reading was measured on a 6-token prompt,
+        # i.e. with the KV cache empty and the weights still resident;
+        # it did not survive real context.
+        #
+        # Kept for reference. Re-enable only with a quant small enough
+        # to stay fully in VRAM alongside its KV cache.
+        # # Dense 24B, Apache 2.0, purpose-built with All Hands AI for agentic
+        # # coding scaffolds. At 13.5GB it fits the same budget coder-30b uses at
+        # # Q3_K_M, but at a higher effective quant -- this is the entry that
+        # # tests whether Q3 quantization damage is what limits the 30B, rather
+        # # than the model generation itself.
+        # #
+        # # Expect it to be markedly slower: 24B dense activates all 24B per
+        # # token, against ~3B for the A3B models above. Quality-per-token versus
+        # # tokens-per-second is the whole trade being measured here.
+        # #
+        # # Filename has no UD- prefix, unlike the Qwen quants -- unsloth only
+        # # prefixes some of Devstral's. Verified against the HF file listing.
+        # "devstral-24b" = mkModel {
+        #   file = "Devstral-Small-2-24B-Instruct-2512-Q4_K_S.gguf";
+        #   # 32768 on purpose, unlike the MoE entries. This model is DENSE, and
+        #   # that changes the arithmetic completely:
+        #   #
+        #   #   - Full attention on every layer means a much larger KV cache than
+        #   #     the Qwen MoEs need, so 65536 does not fit beside 13.5GB of
+        #   #     weights in ~17.5GB of VRAM.
+        #   #   - Every one of its 24B params is read per token, so any weight
+        #   #     spilled to RAM is streamed over PCIe every token. An MoE only
+        #   #     touches its ~3B active params and barely notices the spill.
+        #   #
+        #   # Measured at ctxSize 65536 with a 28k prompt: decode fell to 2.8
+        #   # tok/s, against 15 tok/s at 32768. Raise this only if the weights
+        #   # still fit entirely in VRAM afterwards.
+        #   #
+        #   # Keep in sync with limit.context in magos modules/features/opencode.nix.
+        #   ctxSize = 32768;
+        # };
+
+        # New architecture (qwen4exp), not a bigger Qwen3.6: 512 experts with 10
+        # active, and 3 of every 4 layers use linear attention, so the KV cache
+        # stays small and long context is cheap. Support verified: the GGUF
+        # declares general.architecture = qwen4exp and the deployed libllama has
+        # qwen4exp.cpp compiled in.
+        #
+        # ~82GB across three shards -- the binding constraint is system RAM, not
+        # VRAM. At the time of writing only ~63GB was free (125 total, 23.5GB
+        # already in zram), so this sits right at the edge. It will NOT fail
+        # cleanly if memory runs short: llama.cpp mmaps the file, so experts
+        # that do not fit stay on disk and are paged in from NVMe per token.
+        # It keeps answering, just drastically slower. If it crawls, check
+        # `free -g` before blaming the model.
+        #
+        # Sharded: --model points at the FIRST shard, subdirectory included,
+        # and llama.cpp loads -00002/-00003 itself. Filenames verified against
+        # the HF listing and the partially downloaded directory.
+        "qwen38-flash-q3" = mkModel {
+          file = "UD-IQ3_XXS/Qwen3.8-Flash-Next-UD-IQ3_XXS-00001-of-00003.gguf";
           ctxSize = 65536;
         };
 

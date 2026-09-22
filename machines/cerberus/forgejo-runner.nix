@@ -56,6 +56,7 @@
           nodejs
           devenv
           cacert
+          mold
           # Builds the pipeline driver itself (`cargo run -p ci`). The pipeline
           # then does all real work inside engine containers, so only a
           # host-side toolchain new enough for edition 2024 is needed here.
