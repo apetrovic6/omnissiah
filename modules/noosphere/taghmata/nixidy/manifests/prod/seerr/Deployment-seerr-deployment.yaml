@@ -35,7 +35,7 @@ spec:
                   name: pg-seerr-password
             - name: DB_NAME
               value: seerr
-          image: seerr/seerr:preview-music-support
+          image: seerr/seerr:3.4.1
           name: seerr
           ports:
             - containerPort: 5055
