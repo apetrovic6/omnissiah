@@ -171,7 +171,7 @@ in {
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
+          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
           "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
           "glance/name" = "Seerr";
           "glance/icon" = "di:jellyseerr";
@@ -302,7 +302,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {
@@ -317,7 +317,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {
@@ -332,7 +332,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {
@@ -347,7 +347,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {
@@ -362,7 +362,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {
@@ -377,7 +377,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {
@@ -392,7 +392,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {
@@ -406,7 +406,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {
@@ -421,7 +421,7 @@ in {
 
           metadata = {
             annotations = {
-              "argocd.proj.io/sync-options" = "Prune=false";
+              "argocd.argoproj.io/sync-options" = "Prune=false";
             };
           };
           spec = {

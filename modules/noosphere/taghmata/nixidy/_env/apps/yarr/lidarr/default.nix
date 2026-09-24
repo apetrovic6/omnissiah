@@ -155,7 +155,7 @@
 
         annotations = {
           "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
+          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
           "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
           "glance/name" = "Lidarr";
           "glance/icon" = "di:lidarr";

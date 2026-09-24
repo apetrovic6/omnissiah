@@ -2,9 +2,9 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   annotations:
-    argocd.proj.io/hook: PreSync
-    argocd.proj.io/sync-options: Prune=false,Delete=false
-    argocd.proj.io/sync-wave: "-10"
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-10"
   labels:
     release: kube-prometheus-stack
   name: pg-harbor-rev1

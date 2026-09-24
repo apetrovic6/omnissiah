@@ -71,7 +71,7 @@ in {
           enabled = true;
           annotations = {
             "traefik.ingress.kubernetes.io/router.entrypoints" = "web,websecure";
-            "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
+            "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
             "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
             "glance/name" = "Pocket ID";
             "glance/icon" = "di:pocket-id";
@@ -120,8 +120,8 @@ in {
 
       cluster = {
         annotations = {
-          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-          "argocd.proj.io/sync-hook" = "PreSync";
+          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
+          "argocd.argoproj.io/sync-hook" = "PreSync";
         };
 
         spec = {

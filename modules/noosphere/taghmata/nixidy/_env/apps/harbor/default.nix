@@ -312,9 +312,9 @@ in {
 
       cluster = {
         annotations = {
-          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-          "argocd.proj.io/sync-wave" = "-10";
-          "argocd.proj.io/hook" = "PreSync";
+          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
+          "argocd.argoproj.io/sync-wave" = "-10";
+          "argocd.argoproj.io/hook" = "PreSync";
         };
 
         spec = {
@@ -363,9 +363,9 @@ in {
         {
           name = "registry";
           metadata.annotations = {
-            "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-            "argocd.proj.io/sync-wave" = "-10";
-            "argocd.proj.io/hook" = "PreSync";
+            "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
+            "argocd.argoproj.io/sync-wave" = "-10";
+            "argocd.argoproj.io/hook" = "PreSync";
           };
           spec = {
             name = "registry";

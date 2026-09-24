@@ -259,8 +259,8 @@ in {
 
       cluster = {
         annotations = {
-          "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-          "argocd.proj.io/sync-hook" = "PreSync";
+          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
+          "argocd.argoproj.io/sync-hook" = "PreSync";
         };
 
         spec = {

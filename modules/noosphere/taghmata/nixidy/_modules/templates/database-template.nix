@@ -16,8 +16,8 @@ in {
         annotations = mkOption {
           type = types.nullOr types.attrs;
           default = {
-            "argocd.proj.io/sync-options" = "Prune=false,Delete=false";
-            "argocd.proj.io/sync-hook" = "PreSync";
+            "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
+            "argocd.argoproj.io/sync-hook" = "PreSync";
           };
           description = "Cluster Annotations.";
         };
@@ -244,7 +244,7 @@ in {
             metadata.annotations = mkOption {
               type = types.attrs;
               default = {
-                "argocd.proj.io/sync-options" = "Prune=false";
+                "argocd.argoproj.io/sync-options" = "Prune=false";
               };
               description = "Annotations for the database declarations";
             };
