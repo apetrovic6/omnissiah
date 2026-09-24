@@ -90,7 +90,7 @@ in {
           spec.containers = [
             {
               name = "seerr";
-              image = "seerr/seerr:3.4.1";
+              image = "seerr/seerr:v3.4.1";
               volumeMounts = [
                 {
                   name = "config";
