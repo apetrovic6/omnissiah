@@ -21,7 +21,7 @@ spec:
             - name: PGID
               value: "65537"
             - name: LIDARR__POSTGRES__HOST
-              value: pg-yarr-1-rw
+              value: pg-yarr-2-rw
             - name: LIDARR__POSTGRES__PORT
               value: "5432"
             - name: LIDARR__POSTGRES__USER

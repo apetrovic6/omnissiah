@@ -1,11 +1,14 @@
 apiVersion: postgresql.cnpg.io/v1
-kind: Backup
+kind: ScheduledBackup
 metadata:
-  name: pg-yarr-1-on-demand-backup-0
+  name: pg-yarr-2-scheduled-backup-0
   namespace: yarr
 spec:
+  backupOwnerReference: self
   cluster:
-    name: pg-yarr-1
+    name: pg-yarr-2
+  immediate: true
   method: plugin
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
+  schedule: 0 2 0 * * *

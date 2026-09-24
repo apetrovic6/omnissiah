@@ -6,7 +6,7 @@ metadata:
     argocd.proj.io/sync-options: Prune=false,Delete=false
   labels:
     release: kube-prometheus-stack
-  name: pg-yarr-1
+  name: pg-yarr-2
   namespace: yarr
 spec:
   backup:
@@ -21,7 +21,7 @@ spec:
         name: barman-cloud.cloudnative-pg.io
         parameters:
           barmanObjectName: yarr-object-store
-          serverName: pg-yarr-restored
+          serverName: pg-yarr-1
   imageName: ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie
   instances: 3
   managed:
