@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: memos-s3-import
+    namespace: garage-operator
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:KOLAjd83W5ocKQd+m1ly,iv:B7jAg7yLyhp7nDTNNHT+Z7+fdzOeZJuICH3vY1R1Vu0=,tag:CNzd32vcPTC08Lr+W78ddQ==,type:str]
+          type: ENC[AES256_GCM,data:pWV2W831,iv:EwMwVKZlFSH9BmEj2h8XzOMKzmwhC+N5+s4A6xQxyXw=,tag:F+HjMnY3u2vsqYjC/5CneQ==,type:str]
+          stringData:
+            access-key-id: ENC[AES256_GCM,data:5b/MsDgsI0Kj4RbA4uZ8OrAfHU/YsztzV74=,iv:EEbeDbAz/Nego5vj08EaVY/dp7nqSUT07Kn/XKxPKWI=,tag:kP8l3QJ60dGawu17NqXMeg==,type:str]
+            secret-access-key: ENC[AES256_GCM,data:UTw0Y5yh+TIUtXrdfNhwXcD9oL62Zbg0wteBi/ffWSLFR5LtBaRvcF2VPBza4623hbpo6cA/7fhSEEYF82z2WA==,iv:QRwt5UsvC9YTIu8xhHMrZDjVUMxJjNwdxdKRimuPLdE=,tag:w6NEk2MxBEYIGwHmDZx0eg==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBMU0lwRC9DSVZWZmRTNWRa
+            NVFMNVAwYlBnUmUxNy94Y2pPRmRtcEtrY1hNClFVdDFiMXltNFREUlBxLzZnR05Q
+            WDV0bVd4QnNXbDNyYkJsblpEbmpnT3MKLS0tIGloWGRwVTBrcFVHbXFpN3hXOHBK
+            YXJDWXBmZXYzYm50UTJVUnljZ21BSDQKe7gWDBYzapDJrvzlwztJUvGnnxsduO7N
+            fzVdRtFWe9YRs1zsEWaenurnL/0K5jEqjHsumA+3LwiTIpLOMr7KqQ==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+    encrypted_suffix: Templates
+    lastmodified: "2026-09-25T12:07:25Z"
+    mac: ENC[AES256_GCM,data:cWX1H4VE0TbLz2OSdzMwWIXMLsVKhRgkt5bhKPaKI3YDPDxwBa7HaE36WgVw4jgPWtX1cg7Pe0LxiiD1fqaSjQHoXnSn6ozjjlm0rFukoWxNHEfsD2wztQxw5H5XSswAYI1psxL03ByzQYvxmR+91fFPEN/KktCJ5oVXnfu5Bsk=,iv:cI69JvuLGVwvgVilp8wroMzqTN+VQLs+kN9yN5f5Fc8=,tag:zh8e4yi7BLZiWtkCQipfmQ==,type:str]
+    version: 3.13.3
