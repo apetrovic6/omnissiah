@@ -1,0 +1,18 @@
+apiVersion: garage.rajsingh.info/v1beta1
+kind: GarageKey
+metadata:
+  name: memos
+  namespace: garage-operator
+spec:
+  bucketPermissions:
+    - bucketRef:
+        name: memos
+      owner: true
+      read: true
+      write: true
+  clusterRef:
+    name: garage-main
+  importKey:
+    secretRef:
+      name: memos-s3-import
+      namespace: garage-operator

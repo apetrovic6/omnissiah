@@ -20,6 +20,7 @@ in {
       (builtins.readFile ../../../../../../../vars/shared/garage-backup-rpc-secret/garage-backup-rpc-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/garage-backup-admin-token/garage-backup-admin-token/value)
       (builtins.readFile ../../../../../../../vars/shared/kaneo-s3-key/kaneo-s3-key/value)
+      (builtins.readFile ../../../../../../../vars/shared/memos-s3-key/memos-s3-key/value)
     ];
 
     helm.releases.garage-operator = {
