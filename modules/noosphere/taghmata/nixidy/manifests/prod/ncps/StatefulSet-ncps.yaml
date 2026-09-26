@@ -19,7 +19,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 478c1a9429c5a56f0f1a3685baa9b48423542048ed1b909ca7e5699fe6b0ed07
+        checksum/config: 0c64028a993f68d2b77302d89acb1df7dc36a38344474ef78a75c5ba64506f60
         checksum/secret: 383f8c854d24e578cee91ea1e0ad61c6d88f3ba249c41a04af78080872f255af
         checksum/signing-key-secret: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
       labels:
