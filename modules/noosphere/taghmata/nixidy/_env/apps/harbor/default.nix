@@ -5,7 +5,7 @@
 }: let
   namespace = "harbor";
   domain = config.noosphere.domain;
-  db-cluster-name = "pg-harbor-rev1";
+  db-cluster-name = "pg-harbor-rev2";
   objectStoreName = "harbor-object-store";
 in {
   imports = [
@@ -306,7 +306,7 @@ in {
       };
     };
 
-    templates.cnpg-database-cluster.harbor-rev1 = {
+    templates.cnpg-database-cluster.harbor-rev2 = {
       inherit namespace;
       overrideObjectStore = objectStoreName;
 
@@ -341,6 +341,10 @@ in {
           # (cluster was deleted by the sync shortly after).
           # Backups from 20260925/20260926 are from the EMPTY post-wipe
           # cluster and must not be used.
+          # The cluster runs as pg-harbor-rev2 and archives under that new
+          # serverName; recovery reads the old pg-harbor-rev1 archive.
+          # (Restoring into the same non-empty archive trips barman's
+          # "Expected empty archive" safety check.)
           # Remove/comment this block again once the restore succeeded.
           bootstrap.recovery = {
             source = "origin";
@@ -353,7 +357,7 @@ in {
               plugin = {
                 parameters = {
                   barmanObjectName = objectStoreName;
-                  serverName = db-cluster-name;
+                  serverName = "pg-harbor-rev1";
                 };
               };
             }

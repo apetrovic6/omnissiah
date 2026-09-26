@@ -6,7 +6,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "-10"
   labels:
     release: kube-prometheus-stack
-  name: pg-harbor-rev1
+  name: pg-harbor-rev2
   namespace: harbor
 spec:
   backup:

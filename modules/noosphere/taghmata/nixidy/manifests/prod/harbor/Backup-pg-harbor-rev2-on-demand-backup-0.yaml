@@ -1,14 +1,11 @@
 apiVersion: postgresql.cnpg.io/v1
-kind: ScheduledBackup
+kind: Backup
 metadata:
-  name: pg-harbor-rev1-scheduled-backup-0
+  name: pg-harbor-rev2-on-demand-backup-0
   namespace: harbor
 spec:
-  backupOwnerReference: self
   cluster:
-    name: pg-harbor-rev1
-  immediate: true
+    name: pg-harbor-rev2
   method: plugin
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
-  schedule: 0 2 0 * * *
