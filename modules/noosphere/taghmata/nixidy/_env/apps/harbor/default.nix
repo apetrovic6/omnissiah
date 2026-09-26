@@ -312,9 +312,12 @@ in {
 
       cluster = {
         annotations = {
+          # NOTE: do NOT annotate the Cluster as an argocd PreSync hook.
+          # ArgoCD's default hook-delete-policy (BeforeHookCreation) deletes
+          # and recreates hook resources on every sync, which wipes the
+          # database (this destroyed pg-harbor-rev1 on 2026-09-24).
           "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
           "argocd.argoproj.io/sync-wave" = "-10";
-          "argocd.argoproj.io/hook" = "PreSync";
         };
 
         spec = {
@@ -333,18 +336,28 @@ in {
             }
           ];
 
-          # bootstrap.recovery.source = "origin";
+          # One-time PITR restore after the 2026-09-24 hook-induced wipe.
+          # Base backup taken 2026-09-24T00:02Z; WAL archive ends ~16:40Z
+          # (cluster was deleted by the sync shortly after).
+          # Backups from 20260925/20260926 are from the EMPTY post-wipe
+          # cluster and must not be used.
+          # Remove/comment this block again once the restore succeeded.
+          bootstrap.recovery = {
+            source = "origin";
+            backupID = "20260924T000203";
+            targetTime = "2026-09-24 16:35:00+00";
+          };
 
-          # externalClusters = [
-          #   {
-          #     plugin = {
-          #       parameters = {
-          #         barmanObjectName = objectStoreName;
-          #         serverName = "pg-harbor";
-          #       };
-          #     };
-          #   }
-          # ];
+          externalClusters = [
+            {
+              plugin = {
+                parameters = {
+                  barmanObjectName = objectStoreName;
+                  serverName = db-cluster-name;
+                };
+              };
+            }
+          ];
 
           managed.roles = [
             {
@@ -363,9 +376,9 @@ in {
         {
           name = "registry";
           metadata.annotations = {
+            # NOTE: no PreSync hook here either, see the Cluster note above.
             "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
             "argocd.argoproj.io/sync-wave" = "-10";
-            "argocd.argoproj.io/hook" = "PreSync";
           };
           spec = {
             name = "registry";

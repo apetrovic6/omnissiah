@@ -17,7 +17,9 @@ in {
           type = types.nullOr types.attrs;
           default = {
             "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
-            "argocd.argoproj.io/sync-hook" = "PreSync";
+            # NOTE: never use argocd.argoproj.io/hook: PreSync on stateful
+            # cluster resources - ArgoCD deletes+recreates hook resources on
+            # every sync (BeforeHookCreation), wiping the database.
           };
           description = "Cluster Annotations.";
         };
@@ -69,10 +71,24 @@ in {
             };
           };
 
-          bootstrap.recovery.source = mkOption {
-            type = types.nullOr types.str;
-            default = null;
-            description = "Recovery source for the cluster";
+          bootstrap.recovery = {
+            source = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Recovery source for the cluster";
+            };
+
+            backupID = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Barman backup ID to recover from (e.g. 20260924T000203). Defaults to the latest backup.";
+            };
+
+            targetTime = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "PITR target time, ISO 8601 with timezone (e.g. 2026-09-24 16:35:00+00).";
+            };
           };
 
           externalClusters = mkOption {
@@ -362,11 +378,15 @@ in {
           basePlugins = baseSpec.plugins or [];
           extraPlugins = baseSpec.extraPlugins or [];
 
-          # Remove bootstrap if recovery source is not set
+          recoveryCfg = cfg.cluster.spec.bootstrap.recovery;
+
+          # bootstrap is always rebuilt below from the typed recovery options
           # Remove managed if roles is not set
           attrsToRemove =
-            ["extraPlugins"]
-            ++ lib.optional (cfg.cluster.spec.bootstrap.recovery.source == null) "bootstrap"
+            [
+              "extraPlugins"
+              "bootstrap"
+            ]
             ++ lib.optional (cfg.cluster.spec.managed.roles == null) "managed";
         in
           (lib.removeAttrs baseSpec attrsToRemove)
@@ -403,6 +423,21 @@ in {
                 }
               ];
             };
+          }
+          // lib.optionalAttrs (recoveryCfg.source != null) {
+            bootstrap.recovery =
+              {
+                source = recoveryCfg.source;
+              }
+              // lib.optionalAttrs (recoveryCfg.backupID != null || recoveryCfg.targetTime != null) {
+                recoveryTarget =
+                  lib.optionalAttrs (recoveryCfg.backupID != null) {
+                    backupID = recoveryCfg.backupID;
+                  }
+                  // lib.optionalAttrs (recoveryCfg.targetTime != null) {
+                    targetTime = recoveryCfg.targetTime;
+                  };
+              };
           };
       };
 

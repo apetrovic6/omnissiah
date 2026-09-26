@@ -2,7 +2,6 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   annotations:
-    argocd.argoproj.io/sync-hook: PreSync
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
   labels:
     release: kube-prometheus-stack
