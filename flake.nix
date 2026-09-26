@@ -57,8 +57,9 @@
     };
 
     magos = {
-      url = "github:apetrovic6/magos";
-      # url = "path:/home/apetrovic/clan/magos";
+      # url = "github:apetrovic6/magos";
+      # url = "path:/home/apetrovic/clan/magos_old";
+      url = "path:/home/apetrovic/clan/magos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -88,6 +89,16 @@
     };
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
+
+    nixos-rocksmith = {
+      url = "github:re1n0/nixos-rocksmith/release";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    steam-config-nix = {
+      url = "github:different-name/steam-config-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     darwin = {
       url = "github:nix-darwin/nix-darwin";
@@ -157,6 +168,9 @@
               allowUnfree = true;
               allowInsecurePredicate = pkg: inputs.nixpkgs.lib.getName pkg == "librewolf";
               permittedInsecurePackages = ["librewolf-151.0.2-1"];
+              # PipeASIO (Rocksmith, via nixos-rocksmith overlay) builds against
+              # Wine's MSVC cross-toolchain → xwin-fetch-msvc requires this.
+              microsoftVisualStudioLicenseAccepted = true;
             };
             nix.settings.extra-experimental-features = ["pipe-operators"];
           };
@@ -170,6 +184,10 @@
         lib,
         ...
       }: let
+        # davical-go: CalDAV/CardDAV server (Go rewrite of DAViCal), built purely
+        # from source with Nix — see services/davical/README.md.
+        davical = import ./services/davical {inherit pkgs lib;};
+
         # nixhelm's kubernetes-csi/csi-driver-nfs pin is unusable:
         #   - its default (version 0.0.0) is the master *dev* chart, which
         #     defaults to gcr.io/k8s-staging-sig-storage/nfsplugin:canary and
@@ -215,6 +233,36 @@
           outputHashMode = "recursive";
           outputHashAlgo = "sha256";
           outputHash = "sha256-TubGkb8PB79zLFfcEuqm4AFzxW0SmMZumubTlCS7GWY=";
+        };
+
+        # nixhelm pins the ncps chart at v0.9.4, which predates the fix for
+        # opaque upstream NAR URLs (kalbasit/ncps#1331, first in v0.10.0-rc10).
+        # Cachix upstreams serve `nar/<uuid>.nar.zst` paths that v0.9.4 rejects
+        # with HTTP 500 "invalid nar hash", which nix treats as a hard error
+        # and refuses to fall through to the next substituter. Pull the fixed
+        # chart directly until nixhelm catches up (or v0.10.0 goes stable).
+        ncps-chart = pkgs.stdenv.mkDerivation {
+          name = "helm-chart-ghcr.io-kalbasit-helm-ncps-v0.10.0-rc18";
+          nativeBuildInputs = [pkgs.cacert];
+
+          phases = ["installPhase"];
+          installPhase = ''
+            export HELM_CACHE_HOME="$TMP/.nix-helm-build-cache"
+            out_dir="$TMP/temp-chart-output"
+            mkdir -p "$out_dir"
+
+            ${pkgs.kubernetes-helm}/bin/helm pull \
+              --version v0.10.0-rc18 \
+              oci://ghcr.io/kalbasit/helm/ncps \
+              -d "$out_dir" \
+              --untar
+
+            mv "$out_dir/ncps" "$out"
+          '';
+
+          outputHashMode = "recursive";
+          outputHashAlgo = "sha256";
+          outputHash = "sha256-UrRli9J8vorLAahyvctzxue06nHEklZYUH5p8/cqFo0=";
         };
       in {
         checks = {
@@ -264,6 +312,8 @@
           extraCharts = with self.inputs; {
             "kubernetes-csi/csi-driver-nfs" = csi-driver-nfs-chart;
             "dagger-helm/dagger-helm" = dagger-helm-chart;
+            # Overrides the nixhelm v0.9.4 pin — see ncps-chart above.
+            "kalbasit/ncps" = ncps-chart;
             "deuxfleurs/garage" = "${garage}/script/helm/garage";
             "lukasdietrich/glance-k8s" = "${glance-k8s}/charts/glance-k8s";
             "woodpecker-ci/woodpecker" = "${woodpecker-ci}/charts/woodpecker";
@@ -286,6 +336,9 @@
             rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod";
           };
         };
+
+        packages.davical-go = davical.package;
+        packages.davical-go-image = davical.image;
 
         packages.ci =
           pkgs.runCommand "ci-build" {

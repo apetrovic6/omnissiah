@@ -24,6 +24,11 @@ in {
   ];
   nixpkgs.config.permittedInsecurePackages = ["electron-39.8.10"];
 
+  # PipeASIO (Rocksmith, via nixos-rocksmith overlay applied to HM's own
+  # nixpkgs) builds against Wine's MSVC cross-toolchain → xwin-fetch-msvc
+  # requires accepting the Microsoft VS license terms.
+  nixpkgs.config.microsoftVisualStudioLicenseAccepted = true;
+
   xdg = {
     enable = true;
   };

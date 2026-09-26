@@ -9,10 +9,12 @@
     self,
     lib,
     pkgs,
+    config,
     ...
   }: {
     imports = [
       self.nixosModules.steam
+      self.nixosModules.rocksmith
     ];
 
     nixpkgs.overlays = [
@@ -25,6 +27,10 @@
         inherit (stable) bubblewrap;
       })
     ];
+
+    # PipeASIO (from nixos-rocksmith) builds against Wine's MSVC cross-
+    # compiler, which requires accepting the Microsoft VS license terms.
+    nixpkgs.config.microsoftVisualStudioLicenseAccepted = true;
 
     services.imperium.steam.enable = true;
 
