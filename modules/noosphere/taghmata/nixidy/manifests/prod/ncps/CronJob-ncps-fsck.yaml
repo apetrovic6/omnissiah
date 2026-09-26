@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app.kubernetes.io/component: fsck
+    app.kubernetes.io/instance: ncps
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: ncps
+    app.kubernetes.io/version: v0.10.0-rc18
+    helm.sh/chart: ncps-v0.10.0-rc18
+  name: ncps-fsck
+  namespace: ncps
+spec:
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          annotations:
+            checksum/config: 61402d3d8a2243ccf71664344ec5baa376d13bb7a260af099f84d5e6451f07be
+            checksum/secret: efc18bb980d59d18d1ed0c36fe13dbcd9242b063532d96ced2adc4af881b8ccf
+          labels:
+            app.kubernetes.io/component: fsck
+            app.kubernetes.io/instance: ncps
+            app.kubernetes.io/name: ncps
+        spec:
+          containers:
+            - args:
+                - --config
+                - /etc/ncps/config.yaml
+                - fsck
+                - --repair
+              command:
+                - /bin/ncps
+              env:
+                - name: CACHE_DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-url
+                      name: ncps
+                - name: CACHE_STORAGE_S3_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      key: access-key-id
+                      name: ncps-s3-secret-key
+                - name: CACHE_STORAGE_S3_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      key: secret-access-key
+                      name: ncps-s3-secret-key
+              image: ghcr.io/kalbasit/ncps:v0.10.0-rc18
+              imagePullPolicy: IfNotPresent
+              name: fsck
+              resources: {}
+              volumeMounts:
+                - mountPath: /etc/ncps/config.yaml
+                  name: config
+                  readOnly: true
+                  subPath: config.yaml
+                - mountPath: /tmp/ncps
+                  name: tmp
+          restartPolicy: OnFailure
+          securityContext:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          serviceAccountName: ncps
+          volumes:
+            - configMap:
+                name: ncps
+              name: config
+            - emptyDir: {}
+              name: tmp
+      ttlSecondsAfterFinished: 3600
+  schedule: 0 3 * * *

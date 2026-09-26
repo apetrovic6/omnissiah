@@ -133,6 +133,33 @@ in {
           };
         };
 
+        # v0.9.4 shipped these hardened defaults in the chart; v0.10.0-rcX
+        # moved them to opt-in ({}). Restore them explicitly so the upgrade
+        # doesn't silently drop the security posture.
+        podSecurityContext = {
+          seccompProfile.type = "RuntimeDefault";
+          runAsNonRoot = true;
+          runAsUser = 1000;
+          runAsGroup = 1000;
+          fsGroup = 1000;
+          fsGroupChangePolicy = "OnRootMismatch";
+        };
+
+        securityContext = {
+          allowPrivilegeEscalation = false;
+          capabilities.drop = ["ALL"];
+          readOnlyRootFilesystem = true;
+        };
+
+        # Nightly integrity check + repair. The v0.10.0-rc series added fsck
+        # repairs for narinfo↔NAR compression drift and chunked-NAR residue;
+        # running it periodically keeps the cache self-healing.
+        fsck = {
+          enabled = true;
+          schedule = "0 3 * * *"; # 3 AM nightly (2 AM is the CNPG backup)
+          repair = true;
+        };
+
         # `service` and `ingress` are top-level chart values, NOT part of
         # `config` — nesting them under it renders no Ingress at all.
         service = {

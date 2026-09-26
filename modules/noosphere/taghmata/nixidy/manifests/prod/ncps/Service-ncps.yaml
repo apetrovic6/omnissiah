@@ -5,8 +5,8 @@ metadata:
     app.kubernetes.io/instance: ncps
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: ncps
-    app.kubernetes.io/version: v0.9.4
-    helm.sh/chart: ncps-v0.9.4
+    app.kubernetes.io/version: v0.10.0-rc18
+    helm.sh/chart: ncps-v0.10.0-rc18
   name: ncps
   namespace: ncps
 spec:
