@@ -336,32 +336,27 @@ in {
             }
           ];
 
-          # One-time PITR restore after the 2026-09-24 hook-induced wipe.
-          # Base backup taken 2026-09-24T00:02Z; WAL archive ends ~16:40Z
-          # (cluster was deleted by the sync shortly after).
-          # Backups from 20260925/20260926 are from the EMPTY post-wipe
-          # cluster and must not be used.
-          # The cluster runs as pg-harbor-rev2 and archives under that new
-          # serverName; recovery reads the old pg-harbor-rev1 archive.
-          # (Restoring into the same non-empty archive trips barman's
-          # "Expected empty archive" safety check.)
-          # Remove/comment this block again once the restore succeeded.
-          bootstrap.recovery = {
-            source = "origin";
-            backupID = "20260924T000203";
-            targetTime = "2026-09-24 16:35:00+00";
-          };
-
-          externalClusters = [
-            {
-              plugin = {
-                parameters = {
-                  barmanObjectName = objectStoreName;
-                  serverName = "pg-harbor-rev1";
-                };
-              };
-            }
-          ];
+          # Restored 2026-09-26 via PITR after the PreSync-hook wipe:
+          # base backup 20260924T000203 + WAL replay to 2026-09-24 16:35Z,
+          # recovered FROM serverName pg-harbor-rev1 INTO the new cluster
+          # pg-harbor-rev2 (restoring into the same non-empty archive trips
+          # barman's "Expected empty archive" safety check).
+          # Current backups/WALs live under s3://harbor-backup/backups/pg-harbor-rev2/.
+          # For a future restore, re-enable something like:
+          #
+          # bootstrap.recovery = {
+          #   source = "origin";
+          #   # backupID = "<id from s3://harbor-backup/backups/pg-harbor-rev2/base/>";
+          #   # targetTime = "<PITR target, ISO8601 with tz>";
+          # };
+          # externalClusters = [
+          #   {
+          #     plugin.parameters = {
+          #       barmanObjectName = objectStoreName;
+          #       serverName = "pg-harbor-rev2";
+          #     };
+          #   }
+          # ];
 
           managed.roles = [
             {
