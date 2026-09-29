@@ -78,11 +78,41 @@ data:
           - glanceapp/glance
           - lukasdietrich/glance-k8s
           - dockerhub:seerr/seerr
+          - vikunja/vikunja
+          - excalidraw/excalidraw
+          - getmeili/meilisearch
           - arnarg/nixidy
           - nix-community/nixhelm
           - cloudnative-pg/cloudnative-pg
           - kubernetes-csi/csi-driver-nfs
-          - gitlab:TECHNOFAB/tofunix
+          - TECHNOFAB/tofunix
+          - linuxserver/lidarr
+          - linuxserver/radarr
+          - linuxserver/sonarr
+          - linuxserver/prowlarr
+          - linuxserver/sabnzbd
+          - goharbor/harbor
+          - longhorn/longhorn
+          - dockerhub:dxflrs/garage
+          - rajsinghtech/garage-operator
+          - dockerhub:noooste/garage-ui
+          - prometheus/prometheus
+          - grafana/grafana
+          - prometheus/node-exporter
+          - kiwigrid/k8s-sidecar
+          - grafana/alloy
+          - emberstack/kubernetes-reflector
+          - metallb/metallb
+          - jetstack/cert-manager
+          - isindir/sops-secrets-operator
+          - searxng/searxng
+          - valkey-project/valkey
+          - woodpecker-ci/woodpecker
+          - pocket-id/pocket-id
+          - kalbasit/ncps
+          - rancher/local-path-provisioner
+          - Zenika/alpine-chrome
+          - jordan-dalby/bytestash
           show-source-icon: true
           title: Git
           type: releases
