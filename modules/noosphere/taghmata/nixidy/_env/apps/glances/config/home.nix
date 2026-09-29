@@ -75,7 +75,11 @@
 
     # Infra / Operators
     "arnarg/nixidy"                     # internal project
-    "nix-community/nixhelm"             # internal project
+    # nix-community/nixhelm publishes no GitHub releases and no git tags (it is
+    # a rolling flake), so the releases widget can never resolve it — it would
+    # 404 forever and trigger Glance's early-retry loop. Track it with a
+    # changedetection widget on commits/master.atom instead, if wanted.
+    # "nix-community/nixhelm"
     "cloudnative-pg/cloudnative-pg"     # ghcr.io/cloudnative-pg/cloudnative-pg
     "kubernetes-csi/csi-driver-nfs"     # registry.k8s.io/sig-storage/nfsplugin
     "gitlab:TECHNOFAB/tofunix"          # gitlab.com/TECHNOFAB/tofunix (OpenTofu providers)
@@ -107,7 +111,7 @@
     "metallb/metallb"                   # quay.io/metallb/*
     "cert-manager/cert-manager"         # quay.io/jetstack/cert-manager-*
     "isindir/sops-secrets-operator"     # quay.io/isindir/sops-secrets-operator
-    "searxng/searxng"                   # docker.io/searxng/searxng
+    "dockerhub:searxng/searxng"         # docker.io/searxng/searxng — org publishes no GitHub releases/tags
     "valkey-io/valkey"                  # docker.io/valkey/valkey
 
     # CI/CD & Auth

@@ -84,7 +84,6 @@ data:
           - excalidraw/excalidraw
           - meilisearch/meilisearch
           - arnarg/nixidy
-          - nix-community/nixhelm
           - cloudnative-pg/cloudnative-pg
           - kubernetes-csi/csi-driver-nfs
           - gitlab:TECHNOFAB/tofunix
@@ -107,7 +106,7 @@ data:
           - metallb/metallb
           - cert-manager/cert-manager
           - isindir/sops-secrets-operator
-          - searxng/searxng
+          - dockerhub:searxng/searxng
           - valkey-io/valkey
           - woodpecker-ci/woodpecker
           - pocket-id/pocket-id
