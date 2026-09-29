@@ -25,6 +25,7 @@ data:
           name: garage-backup-ui-oidc-secret
         issuer_url: https://id.noosphere.uk
         name_attribute: name
+        post_logout_redirect_url: ""
         provider_name: id
         role_attribute_path: groups
         scopes:
@@ -68,6 +69,7 @@ data:
       format: json
       level: info
     server:
+      base_path: ""
       domain: ui.backup.garage.noosphere.uk
       environment: production
       host: 0.0.0.0
@@ -90,7 +92,7 @@ metadata:
     app.kubernetes.io/instance: garage-backup-ui
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-ui
-    app.kubernetes.io/version: v0.12.1
-    helm.sh/chart: garage-ui-0.12.1
+    app.kubernetes.io/version: v0.13.0
+    helm.sh/chart: garage-ui-0.13.0
   name: garage-backup-ui-config
   namespace: garage-operator
