@@ -61,17 +61,62 @@
   # };
 
   repositories = [
-    "immich-app/immich"
-    "codeberg:forgejo/forgejo"
-    "karakeep-app/karakeep"
-    "glanceapp/glance"
-    "lukasdietrich/glance-k8s"
-    "dockerhub:seerr/seerr"
-    "arnarg/nixidy"
-    "nix-community/nixhelm"
-    "cloudnative-pg/cloudnative-pg"
-    "kubernetes-csi/csi-driver-nfs"
-    "gitlab:TECHNOFAB/tofunix"
+    # Application stacks
+    "immich-app/immich"                 # docker.io/imhich_app/immich
+    "codeberg:forgejo/forgejo"          # code.forgejo.org/forgejo/forgejo
+    "karakeep-app/karakeep"             # ghcr.io/karakeep-app/karakeep
+    "glanceapp/glance"                  # docker.io/glanceapp/glance
+    "lukasdietrich/glance-k8s"          # ghcr.io/lukasdietrich/glance-k8s/glance-k8s
+    "dockerhub:seerr/seerr"             # docker.io/seerr/seerr
+    "vikunja/vikunja"                   # docker.io/vikunja/vikunja
+    "excalidraw/excalidraw"             # excalidraw/excalidraw
+    "getmeili/meilisearch"              # getmeili/meilisearch
+
+    # Infra / Operators
+    "arnarg/nixidy"                     # internal project
+    "nix-community/nixhelm"             # internal project
+    "cloudnative-pg/cloudnative-pg"     # ghcr.io/cloudnative-pg/cloudnative-pg
+    "kubernetes-csi/csi-driver-nfs"     # registry.k8s.io/sig-storage/nfsplugin
+    "TECHNOFAB/tofunix"                 # gitlab.com/TECHNOFAB/tofunix (OpenTofu providers)
+
+    # LinuxServer.io suite (Yarr)
+    "linuxserver/lidarr"                # lscr.io/linuxserver/lidarr
+    "linuxserver/radarr"                # lscr.io/linuxserver/radarr
+    "linuxserver/sonarr"                # lscr.io/linuxserver/sonarr
+    "linuxserver/prowlarr"              # lscr.io/linuxserver/prowlarr
+    "linuxserver/sabnzbd"               # lscr.io/linuxserver/sabnzbd
+
+    # Storage & Registries
+    "goharbor/harbor"                   # docker.io/goharbor/*
+    "longhorn/longhorn"                 # docker.io/longhornio/longhorn-*
+    "dockerhub:dxflrs/garage"           # dxflrs/amd64_garage — private self-hosted, tracked by image name only
+    "rajsinghtech/garage-operator"      # ghcr.io/rajsinghtech/garage-operator
+    "dockerhub:noooste/garage-ui"       # noooste/garage-ui — no public repo, tracked by image name
+
+    # Monitoring & Observability
+    "prometheus/prometheus"             # quay.io/prometheus/prometheus
+    "grafana/grafana"                   # docker.io/grafana/grafana
+    "prometheus/node-exporter"          # quay.io/prometheus/node-exporter
+    "kiwigrid/k8s-sidecar"              # quay.io/kiwigrid/k8s-sidecar
+    "grafana/alloy"                     # ghcr.io/grafana/alloy-operator
+    "emberstack/kubernetes-reflector"   # docker.io/emberstack/kubernetes-reflector
+
+    # Networking & Security
+    "metallb/metallb"                   # quay.io/metallb/*
+    "jetstack/cert-manager"             # quay.io/jetstack/cert-manager-*
+    "isindir/sops-secrets-operator"     # quay.io/isindir/sops-secrets-operator
+    "searxng/searxng"                   # docker.io/searxng/searxng
+    "valkey-project/valkey"             # docker.io/valkey/valkey
+
+    # CI/CD & Auth
+    "woodpecker-ci/woodpecker"          # docker.io/woodpeckerci/woodpecker-*
+    "pocket-id/pocket-id"               # ghcr.io/pocket-id/pocket-id
+
+    # Misc
+    "kalbasit/ncps"                     # ghcr.io/kalbasit/ncps
+    "rancher/local-path-provisioner"    # rancher/local-path-provisioner
+    "Zenika/alpine-chrome"              # gcr.io/zenika-hub/alpine-chrome
+    "jordan-dalby/bytestash"            # ghcr.io/jordan-dalby/bytestash
   ];
 
   repositoriesOpenTofu = [
