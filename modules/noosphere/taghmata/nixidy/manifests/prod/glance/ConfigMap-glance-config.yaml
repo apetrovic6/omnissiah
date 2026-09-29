@@ -71,6 +71,8 @@ data:
       - size: small
         widgets:
         - cache: 1d
+          collapse-after: 10
+          limit: 100
           repositories:
           - immich-app/immich
           - codeberg:forgejo/forgejo
@@ -78,35 +80,35 @@ data:
           - glanceapp/glance
           - lukasdietrich/glance-k8s
           - dockerhub:seerr/seerr
-          - vikunja/vikunja
+          - go-vikunja/vikunja
           - excalidraw/excalidraw
-          - getmeili/meilisearch
+          - meilisearch/meilisearch
           - arnarg/nixidy
           - nix-community/nixhelm
           - cloudnative-pg/cloudnative-pg
           - kubernetes-csi/csi-driver-nfs
-          - TECHNOFAB/tofunix
-          - linuxserver/lidarr
-          - linuxserver/radarr
-          - linuxserver/sonarr
-          - linuxserver/prowlarr
-          - linuxserver/sabnzbd
+          - gitlab:TECHNOFAB/tofunix
+          - linuxserver/docker-lidarr
+          - linuxserver/docker-radarr
+          - linuxserver/docker-sonarr
+          - linuxserver/docker-prowlarr
+          - linuxserver/docker-sabnzbd
           - goharbor/harbor
           - longhorn/longhorn
-          - dockerhub:dxflrs/garage
+          - dockerhub:dxflrs/amd64_garage
           - rajsinghtech/garage-operator
           - dockerhub:noooste/garage-ui
           - prometheus/prometheus
           - grafana/grafana
-          - prometheus/node-exporter
+          - prometheus/node_exporter
           - kiwigrid/k8s-sidecar
-          - grafana/alloy
+          - grafana/alloy-operator
           - emberstack/kubernetes-reflector
           - metallb/metallb
-          - jetstack/cert-manager
+          - cert-manager/cert-manager
           - isindir/sops-secrets-operator
           - searxng/searxng
-          - valkey-project/valkey
+          - valkey-io/valkey
           - woodpecker-ci/woodpecker
           - pocket-id/pocket-id
           - kalbasit/ncps
@@ -115,6 +117,7 @@ data:
           - jordan-dalby/bytestash
           show-source-icon: true
           title: Git
+          token: ${GLANCE_GITHUB_TOKEN}
           type: releases
         - cache: 1d
           repositories:
@@ -123,6 +126,7 @@ data:
           - goharbor/terraform-provider-harbor
           show-source-icon: true
           title: Open Tofu Providers
+          token: ${GLANCE_GITHUB_TOKEN}
           type: releases
       name: Home
   services.yml: "- center-vertically: true\n  columns:\n  - size: full\n    widgets:\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      title: Nodes\n      type: extension\n      url: http://glance-k8s/extension/nodes\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      parameters:\n        show-if: \"namespace != \\\"kube-system\\\" and\\n\\\"glance/name\\\" in annotations\n          and\\n (\\\"category\\\" in annotations && annotations[\\\"category\\\"] == \\\"gitops\\\"\\\n          )\\n\"\n      title: GitOps\n      type: extension\n      url: http://glance-k8s/extension/apps\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      parameters:\n        show-if: \"namespace != \\\"kube-system\\\" and\\n\\\"glance/name\\\" in annotations\n          and\\nannotations[\\\"glance/hide\\\"] != \\\"true\\\" and\\n(\\\"category\\\" in annotations\n          && annotations[\\\"category\\\"] == \\\"storage\\\")\\n\"\n      title: Storage\n      type: extension\n      url: http://glance-k8s/extension/apps\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      parameters:\n        show-if: \"namespace != \\\"kube-system\\\" and\\n\\\"glance/name\\\" in annotations\n          and\\n (\\\"category\\\" in annotations && annotations[\\\"category\\\"] == \\\"monitoring\\\"\\\n          )\\n\"\n      title: Monitoring\n      type: extension\n      url: http://glance-k8s/extension/apps\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      parameters:\n        show-if: \"namespace != \\\"kube-system\\\" and\\n\\\"glance/name\\\" in annotations\n          and\\n (\\\"category\\\" in annotations && annotations[\\\"category\\\"] == \\\"yarr\\\"\\\n          )\\n\"\n      title: Yarr\n      type: extension\n      url: http://glance-k8s/extension/apps\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      parameters:\n        show-if: \"namespace != \\\"kube-system\\\" and\\n\\\"glance/name\\\" in annotations\n          and\\n (\\\"category\\\" in annotations && annotations[\\\"category\\\"] == \\\"security\\\"\\\n          )\\n\"\n      title: Security\n      type: extension\n      url: http://glance-k8s/extension/apps\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      parameters:\n        show-if: \"namespace != \\\"kube-system\\\" and\\n\\\"glance/name\\\" in annotations\n          and\\n (\\\"category\\\" in annotations && annotations[\\\"category\\\"] == \\\"search\\\"\\\n          )\\n\"\n      title: Search\n      type: extension\n      url: http://glance-k8s/extension/apps\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      parameters:\n        show-if: \"namespace != \\\"kube-system\\\" and\\n\\\"glance/name\\\" in annotations\n          and\\n (\\\"category\\\" in annotations && annotations[\\\"category\\\"] == \\\"productivity\\\"\\\n          )\\n\"\n      title: Productivity\n      type: extension\n      url: http://glance-k8s/extension/apps\n    - allow-potentially-dangerous-html: true\n      cache: 1m\n      parameters:\n        show-if: \"namespace != \\\"kube-system\\\" and\\n\\\"glance/name\\\" in annotations\n          and\\n (\\\"category\\\" in annotations && annotations[\\\"category\\\"] == \\\"utils\\\"\\\n          )\\n\"\n      title: Utils\n      type: extension\n      url: http://glance-k8s/extension/apps\n    - groups:\n      - hide-arrow: true\n        links:\n        - icon: https://nixidy.dev/logo.svg\n          title: Nixidy\n          url: https://nixidy.dev/\n        - icon: di:artifacthub\n          title: Artifact Hub\n          url: https://artifacthub.io/\n        - icon: di:artifacthub\n          title: Operator Hub\n          url: https://operatorhub.io/\n        title: K8s\n      - hide-arrow: true\n        links:\n        - icon: sh:postgresql\n          title: CloudNative PG\n          url: https://cloudnative-pg.io/docs/\n        - icon: sh:postgresql\n          title: CloudNative PG Examples\n          url: \n            https://github.com/cloudnative-pg/cloudnative-pg/tree/main/docs/src/samples\n        - icon: sh:postgresql\n          title: Barman Cloud Plugin\n          url: https://cloudnative-pg.io/plugin-barman-cloud/docs/usage/\n        - icon: di:argo-cd\n          title: Argo CD\n          url: https://argo-cd.readthedocs.io/en/stable/\n        - icon: di:longhorn\n          title: Longhorn\n          url: https://longhorn.io/docs\n        title: Docs\n      - hide-arrow: true\n        links:\n        - icon: di:nixos\n          title: Nix Wiki\n          url: https://wiki.nixos.org/wiki/NixOS_Wiki\n        - icon: di:nixos\n          title: Noogle\n          url: https://noogle.dev\n        - icon: di:nixos\n          title: Nixos Search\n          url: https://search.nixos.org/packages\n        - icon: auto-invert \n            https://docs.clan.lol/main/static/icons/clan-logo.svg\n          title: Clan.lol\n          url: https://docs.clan.lol\n        title: Nix\n      - hide-arrow: true\n        links:\n        - icon: https://external-content.duckduckgo.com/ip3/deepwiki.org.ico\n          title: Deep Wiki\n          url: https://deepwiki.org/\n        title: Utils\n      - hide-arrow: true\n        links:\n        - icon: mdi:material-ui\n          title: Material Design Icons\n          url: https://pictogrammers.com/library/mdi/\n        - icon: di:dashboard-icons\n          title: Dashboard Icons\n          url: https://dashboardicons.com/icons\n        - icon: sh:selfh-st\n          title: Selfh.st Icons\n          url: https://selfh.st/icons/\n        title: Icons\n      type: bookmarks\n    width: slim\n  name: Services\n  width: slim\n"

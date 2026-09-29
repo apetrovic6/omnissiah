@@ -12,10 +12,19 @@
 
   yaml = pkgs.formats.yaml {};
 
+  # Produced by the clan vars generator in
+  # modules/noosphere/taghmata/rke2/kube-secrets/glance/default.nix.
+  # Absent until `clan vars generate` has been run, so every consumer below is
+  # guarded by pathExists: without the secret the deployment renders exactly as
+  # it did before (unauthenticated GitHub calls) rather than failing to eval.
+  githubTokenVarFile = ../../../../../../../vars/shared/glance-secrets/glance-secrets/value;
+  hasGithubToken = builtins.pathExists githubTokenVarFile;
+
   importConfig = name:
     (import ./config/${name}.nix {
       inherit domain;
       inherit lib;
+      inherit hasGithubToken;
     }).${
       name
     };
@@ -35,6 +44,12 @@ in {
     inherit namespace;
 
     createNamespace = true;
+
+    # The age-encrypted SopsSecret the sops-secrets-operator turns into the
+    # in-cluster `glance-secrets` Secret. Only emitted once the var exists.
+    yamls = lib.optionals hasGithubToken [
+      (builtins.readFile githubTokenVarFile)
+    ];
 
     resources.configMaps.glance-config = {
       data = {
@@ -122,9 +137,14 @@ in {
                     mountPath = "/app/assets";
                   }
                 ];
-                # envFrom = [
-                #   {secretRef.name = "glance-secrets";} # created by your SOPS operator
-                # ];
+                # Materialised from the glance-secrets SopsSecret by the
+                # sops-secrets-operator. Exposes GLANCE_GITHUB_TOKEN, which
+                # home.yml interpolates into the releases widget's `token`.
+                envFrom = lib.optionals hasGithubToken [
+                  {
+                    secretRef.name = "glance-secrets";
+                  }
+                ];
               }
             ];
           };

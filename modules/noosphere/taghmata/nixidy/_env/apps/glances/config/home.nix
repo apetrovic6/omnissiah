@@ -1,6 +1,7 @@
 {
   domain,
   lib,
+  hasGithubToken ? false,
   ...
 }: let
   rss = {
@@ -62,51 +63,52 @@
 
   repositories = [
     # Application stacks
-    "immich-app/immich"                 # docker.io/imhich_app/immich
+    "immich-app/immich"                 # ghcr.io/immich-app/immich
     "codeberg:forgejo/forgejo"          # code.forgejo.org/forgejo/forgejo
     "karakeep-app/karakeep"             # ghcr.io/karakeep-app/karakeep
     "glanceapp/glance"                  # docker.io/glanceapp/glance
     "lukasdietrich/glance-k8s"          # ghcr.io/lukasdietrich/glance-k8s/glance-k8s
     "dockerhub:seerr/seerr"             # docker.io/seerr/seerr
-    "vikunja/vikunja"                   # docker.io/vikunja/vikunja
+    "go-vikunja/vikunja"                # docker.io/vikunja/vikunja (canonical: code.vikunja.io)
     "excalidraw/excalidraw"             # excalidraw/excalidraw
-    "getmeili/meilisearch"              # getmeili/meilisearch
+    "meilisearch/meilisearch"           # getmeili/meilisearch
 
     # Infra / Operators
     "arnarg/nixidy"                     # internal project
     "nix-community/nixhelm"             # internal project
     "cloudnative-pg/cloudnative-pg"     # ghcr.io/cloudnative-pg/cloudnative-pg
     "kubernetes-csi/csi-driver-nfs"     # registry.k8s.io/sig-storage/nfsplugin
-    "TECHNOFAB/tofunix"                 # gitlab.com/TECHNOFAB/tofunix (OpenTofu providers)
+    "gitlab:TECHNOFAB/tofunix"          # gitlab.com/TECHNOFAB/tofunix (OpenTofu providers)
 
-    # LinuxServer.io suite (Yarr)
-    "linuxserver/lidarr"                # lscr.io/linuxserver/lidarr
-    "linuxserver/radarr"                # lscr.io/linuxserver/radarr
-    "linuxserver/sonarr"                # lscr.io/linuxserver/sonarr
-    "linuxserver/prowlarr"              # lscr.io/linuxserver/prowlarr
-    "linuxserver/sabnzbd"               # lscr.io/linuxserver/sabnzbd
+    # LinuxServer.io suite (Yarr) — image is lscr.io/linuxserver/<app>,
+    # the Dockerfile repos are linuxserver/docker-<app>.
+    "linuxserver/docker-lidarr"         # lscr.io/linuxserver/lidarr
+    "linuxserver/docker-radarr"         # lscr.io/linuxserver/radarr
+    "linuxserver/docker-sonarr"         # lscr.io/linuxserver/sonarr
+    "linuxserver/docker-prowlarr"       # lscr.io/linuxserver/prowlarr
+    "linuxserver/docker-sabnzbd"        # lscr.io/linuxserver/sabnzbd
 
     # Storage & Registries
     "goharbor/harbor"                   # docker.io/goharbor/*
     "longhorn/longhorn"                 # docker.io/longhornio/longhorn-*
-    "dockerhub:dxflrs/garage"           # dxflrs/amd64_garage — private self-hosted, tracked by image name only
+    "dockerhub:dxflrs/amd64_garage"     # dxflrs/amd64_garage — upstream is git.deuxfleurs.fr (unsupported by glance)
     "rajsinghtech/garage-operator"      # ghcr.io/rajsinghtech/garage-operator
     "dockerhub:noooste/garage-ui"       # noooste/garage-ui — no public repo, tracked by image name
 
     # Monitoring & Observability
     "prometheus/prometheus"             # quay.io/prometheus/prometheus
     "grafana/grafana"                   # docker.io/grafana/grafana
-    "prometheus/node-exporter"          # quay.io/prometheus/node-exporter
+    "prometheus/node_exporter"          # quay.io/prometheus/node-exporter
     "kiwigrid/k8s-sidecar"              # quay.io/kiwigrid/k8s-sidecar
-    "grafana/alloy"                     # ghcr.io/grafana/alloy-operator
+    "grafana/alloy-operator"            # ghcr.io/grafana/alloy-operator
     "emberstack/kubernetes-reflector"   # docker.io/emberstack/kubernetes-reflector
 
     # Networking & Security
     "metallb/metallb"                   # quay.io/metallb/*
-    "jetstack/cert-manager"             # quay.io/jetstack/cert-manager-*
+    "cert-manager/cert-manager"         # quay.io/jetstack/cert-manager-*
     "isindir/sops-secrets-operator"     # quay.io/isindir/sops-secrets-operator
     "searxng/searxng"                   # docker.io/searxng/searxng
-    "valkey-project/valkey"             # docker.io/valkey/valkey
+    "valkey-io/valkey"                  # docker.io/valkey/valkey
 
     # CI/CD & Auth
     "woodpecker-ci/woodpecker"          # docker.io/woodpeckerci/woodpecker-*
@@ -125,13 +127,26 @@
     "goharbor/terraform-provider-harbor"
   ];
 
+  # Injected from the GLANCE_GITHUB_TOKEN env var (see the glance-secrets
+  # SopsSecret). Glance aborts parsing the WHOLE config if a referenced env var
+  # is missing, so this attribute is only emitted when the secret is actually
+  # wired into the Deployment — never leave `${...}` in the config unguarded.
+  githubAuth = lib.optionalAttrs hasGithubToken {
+    token = "\${GLANCE_GITHUB_TOKEN}";
+  };
+
   releases = {
     title = "Git";
     type = "releases";
     cache = "1d";
     show-source-icon = true;
+    # Without an explicit limit this defaults to 10, so most of the
+    # repositories below never render (only the 10 newest releases show).
+    limit = 100;
+    collapse-after = 10;
     inherit repositories;
-  };
+  }
+  // githubAuth;
 
   releasesOpenTofu = {
     title = "Open Tofu Providers";
@@ -139,7 +154,8 @@
     cache = "1d";
     show-source-icon = true;
     repositories = repositoriesOpenTofu;
-  };
+  }
+  // githubAuth;
 in {
   home = [
     {
