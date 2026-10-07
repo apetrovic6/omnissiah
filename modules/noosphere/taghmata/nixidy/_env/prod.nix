@@ -70,6 +70,32 @@ in {
   #     # values = {};
   #   };
   # };
+  applications.calico-config = {
+    namespace = "kube-system";
+    output.path = "./calico";
+
+    yamls = [
+      ''
+        apiVersion: helm.cattle.io/v1
+        kind: HelmChartConfig
+        metadata:
+          name: rke2-calico
+          namespace: kube-system
+        spec:
+          valuesContent: |-
+            installation:
+              calicoNetwork:
+                # Pin the pod MTU rather than letting Felix auto-detect it.
+                # Calico's default mtuIfacePattern does not match servitor's
+                # "end0" (the Amlogic meson driver's name), so detection failed
+                # there and fell back to 1410 while every other node computed
+                # 1450. Mixed MTUs across the VXLAN overlay are a PMTU black
+                # hole: small packets pass, full-size ones are dropped, and TCP
+                # only finds out by timing out.
+                mtu: 1450
+      ''
+    ];
+  };
 
   applications.coredns-config = {
     namespace = "kube-system";
