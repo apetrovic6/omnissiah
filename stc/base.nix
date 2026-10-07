@@ -11,9 +11,7 @@
     pkgs,
     ...
   }: {
-    imports = [
-      self.inputs.nix-index-database.nixosModules.default
-    ];
+    imports = [];
 
     nixpkgs.overlays = [
       self.overlays.go125-shim
@@ -31,21 +29,10 @@
       fastfetch
       yazi
       killall
-      (
-        pkgs.writeShellApplication {
-          name = "ns";
-          runtimeInputs = with pkgs; [
-            fzf
-            nix-search-tv
-          ];
-          text = builtins.readFile "${pkgs.nix-search-tv.src}/nixpkgs.sh";
-        }
-      )
     ];
 
     services.openssh.settings.MaxAuthTries = 10;
 
-    programs.nix-index-database.comma.enable = true;
     # Firmware updates (UEFI / TB / docks, etc.)
     services.fwupd.enable = true;
 
