@@ -8,9 +8,9 @@ data:
         service: registry
     storage:
       s3:
-        region: garage
-        bucket: harbor-bucket
-        regionendpoint: http://garage.garage.svc.cluster.local:3900
+        region: main
+        bucket: harbor
+        regionendpoint: http://garage-main.garage-operator.svc.cluster.local:3900
       cache:
         layerinfo: redis
       maintenance:

@@ -211,10 +211,10 @@ in {
           imageChartStorage = {
             type = "s3";
             s3 = {
-              existingSecret = "harbor-s3-secret-key";
-              region = "garage";
-              regionendpoint = "http://garage.garage.svc.cluster.local:3900";
-              bucket = "harbor-bucket";
+              existingSecret = "harbor-main-s3-secret-key";
+              region = "main";
+              regionendpoint = "http://garage-main.garage-operator.svc.cluster.local:3900";
+              bucket = "harbor";
             };
 
             # Disable redirects - proxy blobs through Harbor instead of redirecting to S3
