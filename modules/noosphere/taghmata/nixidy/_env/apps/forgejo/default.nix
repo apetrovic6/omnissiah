@@ -106,7 +106,12 @@ in {
         persistence = {
           enabled = true;
           storageClass = "longhorn";
-          accessModes = ["ReadWriteMany"];
+          # Must stay RWO: the live PVC was bound RWO and accessModes is
+          # immutable, so declaring RWX here can never reconcile -- it just
+          # parks the forgejo app permanently OutOfSync. The deployment is
+          # replicas=1 with strategy=Recreate, so RWX buys nothing. Switching
+          # for real means recreating the PVC and moving the data.
+          accessModes = ["ReadWriteOnce"];
         };
 
         service.ssh = {
