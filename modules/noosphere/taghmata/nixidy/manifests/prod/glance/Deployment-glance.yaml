@@ -29,6 +29,13 @@ spec:
               name: glance-config
             - mountPath: /app/assets
               name: glance-assets
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      tolerations:
+        - effect: NoSchedule
+          key: arch
+          operator: Equal
+          value: arm64
       volumes:
         - configMap:
             name: glance-config
