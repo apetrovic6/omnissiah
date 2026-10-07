@@ -38,14 +38,18 @@
         '';
       };
 
-      cni = mkOption {
-        type = types.enum ["canal" "calico" "cilium" "flannel" "none"];
-        default = "calico";
-        description = ''
-          CNI plugin this node expects the cluster to use.
-          Must match the servers' CNI setting.
-        '';
-      };
+      # NOTE: there is deliberately no `cni` option here.
+      #
+      # `--cni` is a server-only flag. An agent takes its CNI from the cluster
+      # it joins, and passing the flag anyway is not ignored -- rke2 exits
+      # immediately on the unknown flag:
+      #
+      #   $ rke2 agent --cni=calico
+      #   Incorrect Usage: flag provided but not defined: -cni
+      #
+      # nixpkgs says the same in its own module (services/cluster/rancher/rke2.nix):
+      # for an agent, `agentToken`, `agentTokenFile`, `disable` and `cni`
+      # should not be set. Leave services.rke2.cni unset (null) on agents.
 
       extraFlags = mkOption {
         type = types.listOf types.str;
@@ -73,18 +77,32 @@
         '';
       };
 
+      nodeIP = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "192.168.1.13";
+        description = ''
+          Address to advertise as this node's InternalIP. Worth setting on any
+          node that has more than one address on its primary interface --
+          kubelet otherwise picks one on its own, and the cluster caches the
+          choice.
+        '';
+      };
+
       openFirewall = mkOption {
         type = types.bool;
         default = true;
         description = ''
           Whether to open the common RKE2 agent ports in the firewall.
 
-          This opens:
-            - TCP 10250  (kubelet metrics, for metrics-server)
-            - UDP 8472   (Flannel/Canal VXLAN)
+          The agent *initiates* its connections to the server (9345/6443), so
+          those do not need opening inbound here. What does:
 
-          The agent *initiates* connections to the server (9345/6443),
-          so usually you don't need to open those inbound on the agent.
+            - TCP 10250        kubelet (metrics-server, `kubectl logs/exec`)
+            - TCP 9098, 9099   Calico Typha and Felix metrics
+            - TCP/UDP 7946     MetalLB speaker memberlist
+            - UDP 4789         Calico VXLAN
+            - UDP 8472         Flannel/Canal VXLAN
         '';
       };
     };
@@ -99,8 +117,8 @@
         tokenFile = cfg.tokenFile;
 
         # Networking / node identity
-        cni = cfg.cni;
         nodeName = config.networking.hostName;
+        nodeIP = cfg.nodeIP;
 
         nodeLabel = cfg.nodeLabels;
         nodeTaint = cfg.nodeTaints;
@@ -111,10 +129,19 @@
       networking.firewall = mkIf cfg.openFirewall {
         allowedTCPPorts = [
           10250 # kubelet metrics
+          9098 # calico typha metrics
+          9099 # calico felix metrics
+          7946 # metallb speaker memberlist
         ];
 
         allowedUDPPorts = [
+          # 4789 is the one that actually matters for this cluster: the
+          # default-ipv4-ippool runs vxlanMode=Always. Leaving it closed
+          # black-holes pod-to-pod traffic to this node, which reads as a CNI
+          # fault rather than a firewall one.
+          4789 # calico VXLAN
           8472 # flannel/canal VXLAN
+          7946 # metallb speaker memberlist
         ];
       };
     };

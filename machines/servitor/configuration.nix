@@ -14,12 +14,31 @@
   # the tags once this works.
   environment.systemPackages = with pkgs; [];
 
+  networking.interfaces.end0 = {
+    useDHCP = false;
+    ipv4.addresses = [
+      {
+        address = "192.168.1.13";
+        prefixLength = 24;
+      }
+    ];
+  };
+  networking.defaultGateway = {
+    address = "192.168.1.1";
+    interface = "end0";
+  };
+  networking.nameservers = ["192.168.1.105"];
+
+  environment.etc."NetworkManager/conf.d/unmanaged-end0.conf".text = ''
+    [keyfile]
+    unmanaged-devices=interface-name:end0;
+  '';
+
   # The admin clan service (clan.nix, roles.default.tags.all) authorises the
   # admin key for root, which is what `clan machines update` uses. sshd itself
   # still has to be on for that to be reachable.
   services.openssh.enable = true;
 
-  networking.useDHCP = lib.mkForce true;
   networking.firewall.allowedTCPPorts = [22];
 
   # 4 GB of RAM and no swap partition in the image: without this, a
