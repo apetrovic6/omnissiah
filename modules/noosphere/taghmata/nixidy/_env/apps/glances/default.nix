@@ -104,17 +104,6 @@ in {
         template = {
           metadata.labels = labels;
           spec = {
-            nodeSelector."kubernetes.io/arch" = "arm64";
-
-            tolerations = [
-              {
-                key = "arch";
-                operator = "Equal";
-                value = "arm64";
-                effect = "NoSchedule";
-              }
-            ];
-
             volumes = [
               {
                 name = "glance-config";
