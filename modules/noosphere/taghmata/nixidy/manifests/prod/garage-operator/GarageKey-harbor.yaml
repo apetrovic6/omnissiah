@@ -12,3 +12,12 @@ spec:
       write: true
   clusterRef:
     name: garage-main
+  secretTemplate:
+    accessKeyIdKey: REGISTRY_STORAGE_S3_ACCESSKEY
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: harbor
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: harbor
+    name: harbor-main-s3-secret-key
+    secretAccessKeyKey: REGISTRY_STORAGE_S3_SECRETKEY

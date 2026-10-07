@@ -195,6 +195,23 @@
             owner = true;
           }
         ];
+
+        # Harbor's registry chart reads its S3 credentials from a plain
+        # `existingSecret`, so the key names here must be exactly what the
+        # chart looks for -- not the operator's default access-key-id /
+        # secret-access-key -- and the secret has to be reflected into the
+        # `harbor` namespace, since GarageKeys all live in garage-operator.
+        secretTemplate = {
+          name = "harbor-main-s3-secret-key";
+          accessKeyIdKey = "REGISTRY_STORAGE_S3_ACCESSKEY";
+          secretAccessKeyKey = "REGISTRY_STORAGE_S3_SECRETKEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "harbor";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "harbor";
+          };
+        };
       };
     };
 
