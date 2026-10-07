@@ -9,23 +9,32 @@
 
     domain = config.noosphere.domain;
 
-    registriesYaml = ''
-      mirrors:
-        "docker.io":
-          endpoint:
-            - "https://${cfg.harborHost}"
-          rewrite:
-            "^(.*)$": "${cfg.dockerProject}/$1"
+    # One mirror block per upstream registry proxied through Harbor.
+    #
+    # A registry whose project is null is left out of the file entirely, which
+    # is the only way to keep a given image off Harbor: RKE2 mirror keys are
+    # registry hostnames, with no repository-path scoping, and the `rewrite`
+    # regexes are Go RE2 -- no negative lookahead -- so a mirror cannot be made
+    # to carve out one repository under a host it otherwise proxies.
+    mirrorLines = registry: project: [
+      "  \"${registry}\":"
+      "    endpoint:"
+      "      - \"https://${cfg.harborHost}\""
+      "    rewrite:"
+      "      \"^(.*)$\": \"${project}/$1\""
+    ];
 
-        "ghcr.io":
-          endpoint:
-            - "https://${cfg.harborHost}"
-          rewrite:
-            "^(.*)$": "${cfg.ghcrProject}/$1"
-
-      configs:
-        "${cfg.harborHost}": {}
-    '';
+    registriesYaml = lib.concatStringsSep "\n" (
+      ["mirrors:"]
+      ++ lib.optionals (cfg.dockerProject != null) (mirrorLines "docker.io" cfg.dockerProject)
+      ++ lib.optionals (cfg.ghcrProject != null) (mirrorLines "ghcr.io" cfg.ghcrProject)
+      ++ [
+        ""
+        "configs:"
+        "  \"${cfg.harborHost}\": {}"
+        ""
+      ]
+    );
   in {
     options.services.imperium.taghmata.rke2.registryCache = {
       enable = lib.mkEnableOption "RKE2 registry mirror via Harbor proxy cache";
@@ -36,13 +45,21 @@
       };
 
       dockerProject = lib.mkOption {
-        type = lib.types.str;
-        default = "";
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Harbor proxy-cache project backing docker.io, or null to leave
+          docker.io unmirrored so containerd pulls it directly.
+        '';
       };
 
       ghcrProject = lib.mkOption {
-        type = lib.types.str;
-        default = "";
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Harbor proxy-cache project backing ghcr.io, or null to leave ghcr.io
+          unmirrored so containerd pulls it directly.
+        '';
       };
     };
 

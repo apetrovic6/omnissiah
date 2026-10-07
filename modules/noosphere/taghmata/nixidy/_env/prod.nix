@@ -161,7 +161,12 @@ in {
         spec:
           valuesContent: |-
             service:
-              type: LoadBalancer
+              # Traefik chart v40 (rke2-traefik 40.1.010+) renders the Service
+              # spec straight from `service.spec`; a top-level `service.type` is
+              # silently ignored, so the Service falls back to ClusterIP and the
+              # MetalLB VIP -- and all external ingress -- disappears.
+              spec:
+                type: LoadBalancer
               annotations:
                 metallb.io/allow-shared-ip: "noosphere"
                 metallb.io/loadBalancerIPs: "192.168.1.251"

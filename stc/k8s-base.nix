@@ -35,7 +35,28 @@
     services.imperium.taghmata.rke2.registryCache = {
       enable = true;
       dockerProject = "docker_cache";
-      ghcrProject = "github_cache";
+
+      # ghcr.io is deliberately NOT mirrored, to keep CNPG off Harbor.
+      #
+      # Harbor's own database is a CNPG cluster, so routing
+      # ghcr.io/cloudnative-pg/* through Harbor makes Harbor a prerequisite for
+      # starting the thing Harbor depends on. On 2026-10-02 that closed into a
+      # deadlock: a node lost the Longhorn CSI driver, the Harbor DB primary
+      # living on it could not restart, Harbor served nothing, and the node had
+      # no working mirror to pull its way out. It took ~17 minutes to break out
+      # on its own, via containerd's last-resort fallback to the upstream.
+      #
+      # This cannot be expressed as an exclusion: RKE2 mirror keys are
+      # hostnames only, so the choice is per registry, not per repository.
+      # ghcr.io costs little to give up -- 12 distinct images cluster-wide
+      # against 63 on docker.io -- and four of those twelve are the CNPG ones
+      # this is about.
+      #
+      # Still unbroken, and not fixable the same way: docker.io/goharbor/* and
+      # docker.io/longhornio/* are the other two links, and dropping the
+      # docker.io mirror wholesale is too high a price. Those need the images
+      # preloaded on every node instead.
+      ghcrProject = null;
     };
 
     # Make mount helpers visible in FHS-ish locations Longhorn expects via nsenter
@@ -91,8 +112,8 @@
           enable = true;
           name = "argo-cd";
           repo = "https://argoproj.github.io/argo-helm";
-          version = "9.3.4";
-          hash = "sha256-dpTJFsJgs8rZU3ejxgyggLSpeYGGZnFTPLeQVMV0wG0=";
+          version = "10.9.6";
+          hash = "sha256-btqQvdGN5ThRHJuayhynunocpbkZ9ZhxTQ6RzXFV0Rk=";
           createNamespace = true;
           targetNamespace = "argocd";
 
