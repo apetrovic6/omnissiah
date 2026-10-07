@@ -1,7 +1,6 @@
 {config, ...}: let
   ageKey = config.noosphere.agePublicKey;
   harborAdminPassword = "harbor-admin-password-secret";
-  harborS3Storage = "harbor-s3-secret-key";
   harborSecretSecretKey = "harbor-secret-secret-key";
   harborJobServiceSecret = "harbor-job-service-secret";
   harborRegistryHttpSecret = "harbor-registry-http-secret";
@@ -208,52 +207,6 @@ in {
       '';
     };
 
-    clan.core.vars.generators.${harborS3Storage} = {
-      share = true;
-
-      prompts.access-key-id = {
-        description = "Enter Access Key ID: ";
-        type = "line";
-        persist = false;
-      };
-
-      prompts.access-key-secret = {
-        description = "Enter Access Key Secret: ";
-        type = "hidden";
-        persist = false;
-      };
-
-      files.${harborS3Storage}.secret = false;
-
-      runtimeInputs = [pkgs.coreutils pkgs.sops];
-
-      script = ''
-                set -euo pipefail
-
-                access_key="$(tr -d '\r\n' < "$prompts/access-key-id")"
-                secret_key="$(tr -d '\r\n' < "$prompts/access-key-secret")"
-
-
-        sops encrypt \
-          --age "${ageKey}" \
-          --encrypted-suffix "Templates" \
-          --input-type yaml --output-type yaml \
-          /dev/stdin > "$out/${harborS3Storage}" <<EOF
-        apiVersion: isindir.github.com/v1alpha3
-        kind: SopsSecret
-        metadata:
-          name: ${harborS3Storage}
-          namespace: harbor
-        spec:
-          secretTemplates:
-            - name: ${harborS3Storage}
-              type: Opaque
-              stringData:
-                REGISTRY_STORAGE_S3_ACCESSKEY: "$access_key"
-                REGISTRY_STORAGE_S3_SECRETKEY: "$secret_key"
-        EOF
-      '';
-    };
 
     clan.core.vars.generators."${harborPostgresSecret}" = {
       share = true;

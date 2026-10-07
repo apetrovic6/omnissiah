@@ -22,7 +22,6 @@ in {
     resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/harbor-s3-secret-key/harbor-s3-secret-key/value)
       (builtins.readFile ../../../../../../../vars/shared/harbor-admin-password-secret/harbor-admin-password-secret/value)
       (builtins.readFile ../../../../../../../vars/shared/harbor-secret-secret-key/harbor-secret-secret-key/value)
       (builtins.readFile ../../../../../../../vars/shared/harbor-job-service-secret/harbor-job-service-secret/value)

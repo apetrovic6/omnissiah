@@ -19,8 +19,6 @@ in {
     ./apps/prometheus-stack
     ./apps/yarr/seerr
     ./apps/csi-driver-nfs
-    ./apps/garage
-    ./apps/garage-ui
     ./apps/excalidraw
     ./apps/karakeep
     ./apps/bytestash

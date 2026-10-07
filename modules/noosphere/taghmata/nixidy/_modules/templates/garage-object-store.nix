@@ -11,19 +11,18 @@ in {
 
       awsDefaultRegion = mkOption {
         type = types.str;
-        default = "garage";
+        default = "backup";
         description = "Region of the Garage object store";
       };
 
       destinationPath = mkOption {
         type = types.str;
-        default = "s3://cnpg-backup-bucket/backups";
         description = "Path in the bucket";
       };
 
       endpointUrl = mkOption {
         type = types.str;
-        default = "http://garage.garage.svc.cluster.local:3900";
+        default = "http://garage-backup.garage-operator.svc.cluster.local:3900";
         description = "Garage Endpoint";
       };
 
