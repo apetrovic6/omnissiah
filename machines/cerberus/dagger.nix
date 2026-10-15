@@ -17,7 +17,7 @@
   # MUST match the engine version dagger-sdk pins in the fishing repo
   # (ci/Cargo.toml -> dagger-sdk 0.21.8) and the dagger CLI on PATH below.
   # All three move together or sessions fail to start.
-  version = "v0.21.8";
+  version = "v1.0.0-beta.14";
   port = 8080;
 in {
   virtualisation.oci-containers.containers.dagger-engine = {
