@@ -17,6 +17,8 @@ in {
     self.nixosModules.impermanence
     ./nopresh.nix
     ./kaneo.nix
+    ./memos.nix
+    ./davical.nix
     ./forgejo-runner.nix
     ./dagger.nix
     # self.inputs.impermanence.nixosModules.impermanence
@@ -60,6 +62,10 @@ in {
         }
         tls {
           dns cloudflare {$CLOUDFLARE_API_TOKEN}
+          # Same reason as mkRevProxyVHost in modules/litanies/default.nix:
+          # the local Technitium is authoritative for this zone and never has
+          # the _acme-challenge TXT.
+          resolvers 1.1.1.1 1.0.0.1
         }
       '';
     };
@@ -610,6 +616,9 @@ in {
         }
         tls {
           dns cloudflare {$CLOUDFLARE_API_TOKEN}
+          # noosphere.uk is a Technitium primary zone on this host too — see
+          # modules/litanies/default.nix.
+          resolvers 1.1.1.1 1.0.0.1
         }
       '';
     };
@@ -657,6 +666,9 @@ in {
         }
         tls {
           dns cloudflare {$CLOUDFLARE_API_TOKEN_KEKSIC}
+          # keksic.xyz is a Technitium primary zone on this host too — see
+          # modules/litanies/default.nix.
+          resolvers 1.1.1.1 1.0.0.1
         }
       '';
     };
