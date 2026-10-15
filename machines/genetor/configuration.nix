@@ -12,6 +12,12 @@
 
   nixpkgs.config = {allowUnfree = true;};
 
+  nixpkgs.overlays = [
+    self.overlays.helix
+    self.overlays.herdr
+    self.overlays.pi
+  ];
+
   system.primaryUser = "apetrovic";
   nix-homebrew = {
     enable = true;
@@ -64,7 +70,6 @@
   environment.systemPackages = with pkgs; [
     git
     wget
-    self.inputs.nvf.packages.${stdenv.hostPlatform.system}.default
     vim
     fastfetch
     yazi
@@ -75,8 +80,11 @@
     devenv
     claude-code
     xcodes
+    helix
+    herdr
+    pi-coding-agent
   ];
-  
+
   nix.enable = false;
 
   fonts.packages = [
