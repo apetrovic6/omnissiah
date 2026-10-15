@@ -99,6 +99,7 @@
           those do not need opening inbound here. What does:
 
             - TCP 10250        kubelet (metrics-server, `kubectl logs/exec`)
+            - TCP 9100         node-exporter (hostNetwork, so a host port)
             - TCP 9098, 9099   Calico Typha and Felix metrics
             - TCP/UDP 7946     MetalLB speaker memberlist
             - UDP 4789         Calico VXLAN
@@ -129,6 +130,7 @@
       networking.firewall = mkIf cfg.openFirewall {
         allowedTCPPorts = [
           10250 # kubelet metrics
+          9100 # node-exporter (runs hostNetwork, so this is a host port)
           9098 # calico typha metrics
           9099 # calico felix metrics
           7946 # metallb speaker memberlist
