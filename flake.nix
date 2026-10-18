@@ -100,6 +100,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # SoundCraft + the other 11 ArtCraft apps. Upstream (storytold) is
+    # pre-alpha and cuts releases daily, so leave this pinned and bump it
+    # deliberately -- `nix flake update nix-craftapps`.
+    nix-craftapps = {
+      url = "github:olafkfreund/nix-craftapps";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     darwin = {
       url = "github:nix-darwin/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";

@@ -17,6 +17,7 @@ in {
     self.nixosModules.lanzaboote
     self.nixosModules.vars
     self.nixosModules.smb
+    self.nixosModules.proaudio
     self.inputs.nixvirt.nixosModules.default
 
     ./vllm.nix
@@ -341,6 +342,14 @@ in {
 
   services.imperium.lanzaboote.enable = true;
   services.imperium.zram.enable = true;
+
+  # Realtime groundwork already comes from the rocksmith module via the
+  # "gaming" tag; this adds the plugin search paths, JACK, a buffer ceiling
+  # for mixdown sessions, and the DAW/plugin set.
+  services.imperium.proaudio = {
+    enable = true;
+    soundcraft.enable = true;
+  };
 
   hardware.nvidia.powerManagement.enable = true;
 
