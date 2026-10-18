@@ -12,11 +12,12 @@
   # CONFIG_PREEMPT_RT.
   flake.nixosModules.proaudio = {
     config,
+    options,
     lib,
     pkgs,
     ...
   }: let
-    inherit (lib) mkIf mkOption mkEnableOption types concatStringsSep;
+    inherit (lib) mkIf mkMerge mkOption mkEnableOption types concatStringsSep optionals optionalAttrs;
     cfg = config.services.imperium.proaudio;
 
     # NixOS has no FHS plugin directories, so every host (SoundCraft, Ardour,
@@ -29,6 +30,62 @@
         "$HOME/.nix-profile/lib/${dir}"
         "/run/current-system/sw/lib/${dir}"
       ];
+
+    yb = cfg.yabridge;
+
+    # The exact Wine that nixpkgs' yabridgectl wrapper puts on PATH
+    # (wine-wow64-yabridge, currently 9.21), referenced by store path rather
+    # than installed system-wide: a second `wine` on PATH would shadow
+    # whatever else expects one. Using the same build for the installer as
+    # for the plugin host is what keeps the prefix version consistent.
+    ybWine = pkgs.wineWow64Packages.yabridge;
+
+    # yabridgectl owns ~/.config/yabridgectl/config.toml and rewrites it on
+    # `add`, so the dirs are registered through the CLI instead of having
+    # Home Manager place a read-only file there that the CLI cannot update.
+    # Absolute path, not a bare `yabridgectl`: this snippet is also spliced
+    # into a Home Manager activation script, where PATH is not the user's and
+    # the `|| true` guard would turn a missing binary into a silent no-op --
+    # registering nothing, and leaving `sync` to find no plugins at all.
+    ybAddDirs = concatStringsSep "\n" (map (d: ''
+      if [ -d "$WINEPREFIX/${d}" ]; then
+        ${pkgs.yabridgectl}/bin/yabridgectl add "$WINEPREFIX/${d}" >/dev/null 2>&1 || true
+      fi
+    '') yb.pluginDirs);
+
+    yabridgeSync = pkgs.writeShellApplication {
+      name = "yabridge-sync";
+      runtimeInputs = [pkgs.yabridgectl];
+      text = ''
+        export WINEPREFIX="${yb.prefix}"
+        if [ ! -d "$WINEPREFIX" ]; then
+          echo "yabridge: no prefix at $WINEPREFIX -- install a plugin first with:"
+          echo "  yabridge-install /path/to/installer.exe"
+          exit 1
+        fi
+        ${ybAddDirs}
+        yabridgectl sync --prune
+        yabridgectl status
+      '';
+    };
+
+    yabridgeInstall = pkgs.writeShellApplication {
+      name = "yabridge-install";
+      runtimeInputs = [pkgs.yabridgectl yabridgeSync];
+      text = ''
+        if [ "$#" -eq 0 ]; then
+          echo "usage: yabridge-install <installer.exe> [args...]"
+          exit 1
+        fi
+        export WINEPREFIX="${yb.prefix}"
+        if [ ! -d "$WINEPREFIX" ]; then
+          echo "yabridge: creating prefix at $WINEPREFIX"
+          ${ybWine}/bin/wineboot -u
+        fi
+        ${ybWine}/bin/wine "$@"
+        yabridge-sync
+      '';
+    };
   in {
     # Inert until programs.craftapps.enable, so an unconditional import is
     # safe even on hosts that never turn proaudio on.
@@ -74,6 +131,37 @@
 
       soundcraft = {
         enable = mkEnableOption "SoundCraft, via the nix-craftapps flake";
+      };
+
+      yabridge = {
+        enable = mkEnableOption "yabridge, for Windows VST2/VST3/CLAP plugins under Wine";
+
+        prefix = mkOption {
+          type = types.str;
+          default = "$HOME/.wine-yabridge";
+          description = ''
+            WINEPREFIX holding the Windows plugins. Deliberately not ~/.wine:
+            a dedicated prefix keeps plugins clear of other Wine apps, and
+            stops an unrelated newer wine from upgrading the prefix past the
+            Wine version yabridge pins (prefixes do not downgrade cleanly).
+          '';
+        };
+
+        pluginDirs = mkOption {
+          type = types.listOf types.str;
+          default = [
+            "drive_c/Program Files/Common Files/VST3"
+            "drive_c/Program Files/Common Files/CLAP"
+            "drive_c/Program Files/Common Files/VST2"
+            "drive_c/Program Files/Steinberg/VstPlugins"
+            "drive_c/Program Files/VstPlugins"
+          ];
+          description = ''
+            Directories inside the prefix for yabridgectl to index, relative
+            to the prefix root. Ones that do not exist are skipped, so the
+            default covers the usual install locations without complaining.
+          '';
+        };
       };
 
       daws = mkOption {
@@ -131,7 +219,8 @@
       };
     };
 
-    config = mkIf cfg.enable {
+    config = mkIf cfg.enable (mkMerge [
+      {
       # ── Plugin discovery ──────────────────────────────────────────────
       environment.sessionVariables = {
         CLAP_PATH = pluginPath "clap";
@@ -159,7 +248,19 @@
         };
       };
 
-      environment.systemPackages = cfg.daws ++ cfg.plugins ++ cfg.tools;
+      environment.systemPackages =
+        cfg.daws
+        ++ cfg.plugins
+        ++ cfg.tools
+        # yabridgectl finds libyabridge-chainloader-*.so by searching
+        # NIX_PROFILES, and /run/current-system/sw is first in it, so simply
+        # installing yabridge here is enough -- no `yabridgectl set --path`.
+        ++ optionals yb.enable [
+          pkgs.yabridge
+          pkgs.yabridgectl
+          yabridgeInstall
+          yabridgeSync
+        ];
 
       # ── SoundCraft ────────────────────────────────────────────────────
       # nix-craftapps packages all twelve ArtCraft apps; enableAll stays off
@@ -176,6 +277,29 @@
         # so impermanence on this host is not a problem.
         linkFonts = true;
       };
-    };
+      }
+
+      # ── yabridge re-sync ────────────────────────────────────────────────
+      # yabridge's stubs embed the version they were generated from, so
+      # `yabridgectl sync` MUST be re-run after every yabridge bump or the
+      # plugins stop loading. Doing it at activation makes that automatic.
+      # --no-verify because the post-install checks spawn Wine, which has no
+      # business running inside an activation script; yabridge-sync does the
+      # verifying pass when invoked by hand.
+      (optionalAttrs (options ? home-manager) {
+        home-manager.sharedModules = mkIf yb.enable [
+          ({lib, ...}: {
+            home.activation.yabridgeSync = lib.hm.dag.entryAfter ["writeBoundary"] ''
+              export WINEPREFIX="${yb.prefix}"
+              if [ -d "$WINEPREFIX" ]; then
+                ${ybAddDirs}
+                ${pkgs.yabridgectl}/bin/yabridgectl sync --prune --no-verify || \
+                  echo "yabridge: sync failed -- run 'yabridge-sync' to see why"
+              fi
+            '';
+          })
+        ];
+      })
+    ]);
   };
 }
