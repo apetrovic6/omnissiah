@@ -350,6 +350,7 @@ in {
     enable = true;
     soundcraft.enable = true;
     yabridge.enable = true;
+    ilok.enable = true;
   };
 
   hardware.nvidia.powerManagement.enable = true;

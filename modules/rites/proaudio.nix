@@ -86,6 +86,55 @@
         yabridge-sync
       '';
     };
+
+    # Plain `winetricks` would act on ~/.wine with the system wine. This one
+    # is pinned to the yabridge prefix and the yabridge Wine, which is the
+    # only combination that matters here.
+    yabridgeWinetricks = pkgs.writeShellApplication {
+      name = "yabridge-winetricks";
+      runtimeInputs = [pkgs.winetricks];
+      text = ''
+        export WINEPREFIX="${yb.prefix}"
+        export WINE="${ybWine}/bin/wine"
+        export PATH="${ybWine}/bin:$PATH"
+        exec winetricks "$@"
+      '';
+    };
+
+    # iLok License Manager has to live in the SAME prefix as the plugins:
+    # the plugins query the PACE components installed alongside them, so an
+    # ILM in its own prefix authorises nothing.
+    ilokInstall = pkgs.writeShellApplication {
+      name = "ilok-install";
+      runtimeInputs = [yabridgeInstall];
+      text = ''
+        if [ "$#" -ne 1 ]; then
+          echo "usage: ilok-install /path/to/iLokLicenseManager.exe"
+          echo
+          echo "Download it from https://www.ilok.com/#!license-manager first."
+          exit 1
+        fi
+        echo "iLok: installing into ${yb.prefix}"
+        echo "iLok: machine activation and Cloud may work; a USB dongle will not."
+        yabridge-install "$1"
+      '';
+    };
+
+    ilok = pkgs.writeShellApplication {
+      name = "ilok";
+      text = ''
+        export WINEPREFIX="${yb.prefix}"
+        # Located rather than hardcoded: PACE has moved the install path
+        # between versions, and the name carries spaces either way.
+        ilm=$(find "$WINEPREFIX/drive_c" -iname "iLok License Manager.exe" 2>/dev/null | head -n1)
+        if [ -z "$ilm" ]; then
+          echo "iLok: License Manager not found in ${yb.prefix}"
+          echo "Install it with:  ilok-install /path/to/iLokLicenseManager.exe"
+          exit 1
+        fi
+        exec ${ybWine}/bin/wine "$ilm" "$@"
+      '';
+    };
   in {
     # Inert until programs.craftapps.enable, so an unconditional import is
     # safe even on hosts that never turn proaudio on.
@@ -164,6 +213,21 @@
         };
       };
 
+      ilok = {
+        enable =
+          mkEnableOption ''
+            iLok License Manager inside the yabridge Wine prefix.
+
+            Only machine ("PC") activation and iLok Cloud have any chance of
+            working. The iLok USB dongle does NOT: there is no Linux driver
+            for the key and Wine cannot pass it through, so even USB-over-IP
+            forwarding leaves nothing able to talk to it. Plugins whose
+            license is USB-only cannot be authorised on this machine at all.
+
+            Unsupported by PACE either way -- treat it as empirical
+          '';
+      };
+
       daws = mkOption {
         type = types.listOf types.package;
         default = [pkgs.ardour];
@@ -221,6 +285,15 @@
 
     config = mkIf cfg.enable (mkMerge [
       {
+      # iLok rides on the yabridge prefix and the Wine pinned with it, so it
+      # has nothing to install into on its own.
+      assertions = [
+        {
+          assertion = cfg.ilok.enable -> yb.enable;
+          message = "services.imperium.proaudio.ilok.enable requires yabridge.enable (it installs into the yabridge Wine prefix).";
+        }
+      ];
+
       # ── Plugin discovery ──────────────────────────────────────────────
       environment.sessionVariables = {
         CLAP_PATH = pluginPath "clap";
@@ -260,7 +333,9 @@
           pkgs.yabridgectl
           yabridgeInstall
           yabridgeSync
-        ];
+          yabridgeWinetricks
+        ]
+        ++ optionals cfg.ilok.enable [ilokInstall ilok];
 
       # ── SoundCraft ────────────────────────────────────────────────────
       # nix-craftapps packages all twelve ArtCraft apps; enableAll stays off
