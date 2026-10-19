@@ -143,6 +143,15 @@
     options.services.imperium.proaudio = {
       enable = mkEnableOption "pro audio / DAW support";
 
+      user = mkOption {
+        type = types.str;
+        default = "apetrovic";
+        description = ''
+          User whose home holds the plugin directories and the Wine prefix.
+          Used to place impermanence persistence entries.
+        '';
+      };
+
       jack = mkOption {
         type = types.bool;
         default = true;
@@ -213,6 +222,24 @@
         };
       };
 
+      nam = {
+        enable = mkEnableOption "Neural Amp Modeler capture + impulse response directories";
+
+        dir = mkOption {
+          type = types.str;
+          default = ".local/share/nam";
+          description = ''
+            Where NAM captures and cabinet IRs live, relative to the home
+            directory. Kept under ~/.local/share deliberately: the
+            impermanence module already persists that wholesale, so the
+            captures survive the boot-time rollback without another entry.
+
+            NAM has no search-path convention -- the plugin opens a file
+            chooser -- so this is purely a stable place to point it at.
+          '';
+        };
+      };
+
       ilok = {
         enable =
           mkEnableOption ''
@@ -250,11 +277,19 @@
           dragonfly-reverb # clap vst3 lv2
           distrho-ports # vst3 vst lv2 -- VST3 only, no CLAP
 
+          # GuitarML Proteus: neural amp modelling that ships VST3, so it is
+          # the only neural amp option SoundCraft can actually load. Its
+          # engine and capture format are not NAM's -- it takes .json
+          # profiles, not .nam -- so it complements NAM rather than replacing
+          # it. See the nam option below.
+          proteus
+
           # LV2-only: invisible to SoundCraft, used by Ardour and Carla.
           calf
           airwindows-lv2
           x42-plugins
           neural-amp-modeler-lv2
+          ir-lv2 # cabinet impulse responses, to pair with NAM
           gxplugins-lv2
 
           # Deliberately omitted: pkgs.sfizz builds only libsfizz.so plus the
@@ -293,6 +328,27 @@
           message = "services.imperium.proaudio.ilok.enable requires yabridge.enable (it installs into the yabridge Wine prefix).";
         }
       ];
+
+      # ── Impermanence ──────────────────────────────────────────────────
+      # phalanx rolls the root subvolume back to pristine on every boot, so
+      # anything not listed here is gone at reboot. Without it the whole Wine
+      # prefix, every installed Windows plugin, the yabridgectl index and the
+      # generated stubs are destroyed nightly -- and for iLok machine
+      # activation that means burning an activation on every single boot.
+      #
+      # ~/.local/share is already persisted wholesale by the impermanence
+      # module, which is why the NAM model directory lives under it and needs
+      # no entry of its own.
+      environment.persistence."/persist".users.${cfg.user}.directories =
+        mkIf config.services.imperium.impermanence.enable
+        ([".lv2" ".vst3" ".clap" ".lxvst" ".ladspa" ".dssi"]
+          ++ optionals yb.enable [
+            ".vst"
+            ".config/yabridgectl"
+            # Relative to the home dir, which is how impermanence wants it;
+            # keep in step with yabridge.prefix if that is ever changed.
+            ".wine-yabridge"
+          ]);
 
       # ── Plugin discovery ──────────────────────────────────────────────
       environment.sessionVariables = {
@@ -362,18 +418,32 @@
       # business running inside an activation script; yabridge-sync does the
       # verifying pass when invoked by hand.
       (optionalAttrs (options ? home-manager) {
-        home-manager.sharedModules = mkIf yb.enable [
-          ({lib, ...}: {
-            home.activation.yabridgeSync = lib.hm.dag.entryAfter ["writeBoundary"] ''
-              export WINEPREFIX="${yb.prefix}"
-              if [ -d "$WINEPREFIX" ]; then
-                ${ybAddDirs}
-                ${pkgs.yabridgectl}/bin/yabridgectl sync --prune --no-verify || \
-                  echo "yabridge: sync failed -- run 'yabridge-sync' to see why"
-              fi
-            '';
-          })
-        ];
+        home-manager.sharedModules =
+          optionals yb.enable [
+            ({lib, ...}: {
+              home.activation.yabridgeSync = lib.hm.dag.entryAfter ["writeBoundary"] ''
+                export WINEPREFIX="${yb.prefix}"
+                if [ -d "$WINEPREFIX" ]; then
+                  ${ybAddDirs}
+                  ${pkgs.yabridgectl}/bin/yabridgectl sync --prune --no-verify || \
+                    echo "yabridge: sync failed -- run 'yabridge-sync' to see why"
+                fi
+              '';
+            })
+          ]
+          ++ optionals cfg.nam.enable [
+            ({
+              config,
+              lib,
+              ...
+            }: {
+              home.activation.namDirs = lib.hm.dag.entryAfter ["writeBoundary"] ''
+                run mkdir -p \
+                  "${config.home.homeDirectory}/${cfg.nam.dir}/captures" \
+                  "${config.home.homeDirectory}/${cfg.nam.dir}/irs"
+              '';
+            })
+          ];
       })
     ]);
   };

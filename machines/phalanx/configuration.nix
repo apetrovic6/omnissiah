@@ -350,6 +350,7 @@ in {
     enable = true;
     soundcraft.enable = true;
     yabridge.enable = true;
+    nam.enable = true;
     ilok.enable = true;
   };
 
