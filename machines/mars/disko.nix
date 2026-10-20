@@ -14,7 +14,7 @@
   disko.devices = {
     disk = {
       main = {
-        name = "main-b53c73b117ce4846b023d5f29a8dfa52";
+        name = "main-e7fa61621a944fc9ac9bb75766146650";
         device = "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi0";
         type = "disk";
         content = {
