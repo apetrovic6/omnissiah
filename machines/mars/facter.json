@@ -23,7 +23,7 @@
     },
     "bridge": [
       {
-        "index": 8,
+        "index": 9,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -74,7 +74,7 @@
         "module_alias": "pci:v00001B36d00000001sv00000000sd00000000bc06sc04i00"
       },
       {
-        "index": 9,
+        "index": 10,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -129,7 +129,7 @@
         "module_alias": "pci:v00008086d00007000sv00001AF4sd00001100bc06sc01i00"
       },
       {
-        "index": 11,
+        "index": 12,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -180,7 +180,7 @@
         "module_alias": "pci:v00001B36d00000001sv00000000sd00000000bc06sc04i00"
       },
       {
-        "index": 12,
+        "index": 13,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -239,7 +239,7 @@
         "module_alias": "pci:v00008086d00001237sv00001AF4sd00001100bc06sc00i00"
       },
       {
-        "index": 13,
+        "index": 14,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -306,7 +306,7 @@
         "module_alias": "pci:v00008086d00007113sv00001AF4sd00001100bc06sc80i00"
       },
       {
-        "index": 18,
+        "index": 19,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -359,8 +359,8 @@
     ],
     "cdrom": [
       {
-        "index": 25,
-        "attached_to": 16,
+        "index": 26,
+        "attached_to": 17,
         "class_list": [
           "cdrom",
           "scsi",
@@ -372,7 +372,7 @@
           "value": 132
         },
         "slot": {
-          "bus": 2,
+          "bus": 1,
           "number": 0
         },
         "base_class": {
@@ -407,8 +407,8 @@
         },
         "model": "QEMU DVD-ROM",
         "sysfs_id": "/class/block/sr0",
-        "sysfs_bus_id": "2:0:0:0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.1/ata2/host2/target2:0:0/2:0:0:0",
+        "sysfs_bus_id": "1:0:0:0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:01.1/ata2/host1/target1:0:0/1:0:0:0",
         "unix_device_names": [
           "/dev/cdrom",
           "/dev/disk/by-id/ata-QEMU_DVD-ROM_QM00003",
@@ -462,6 +462,7 @@
           "fxsr",
           "sse",
           "sse2",
+          "ht",
           "syscall",
           "nx",
           "lm",
@@ -501,15 +502,16 @@
         ],
         "bogo": 4377,
         "cache": 16384,
+        "units": 2,
         "page_size": 4096,
         "physical_id": 0,
-        "siblings": 1,
-        "cores": 1,
+        "siblings": 2,
+        "cores": 2,
         "fpu": false,
         "fpu_exception": false,
         "cpuid_level": 13,
         "write_protect": false,
-        "tlb_size": 32679,
+        "tlb_size": 32765,
         "clflush_size": 64,
         "cache_alignment": 128,
         "address_sizes": {
@@ -520,8 +522,8 @@
     ],
     "disk": [
       {
-        "index": 26,
-        "attached_to": 23,
+        "index": 27,
+        "attached_to": 24,
         "class_list": [
           "disk",
           "scsi",
@@ -533,7 +535,7 @@
           "value": 132
         },
         "slot": {
-          "bus": 0,
+          "bus": 2,
           "number": 0
         },
         "base_class": {
@@ -563,8 +565,8 @@
         },
         "model": "QEMU HARDDISK",
         "sysfs_id": "/class/block/sda",
-        "sysfs_bus_id": "0:0:0:0",
-        "sysfs_device_link": "/devices/pci0000:00/0000:00:05.0/0000:01:01.0/virtio3/host0/target0:0:0/0:0:0:0",
+        "sysfs_bus_id": "2:0:0:0",
+        "sysfs_device_link": "/devices/pci0000:00/0000:00:05.0/0000:01:01.0/virtio3/host2/target2:0:0/2:0:0:0",
         "unix_device_names": [
           "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi0",
           "/dev/disk/by-path/pci-0000:01:01.0-scsi-0:0:0:0",
@@ -575,16 +577,16 @@
         "resources": [
           {
             "type": "disk_geo",
-            "cylinders": 32768,
-            "heads": 64,
-            "sectors": 32,
+            "cylinders": 16709,
+            "heads": 255,
+            "sectors": 63,
             "size": "0x0",
             "geo_type": "logical"
           },
           {
             "type": "size",
             "unit": "sectors",
-            "value_1": 67108864,
+            "value_1": 268435456,
             "value_2": 512
           }
         ],
@@ -602,7 +604,7 @@
     ],
     "graphics_card": [
       {
-        "index": 17,
+        "index": 18,
         "attached_to": 0,
         "class_list": [
           "graphics_card",
@@ -675,8 +677,8 @@
     ],
     "hub": [
       {
-        "index": 27,
-        "attached_to": 7,
+        "index": 28,
+        "attached_to": 8,
         "class_list": [
           "usb",
           "hub"
@@ -764,7 +766,7 @@
     ],
     "memory": [
       {
-        "index": 4,
+        "index": 5,
         "attached_to": 0,
         "class_list": [
           "memory"
@@ -783,15 +785,15 @@
         "resources": [
           {
             "type": "phys_mem",
-            "range": 2013265920
+            "range": 5905580032
           }
         ]
       }
     ],
     "monitor": [
       {
-        "index": 24,
-        "attached_to": 17,
+        "index": 25,
+        "attached_to": 18,
         "class_list": [
           "monitor"
         ],
@@ -938,8 +940,8 @@
     ],
     "mouse": [
       {
-        "index": 28,
-        "attached_to": 27,
+        "index": 29,
+        "attached_to": 28,
         "class_list": [
           "mouse",
           "usb"
@@ -1044,8 +1046,8 @@
     ],
     "network_controller": [
       {
-        "index": 21,
-        "attached_to": 14,
+        "index": 22,
+        "attached_to": 15,
         "class_list": [
           "network_controller"
         ],
@@ -1099,8 +1101,8 @@
     ],
     "network_interface": [
       {
-        "index": 29,
-        "attached_to": 21,
+        "index": 30,
+        "attached_to": 22,
         "class_list": [
           "network_interface"
         ],
@@ -1140,7 +1142,7 @@
         ]
       },
       {
-        "index": 30,
+        "index": 31,
         "attached_to": 0,
         "class_list": [
           "network_interface"
@@ -1164,7 +1166,7 @@
     ],
     "pci": [
       {
-        "index": 6,
+        "index": 7,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -1235,8 +1237,8 @@
         "module_alias": "pci:v00001AF4d00001003sv00001AF4sd00000003bc07sc80i00"
       },
       {
-        "index": 10,
-        "attached_to": 11,
+        "index": 11,
+        "attached_to": 12,
         "class_list": [
           "pci",
           "unknown"
@@ -1305,7 +1307,7 @@
         "module_alias": "pci:v00001AF4d00001005sv00001AF4sd00000004bc00scFFi00"
       },
       {
-        "index": 14,
+        "index": 15,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -1376,7 +1378,7 @@
         "module_alias": "pci:v00001AF4d00001000sv00001AF4sd00000001bc02sc00i00"
       },
       {
-        "index": 15,
+        "index": 16,
         "attached_to": 0,
         "class_list": [
           "pci",
@@ -1448,8 +1450,8 @@
     ],
     "storage_controller": [
       {
-        "index": 5,
-        "attached_to": 18,
+        "index": 6,
+        "attached_to": 19,
         "class_list": [
           "storage_controller",
           "pci"
@@ -1519,7 +1521,7 @@
         "module_alias": "pci:v00001AF4d00001004sv00001AF4sd00000008bc01sc00i00"
       },
       {
-        "index": 16,
+        "index": 17,
         "attached_to": 0,
         "class_list": [
           "storage_controller",
@@ -1628,8 +1630,8 @@
     },
     "unknown": [
       {
-        "index": 19,
-        "attached_to": 6,
+        "index": 20,
+        "attached_to": 7,
         "class_list": [
           "unknown"
         ],
@@ -1659,8 +1661,8 @@
         "module_alias": "virtio:d00000003v00001AF4"
       },
       {
-        "index": 20,
-        "attached_to": 10,
+        "index": 21,
+        "attached_to": 11,
         "class_list": [
           "unknown"
         ],
@@ -1690,8 +1692,8 @@
         "module_alias": "virtio:d00000004v00001AF4"
       },
       {
-        "index": 22,
-        "attached_to": 15,
+        "index": 23,
+        "attached_to": 16,
         "class_list": [
           "unknown"
         ],
@@ -1721,8 +1723,8 @@
         "module_alias": "virtio:d00000005v00001AF4"
       },
       {
-        "index": 23,
-        "attached_to": 5,
+        "index": 24,
+        "attached_to": 6,
         "class_list": [
           "unknown"
         ],
@@ -1754,7 +1756,7 @@
     ],
     "usb_controller": [
       {
-        "index": 7,
+        "index": 8,
         "attached_to": 0,
         "class_list": [
           "usb_controller",
@@ -1913,7 +1915,7 @@
           "name": "Multi-bit",
           "value": 6
         },
-        "max_size": "0x200000",
+        "max_size": "0x5dc000",
         "error_handle": 65534,
         "slots": 1
       }
@@ -1923,7 +1925,14 @@
         "handle": 4864,
         "array_handle": 4096,
         "start_address": "0x0",
-        "end_address": "0x80000000",
+        "end_address": "0xc0000000",
+        "part_width": 1
+      },
+      {
+        "handle": 4865,
+        "array_handle": 4096,
+        "start_address": "0x100000000",
+        "end_address": "0x1b7000000",
         "part_width": 1
       }
     ],
@@ -1938,7 +1947,7 @@
         "error_handle": 65534,
         "width": 0,
         "ecc_bits": 0,
-        "size": 2097152,
+        "size": 6144000,
         "form_factor": {
           "hex": "0009",
           "name": "DIMM",
