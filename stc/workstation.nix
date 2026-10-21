@@ -15,10 +15,37 @@
     imports = [
       self.nixosModules.flatpak
       self.inputs.magos.nixosModules.desktop
+      self.inputs.magos.nixosModules.pi
+      self.inputs.magos.nixosModules.omp
       # self.nixosModules.flatpak
       self.nixosModules.bluetooth
       self.nixosModules.virtualisation
     ];
+
+    # ── Pi / OMP: declarative API key injection via sops ──────────
+    # The pi-api-keys clan vars generator (in modules/vars) creates and
+    # sops-encrypts the key. Enable the agents here once the secret is
+    # generated:
+    #   clan vars generate --generator pi-api-keys <machine>
+    #
+    magos.agents.pi = {
+      enable = true;
+      apiKeys.qwen = config.clan.core.vars.generators.pi-api-keys.files."qwen-api-key".path;
+      # apiKeys.anthropic = config.clan.core.vars.generators.pi-api-keys.files."anthropic-api-key".path;
+      # apiKeys.openai    = config.clan.core.vars.generators.pi-api-keys.files."openai-api-key".path;
+
+      # Hide Bedrock/Vertex from pi's /model picker. pi treats them as
+      # authenticated purely from ambient env vars (AWS_PROFILE alone is
+      # enough), and `enabledModels` cannot suppress that — it only scopes
+      # startup selection and Ctrl+P cycling.
+      #
+      # CAVEAT: this unsets AWS_PROFILE / AWS_ACCESS_KEY_ID / etc. for pi's
+      # whole process tree, so pi's bash tool — and terraform / aws / kubectl
+      # run through it — loses those credentials. Drop "amazon-bedrock" from
+      # this list if you drive AWS from inside pi.
+      blockAmbientCredentials = ["amazon-bedrock"];
+    };
+    magos.agents.omp.enable = true; # piggybacks on pi's apiKeys
 
     nixpkgs.overlays = [
       self.overlays.pangolin-cli

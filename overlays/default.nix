@@ -101,6 +101,10 @@
     herdr = self.inputs.magos.packages.${final.system}.herdr;
   };
 
+  # pi and omp are no longer provided as overlays. The NixOS modules
+  # (self.inputs.magos.nixosModules.pi / .omp) handle building, wrapping,
+  # and installing — import them and set options instead.
+
   flake.overlays.bitwarden-desktop = final: prev: {
     prev.electron_39 = final.electron_41-bin;
   };
