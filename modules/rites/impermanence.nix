@@ -74,6 +74,10 @@
             ".config/obsidian"
             ".claude"
             ".local/share"
+            # Omarchy's state: theme choice, toggles, and the done/ markers.
+            # Without it the first-run marker is wiped every boot, so the
+            # "Learn Keybindings" and "Update System" toasts return each login.
+            ".local/state/omarchy"
             ".librewolf"
             ".var/app"
             ".mozilla"
