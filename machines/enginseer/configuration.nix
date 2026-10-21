@@ -174,6 +174,20 @@ in {
       };
     };
   };
+  # Intel + NVIDIA. Bus IDs read from sysfs and converted to decimal.
+  hardware.nvidia.prime = {
+    offload.enable = true;
+    offload.enableOffloadCmd = true; # gives you `nvidia-offload <cmd>`
+    intelBusId = "PCI:0:2:0";
+    nvidiaBusId = "PCI:1:0:0";
+  };
+  # Or sync mode instead -- dGPU drives everything: best performance,
+  # worst battery. The two are mutually exclusive; pick one.
+  #   hardware.nvidia.prime.sync.enable = true;
+  hardware.nvidia.open = true;
+  # and in hosts/<name>/nixarchy-hardware.nix:
+  #   inputs.nixos-hardware.nixosModules.common-gpu-nvidia
+
   # nix = {
   #   extraOptions = ''
   #     !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
