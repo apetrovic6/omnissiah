@@ -22,6 +22,7 @@ in {
   nixpkgs.overlays = [
     self.overlays.bitwarden-desktop
   ];
+
   nixpkgs.config.permittedInsecurePackages = ["electron-39.8.10"];
 
   # PipeASIO (Rocksmith, via nixos-rocksmith overlay applied to HM's own
@@ -29,11 +30,20 @@ in {
   # requires accepting the Microsoft VS license terms.
   nixpkgs.config.microsoftVisualStudioLicenseAccepted = true;
 
+  # omnishell's HM module switches on programs.helix with a helix from its OWN
+  # flake input (github:apetrovic6/helix) rather than pkgs.helix, so
+  # self.overlays.helix never reaches it. The result was a second, unconfigured
+  # editor built and installed next to the magos-wrapped helix that
+  # stc/workstation.nix already puts in systemPackages -- two full helix builds
+  # per rebuild, and whichever won $PATH decided which config you got.
+  # `hx` still resolves after this, to the magos build.
+  programs.helix.enable = lib.mkForce false;
+
   xdg = {
     enable = true;
   };
 
-  home.packages = with pkgs; [];
+  # home.packages = with pkgs; [];
 
   nix = {
     extraOptions = ''
