@@ -101,6 +101,47 @@
     #   };
     # };
 
+    # ── Printing and scanning against servitor ───────────────────
+    # servitor (192.168.1.13) shares an HP LaserJet MFP M28-M31 over CUPS and
+    # its flatbed over saned. The two are found in different ways: the printer
+    # really is discovered over DNS-SD, the scanner has to be pinned. See
+    # netConf below for why.
+    services.printing = {
+      enable = true;
+
+      # On servitor this is deliberately off; here it is the whole point.
+      # cups-browsed imports *remote* DNS-SD-advertised queues and turns them
+      # into local ones, which is the direction a client wants. Without it,
+      # only applications that do their own avahi browsing (the GTK print
+      # dialog) see the printer, and `lp`/`lpr` from a shell do not.
+      browsed.enable = true;
+    };
+
+    hardware.sane = {
+      enable = true;
+
+      # saned has to be named explicitly: it never shows up over mDNS.
+      #
+      # The binary does link avahi and can register _sane-port._tcp, but the
+      # NixOS module runs it from a socket unit with Accept=yes, i.e. one
+      # short-lived process per connection, and a per-connection process
+      # never registers a service. Confirmed on servitor: `avahi-browse -rtp
+      # _sane-port._tcp` returns nothing while _ipp._tcp lists the printer.
+      netConf = "192.168.1.13";
+    };
+
+    services.avahi = {
+      enable = true;
+
+      # cups-browsed browses _ipp._tcp through avahi to find servitor's queue.
+      # Scanning does not depend on this -- see netConf above.
+      nssmdns4 = true;
+
+      # Lets servitor.local resolve, which is also what the printer's DNS-SD
+      # record points its adminurl at.
+      openFirewall = true; # 5353/udp
+    };
+
     networking.firewall = {
       allowedTCPPorts = [
         53317 # LocalSend
