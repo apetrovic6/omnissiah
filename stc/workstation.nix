@@ -20,6 +20,7 @@
       # self.nixosModules.flatpak
       self.nixosModules.bluetooth
       self.nixosModules.virtualisation
+      self.inputs.nix-index-database.nixosModules.default
     ];
 
     # ── Pi / OMP: declarative API key injection via sops ──────────
@@ -52,6 +53,8 @@
       self.overlays.helix
       self.overlays.herdr
     ];
+
+    programs.nix-index-database.comma.enable = true;
 
     services.udev.packages = [pkgs.probe-rs-tools];
 
@@ -255,6 +258,7 @@
 
       herdr
       (self.inputs.magos.packages.${system}.opencode)
+      (self.inputs.magos.packages.${system}.nautili)
       python3Packages.huggingface-hub
 
       # neomutt
@@ -268,6 +272,8 @@
       chromium
       slack
 
+      openscad
+
       quickemu
       evtest
       librepods
@@ -278,6 +284,17 @@
       (buildIdeWithPlugins pkgs "goland" commonPlugins)
       (buildIdeWithPlugins pkgs "datagrip" commonPlugins)
       jetbrains-toolbox
+
+      (
+        pkgs.writeShellApplication {
+          name = "ns";
+          runtimeInputs = with pkgs; [
+            fzf
+            nix-search-tv
+          ];
+          text = builtins.readFile "${pkgs.nix-search-tv.src}/nixpkgs.sh";
+        }
+      )
     ];
 
     services.spice-vdagentd.enable = true;
