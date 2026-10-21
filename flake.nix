@@ -36,7 +36,10 @@
 
     nix-jetbrains-plugins.url = "github:nix-community/nix-jetbrains-plugins";
 
-    clan-core.url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
+    clan-core = {
+      url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
+      # inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     nixpkgs.follows = "nixpkgs-unstable";
 
@@ -138,6 +141,29 @@
 
     dagger-cli = {
       url = "github:dagger/nix";
+    };
+
+    rustfs = {
+      url = "github:rustfs/rustfs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # MCP server giving coding agents real NixOS data -- packages, options,
+    # home-manager, nix-darwin, nixvim, nixarchy -- from search.nixos.org and
+    # the official docs, instead of inventing attribute names. A fork of
+    # utensils/mcp-nixos.
+    #
+    # Stays here rather than moving to magos with the Omarchy desktop: this is
+    # agent tooling, wired into programs.mcp.servers for both Claude Code and
+    # pi, and has nothing to do with the session.
+    #
+    # A real flake, not `flake = false`: it carries its own fastmcp 4 stack
+    # (nixpkgs still has 3.x, and its overlays.default would move fastmcp
+    # set-wide and break other consumers of `mcp`). Taking
+    # packages.<system>.mcp-nixarchy keeps that contained to this one package.
+    mcp-nixarchy = {
+      url = "github:olafkfreund/mcp-nixarchy";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
