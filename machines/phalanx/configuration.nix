@@ -54,6 +54,8 @@ in {
     };
   };
 
+  programs.kdeconnect.enable = true;
+
   magos.niri.outputs = {
     "DP-2" = {
       scale = 1.33;
