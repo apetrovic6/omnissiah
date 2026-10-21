@@ -165,14 +165,12 @@
       enable = true;
     };
 
-    # Workaround for stylix 5b298f7, which renamed ImageMagick `convert` to
-    # `magick` in modules/plymouth/nixos.nix without reordering the arguments.
-    # IM7's parser needs an image on the stack before an image operator, and
-    # `-border 42%` is still emitted ahead of the logo, so the theme fails to
-    # build with "no images found for operation `-border'". The border is only
-    # emitted when logoAnimated is set, so turning it off sidesteps it; we lose
-    # the spinner but keep the themed splash. Revert once stylix is fixed.
-    stylix.targets.plymouth.logoAnimated = false;
+    # The animated (spinning) logo needs stylix >= 7c065d1 (2026-10-01), which
+    # moved the logo ahead of `-border 42%` in modules/plymouth/nixos.nix.
+    # Before that commit IM7 refused the theme -- "no images found for
+    # operation `-border`" -- because an image operator preceded any input, and
+    # the border is emitted only when logoAnimated is on. logoAnimated defaults
+    # to true, so nothing is set here; do not pin stylix back past that rev.
 
     services.greetd = {
       enable = true;
