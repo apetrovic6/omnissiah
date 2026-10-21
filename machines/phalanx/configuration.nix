@@ -32,6 +32,12 @@ in {
 
   nixpkgs.config.cudaCapabilities = ["8.6"];
 
+  # Lets phalanx build the aarch64 closure for servitor (Banana Pi BPI-M5)
+  # without a native aarch64 builder. The signed U-Boot is unaffected -- it is
+  # pinned to an x86_64 build platform and cross-compiles, because the Amlogic
+  # signing tool is an x86_64 binary and its Makefile dispatches on `uname -m`.
+  boot.binfmt.emulatedSystems = ["aarch64-linux"];
+
   nixpkgs = {
     overlays = [
       # self.overlays.librewolf
