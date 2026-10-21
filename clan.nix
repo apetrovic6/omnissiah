@@ -140,6 +140,7 @@
           "adb"
           "podman"
           "docker"
+          "dialout"
         ];
       };
 
