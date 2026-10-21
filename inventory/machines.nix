@@ -2,13 +2,13 @@
   inventory.machines = {
     phalanx = {
       tags = ["base" "workstation" "dev" "gaming"];
-      deploy.targetHost = "root@192.168.1.71";
+      deploy.targetHost = "root@192.168.1.75";
       deploy.buildHost = "localhost";
     };
 
     enginseer = {
       tags = ["base" "laptop" "workstation" "dev" "gaming"];
-      deploy.targetHost = "root@192.168.1.157";
+      deploy.targetHost = "root@192.168.1.146";
       deploy.buildHost = "localhost";
     };
 
@@ -25,6 +25,9 @@
 
     alfrost = {
       tags = [];
+
+      deploy.targetHost = "root@172.245.55.111";
+      deploy.buildHost = "localhost";
     };
 
     servitor = {
