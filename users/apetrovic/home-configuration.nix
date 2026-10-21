@@ -116,6 +116,35 @@ in {
 
   programs.btop.enable = true;
 
+  # Shared MCP servers -- ONE declaration, both agents.
+  #
+  # This writes ~/.config/mcp/mcp.json, which is:
+  #   - merged into Claude Code's own config by the claude-code module
+  #     (programs.claude-code.mcpServers wins on a name clash), and
+  #   - step 1 of pi-mcp-adapter's precedence chain, where "later entries
+  #     win" means the layers are MERGED, not replaced -- so this sits
+  #     underneath pi's agent-dir mcp.json (kaneo, devenv, from magos) rather
+  #     than being shadowed by it.
+  #
+  # Anything needed by only one of the two still belongs in that agent's own
+  # config; this is for servers both should see.
+  programs.mcp = {
+    enable = true;
+
+    servers = {
+      # Real NixOS data for the agents: package and option search, home-manager,
+      # nix-darwin, nixvim, nixarchy, flake inputs, binary-cache status. Stdio,
+      # so it runs on demand as a child process -- nothing listening, no
+      # credentials, and no network until a tool call is made (it then queries
+      # search.nixos.org and the official docs).
+      #
+      # Named `nixos` deliberately: upstream keeps that as the client key across
+      # the rename from mcp-nixos, so tools surface as mcp__nixos__* and stay
+      # stable if the package is renamed again.
+      nixos.command = lib.getExe self.inputs.mcp-nixarchy.packages.${pkgs.stdenv.hostPlatform.system}.mcp-nixarchy;
+    };
+  };
+
   programs.claude-code = {
     enable = true;
     # claude-code itself comes from environment.systemPackages in
