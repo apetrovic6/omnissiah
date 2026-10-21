@@ -15,6 +15,9 @@
   modules."@imperium/gaming" = import ./stc/gaming.nix;
   modules."@imperium/k8s-server" = import ./stc/k8s-server.nix;
   modules."@imperium/k8s-base" = import ./stc/k8s-base.nix;
+  modules."@imperium/k8s-agent" = import ./stc/k8s-agent.nix;
+  modules."@imperium/k8s-master" = import ./stc/k8s-master.nix;
+  modules."@imperium/k8s" = import ./stc/k8s.nix;
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
@@ -25,11 +28,10 @@
     #   };
 
     #   roles.client.machines = {
-    #     cerberus = 
+    #     cerberus =
     #   };
     # };
 
-    
     laptop = {
       module.input = "self";
       module.name = "@imperium/laptop";
@@ -65,6 +67,20 @@
       roles.default.tags.gaming = {};
     };
 
+    k8s-agent = {
+      module.input = "self";
+      module.name = "@imperium/k8s-agent";
+
+      roles.default.tags.k8s-agent = {};
+    };
+
+    k8s = {
+      module.input = "self";
+      module.name = "@imperium/k8s";
+
+      roles.default.tags.k8s = {};
+    };
+
     k8s-server = {
       module.input = "self";
       module.name = "@imperium/k8s-server";
@@ -77,6 +93,13 @@
       module.name = "@imperium/k8s-base";
 
       roles.default.tags.k8s-base = {};
+    };
+
+    k8s-master = {
+      module.input = "self";
+      module.name = "@imperium/k8s-master";
+
+      roles.default.tags.k8s-master = {};
     };
 
     dev = {
