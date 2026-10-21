@@ -43,10 +43,10 @@ in {
     settings = {
       netrc-file = /home/apetrovic/.config/nix/netrc;
       trusted-users = ["root" "apetrovic"];
-      trusted-public-keys = [
-        "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
-        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-      ];
+      # No trusted-public-keys here. A user nix.conf replaces the system list
+      # instead of extending it, and as a trusted user the daemon honours it,
+      # so any list here silently drops ncps's key (stc/base.nix) and every
+      # ncps substitute is rejected as "not signed by any of the keys".
     };
   };
 
