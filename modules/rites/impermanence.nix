@@ -56,6 +56,9 @@
             ".config/herdr"
             ".config/pangolin"
             ".config/secretspec"
+            # Strata keeps data_dir here; without this the model path is
+            # lost on reboot and setup.sh re-prompts for it.
+            ".config/strata"
             ".config/Bitwarden"
             # ".config/noctalia"
             ".config/sabnzbd-tui"

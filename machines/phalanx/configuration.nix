@@ -21,7 +21,13 @@ in {
     self.inputs.nixvirt.nixosModules.default
 
     ./vllm.nix
-    ./llama-swap.nix
+
+    # ./llama-cpp.nix and ./llama-swap.nix are left on disk but NOT imported:
+    # Strata replaced the llama.cpp engine outright, and its server does its own
+    # lazy load / idle unload (--lazy, --idle-unload), which was the only part of
+    # llama-swap still earning its keep once coder-30b and qwen36-35b-q4 were
+    # dropped. Re-import llama-swap.nix if a second model ever comes back.
+    ./strata.nix
   ];
 
   nixpkgs.config.cudaCapabilities = ["8.6"];
@@ -378,6 +384,15 @@ in {
       useTmpfs = true;
       tmpfsSize = "50%";
     };
+
+    # llama-swap's models total ~80GB of mmap'ed weights, and MoE decode
+    # reads experts straight out of the page cache, token by token. The
+    # default swappiness (60) evicts exactly those pages first when a
+    # build or a browser pressures memory -- zram had 23.5GB of them in
+    # one recorded session -- and a compressed model page turns into
+    # decompression cost per token, invisible in every llama.cpp counter.
+    # On this box the page cache IS the working set; reclaim it last.
+    kernel.sysctl."vm.swappiness" = lib.mkDefault 10;
   };
 
   # Enable autoScrub for btrfs
