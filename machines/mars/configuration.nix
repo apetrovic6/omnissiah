@@ -1,0 +1,7 @@
+{
+  self,
+  lib,
+  config,
+  pkgs,
+  ...
+}: {}

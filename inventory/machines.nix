@@ -56,5 +56,11 @@
       deploy.targetHost = "root@192.168.1.42";
       deploy.buildHost = "localhost";
     };
+
+    mars = {
+      tags = ["base" "k8s" "k8s-master"];
+      deploy.targetHost = "root@192.168.1.44";
+      deploy.buildHost = "localhost";
+    };
   };
 }
