@@ -49,7 +49,7 @@
     magos.agents.omp.enable = true; # piggybacks on pi's apiKeys
 
     nixpkgs.overlays = [
-      self.overlays.pangolin-cli
+      # self.overlays.pangolin-cli
       self.overlays.helix
       self.overlays.herdr
     ];
@@ -158,6 +158,18 @@
     };
 
     services.imperium.bluetooth.enable = true;
+
+    # Default browser. Without this, links fall through to whichever handler
+    # xdg finds first (the Waterfox flatpak).
+    xdg.mime.defaultApplications = lib.genAttrs [
+      "text/html"
+      "application/xhtml+xml"
+      "x-scheme-handler/http"
+      "x-scheme-handler/https"
+      "x-scheme-handler/about"
+      "x-scheme-handler/unknown"
+    ] (_: "librewolf.desktop");
+    environment.sessionVariables.BROWSER = "librewolf";
 
     magos.stylix = {
       enable = true;
