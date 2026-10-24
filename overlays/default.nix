@@ -130,16 +130,16 @@
     });
   };
 
-  flake.overlays.pangolin-cli = final: prev: {
-    pangolin-cli = prev.pangolin-cli.overrideAttrs (old: {
-      version = "0.12.0";
-      src = old.src.override {
-        hash = "sha256-0G5HsAa9I0ilPQ92qQIuYssfGvoZhLrF3kyO1+0JqEQ=";
-      };
-      vendorHash = "sha256-FCIp0VLmRO6TUPRDNd3Zl/CULwy00D8F4YTo/oQge+s=";
-      doInstallCheck = false; # upstream 0.5.1 tag has version const still set to 0.5.0
-    });
-  };
+  # flake.overlays.pangolin-cli = final: prev: {
+  #   pangolin-cli = prev.pangolin-cli.overrideAttrs (old: {
+  #     version = "0.12.0";
+  #     src = old.src.override {
+  #       hash = "sha256-0G5HsAa9I0ilPQ92qQIuYssfGvoZhLrF3kyO1+0JqEQ=";
+  #     };
+  #     vendorHash = "sha256-FCIp0VLmRO6TUPRDNd3Zl/CULwy00D8F4YTo/oQge+s=";
+  #     doInstallCheck = false; # upstream 0.5.1 tag has version const still set to 0.5.0
+  #   });
+  # };
 
   flake.overlays.newt = final: prev: {
     fosrl-newt = prev.fosrl-newt.overrideAttrs (old: {
