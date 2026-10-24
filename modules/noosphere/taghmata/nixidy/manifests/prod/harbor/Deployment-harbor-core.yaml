@@ -10,7 +10,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: harbor
     app.kubernetes.io/part-of: harbor
-    app.kubernetes.io/version: 2.15.2
+    app.kubernetes.io/version: 2.15.4
     chart: harbor
     component: core
     heritage: Helm
@@ -28,9 +28,9 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: 410e80f6e5a526f0c9e8ffcf3c1f08ebe35cf717327233af7f679824888739ba
-        checksum/secret: 02cb2002438f66fb804c1b99494db2e4bba58f3aeeb7da741f9e0d960583deee
-        checksum/secret-jobservice: 4364344c5a700311e9700b505d40e6737f237608a72b5c1a04d5f1c3ffeb9b0d
+        checksum/configmap: 7f0a4666d48a0cae3f4691c522abe4e2ac853d849b41693e1fead2cd33b2b277
+        checksum/secret: 7c8a26615e5ea394c6ebb5d6b975553556dcd3224c5e76351f3c71db82ca1dbc
+        checksum/secret-jobservice: b458a24b4de57975a180b4e59cd775b5cba4528dfd251c7d911e385b6e7c330e
       labels:
         app: harbor
         app.kubernetes.io/component: core
@@ -38,7 +38,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: harbor
         app.kubernetes.io/part-of: harbor
-        app.kubernetes.io/version: 2.15.2
+        app.kubernetes.io/version: 2.15.4
         chart: harbor
         component: core
         heritage: Helm
@@ -87,7 +87,7 @@ spec:
                 name: harbor-core
             - secretRef:
                 name: harbor-core
-          image: docker.io/goharbor/harbor-core:v2.15.2
+          image: docker.io/goharbor/harbor-core:v2.15.4
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 2

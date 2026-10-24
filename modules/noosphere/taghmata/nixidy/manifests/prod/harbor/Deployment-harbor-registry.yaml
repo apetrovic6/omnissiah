@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: harbor
     app.kubernetes.io/part-of: harbor
-    app.kubernetes.io/version: 2.15.2
+    app.kubernetes.io/version: 2.15.4
     chart: harbor
     component: registry
     heritage: Helm
@@ -28,10 +28,10 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/configmap: 5cdf01b93bd911c17754ddb957bc6507c68471fb4bc62e4f1ed0cfb6de0b2fb1
-        checksum/secret: 7573b28ff956d8cd3ac04a0de509d1b73bfbc3c8e25b7bb80c8e48e1351717d8
-        checksum/secret-core: 02cb2002438f66fb804c1b99494db2e4bba58f3aeeb7da741f9e0d960583deee
-        checksum/secret-jobservice: 4364344c5a700311e9700b505d40e6737f237608a72b5c1a04d5f1c3ffeb9b0d
+        checksum/configmap: 85066ee165efd94c401909327d478084b7fce92aed10e8b8d74e435bbc9f5569
+        checksum/secret: 1d75a4d4c56aeb5f0464b55ae4ada9a09cae76cce22aa61bd56acc02ca2c1752
+        checksum/secret-core: 7c8a26615e5ea394c6ebb5d6b975553556dcd3224c5e76351f3c71db82ca1dbc
+        checksum/secret-jobservice: b458a24b4de57975a180b4e59cd775b5cba4528dfd251c7d911e385b6e7c330e
       labels:
         app: harbor
         app.kubernetes.io/component: registry
@@ -39,7 +39,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: harbor
         app.kubernetes.io/part-of: harbor
-        app.kubernetes.io/version: 2.15.2
+        app.kubernetes.io/version: 2.15.4
         chart: harbor
         component: registry
         heritage: Helm
@@ -58,7 +58,7 @@ spec:
                 name: harbor-registry
             - secretRef:
                 name: harbor-main-s3-secret-key
-          image: docker.io/goharbor/registry-photon:v2.15.2
+          image: docker.io/goharbor/registry-photon:v2.15.4
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
@@ -127,7 +127,7 @@ spec:
                 name: harbor-registryctl
             - secretRef:
                 name: harbor-main-s3-secret-key
-          image: docker.io/goharbor/harbor-registryctl:v2.15.2
+          image: docker.io/goharbor/harbor-registryctl:v2.15.4
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
