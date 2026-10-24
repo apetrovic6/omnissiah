@@ -1189,6 +1189,10 @@ let
           description = "Website configures static website hosting for this bucket.\nNote: Only indexDocument and errorDocument are supported via the Admin API.\nFor advanced features (routing rules, redirectAll), use S3 PutBucketWebsite API directly.";
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsite"));
         };
+        "websiteExposure" = mkOption {
+          description = "WebsiteExposure optionally exposes a website-enabled bucket through\nKubernetes HTTP routing: an Ingress or a Gateway API HTTPRoute, created\nin this bucket's namespace and pointing at the referenced cluster's web\nAPI Service. At most one of Ingress and Gateway may be set. Requires\nspec.website.enabled. See the websiteExposure documentation for the\nhostname semantics (Garage resolves the bucket from the Host header).";
+          type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposure"));
+        };
       };
 
       config = {
@@ -1200,6 +1204,7 @@ let
         "localAliases" = mkOverride 1002 null;
         "quotas" = mkOverride 1002 null;
         "website" = mkOverride 1002 null;
+        "websiteExposure" = mkOverride 1002 null;
       };
 
     };
@@ -1447,6 +1452,165 @@ let
       };
 
     };
+    "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposure" = {
+
+      options = {
+        "backendRef" = mkOption {
+          description = "BackendRef overrides the Service the exposure routes to. When unset,\nthe operator targets the referenced cluster's web API Service\n(<cluster>-gateway for unified clusters, <cluster> otherwise). For an\nIngress the referent must be a core/v1 Service in the bucket's\nnamespace (Ingress backends cannot cross namespaces). For an\nHTTPRoute any referent valid for spec.rules[].backendRefs is\naccepted, including cross-namespace ones (which additionally need a\ngateway API ReferenceGrant).";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposureBackendRef")
+          );
+        };
+        "gateway" = mkOption {
+          description = "Gateway configures the generated Gateway API HTTPRoute. Mutually\nexclusive with Ingress. Requires the Gateway API CRDs to be installed;\nwithout them the operator reports a condition and does not fail the\nbucket.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposureGateway")
+          );
+        };
+        "hostnames" = mkOption {
+          description = "Hostnames are the external hostnames the exposure routes on. When\nempty, the operator uses the single canonical hostname\n<globalAlias><webApi.rootDomain>. Wildcards and duplicates are not\nsupported (duplicates are rejected by the validating webhook; the CRD\nschema cannot express uniqueItems).\n\nFor an HTTPRoute any hostname is accepted: a hostname that is neither\ncanonical nor the global alias gets a URLRewrite filter rewriting the\nHost header back to the canonical host, so Garage still resolves it to\nthis bucket. For an Ingress, only the canonical hostname and the\nglobal alias are accepted — an Ingress cannot rewrite the Host header,\nso any other hostname is refused on the WebsiteExposed condition.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "ingress" = mkOption {
+          description = "Ingress configures the generated Kubernetes Ingress. Mutually\nexclusive with Gateway. Only valid when the bucket and the referenced\ncluster share a namespace.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposureIngress")
+          );
+        };
+      };
+
+      config = {
+        "backendRef" = mkOverride 1002 null;
+        "gateway" = mkOverride 1002 null;
+        "hostnames" = mkOverride 1002 null;
+        "ingress" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposureBackendRef" = {
+
+      options = {
+        "group" = mkOption {
+          description = "Group of the referent. Defaults to \"\" (the core API group).";
+          type = (types.nullOr (types.withMaxLength 253 types.str));
+        };
+        "kind" = mkOption {
+          description = "Kind of the referent. Defaults to Service.";
+          type = (types.nullOr (types.withMaxLength 253 types.str));
+        };
+        "name" = mkOption {
+          description = "Name of the referent.";
+          type = (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+        "namespace" = mkOption {
+          description = "Namespace of the referent. Defaults to the bucket's namespace (the\nexposure resource's namespace). For an Ingress it must stay the\nbucket's namespace: Ingress backends cannot cross namespaces.";
+          type = (types.nullOr (types.withMaxLength 63 (types.withMinLength 1 types.str)));
+        };
+      };
+
+      config = {
+        "group" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "namespace" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposureGateway" = {
+
+      options = {
+        "annotations" = mkOption {
+          description = "Annotations to add to the HTTPRoute.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+        "labels" = mkOption {
+          description = "Labels to add to the HTTPRoute (for example external-dns or\nargo-rollouts annotations). Operator-managed labels take precedence\non conflict.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+        "parentRefs" = mkOption {
+          description = "ParentRefs are passed through verbatim to the HTTPRoute's\nspec.parentRefs (Gateway names, optional sectionName, and optional\ncross-namespace references). At least one is required.";
+          type = (
+            coerceAttrsOfSubmodulesToListByKey
+              "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposureGatewayParentRefs"
+              "name"
+              [ ]
+          );
+          apply = attrsToList;
+        };
+      };
+
+      config = {
+        "annotations" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposureGatewayParentRefs" = {
+
+      options = {
+        "group" = mkOption {
+          description = "Group is the group of the referent.\nWhen unspecified, \"gateway.networking.k8s.io\" is inferred.\nTo set the core API group (such as for a \"Service\" kind referent),\nGroup must be explicitly set to \"\" (empty string).\n\nSupport: Core";
+          type = (types.nullOr (types.withMaxLength 253 types.str));
+        };
+        "kind" = mkOption {
+          description = "Kind is kind of the referent.\n\nThere are two kinds of parent resources with \"Core\" support:\n\n* Gateway (Gateway conformance profile)\n* Service (Mesh conformance profile, ClusterIP Services only)\n\nSupport for other resources is Implementation-Specific.";
+          type = (types.nullOr (types.withMaxLength 63 (types.withMinLength 1 types.str)));
+        };
+        "name" = mkOption {
+          description = "Name is the name of the referent.\n\nSupport: Core";
+          type = (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+        "namespace" = mkOption {
+          description = "Namespace is the namespace of the referent. When unspecified, this refers\nto the local namespace of the Route.\n\nNote that there are specific rules for ParentRefs which cross namespace\nboundaries. Cross-namespace references are only valid if they are explicitly\nallowed by something in the namespace they are referring to. For example:\nGateway has the AllowedRoutes field, and ReferenceGrant provides a\ngeneric way to enable any other kind of cross-namespace reference.\n\n<gateway:experimental:description>\nParentRefs from a Route to a Service in the same namespace are \"producer\"\nroutes, which apply default routing rules to inbound connections from\nany namespace to the Service.\n\nParentRefs from a Route to a Service in a different namespace are\n\"consumer\" routes, and these routing rules are only applied to outbound\nconnections originating from the same namespace as the Route, for which\nthe intended destination of the connections are a Service targeted as a\nParentRef of the Route.\n</gateway:experimental:description>\n\nSupport: Core";
+          type = (types.nullOr (types.withMaxLength 63 (types.withMinLength 1 types.str)));
+        };
+        "port" = mkOption {
+          description = "Port is the network port this Route targets. It can be interpreted\ndifferently based on the type of parent resource.\n\nWhen the parent resource is a Gateway, this targets all listeners\nlistening on the specified port that also support this kind of Route(and\nselect this Route). It's not recommended to set `Port` unless the\nnetworking behaviors specified in a Route must apply to a specific port\nas opposed to a listener(s) whose port(s) may be changed. When both Port\nand SectionName are specified, the name and port of the selected listener\nmust match both specified values.\n\n<gateway:experimental:description>\nWhen the parent resource is a Service, this targets a specific port in the\nService spec. When both Port (experimental) and SectionName are specified,\nthe name and port of the selected port must match both specified values.\n</gateway:experimental:description>\n\nImplementations MAY choose to support other parent resources.\nImplementations supporting other types of parent resources MUST clearly\ndocument how/if Port is interpreted.\n\nFor the purpose of status, an attachment is considered successful as\nlong as the parent resource accepts it partially. For example, Gateway\nlisteners can restrict which Routes can attach to them by Route kind,\nnamespace, or hostname. If 1 of 2 Gateway listeners accept attachment\nfrom the referencing Route, the Route MUST be considered successfully\nattached. If no Gateway listeners accept attachment from this Route,\nthe Route MUST be considered detached from the Gateway.\n\nSupport: Extended";
+          type = (types.nullOr (types.withMaximum 65535 (types.withMinimum 1 types.int)));
+        };
+        "sectionName" = mkOption {
+          description = "SectionName is the name of a section within the target resource. In the\nfollowing resources, SectionName is interpreted as the following:\n\n* Gateway: Listener name. When both Port (experimental) and SectionName\nare specified, the name and port of the selected listener must match\nboth specified values.\n* Service: Port name. When both Port (experimental) and SectionName\nare specified, the name and port of the selected listener must match\nboth specified values.\n\nImplementations MAY choose to support attaching Routes to other resources.\nIf that is the case, they MUST clearly document how SectionName is\ninterpreted.\n\nWhen unspecified (empty string), this will reference the entire resource.\nFor the purpose of status, an attachment is considered successful if at\nleast one section in the parent resource accepts it. For example, Gateway\nlisteners can restrict which Routes can attach to them by Route kind,\nnamespace, or hostname. If 1 of 2 Gateway listeners accept attachment from\nthe referencing Route, the Route MUST be considered successfully\nattached. If no Gateway listeners accept attachment from this Route, the\nRoute MUST be considered detached from the Gateway.\n\nSupport: Core";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
+      };
+
+      config = {
+        "group" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "namespace" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "sectionName" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta1.GarageBucketSpecWebsiteExposureIngress" = {
+
+      options = {
+        "annotations" = mkOption {
+          description = "Annotations to add to the Ingress (for example the TLS or\nproxy-protocol annotations your ingress controller expects).";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+        "ingressClassName" = mkOption {
+          description = "IngressClassName is the ingress class the Ingress must match\n(spec.ingressClassName). When empty, the Ingress is left without a\nclass so the cluster's default ingress controller picks it up.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
+        "labels" = mkOption {
+          description = "Labels to add to the Ingress. Operator-managed labels take precedence\non conflict.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+        "tlsSecretName" = mkOption {
+          description = "TLSSecretName is the name of a TLS Secret in the bucket's namespace\n(where the generated Ingress lives), attached to the Ingress\n(spec.tls). The Secret must already exist; the operator does not\nprovision certificates.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
+      };
+
+      config = {
+        "annotations" = mkOverride 1002 null;
+        "ingressClassName" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
+        "tlsSecretName" = mkOverride 1002 null;
+      };
+
+    };
     "garage.rajsingh.info.v1beta1.GarageBucketStatus" = {
 
       options = {
@@ -1562,6 +1726,12 @@ let
           description = "WebsiteEnabled indicates if website hosting is currently enabled";
           type = (types.nullOr types.bool);
         };
+        "websiteExposure" = mkOption {
+          description = "WebsiteExposure reports the operator-generated HTTP routing resource\n(Ingress or HTTPRoute) when spec.websiteExposure is set.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageBucketStatusWebsiteExposure")
+          );
+        };
         "websiteUrl" = mkOption {
           description = "WebsiteURL is the computed website URL (if website hosting is enabled)";
           type = (types.nullOr types.str);
@@ -1589,6 +1759,7 @@ let
         "size" = mkOverride 1002 null;
         "websiteConfig" = mkOverride 1002 null;
         "websiteEnabled" = mkOverride 1002 null;
+        "websiteExposure" = mkOverride 1002 null;
         "websiteUrl" = mkOverride 1002 null;
       };
 
@@ -1807,6 +1978,80 @@ let
       config = {
         "errorDocument" = mkOverride 1002 null;
         "indexDocument" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta1.GarageBucketStatusWebsiteExposure" = {
+
+      options = {
+        "hostnames" = mkOption {
+          description = "Hostnames are the hostnames the generated resource routes on.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "name" = mkOption {
+          description = "Name is the name of the generated resource, in the bucket's namespace.";
+          type = (types.nullOr types.str);
+        };
+        "parents" = mkOption {
+          description = "Parents mirrors the route's status.parents for an HTTPRoute: the\nper-parent Accepted/ResolvedRefs/Ready conditions the Gateway\ncontrollers publish. Empty for an Ingress, which has no per-parent\nreadiness model.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "garage.rajsingh.info.v1beta1.GarageBucketStatusWebsiteExposureParents")
+            )
+          );
+        };
+        "type" = mkOption {
+          description = "Type is the kind of routing resource the operator manages for this\nbucket: Ingress or HTTPRoute.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Ingress"
+                "HTTPRoute"
+              ]
+            )
+          );
+        };
+      };
+
+      config = {
+        "hostnames" = mkOverride 1002 null;
+        "name" = mkOverride 1002 null;
+        "parents" = mkOverride 1002 null;
+        "type" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta1.GarageBucketStatusWebsiteExposureParents" = {
+
+      options = {
+        "accepted" = mkOption {
+          description = "Accepted is true when the parent accepted the route\n(status.parents[].conditions[Accepted]=True).";
+          type = (types.nullOr types.bool);
+        };
+        "message" = mkOption {
+          description = "Message carries the parent's condition message when not ready.";
+          type = (types.nullOr types.str);
+        };
+        "parent" = mkOption {
+          description = "Parent is the parent Gateway (or other parent) as namespace/name.";
+          type = (types.nullOr types.str);
+        };
+        "ready" = mkOption {
+          description = "Ready is true when the parent reports the route Ready\n(status.parents[].conditions[Ready]=True).";
+          type = (types.nullOr types.bool);
+        };
+        "resolvedRefs" = mkOption {
+          description = "ResolvedRefs is true when the route's backend references resolved on\nthat parent (status.parents[].conditions[ResolvedRefs]=True).";
+          type = (types.nullOr types.bool);
+        };
+      };
+
+      config = {
+        "accepted" = mkOverride 1002 null;
+        "message" = mkOverride 1002 null;
+        "parent" = mkOverride 1002 null;
+        "ready" = mkOverride 1002 null;
+        "resolvedRefs" = mkOverride 1002 null;
       };
 
     };
@@ -2035,7 +2280,7 @@ let
 
       options = {
         "accessKeyId" = mkOption {
-          description = "AccessKeyID is the existing Garage access key ID (must start with \"GK\").\nUse secretRef instead to avoid storing credentials in the CR.";
+          description = "AccessKeyID is the existing Garage access key ID. Garage v2.3 and newer\naccept at least 8 characters from ASCII letters, digits, '-', '_' and '.'\n(so keys from other S3 providers can be migrated). Garage v2.0 to v2.2\naccept only \"GK\" followed by 24 hex characters and reject anything else\nwith a 400 that is reported in the Ready condition.\nUse secretRef instead to avoid storing credentials in the CR.";
           type = (types.nullOr types.str);
         };
         "accessKeyIdKey" = mkOption {
@@ -2043,7 +2288,7 @@ let
           type = (types.nullOr types.str);
         };
         "secretAccessKey" = mkOption {
-          description = "SecretAccessKey is the existing secret access key.\nUse secretRef instead to avoid storing credentials in the CR.";
+          description = "SecretAccessKey is the existing secret access key. Garage v2.3 and newer\naccept at least 16 graphic ASCII characters (U+0021 to U+007E: no spaces,\ncontrol characters or non-ASCII text). Garage v2.0 to v2.2 accept only 64\nhex characters and reject anything else with a 400 that is reported in the\nReady condition.\nUse secretRef instead to avoid storing credentials in the CR.";
           type = (types.nullOr types.str);
         };
         "secretAccessKeyKey" = mkOption {
@@ -2149,6 +2394,10 @@ let
           description = "IncludeRegion includes the S3 region in the secret\nDefaults to true if not specified";
           type = (types.nullOr types.bool);
         };
+        "includeWebsiteUrl" = mkOption {
+          description = "IncludeWebsiteURL controls whether the referenced bucket's observed website\nURL is written to the Secret. Defaults to false. The value is populated only\nwhen the key references exactly one GarageBucket via bucketRef and that\nbucket has a non-empty status.websiteUrl.";
+          type = (types.nullOr types.bool);
+        };
         "labels" = mkOption {
           description = "Labels to add to the secret";
           type = (types.nullOr (types.attrsOf types.str));
@@ -2173,6 +2422,10 @@ let
           description = "Type is the secret type";
           type = (types.nullOr types.str);
         };
+        "websiteUrlKey" = mkOption {
+          description = "WebsiteURLKey is the data key under which the bucket website URL is written\nin the Secret. Defaults to \"website-url\". Only used when IncludeWebsiteURL\nis true.";
+          type = (types.nullOr types.str);
+        };
       };
 
       config = {
@@ -2188,12 +2441,14 @@ let
         "includeCredentialsFile" = mkOverride 1002 null;
         "includeEndpoint" = mkOverride 1002 null;
         "includeRegion" = mkOverride 1002 null;
+        "includeWebsiteUrl" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
         "name" = mkOverride 1002 null;
         "regionKey" = mkOverride 1002 null;
         "schemeKey" = mkOverride 1002 null;
         "secretAccessKeyKey" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "websiteUrlKey" = mkOverride 1002 null;
       };
 
     };
@@ -2526,6 +2781,27 @@ let
           description = "External marks this node as an external node (not managed by this operator).\nWhen set, no StatefulSet is created - the node is assumed to exist externally.";
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageNodeSpecExternal"));
         };
+        "extraContainers" = mkOption {
+          description = "ExtraContainers run beside the Garage container in the same pod and network\nnamespace. They cannot mount operator-owned volumes.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey "garage.rajsingh.info.v1beta1.GarageNodeSpecExtraContainers"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "extraVolumes" = mkOption {
+          description = "ExtraVolumes are added to the pod. Operator-owned volume names are reserved\n(config, metadata, data, data-<N>, rpc-secret, admin-token, metrics-token).";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey "garage.rajsingh.info.v1beta1.GarageNodeSpecExtraVolumes" "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
         "gateway" = mkOption {
           description = "Gateway marks this node as a gateway-only node (no storage).\nGateway nodes handle API requests but don't store data blocks. Immutable:\ndelete and drain the old identity before changing its storage tier.";
           type = (types.nullOr types.bool);
@@ -2560,6 +2836,17 @@ let
         "imageRepository" = mkOption {
           description = "ImageRepository overrides just the repository portion of the Garage image.\nIf not specified, inherits from GarageCluster.\nIgnored if image is set.";
           type = (types.nullOr types.str);
+        };
+        "initContainers" = mkOption {
+          description = "InitContainers run before the Garage container, after any operator-injected\ninit containers. Entries with restartPolicy: Always are native sidecars\n(Kubernetes 1.29+ beta, GA in 1.33). Names garage, purge-cluster-layout and\nthe prefix garage-operator- are reserved.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey "garage.rajsingh.info.v1beta1.GarageNodeSpecInitContainers"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
         };
         "kubernetesNodeName" = mkOption {
           description = "KubernetesNodeName is the name of the Kubernetes node this GarageNode\nrepresents. Required when backing is NodeLocalPool: node_id discovery\nselects the managed node-local-pool Pod scheduled on this Kubernetes node.\nImmutable for node-local-pool-backed GarageNodes.";
@@ -2657,11 +2944,14 @@ let
         "env" = mkOverride 1002 null;
         "envFrom" = mkOverride 1002 null;
         "external" = mkOverride 1002 null;
+        "extraContainers" = mkOverride 1002 null;
+        "extraVolumes" = mkOverride 1002 null;
         "gateway" = mkOverride 1002 null;
         "image" = mkOverride 1002 null;
         "imagePullPolicy" = mkOverride 1002 null;
         "imagePullSecrets" = mkOverride 1002 null;
         "imageRepository" = mkOverride 1002 null;
+        "initContainers" = mkOverride 1002 null;
         "kubernetesNodeName" = mkOverride 1002 null;
         "logging" = mkOverride 1002 null;
         "maintenance" = mkOverride 1002 null;
@@ -4186,6 +4476,30 @@ let
       };
 
     };
+    "garage.rajsingh.info.v1beta1.GarageNodeSpecExtraContainers" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the container. It must be unique across initContainers and\nextraContainers, a DNS-1123 label, and not an operator-reserved name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta1.GarageNodeSpecExtraVolumes" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the volume. It must be unique across extraVolumes, a DNS-1123\nlabel, and not an operator-reserved volume name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
     "garage.rajsingh.info.v1beta1.GarageNodeSpecImagePullSecrets" = {
 
       options = {
@@ -4198,6 +4512,18 @@ let
       config = {
         "name" = mkOverride 1002 null;
       };
+
+    };
+    "garage.rajsingh.info.v1beta1.GarageNodeSpecInitContainers" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the container. It must be unique across initContainers and\nextraContainers, a DNS-1123 label, and not an operator-reserved name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
 
     };
     "garage.rajsingh.info.v1beta1.GarageNodeSpecLogging" = {
@@ -4727,6 +5053,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
       };
 
       config = {
@@ -4741,6 +5071,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
       };
 
     };
@@ -4831,6 +5162,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
       };
 
       config = {
@@ -4845,6 +5180,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
       };
 
     };
@@ -5027,6 +5363,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
       };
 
       config = {
@@ -5041,6 +5381,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
       };
 
     };
@@ -5270,7 +5611,7 @@ let
           type = (types.nullOr types.str);
         };
         "blockErrors" = mkOption {
-          description = "BlockErrors is retained for API compatibility but is not currently populated;\nGarage's node-status API does not expose a per-node block error count.";
+          description = "BlockErrors is retained for API compatibility but is not currently populated;\nGarage's node-status API does not expose a per-node block error count.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr types.int);
         };
         "clusterAdminEndpoint" = mkOption {
@@ -5396,19 +5737,19 @@ let
           );
         };
         "repairInProgress" = mkOption {
-          description = "RepairInProgress is retained for API compatibility but is not currently\npopulated because Garage's Admin API exposes no per-node repair status.";
+          description = "RepairInProgress is retained for API compatibility but is not currently\npopulated because Garage's Admin API exposes no per-node repair status.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr types.bool);
         };
         "repairProgress" = mkOption {
-          description = "RepairProgress is retained for API compatibility but is not currently populated.";
+          description = "RepairProgress is retained for API compatibility but is not currently populated.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr types.str);
         };
         "repairType" = mkOption {
-          description = "RepairType is retained for API compatibility but is not currently populated.";
+          description = "RepairType is retained for API compatibility but is not currently populated.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr types.str);
         };
         "storedData" = mkOption {
-          description = "StoredData is retained for API compatibility but is not currently populated;\nGarage reports assigned partitions and disk free space, not per-node stored bytes.";
+          description = "StoredData is retained for API compatibility but is not currently populated;\nGarage reports assigned partitions and disk free space, not per-node stored bytes.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr (types.either types.int types.str));
         };
         "tags" = mkOption {
@@ -6648,6 +6989,42 @@ let
             )
           );
         };
+        "extraContainers" = mkOption {
+          description = "ExtraContainers run beside the Garage container in the same pod and network\nnamespace. They cannot mount operator-owned volumes.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayExtraContainers"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "extraVolumes" = mkOption {
+          description = "ExtraVolumes are added to the pod. Operator-owned volume names are reserved\n(config, metadata, data, data-<N>, rpc-secret, admin-token, metrics-token).";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayExtraVolumes"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "initContainers" = mkOption {
+          description = "InitContainers run before the Garage container, after any operator-injected\ninit containers. Entries with restartPolicy: Always are native sidecars\n(Kubernetes 1.29+ beta, GA in 1.33). Names garage, purge-cluster-layout and\nthe prefix garage-operator- are reserved.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayInitContainers"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
         "metadata" = mkOption {
           description = "Metadata configures gateway metadata storage for Auto unified gateways and\nedge gateways. It defaults to a 1Gi PVC; type EmptyDir explicitly gives up\nidentity persistence. Manual unified gateways are user-owned GarageNodes,\nso this cluster-level field is rejected there. Paths and\nvolumeClaimTemplateSpec is unsupported. Selector applies to newly created\nclaims in both unified and edge gateway workloads. Change an edge gateway's\nmetadata configuration only after scaling gateway replicas to zero and\nwaiting for its capacity-less roles to retire. Data always stays EmptyDir\nbecause gateways do not store object blocks.";
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayMetadata"));
@@ -6733,6 +7110,9 @@ let
         "containerSecurityContext" = mkOverride 1002 null;
         "env" = mkOverride 1002 null;
         "envFrom" = mkOverride 1002 null;
+        "extraContainers" = mkOverride 1002 null;
+        "extraVolumes" = mkOverride 1002 null;
+        "initContainers" = mkOverride 1002 null;
         "metadata" = mkOverride 1002 null;
         "nodeSelector" = mkOverride 1002 null;
         "podAnnotations" = mkOverride 1002 null;
@@ -8148,6 +8528,42 @@ let
       };
 
     };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayExtraContainers" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the container. It must be unique across initContainers and\nextraContainers, a DNS-1123 label, and not an operator-reserved name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayExtraVolumes" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the volume. It must be unique across extraVolumes, a DNS-1123\nlabel, and not an operator-reserved volume name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayInitContainers" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the container. It must be unique across initContainers and\nextraContainers, a DNS-1123 label, and not an operator-reserved name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
     "garage.rajsingh.info.v1beta2.GarageClusterSpecGatewayMetadata" = {
 
       options = {
@@ -8204,6 +8620,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
         "volumeClaimTemplateSpec" = mkOption {
           description = "VolumeClaimTemplateSpec is retained for API compatibility but is not\nsupported by operator-managed workloads. Admission rejects new or changed\nvalues; an unchanged legacy value is tolerated only so it can be removed.\nArbitrary claim-template dataSource or volumeName settings can clone a\nmetadata node_key or bind multiple Garage identities to one disk. Use the\nexplicit PVC fields above, or pre-provision a PVC and reference it from an\nordinary GarageNode storage existingClaim.\nDeprecated: use explicit PVC fields or GarageNode existingClaim.";
           type = (
@@ -8224,6 +8644,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
         "volumeClaimTemplateSpec" = mkOverride 1002 null;
       };
 
@@ -8337,6 +8758,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
         "volumeClaimTemplateSpec" = mkOption {
           description = "VolumeClaimTemplateSpec is retained for API compatibility but is not\nsupported by operator-managed workloads. Admission rejects new or changed\nvalues; an unchanged legacy value is tolerated only so it can be removed.\nUse the explicit PVC fields above, or pre-provision a PVC and reference it\nfrom an ordinary GarageNode storage existingClaim.\nDeprecated: use explicit PVC fields or GarageNode existingClaim.";
           type = (
@@ -8356,6 +8781,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
         "volumeClaimTemplateSpec" = mkOverride 1002 null;
       };
 
@@ -9545,12 +9971,33 @@ let
           description = "MinNodesHealthy is the minimum healthy nodes required before applying layout changes.";
           type = (types.nullOr types.int);
         };
+        "redundancyVerification" = mkOption {
+          description = "RedundancyVerification configures the FullyReplicated proof (#474).";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecLayoutManagementRedundancyVerification"
+            )
+          );
+        };
+        "siteRole" = mkOption {
+          description = "SiteRole selects whether this GarageCluster may change the shared Garage\nlayout. Absent is equivalent to Writer, the behavior of every release\nbefore this field existed. A Follower never stages, applies, reverts,\nor removes roles; it only reconciles its own workloads and reports\nstatus. Exactly one site in a federation should be the Writer.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Writer"
+                "Follower"
+              ]
+            )
+          );
+        };
       };
 
       config = {
         "autoApply" = mkOverride 1002 null;
         "drain" = mkOverride 1002 null;
         "minNodesHealthy" = mkOverride 1002 null;
+        "redundancyVerification" = mkOverride 1002 null;
+        "siteRole" = mkOverride 1002 null;
       };
 
     };
@@ -9572,6 +10019,20 @@ let
 
       config = {
         "unverifiedPeersPolicy" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecLayoutManagementRedundancyVerification" = {
+
+      options = {
+        "onTopologyChange" = mkOption {
+          description = "OnTopologyChange starts a blocks-only proof, one local storage node at\na time, when the storage nodes, zones or capacities of the layout change\nafter the operator recorded its baseline. Off by default: proofs then\nrun only from the annotation. Ignored on a Follower site.";
+          type = (types.nullOr types.bool);
+        };
+      };
+
+      config = {
+        "onTopologyChange" = mkOverride 1002 null;
       };
 
     };
@@ -10289,6 +10750,42 @@ let
             )
           );
         };
+        "extraContainers" = mkOption {
+          description = "ExtraContainers run beside the Garage container in the same pod and network\nnamespace. They cannot mount operator-owned volumes.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageExtraContainers"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "extraVolumes" = mkOption {
+          description = "ExtraVolumes are added to the pod. Operator-owned volume names are reserved\n(config, metadata, data, data-<N>, rpc-secret, admin-token, metrics-token).";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageExtraVolumes"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "initContainers" = mkOption {
+          description = "InitContainers run before the Garage container, after any operator-injected\ninit containers. Entries with restartPolicy: Always are native sidecars\n(Kubernetes 1.29+ beta, GA in 1.33). Names garage, purge-cluster-layout and\nthe prefix garage-operator- are reserved.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageInitContainers"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
         "layoutPolicy" = mkOption {
           description = "LayoutPolicy overrides the cluster-level spec.layoutPolicy for the STORAGE\ndefault StatefulSet/PVC group only. This lets a cluster hand-manage SMB/PVC\nGarageNodes (Manual) while node-local pools remain operator-managed and\nwhile the gateway tier follows the cluster policy. Defaults to\nspec.layoutPolicy when empty. Auto->Manual is one-way for the default group.";
           type = (
@@ -10406,6 +10903,9 @@ let
         "dataFsync" = mkOverride 1002 null;
         "env" = mkOverride 1002 null;
         "envFrom" = mkOverride 1002 null;
+        "extraContainers" = mkOverride 1002 null;
+        "extraVolumes" = mkOverride 1002 null;
+        "initContainers" = mkOverride 1002 null;
         "layoutPolicy" = mkOverride 1002 null;
         "metadata" = mkOverride 1002 null;
         "metadataAutoSnapshotInterval" = mkOverride 1002 null;
@@ -11619,6 +12119,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
         "volumeClaimTemplateSpec" = mkOption {
           description = "VolumeClaimTemplateSpec is retained for API compatibility but is not\nsupported by operator-managed workloads. Admission rejects new or changed\nvalues; an unchanged legacy value is tolerated only so it can be removed.\nArbitrary claim-template dataSource or volumeName settings can clone a\nmetadata node_key or bind multiple Garage identities to one disk. Use the\nexplicit PVC fields above, or pre-provision a PVC and reference it from an\nordinary GarageNode storage existingClaim.\nDeprecated: use explicit PVC fields or GarageNode existingClaim.";
           type = (
@@ -11639,6 +12143,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
         "volumeClaimTemplateSpec" = mkOverride 1002 null;
       };
 
@@ -11750,6 +12255,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
         "volumeClaimTemplateSpec" = mkOption {
           description = "VolumeClaimTemplateSpec is retained for API compatibility but is not\nsupported by operator-managed workloads. Admission rejects new or changed\nvalues; an unchanged legacy value is tolerated only so it can be removed.\nUse the explicit PVC fields above, or pre-provision a PVC and reference it\nfrom an ordinary GarageNode storage existingClaim.\nDeprecated: use explicit PVC fields or GarageNode existingClaim.";
           type = (
@@ -11769,6 +12278,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
         "volumeClaimTemplateSpec" = mkOverride 1002 null;
       };
 
@@ -12530,6 +13040,42 @@ let
       };
 
     };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageExtraContainers" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the container. It must be unique across initContainers and\nextraContainers, a DNS-1123 label, and not an operator-reserved name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageExtraVolumes" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the volume. It must be unique across extraVolumes, a DNS-1123\nlabel, and not an operator-reserved volume name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageInitContainers" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the container. It must be unique across initContainers and\nextraContainers, a DNS-1123 label, and not an operator-reserved name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
     "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageMetadata" = {
 
       options = {
@@ -12586,6 +13132,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
         "volumeClaimTemplateSpec" = mkOption {
           description = "VolumeClaimTemplateSpec is retained for API compatibility but is not\nsupported by operator-managed workloads. Admission rejects new or changed\nvalues; an unchanged legacy value is tolerated only so it can be removed.\nArbitrary claim-template dataSource or volumeName settings can clone a\nmetadata node_key or bind multiple Garage identities to one disk. Use the\nexplicit PVC fields above, or pre-provision a PVC and reference it from an\nordinary GarageNode storage existingClaim.\nDeprecated: use explicit PVC fields or GarageNode existingClaim.";
           type = (
@@ -12606,6 +13156,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
         "volumeClaimTemplateSpec" = mkOverride 1002 null;
       };
 
@@ -12719,6 +13270,10 @@ let
             )
           );
         };
+        "volumeAttributesClassName" = mkOption {
+          description = "VolumeAttributesClassName is the name of a cluster-scoped Kubernetes\nVolumeAttributesClass applied to every PVC generated for this volume role.\nThe class's driver must match the StorageClass provisioner; the operator\ndoes not check that or whether the class exists. Valid only for\nPersistentVolumeClaim volumes. Unlike storageClassName it may be changed\nwhile replicas are live: the operator updates bound claims in place, which\nasks the CSI driver to modify the volume. Requires Kubernetes 1.34+ (or\n1.31-1.33 with the VolumeAttributesClass feature enabled) and a driver that\nsupports ModifyVolume. Removing a configured value from a live volume is\nrejected.";
+          type = (types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str)));
+        };
         "volumeClaimTemplateSpec" = mkOption {
           description = "VolumeClaimTemplateSpec is retained for API compatibility but is not\nsupported by operator-managed workloads. Admission rejects new or changed\nvalues; an unchanged legacy value is tolerated only so it can be removed.\nUse the explicit PVC fields above, or pre-provision a PVC and reference it\nfrom an ordinary GarageNode storage existingClaim.\nDeprecated: use explicit PVC fields or GarageNode existingClaim.";
           type = (
@@ -12738,6 +13293,7 @@ let
         "size" = mkOverride 1002 null;
         "storageClassName" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+        "volumeAttributesClassName" = mkOverride 1002 null;
         "volumeClaimTemplateSpec" = mkOverride 1002 null;
       };
 
@@ -13447,6 +14003,42 @@ let
             )
           );
         };
+        "extraContainers" = mkOption {
+          description = "ExtraContainers run beside the Garage container in the same pod and network\nnamespace. They cannot mount operator-owned volumes.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageNodeLocalPoolsPodTemplateExtraContainers"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "extraVolumes" = mkOption {
+          description = "ExtraVolumes are added to the pod. Operator-owned volume names are reserved\n(config, metadata, data, data-<N>, rpc-secret, admin-token, metrics-token).";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageNodeLocalPoolsPodTemplateExtraVolumes"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
+        "initContainers" = mkOption {
+          description = "InitContainers run before the Garage container, after any operator-injected\ninit containers. Entries with restartPolicy: Always are native sidecars\n(Kubernetes 1.29+ beta, GA in 1.33). Names garage, purge-cluster-layout and\nthe prefix garage-operator- are reserved.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+                "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageNodeLocalPoolsPodTemplateInitContainers"
+                "name"
+                [ "name" ]
+            )
+          );
+          apply = attrsToList;
+        };
         "podAnnotations" = mkOption {
           description = "PodAnnotations to add to pods.";
           type = (types.nullOr (types.attrsOf types.str));
@@ -13502,6 +14094,9 @@ let
         "containerSecurityContext" = mkOverride 1002 null;
         "env" = mkOverride 1002 null;
         "envFrom" = mkOverride 1002 null;
+        "extraContainers" = mkOverride 1002 null;
+        "extraVolumes" = mkOverride 1002 null;
+        "initContainers" = mkOverride 1002 null;
         "podAnnotations" = mkOverride 1002 null;
         "podLabels" = mkOverride 1002 null;
         "priorityClassName" = mkOverride 1002 null;
@@ -14930,6 +15525,42 @@ let
         };
 
       };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageNodeLocalPoolsPodTemplateExtraContainers" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the container. It must be unique across initContainers and\nextraContainers, a DNS-1123 label, and not an operator-reserved name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageNodeLocalPoolsPodTemplateExtraVolumes" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the volume. It must be unique across extraVolumes, a DNS-1123\nlabel, and not an operator-reserved volume name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageNodeLocalPoolsPodTemplateInitContainers" = {
+
+      options = {
+        "name" = mkOption {
+          description = "Name of the container. It must be unique across initContainers and\nextraContainers, a DNS-1123 label, and not an operator-reserved name.";
+          type = (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = { };
+
+    };
     "garage.rajsingh.info.v1beta2.GarageClusterSpecStorageNodeLocalPoolsPodTemplateResources" = {
 
       options = {
@@ -15844,6 +16475,17 @@ let
           description = "RootDomain is the root domain suffix for bucket website access.";
           type = (types.nullOr types.str);
         };
+        "scheme" = mkOption {
+          description = "Scheme is the URL scheme used when publishing bucket website URLs.\nSet to https when TLS is terminated in front of the Garage Web API.\nDefaults to http.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "https"
+              ]
+            )
+          );
+        };
       };
 
       config = {
@@ -15852,6 +16494,7 @@ let
         "bindPort" = mkOverride 1002 null;
         "enabled" = mkOverride 1002 null;
         "rootDomain" = mkOverride 1002 null;
+        "scheme" = mkOverride 1002 null;
       };
 
     };
@@ -15895,7 +16538,7 @@ let
 
       options = {
         "activeRepairs" = mkOption {
-          description = "ActiveRepairs contains currently running repair operations.";
+          description = "ActiveRepairs contains currently running repair operations.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (
             types.nullOr (
               types.listOf (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusActiveRepairs")
@@ -15917,7 +16560,7 @@ let
           );
         };
         "blockErrors" = mkOption {
-          description = "BlockErrors is the count of blocks with sync errors across all nodes.";
+          description = "BlockErrors is the count of blocks with sync errors across all nodes.\nAbsent means not observed (Admin API unreachable, or a node that can\nhold blocks did not answer; silent capacityless gateways are ignored).\n0 means observed with no errors.";
           type = (types.nullOr types.int);
         };
         "buildInfo" = mkOption {
@@ -15986,14 +16629,18 @@ let
           description = "LayoutVersion is the current layout version.";
           type = (types.nullOr types.int);
         };
+        "layoutWriter" = mkOption {
+          description = "LayoutWriter reports the layout role the controller is currently\nenforcing for this site. Nil until the controller first records it.";
+          type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusLayoutWriter"));
+        };
         "lifecycleStatus" = mkOption {
-          description = "LifecycleStatus contains the status of bucket lifecycle operations.";
+          description = "LifecycleStatus contains the status of bucket lifecycle operations.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (
             types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusLifecycleStatus")
           );
         };
         "nodes" = mkOption {
-          description = "Nodes contains status information for each node.";
+          description = "Nodes contains status information for each node.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (
             types.nullOr (types.listOf (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusNodes"))
           );
@@ -16028,6 +16675,10 @@ let
           description = "ReadyReplicas is the number of ready Garage pods.";
           type = (types.nullOr types.int);
         };
+        "redundancy" = mkOption {
+          description = "Redundancy reports block-resync progress and the last full-redundancy\nproof. Absent on clusters without a storage tier, on connectTo clusters,\nand until the controller first observes Garage.";
+          type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancy"));
+        };
         "remoteClusters" = mkOption {
           description = "RemoteClusters contains status of remote clusters in the federation.";
           type = (
@@ -16044,7 +16695,7 @@ let
           type = types.int;
         };
         "resyncQueueLength" = mkOption {
-          description = "ResyncQueueLength is the total block resync queue depth across all nodes.";
+          description = "ResyncQueueLength is the total block resync queue depth across all nodes.\nAbsent means not observed (Admin API unreachable, or a node that can\nhold blocks did not answer; silent capacityless gateways are ignored).\n0 means observed and drained.";
           type = (types.nullOr types.int);
         };
         "scaleReplicas" = mkOption {
@@ -16056,7 +16707,7 @@ let
           type = (types.nullOr types.str);
         };
         "scrubStatus" = mkOption {
-          description = "ScrubStatus contains the status of data scrub operations.";
+          description = "ScrubStatus contains the status of data scrub operations.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusScrubStatus"));
         };
         "selector" = mkOption {
@@ -16094,7 +16745,7 @@ let
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusStorageStats"));
         };
         "totalNodes" = mkOption {
-          description = "TotalNodes is the total nodes across all clusters (local + remote).";
+          description = "TotalNodes is the total nodes across all clusters (local + remote).\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr types.int);
         };
         "unreachablePeers" = mkOption {
@@ -16102,15 +16753,15 @@ let
           type = (types.nullOr (types.listOf types.str));
         };
         "workerCount" = mkOption {
-          description = "WorkerCount is the total number of background workers.";
+          description = "WorkerCount is the total number of background workers.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr types.int);
         };
         "workers" = mkOption {
-          description = "Workers contains detailed information about background workers.";
+          description = "Workers contains detailed information about background workers.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusWorkers"));
         };
         "workersFailed" = mkOption {
-          description = "WorkersFailed is the number of failed workers.";
+          description = "WorkersFailed is the number of failed workers.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (types.nullOr types.int);
         };
       };
@@ -16135,12 +16786,14 @@ let
         "layoutHistory" = mkOverride 1002 null;
         "layoutPreview" = mkOverride 1002 null;
         "layoutVersion" = mkOverride 1002 null;
+        "layoutWriter" = mkOverride 1002 null;
         "lifecycleStatus" = mkOverride 1002 null;
         "nodes" = mkOverride 1002 null;
         "observedGeneration" = mkOverride 1002 null;
         "pendingGatewayTombstones" = mkOverride 1002 null;
         "phase" = mkOverride 1002 null;
         "readyReplicas" = mkOverride 1002 null;
+        "redundancy" = mkOverride 1002 null;
         "remoteClusters" = mkOverride 1002 null;
         "resyncQueueLength" = mkOverride 1002 null;
         "scaleReplicas" = mkOverride 1002 null;
@@ -16643,6 +17296,23 @@ let
       };
 
     };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusLayoutWriter" = {
+
+      options = {
+        "role" = mkOption {
+          description = "Role is the role the controller is currently enforcing.";
+          type = (
+            types.enum [
+              "Writer"
+              "Follower"
+            ]
+          );
+        };
+      };
+
+      config = { };
+
+    };
     "garage.rajsingh.info.v1beta2.GarageClusterStatusLifecycleStatus" = {
 
       options = {
@@ -16723,6 +17393,380 @@ let
         "tier" = mkOverride 1002 null;
         "version" = mkOverride 1002 null;
         "zone" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancy" = {
+
+      options = {
+        "coordination" = mkOption {
+          description = "Coordination is what this site last saw of other sites' repairs. It\nserializes proofs across a federation. Absent on a cluster that is not\nfederated.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyCoordination")
+          );
+        };
+        "deferredNodes" = mkOption {
+          description = "DeferredNodes lists owned storage nodes the current proof skipped.\nDown and NotReporting nodes are retried once they are back, no sooner\nthan retryAfter.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyDeferredNodes")
+            )
+          );
+        };
+        "lastProgressAt" = mkOption {
+          description = "LastProgressAt is the last time remaining work decreased (a resync or\ntable sync queue shrank, a repair scan advanced, or the proof moved to\na later step). It moves forward in steps of at least one minute.";
+          type = (types.nullOr types.str);
+        };
+        "nodes" = mkOption {
+          description = "Nodes holds per-node progress for every current storage node and every\nother node that reports block errors, sorted by nodeId.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyNodes")
+            )
+          );
+        };
+        "progressObservedAt" = mkOption {
+          description = "ProgressObservedAt is when nodes[] was last rewritten. Progress is\nrewritten at most once per minute unless another redundancy field\nchanges in the same pass, and only when a value changed.";
+          type = (types.nullOr types.str);
+        };
+        "scope" = mkOption {
+          description = "Scope is Cluster when every storage role of the layout runs at this\nsite, and Local when other sites run some of them; the proof covers\nonly this site's local storage nodes.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Cluster"
+                "Local"
+              ]
+            )
+          );
+        };
+        "storageNodes" = mkOption {
+          description = "StorageNodes counts the layout's storage roles for this site.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyStorageNodes")
+          );
+        };
+        "verification" = mkOption {
+          description = "Verification is the proof state. Absent on a federated site without\nspec.layoutManagement.siteRole.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyVerification")
+          );
+        };
+      };
+
+      config = {
+        "coordination" = mkOverride 1002 null;
+        "deferredNodes" = mkOverride 1002 null;
+        "lastProgressAt" = mkOverride 1002 null;
+        "nodes" = mkOverride 1002 null;
+        "progressObservedAt" = mkOverride 1002 null;
+        "scope" = mkOverride 1002 null;
+        "storageNodes" = mkOverride 1002 null;
+        "verification" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyCoordination" = {
+
+      options = {
+        "lastRemoteRepairAt" = mkOption {
+          description = "LastRemoteRepairAt is when a blocks repair on a remote storage node was\nlast seen starting or running, or when this site started watching.";
+          type = (types.nullOr types.str);
+        };
+        "lastRemoteRepairNodeId" = mkOption {
+          description = "LastRemoteRepairNodeID is the remote node of that repair.";
+          type = (types.nullOr types.str);
+        };
+        "remoteRepairWorkerIds" = mkOption {
+          description = "RemoteRepairWorkerIDs maps each remote storage node ID to the highest\nBlock repair worker ID seen on it.";
+          type = (types.nullOr (types.attrsOf types.int));
+        };
+      };
+
+      config = {
+        "lastRemoteRepairAt" = mkOverride 1002 null;
+        "lastRemoteRepairNodeId" = mkOverride 1002 null;
+        "remoteRepairWorkerIds" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyDeferredNodes" = {
+
+      options = {
+        "nodeId" = mkOption {
+          description = "NodeID is the full Garage node ID.";
+          type = types.str;
+        };
+        "reason" = mkOption {
+          description = "Reason says why the node was skipped.";
+          type = (
+            types.enum [
+              "Down"
+              "NotReporting"
+              "RepairFailed"
+            ]
+          );
+        };
+        "retryAfter" = mkOption {
+          description = "RetryAfter is the earliest time the operator retries the node. Absent\nfor RepairFailed, which only a new verify-redundancy value retries.";
+          type = (types.nullOr types.str);
+        };
+        "since" = mkOption {
+          description = "Since is when the node was skipped.";
+          type = types.str;
+        };
+      };
+
+      config = {
+        "retryAfter" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyNodes" = {
+
+      options = {
+        "blockErrors" = mkOption {
+          description = "BlockErrors is the node's number of blocks with resync errors.";
+          type = (types.nullOr types.int);
+        };
+        "blockRepairProgress" = mkOption {
+          description = "BlockRepairProgress is Garage's progress string for the exact\nverification repair worker on this node while it runs.";
+          type = (types.nullOr (types.withMaxLength 64 types.str));
+        };
+        "metadataQueueLength" = mkOption {
+          description = "MetadataQueueLength is the sum of the Merkle-updater and insert queues.";
+          type = (types.nullOr types.int);
+        };
+        "metadataSyncPartitions" = mkOption {
+          description = "MetadataSyncPartitions is the sum over tables of partitions left in the\ncurrent full-sync pass. It is 0 between passes.";
+          type = (types.nullOr types.int);
+        };
+        "nodeId" = mkOption {
+          description = "NodeID is the full Garage node ID.";
+          type = types.str;
+        };
+        "observed" = mkOption {
+          description = "Observed is false when the node did not answer this pass; the counters\nthen keep their previous values.";
+          type = types.bool;
+        };
+        "resyncIdle" = mkOption {
+          description = "ResyncIdle is true when every enabled resync worker is idle.";
+          type = (types.nullOr types.bool);
+        };
+        "resyncQueueLength" = mkOption {
+          description = "ResyncQueueLength is the node's block resync queue, including delayed\nrechecks.";
+          type = (types.nullOr types.int);
+        };
+      };
+
+      config = {
+        "blockErrors" = mkOverride 1002 null;
+        "blockRepairProgress" = mkOverride 1002 null;
+        "metadataQueueLength" = mkOverride 1002 null;
+        "metadataSyncPartitions" = mkOverride 1002 null;
+        "resyncIdle" = mkOverride 1002 null;
+        "resyncQueueLength" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyStorageNodes" = {
+
+      options = {
+        "local" = mkOption {
+          description = "Local is the number of storage roles that run at this site.";
+          type = (types.withMinimum 0 types.int);
+        };
+        "remote" = mkOption {
+          description = "Remote is the number of storage roles that run at other sites.";
+          type = (types.withMinimum 0 types.int);
+        };
+        "total" = mkOption {
+          description = "Total is the number of storage roles across all sites.";
+          type = (types.withMinimum 0 types.int);
+        };
+        "verified" = mkOption {
+          description = "Verified is the number of local storage nodes the current or last\nproof has completed.";
+          type = (types.withMinimum 0 types.int);
+        };
+      };
+
+      config = { };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyVerification" = {
+
+      options = {
+        "completedNodeIds" = mkOption {
+          description = "CompletedNodeIDs are the owned storage nodes that finished this proof,\nsorted.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "currentNodeId" = mkOption {
+          description = "CurrentNodeID is the owned storage node whose turn it is. Repairs run\non one storage node at a time.";
+          type = (types.nullOr types.str);
+        };
+        "evidence" = mkOption {
+          description = "Evidence is the internal proof state. Its shape may change between\noperator releases; an unrecognized shape restarts the current node.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyVerificationEvidence"
+            )
+          );
+        };
+        "layoutVersion" = mkOption {
+          description = "LayoutVersion is the Garage layout version last observed.";
+          type = (types.nullOr (types.withMinimum 0 types.int));
+        };
+        "phase" = mkOption {
+          description = "Phase is the proof step.";
+          type = (
+            types.enum [
+              "Idle"
+              "Pending"
+              "SyncingMetadata"
+              "ScanningBlocks"
+              "Settling"
+              "Partial"
+              "Verified"
+            ]
+          );
+        };
+        "phaseStartedAt" = mkOption {
+          description = "PhaseStartedAt is when Phase was entered.";
+          type = (types.nullOr types.str);
+        };
+        "requestToken" = mkOption {
+          description = "RequestToken is the last handled value of the\ngarage.rajsingh.info/verify-redundancy annotation.";
+          type = (types.nullOr (types.withMaxLength 253 types.str));
+        };
+        "startedAt" = mkOption {
+          description = "StartedAt is when the current proof attempt began.";
+          type = (types.nullOr types.str);
+        };
+        "topologyHash" = mkOption {
+          description = "TopologyHash fingerprints the ID, zone and capacity of every storage\nrole in the current layout. A change after the baseline starts a proof;\ntag-only layout changes and Pod restarts do not change it.";
+          type = (types.nullOr (types.withMaxLength 64 types.str));
+        };
+        "trigger" = mkOption {
+          description = "Trigger is what started the current proof. Absent while Idle.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Requested"
+                "LayoutChanged"
+                "NodeChanged"
+              ]
+            )
+          );
+        };
+        "verifiedAt" = mkOption {
+          description = "VerifiedAt is when the last proof completed. It survives later proofs\nand outages, so it records the last time full redundancy was proven.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "completedNodeIds" = mkOverride 1002 null;
+        "currentNodeId" = mkOverride 1002 null;
+        "evidence" = mkOverride 1002 null;
+        "layoutVersion" = mkOverride 1002 null;
+        "phaseStartedAt" = mkOverride 1002 null;
+        "requestToken" = mkOverride 1002 null;
+        "startedAt" = mkOverride 1002 null;
+        "topologyHash" = mkOverride 1002 null;
+        "trigger" = mkOverride 1002 null;
+        "verifiedAt" = mkOverride 1002 null;
+      };
+
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusRedundancyVerificationEvidence" = {
+
+      options = {
+        "blockErrorsBaseline" = mkOption {
+          description = "BlockErrorsBaseline is the block-error count at the start of the\ncurrent 30-minute window used to detect a growing count.";
+          type = (types.nullOr types.int);
+        };
+        "blockErrorsBaselineAt" = mkOption {
+          description = "BlockErrorsBaselineAt is when the current block-error window opened.";
+          type = (types.nullOr types.str);
+        };
+        "idleSince" = mkOption {
+          description = "IdleSince is the first pass, after the tables launch, at which the\ncurrent node's sync workers were idle and its metadata queues empty.";
+          type = (types.nullOr types.str);
+        };
+        "launches" = mkOption {
+          description = "Launches counts the launches of the current node's stage. After three\nthe node is deferred as RepairFailed.";
+          type = (types.nullOr (types.withMaximum 3 (types.withMinimum 0 types.int)));
+        };
+        "nodeStage" = mkOption {
+          description = "NodeStage is the current node's step.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Tables"
+                "Blocks"
+                "Pause"
+              ]
+            )
+          );
+        };
+        "pauseUntil" = mkOption {
+          description = "PauseUntil ends the pause after the current node finished.";
+          type = (types.nullOr types.str);
+        };
+        "peerDownSeen" = mkOption {
+          description = "PeerDownSeen is true when some storage node was down during the\ncurrent node's table sync. Sync errors are then expected; the node is\nrechecked with a tables-only pass once every node is up.";
+          type = (types.nullOr types.bool);
+        };
+        "quietSince" = mkOption {
+          description = "QuietSince starts the final quiet period.";
+          type = (types.nullOr types.str);
+        };
+        "repairWorkerId" = mkOption {
+          description = "RepairWorkerID is the blocks repair worker adopted on the current node.";
+          type = (types.nullOr types.int);
+        };
+        "resyncErrorBaselines" = mkOption {
+          description = "ResyncErrorBaselines is the persistent-error counter of every block\nresync worker on the owned nodes when the quiet period started.";
+          type = (types.nullOr (types.attrsOf types.int));
+        };
+        "skipTables" = mkOption {
+          description = "SkipTables is true for a proof started by a layout change: Garage's\nsettled layout history already proves a full table sync on every node.";
+          type = (types.nullOr types.bool);
+        };
+        "stageLaunchedAt" = mkOption {
+          description = "StageLaunchedAt is when the current node's repair was launched.";
+          type = (types.nullOr types.str);
+        };
+        "syncErrorBaselines" = mkOption {
+          description = "SyncErrorBaselines is the errors counter of each of the five\n\"<table> sync\" workers of the current node at the tables launch.";
+          type = (types.nullOr (types.attrsOf types.int));
+        };
+        "tablesRecheckNodeIds" = mkOption {
+          description = "TablesRecheckNodeIDs are completed nodes whose table sync ran while a\npeer was down; each gets a tables-only pass once every node is up.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+        "workerBaseline" = mkOption {
+          description = "WorkerBaseline is the current node's highest worker ID at the launch.\nA lower maximum later means Garage restarted.";
+          type = (types.nullOr types.int);
+        };
+      };
+
+      config = {
+        "blockErrorsBaseline" = mkOverride 1002 null;
+        "blockErrorsBaselineAt" = mkOverride 1002 null;
+        "idleSince" = mkOverride 1002 null;
+        "launches" = mkOverride 1002 null;
+        "nodeStage" = mkOverride 1002 null;
+        "pauseUntil" = mkOverride 1002 null;
+        "peerDownSeen" = mkOverride 1002 null;
+        "quietSince" = mkOverride 1002 null;
+        "repairWorkerId" = mkOverride 1002 null;
+        "resyncErrorBaselines" = mkOverride 1002 null;
+        "skipTables" = mkOverride 1002 null;
+        "stageLaunchedAt" = mkOverride 1002 null;
+        "syncErrorBaselines" = mkOverride 1002 null;
+        "tablesRecheckNodeIds" = mkOverride 1002 null;
+        "workerBaseline" = mkOverride 1002 null;
       };
 
     };

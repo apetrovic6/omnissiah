@@ -1238,6 +1238,14 @@ let
           description = "The last time that the backup volume was synced into the cluster.";
           type = (types.nullOr types.str);
         };
+        "linkedCloneSourceSnapshot" = mkOption {
+          description = "The source snapshot of the backed up volume, set only when it was a linked clone.";
+          type = (types.nullOr types.str);
+        };
+        "linkedCloneSourceVolume" = mkOption {
+          description = "The source volume of the backed up volume, set only when it was a linked clone.";
+          type = (types.nullOr types.str);
+        };
         "messages" = mkOption {
           description = "The error messages when call longhorn engine on list or inspect backup volumes.";
           type = (types.nullOr (types.attrsOf types.str));
@@ -1266,6 +1274,8 @@ let
         "lastBackupName" = mkOverride 1002 null;
         "lastModificationTime" = mkOverride 1002 null;
         "lastSyncedAt" = mkOverride 1002 null;
+        "linkedCloneSourceSnapshot" = mkOverride 1002 null;
+        "linkedCloneSourceVolume" = mkOverride 1002 null;
         "messages" = mkOverride 1002 null;
         "ownerID" = mkOverride 1002 null;
         "size" = mkOverride 1002 null;
@@ -1397,6 +1407,10 @@ let
           description = "";
           type = (types.nullOr types.str);
         };
+        "nvmeTcpNrIoQueues" = mkOption {
+          description = "nvmeTcpNrIoQueues limits the number of I/O queues the kernel initiator\ncreates when connecting the blockdev frontend over NVMe-TCP.\n0 means inheriting the global setting default-nvme-tcp-nr-io-queues.\nTakes effect on (re)attach.";
+          type = (types.nullOr types.int);
+        };
         "salvageRequested" = mkOption {
           description = "";
           type = (types.nullOr types.bool);
@@ -1441,6 +1455,7 @@ let
         "image" = mkOverride 1002 null;
         "logRequested" = mkOverride 1002 null;
         "nodeID" = mkOverride 1002 null;
+        "nvmeTcpNrIoQueues" = mkOverride 1002 null;
         "salvageRequested" = mkOverride 1002 null;
         "size" = mkOverride 1002 null;
         "targetIP" = mkOverride 1002 null;
@@ -2280,7 +2295,7 @@ let
 
       options = {
         "cpuIsolationEnabled" = mkOption {
-          description = "CPUIsolationEnabled overrides the cluster-wide\ndata-engine-cpu-isolation-enabled setting for this instance manager.\n\"true\"  -> pass --enable-irq-affinity and --enable-workqueue-affinity\n           to start-spdk-tgt (steer host IRQs and unbound kernel\n           workqueues away from the SPDK reactor CPUs).\n\"false\" -> do not pass the flags.\n\"\"      -> inherit the global setting value.";
+          description = "CPUIsolationEnabled overrides the cluster-wide\ndata-engine-cpu-isolation-enabled setting for this instance manager.\n\"true\"  -> pass --enable-irq-affinity and --enable-workqueue-affinity\n           to start-spdk-tgt (steer host IRQs and unbound kernel\n           workqueues away from the SPDK reactor CPUs).\n\"false\" -> do not pass the flags.\n\"\"      -> inherit the global setting value.\nThis field is ignored when interrupt mode is enabled, since the SPDK\nreactors no longer busy-poll and CPU isolation is always disabled.";
           type = (
             types.nullOr (
               types.enum [
@@ -2471,6 +2486,230 @@ let
         "cpuCoreNumber" = mkOverride 1002 null;
         "cpuMask" = mkOverride 1002 null;
         "interruptModeEnabled" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.InstanceManagerUpgrade" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "InstanceManagerUpgradeSpec defines the desired state of the InstanceManagerUpgrade.";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.InstanceManagerUpgradeSpec"));
+        };
+        "status" = mkOption {
+          description = "InstanceManagerUpgradeStatus defines the observed state of the InstanceManagerUpgrade.";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.InstanceManagerUpgradeStatus"));
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.InstanceManagerUpgradeControl" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "InstanceManagerUpgradeControlSpec defines the desired state of the\nInstanceManagerUpgradeControl singleton.";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.InstanceManagerUpgradeControlSpec"));
+        };
+        "status" = mkOption {
+          description = "InstanceManagerUpgradeControlStatus defines the observed state of the\nInstanceManagerUpgradeControl.";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.InstanceManagerUpgradeControlStatus"));
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.InstanceManagerUpgradeControlSpec" = {
+
+      options = {
+        "startAt" = mkOption {
+          description = "StartAt is the RFC3339 timestamp at which the upgrade cycle should begin.";
+          type = (types.nullOr types.str);
+        };
+        "targetImage" = mkOption {
+          description = "TargetImage is the desired instance manager image for all nodes.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "startAt" = mkOverride 1002 null;
+        "targetImage" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.InstanceManagerUpgradeControlStatus" = {
+
+      options = {
+        "currentNode" = mkOption {
+          description = "CurrentNode is the name of the node that is actively being upgraded.";
+          type = (types.nullOr types.str);
+        };
+        "nodes" = mkOption {
+          description = "Nodes holds the upgrade status for nodes participating in the current or\nmost recent upgrade cycle.";
+          type = (types.nullOr (types.attrsOf types.attrs));
+        };
+        "ownerID" = mkOption {
+          description = "OwnerID is the ID of the Longhorn manager pod that currently owns this CR.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "currentNode" = mkOverride 1002 null;
+        "nodes" = mkOverride 1002 null;
+        "ownerID" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.InstanceManagerUpgradeSpec" = {
+
+      options = {
+        "nodeID" = mkOption {
+          description = "NodeID is the node where the source instance manager is running.";
+          type = types.str;
+        };
+        "targetImage" = mkOption {
+          description = "TargetImage is the desired instance manager image after upgrade.";
+          type = types.str;
+        };
+      };
+
+      config = { };
+
+    };
+    "longhorn.io.v1beta2.InstanceManagerUpgradeStatus" = {
+
+      options = {
+        "abortReason" = mkOption {
+          description = "AbortReason explains why AbortRequested was set.";
+          type = (types.nullOr types.str);
+        };
+        "abortRequested" = mkOption {
+          description = "AbortRequested is set by the controller when an abort condition is detected.";
+          type = (types.nullOr types.bool);
+        };
+        "conditions" = mkOption {
+          description = "Conditions records the current conditions of the upgrade.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "longhorn.io.v1beta2.InstanceManagerUpgradeStatusConditions")
+            )
+          );
+        };
+        "engines" = mkOption {
+          description = "Engines records the relocation plan for each engine managed by the source\ninstance manager. The map key is the volume name.";
+          type = (types.nullOr (types.attrsOf types.attrs));
+        };
+        "errorMsg" = mkOption {
+          description = "ErrorMsg records the terminal error encountered during the upgrade, if any.";
+          type = (types.nullOr types.str);
+        };
+        "ownerID" = mkOption {
+          description = "OwnerID is the owner node ID of this InstanceManagerUpgrade.";
+          type = (types.nullOr types.str);
+        };
+        "plannedDetachedReplicas" = mkOption {
+          description = "PlannedDetachedReplicas records the replicas that should be temporarily\ndetached from engines during the instance manager upgrade. The map key is\nthe volume name.";
+          type = (types.nullOr (types.loaOf types.attrs));
+        };
+        "startedAt" = mkOption {
+          description = "StartedAt records when the timed or active portion of the upgrade began.";
+          type = (types.nullOr types.str);
+        };
+        "state" = mkOption {
+          description = "State indicates the overall progress of the instance manager upgrade.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "abortReason" = mkOverride 1002 null;
+        "abortRequested" = mkOverride 1002 null;
+        "conditions" = mkOverride 1002 null;
+        "engines" = mkOverride 1002 null;
+        "errorMsg" = mkOverride 1002 null;
+        "ownerID" = mkOverride 1002 null;
+        "plannedDetachedReplicas" = mkOverride 1002 null;
+        "startedAt" = mkOverride 1002 null;
+        "state" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.InstanceManagerUpgradeStatusConditions" = {
+
+      options = {
+        "lastProbeTime" = mkOption {
+          description = "Last time we probed the condition.";
+          type = (types.nullOr types.str);
+        };
+        "lastTransitionTime" = mkOption {
+          description = "Last time the condition transitioned from one status to another.";
+          type = (types.nullOr types.str);
+        };
+        "message" = mkOption {
+          description = "Human-readable message indicating details about last transition.";
+          type = (types.nullOr types.str);
+        };
+        "reason" = mkOption {
+          description = "Unique, one-word, CamelCase reason for the condition's last transition.";
+          type = (types.nullOr types.str);
+        };
+        "status" = mkOption {
+          description = "Status is the status of the condition.\nCan be True, False, Unknown.";
+          type = (types.nullOr types.str);
+        };
+        "type" = mkOption {
+          description = "Type is the type of the condition.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "lastProbeTime" = mkOverride 1002 null;
+        "lastTransitionTime" = mkOverride 1002 null;
+        "message" = mkOverride 1002 null;
+        "reason" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+        "type" = mkOverride 1002 null;
       };
 
     };
@@ -2834,8 +3073,23 @@ let
           type = (types.nullOr (types.attrsOf types.str));
         };
         "retain" = mkOption {
-          description = "The retain count of the snapshot/backup.";
+          description = "The retain count of the snapshot/backup.\nRetain represents the number of snapshots/backups to retain and only when the retention policy is \"count-based\".";
           type = (types.nullOr types.int);
+        };
+        "retainAge" = mkOption {
+          description = "The retention age of the snapshot/backup, specified as a Go duration string,\nsuch as \"10m\", \"24h\", or \"8760h\". Note that Go durations have no day or year unit,\nso a day is \"24h\". Snapshots/backups older than this are cleaned up by the recurring job.\nOnly takes effect when the retention policy is \"age-based\".\nIf the retention policy is \"age-based\", this value is 0s, the recurring job will not start.";
+          type = (types.nullOr types.str);
+        };
+        "retentionPolicy" = mkOption {
+          description = "The retention policy that determines whether the recurring job cleans up\nsnapshots/backups based on their count or age. Can be \"count-based\" or\n\"age-based\". The two policies work independently: \"count-based\" (the default)\nretains the configured number of newest snapshots/backups and ignores\nRetainAge, while \"age-based\" retains snapshots/backups no older than RetainAge\nand ignores Retain.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "count-based"
+                "age-based"
+              ]
+            )
+          );
         };
         "task" = mkOption {
           description = "The recurring job task.\nCan be \"snapshot\", \"snapshot-force-create\", \"snapshot-cleanup\", \"snapshot-delete\", \"backup\", \"backup-force-create\", \"filesystem-trim\" or \"system-backup\".";
@@ -2864,6 +3118,8 @@ let
         "name" = mkOverride 1002 null;
         "parameters" = mkOverride 1002 null;
         "retain" = mkOverride 1002 null;
+        "retainAge" = mkOverride 1002 null;
+        "retentionPolicy" = mkOverride 1002 null;
         "task" = mkOverride 1002 null;
       };
 
@@ -3717,6 +3973,261 @@ let
       };
 
     };
+    "longhorn.io.v1beta2.SnapshotGroup" = {
+
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = (types.nullOr types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = (types.nullOr types.str);
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = (types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"));
+        };
+        "spec" = mkOption {
+          description = "SnapshotGroupSpec defines the desired state of the Longhorn SnapshotGroup.\nThe whole spec is immutable after creation: a group is a point-in-time\nrequest, so changing members later has no meaning.";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.SnapshotGroupSpec"));
+        };
+        "status" = mkOption {
+          description = "SnapshotGroupStatus defines the observed state of the Longhorn SnapshotGroup";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.SnapshotGroupStatus"));
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "spec" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.SnapshotGroupSpec" = {
+
+      options = {
+        "deadlineSeconds" = mkOption {
+          description = "DeadlineSeconds is the deadline for taking every member snapshot,\nmeasured from the group's metadata.creationTimestamp. When the field is\nomitted, the CRD default applies. Go clients cannot omit the field: an\nunset field arrives as 0, and the mutating webhook replaces the 0 with\nthe default.";
+          type = (types.nullOr (types.withMaximum 3600 (types.withMinimum 10 types.int)));
+        };
+        "labels" = mkOption {
+          description = "Labels are engine snapshot labels applied to every member (Snapshot\nspec.labels). They are not visible to Kubernetes label selectors.\nReserved recurring-job label keys are rejected at admission.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+        "members" = mkOption {
+          description = "Members is the fixed member set, resolved from Volumes or VolumeSelector\nand stamped by the mutating webhook at admission. It may not be set by\nthe user.";
+          type = (types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.SnapshotGroupSpecMembers")));
+        };
+        "volumeSelector" = mkOption {
+          description = "VolumeSelector selects the member volumes by their labels. Exactly one of\nVolumes or VolumeSelector may be set at creation.";
+          type = (types.nullOr (submoduleOf "longhorn.io.v1beta2.SnapshotGroupSpecVolumeSelector"));
+        };
+        "volumes" = mkOption {
+          description = "Volumes explicitly lists the member volumes. Exactly one of Volumes or\nVolumeSelector may be set at creation; the mutating webhook resolves the\nselection into Members at admission.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "deadlineSeconds" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
+        "members" = mkOverride 1002 null;
+        "volumeSelector" = mkOverride 1002 null;
+        "volumes" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.SnapshotGroupSpecMembers" = {
+
+      options = {
+        "snapshotName" = mkOption {
+          description = "";
+          type = types.str;
+        };
+        "volumeName" = mkOption {
+          description = "";
+          type = types.str;
+        };
+      };
+
+      config = { };
+
+    };
+    "longhorn.io.v1beta2.SnapshotGroupSpecVolumeSelector" = {
+
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "longhorn.io.v1beta2.SnapshotGroupSpecVolumeSelectorMatchExpressions")
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = (types.nullOr (types.attrsOf types.str));
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.SnapshotGroupSpecVolumeSelectorMatchExpressions" = {
+
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = (types.nullOr (types.listOf types.str));
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.SnapshotGroupStatus" = {
+
+      options = {
+        "conditions" = mkOption {
+          description = "Conditions holds the latest observations of the SnapshotGroup's state,\nsuch as Degraded.";
+          type = (
+            types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.SnapshotGroupStatusConditions"))
+          );
+        };
+        "creationTime" = mkOption {
+          description = "CreationTime is the latest member creation time, set when the group\nbecomes Ready.";
+          type = (types.nullOr types.str);
+        };
+        "error" = mkOption {
+          description = "Error is set when the group fails (deadline, name collision).";
+          type = (types.nullOr types.str);
+        };
+        "members" = mkOption {
+          description = "Members is the observed state of every member, one entry per spec\nmember. It is the primary debugging signal: each entry carries the\nmember's last error and creation time.";
+          type = (types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.SnapshotGroupStatusMembers")));
+        };
+        "ownerID" = mkOption {
+          description = "OwnerID is the ID of the node that owns this SnapshotGroup.";
+          type = (types.nullOr types.str);
+        };
+        "phase" = mkOption {
+          description = "Phase is the lifecycle phase: empty until the first reconcile, then\nInProgress -> Ready | Failed.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "InProgress"
+                "Ready"
+                "Failed"
+                ""
+              ]
+            )
+          );
+        };
+        "readyToUse" = mkOption {
+          description = "ReadyToUse is true when the group is Ready and every member snapshot\nis still individually ready: group readiness is the AND of member\nreadiness, following the Kubernetes VolumeGroupSnapshot convention. It\ndrops to false when a member is lost or unusable after Ready and\nrecovers once every member is whole again; the Degraded condition\ncarries the per-member detail. A failed, partial, or empty group is\nnever reported ready.";
+          type = (types.nullOr types.bool);
+        };
+      };
+
+      config = {
+        "conditions" = mkOverride 1002 null;
+        "creationTime" = mkOverride 1002 null;
+        "error" = mkOverride 1002 null;
+        "members" = mkOverride 1002 null;
+        "ownerID" = mkOverride 1002 null;
+        "phase" = mkOverride 1002 null;
+        "readyToUse" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.SnapshotGroupStatusConditions" = {
+
+      options = {
+        "lastProbeTime" = mkOption {
+          description = "Last time we probed the condition.";
+          type = (types.nullOr types.str);
+        };
+        "lastTransitionTime" = mkOption {
+          description = "Last time the condition transitioned from one status to another.";
+          type = (types.nullOr types.str);
+        };
+        "message" = mkOption {
+          description = "Human-readable message indicating details about last transition.";
+          type = (types.nullOr types.str);
+        };
+        "reason" = mkOption {
+          description = "Unique, one-word, CamelCase reason for the condition's last transition.";
+          type = (types.nullOr types.str);
+        };
+        "status" = mkOption {
+          description = "Status is the status of the condition.\nCan be True, False, Unknown.";
+          type = (types.nullOr types.str);
+        };
+        "type" = mkOption {
+          description = "Type is the type of the condition.";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "lastProbeTime" = mkOverride 1002 null;
+        "lastTransitionTime" = mkOverride 1002 null;
+        "message" = mkOverride 1002 null;
+        "reason" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+        "type" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.SnapshotGroupStatusMembers" = {
+
+      options = {
+        "creationTime" = mkOption {
+          description = "CreationTime is the engine snapshot creation time, mirrored from the\nmember Snapshot. It is kept when the member is later lost.";
+          type = (types.nullOr types.str);
+        };
+        "error" = mkOption {
+          description = "Error is the last member error. A member Snapshot CR that disappeared\nafter the group became Ready is recorded with the synthetic error\n\"member snapshot deleted\"; an unusable member keeps its own mirrored\nerror.";
+          type = (types.nullOr types.str);
+        };
+        "readyToUse" = mkOption {
+          description = "ReadyToUse mirrors the member Snapshot while the group is InProgress.\nAfter the group is Ready, a member later deleted or unusable is recorded\nhere as false: member entries always tell the per-member truth.";
+          type = (types.nullOr types.bool);
+        };
+        "snapshotName" = mkOption {
+          description = "";
+          type = types.str;
+        };
+        "volumeName" = mkOption {
+          description = "";
+          type = types.str;
+        };
+      };
+
+      config = {
+        "creationTime" = mkOverride 1002 null;
+        "error" = mkOverride 1002 null;
+        "readyToUse" = mkOverride 1002 null;
+      };
+
+    };
     "longhorn.io.v1beta2.SnapshotSpec" = {
 
       options = {
@@ -4487,6 +4998,10 @@ let
           description = "";
           type = (types.nullOr types.int);
         };
+        "nvmeTcpNrIoQueues" = mkOption {
+          description = "nvmeTcpNrIoQueues limits the number of I/O queues the kernel initiator\ncreates when connecting the blockdev frontend over NVMe-TCP.\n0 means inheriting the global setting default-nvme-tcp-nr-io-queues.\nTakes effect on (re)attach.";
+          type = (types.nullOr types.int);
+        };
         "offlineRebuilding" = mkOption {
           description = "Specifies whether Longhorn should rebuild replicas while the detached volume is degraded.\n- ignored: Use the global setting for offline replica rebuilding.\n- enabled: Enable offline rebuilding for this volume, regardless of the global setting.\n- disabled: Disable offline rebuilding for this volume, regardless of the global setting";
           type = (
@@ -4605,6 +5120,12 @@ let
           description = "";
           type = (types.nullOr types.int);
         };
+        "topologyRequirement" = mkOption {
+          description = "TopologyRequirement lists the failure domains the volume's replicas must\nbe scheduled in, derived from the CSI accessible topology at creation —\nthe same failure domains as the PV nodeAffinity terms (a node must match\nat least one term). Empty means unconstrained.";
+          type = (
+            types.nullOr (types.listOf (submoduleOf "longhorn.io.v1beta2.VolumeSpecTopologyRequirement"))
+          );
+        };
         "ublkNumberOfQueue" = mkOption {
           description = "ublkNumberOfQueue controls the number of queues for ublk frontend.";
           type = (types.nullOr types.int);
@@ -4653,6 +5174,7 @@ let
         "nodeID" = mkOverride 1002 null;
         "nodeSelector" = mkOverride 1002 null;
         "numberOfReplicas" = mkOverride 1002 null;
+        "nvmeTcpNrIoQueues" = mkOverride 1002 null;
         "offlineRebuilding" = mkOverride 1002 null;
         "rebuildConcurrentSyncLimit" = mkOverride 1002 null;
         "replicaAutoBalance" = mkOverride 1002 null;
@@ -4668,6 +5190,7 @@ let
         "snapshotMaxCount" = mkOverride 1002 null;
         "snapshotMaxSize" = mkOverride 1002 null;
         "staleReplicaTimeout" = mkOverride 1002 null;
+        "topologyRequirement" = mkOverride 1002 null;
         "ublkNumberOfQueue" = mkOverride 1002 null;
         "ublkQueueDepth" = mkOverride 1002 null;
         "unmapMarkSnapChainRemoved" = mkOverride 1002 null;
@@ -4721,6 +5244,25 @@ let
         "parityChunks" = mkOverride 1002 null;
         "stripSizeKB" = mkOverride 1002 null;
         "type" = mkOverride 1002 null;
+      };
+
+    };
+    "longhorn.io.v1beta2.VolumeSpecTopologyRequirement" = {
+
+      options = {
+        "region" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+        "zone" = mkOption {
+          description = "";
+          type = (types.nullOr types.str);
+        };
+      };
+
+      config = {
+        "region" = mkOverride 1002 null;
+        "zone" = mkOverride 1002 null;
       };
 
     };
@@ -5134,6 +5676,31 @@ in
         );
         default = { };
       };
+      "longhorn.io"."v1beta2"."InstanceManagerUpgrade" = mkOption {
+        description = "InstanceManagerUpgrade is the Longhorn CR that tracks the live upgrade of a\nv2 instance manager.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.InstanceManagerUpgrade" "instancemanagerupgrades"
+              "InstanceManagerUpgrade"
+              "longhorn.io"
+              "v1beta2"
+          )
+        );
+        default = { };
+      };
+      "longhorn.io"."v1beta2"."InstanceManagerUpgradeControl" = mkOption {
+        description = "InstanceManagerUpgradeControl is the singleton Longhorn CR that orchestrates\nrolling live upgrades of v2 instance managers across all cluster nodes.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.InstanceManagerUpgradeControl"
+              "instancemanagerupgradecontrols"
+              "InstanceManagerUpgradeControl"
+              "longhorn.io"
+              "v1beta2"
+          )
+        );
+        default = { };
+      };
       "longhorn.io"."v1beta2"."Node" = mkOption {
         description = "Node is where Longhorn stores Longhorn node object.";
         type = (
@@ -5216,6 +5783,17 @@ in
         type = (
           types.attrsOf (
             submoduleForDefinition "longhorn.io.v1beta2.Snapshot" "snapshots" "Snapshot" "longhorn.io" "v1beta2"
+          )
+        );
+        default = { };
+      };
+      "longhorn.io"."v1beta2"."SnapshotGroup" = mkOption {
+        description = "SnapshotGroup is the Schema for the snapshotgroups API";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.SnapshotGroup" "snapshotgroups" "SnapshotGroup"
+              "longhorn.io"
+              "v1beta2"
           )
         );
         default = { };
@@ -5395,6 +5973,31 @@ in
         );
         default = { };
       };
+      "longhornInstanceManagerUpgrades" = mkOption {
+        description = "InstanceManagerUpgrade is the Longhorn CR that tracks the live upgrade of a\nv2 instance manager.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.InstanceManagerUpgrade" "instancemanagerupgrades"
+              "InstanceManagerUpgrade"
+              "longhorn.io"
+              "v1beta2"
+          )
+        );
+        default = { };
+      };
+      "longhornInstanceManagerUpgradeControls" = mkOption {
+        description = "InstanceManagerUpgradeControl is the singleton Longhorn CR that orchestrates\nrolling live upgrades of v2 instance managers across all cluster nodes.";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.InstanceManagerUpgradeControl"
+              "instancemanagerupgradecontrols"
+              "InstanceManagerUpgradeControl"
+              "longhorn.io"
+              "v1beta2"
+          )
+        );
+        default = { };
+      };
       "longhornNodes" = mkOption {
         description = "Node is where Longhorn stores Longhorn node object.";
         type = (
@@ -5477,6 +6080,17 @@ in
         type = (
           types.attrsOf (
             submoduleForDefinition "longhorn.io.v1beta2.Snapshot" "snapshots" "Snapshot" "longhorn.io" "v1beta2"
+          )
+        );
+        default = { };
+      };
+      "longhornSnapshotGroups" = mkOption {
+        description = "SnapshotGroup is the Schema for the snapshotgroups API";
+        type = (
+          types.attrsOf (
+            submoduleForDefinition "longhorn.io.v1beta2.SnapshotGroup" "snapshotgroups" "SnapshotGroup"
+              "longhorn.io"
+              "v1beta2"
           )
         );
         default = { };
@@ -5622,6 +6236,20 @@ in
         attrName = "longhornInstanceManagers";
       }
       {
+        name = "instancemanagerupgrades";
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "InstanceManagerUpgrade";
+        attrName = "longhornInstanceManagerUpgrades";
+      }
+      {
+        name = "instancemanagerupgradecontrols";
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "InstanceManagerUpgradeControl";
+        attrName = "longhornInstanceManagerUpgradeControls";
+      }
+      {
         name = "nodes";
         group = "longhorn.io";
         version = "v1beta2";
@@ -5683,6 +6311,13 @@ in
         version = "v1beta2";
         kind = "Snapshot";
         attrName = "longhornSnapshots";
+      }
+      {
+        name = "snapshotgroups";
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "SnapshotGroup";
+        attrName = "longhornSnapshotGroups";
       }
       {
         name = "supportbundles";
@@ -5749,6 +6384,12 @@ in
       "longhorn.io"."v1beta2"."InstanceManager" =
         mkAliasDefinitions
           options.resources."longhornInstanceManagers";
+      "longhorn.io"."v1beta2"."InstanceManagerUpgrade" =
+        mkAliasDefinitions
+          options.resources."longhornInstanceManagerUpgrades";
+      "longhorn.io"."v1beta2"."InstanceManagerUpgradeControl" =
+        mkAliasDefinitions
+          options.resources."longhornInstanceManagerUpgradeControls";
       "longhorn.io"."v1beta2"."Node" = mkAliasDefinitions options.resources."longhornNodes";
       "longhorn.io"."v1beta2"."Orphan" = mkAliasDefinitions options.resources."longhornOrphans";
       "longhorn.io"."v1beta2"."RecurringJob" =
@@ -5762,6 +6403,9 @@ in
         mkAliasDefinitions
           options.resources."longhornShareManagers";
       "longhorn.io"."v1beta2"."Snapshot" = mkAliasDefinitions options.resources."longhornSnapshots";
+      "longhorn.io"."v1beta2"."SnapshotGroup" =
+        mkAliasDefinitions
+          options.resources."longhornSnapshotGroups";
       "longhorn.io"."v1beta2"."SupportBundle" =
         mkAliasDefinitions
           options.resources."longhornSupportBundles";
@@ -5850,6 +6494,18 @@ in
       {
         group = "longhorn.io";
         version = "v1beta2";
+        kind = "InstanceManagerUpgrade";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "InstanceManagerUpgradeControl";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "longhorn.io";
+        version = "v1beta2";
         kind = "Node";
         default.metadata.namespace = lib.mkDefault config.namespace;
       }
@@ -5899,6 +6555,12 @@ in
         group = "longhorn.io";
         version = "v1beta2";
         kind = "Snapshot";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "longhorn.io";
+        version = "v1beta2";
+        kind = "SnapshotGroup";
         default.metadata.namespace = lib.mkDefault config.namespace;
       }
       {
