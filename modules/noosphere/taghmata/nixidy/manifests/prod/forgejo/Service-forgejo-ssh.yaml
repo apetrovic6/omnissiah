@@ -6,12 +6,13 @@ metadata:
     metallb.io/loadBalancerIPs: 192.168.1.251
   labels:
     app: forgejo
+    app.kubernetes.io/component: ssh
     app.kubernetes.io/instance: forgejo
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: forgejo
-    app.kubernetes.io/version: 15.0.9
-    helm.sh/chart: forgejo-17.1.7
-    version: 15.0.9
+    app.kubernetes.io/version: 15.0.10
+    helm.sh/chart: forgejo-17.3.1
+    version: 15.0.10
   name: forgejo-ssh
   namespace: forgejo
 spec:
