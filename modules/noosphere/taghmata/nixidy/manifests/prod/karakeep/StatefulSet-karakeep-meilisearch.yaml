@@ -7,8 +7,8 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: meilisearch
     app.kubernetes.io/part-of: meilisearch
-    app.kubernetes.io/version: v1.13.0
-    helm.sh/chart: meilisearch-0.12.0
+    app.kubernetes.io/version: v1.55.0
+    helm.sh/chart: meilisearch-0.41.0
   name: karakeep-meilisearch
   namespace: karakeep
 spec:
@@ -21,15 +21,15 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 87186460929524abb1a98fcb0deb528c232cee24aeb7ae42a939fb5c84882977
+        checksum/config: b8fc2406d7948b3c182393e1055ed4f4c967b075f3b14d5c69cbb3de5266f553
       labels:
         app.kubernetes.io/component: search-engine
         app.kubernetes.io/instance: karakeep
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: meilisearch
         app.kubernetes.io/part-of: meilisearch
-        app.kubernetes.io/version: v1.13.0
-        helm.sh/chart: meilisearch-0.12.0
+        app.kubernetes.io/version: v1.55.0
+        helm.sh/chart: meilisearch-0.41.0
     spec:
       containers:
         - envFrom:
@@ -37,7 +37,7 @@ spec:
                 name: karakeep-meilisearch-environment
             - secretRef:
                 name: karakeep-meilisearch-secret
-          image: getmeili/meilisearch:v1.13.0
+          image: getmeili/meilisearch:v1.55.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -45,6 +45,7 @@ spec:
               port: http
             initialDelaySeconds: 0
             periodSeconds: 10
+            timeoutSeconds: 10
           name: meilisearch
           ports:
             - containerPort: 7700
@@ -56,6 +57,7 @@ spec:
               port: http
             initialDelaySeconds: 0
             periodSeconds: 10
+            timeoutSeconds: 10
           resources: {}
           securityContext:
             allowPrivilegeEscalation: false
@@ -70,6 +72,7 @@ spec:
               port: http
             initialDelaySeconds: 1
             periodSeconds: 1
+            timeoutSeconds: 1
           volumeMounts:
             - mountPath: /tmp
               name: tmp
