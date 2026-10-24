@@ -19,7 +19,8 @@
         settings = {
           General = {
             Enable = "Source,Sink,Media,Socket";
-            ControllerMode = "bredr";
+            # "dual", not "bredr": BLE-only devices (ZMK keyboards like the urchin) need LE
+            ControllerMode = "dual";
             Experimental = true;
             FastConnectable = true;
           };
