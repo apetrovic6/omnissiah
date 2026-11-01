@@ -14,10 +14,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    garage = {
-      url = "git+https://git.deuxfleurs.fr/Deuxfleurs/garage";
-      flake = false;
-    };
+    # garage = {
+    #   url = "git+https://git.deuxfleurs.fr/Deuxfleurs/garage";
+    #   flake = false;
+    # };
 
     woodpecker-ci = {
       url = "github:woodpecker-ci/helm";
@@ -347,7 +347,7 @@
             "dagger-helm/dagger-helm" = dagger-helm-chart;
             # Overrides the nixhelm v0.9.4 pin — see ncps-chart above.
             "kalbasit/ncps" = ncps-chart;
-            "deuxfleurs/garage" = "${garage}/script/helm/garage";
+            # "deuxfleurs/garage" = "${garage}/script/helm/garage";
             "lukasdietrich/glance-k8s" = "${glance-k8s}/charts/glance-k8s";
             "woodpecker-ci/woodpecker" = "${woodpecker-ci}/charts/woodpecker";
             "rajsinghtech/garage-operator" = "${garage-operator}/charts/garage-operator";

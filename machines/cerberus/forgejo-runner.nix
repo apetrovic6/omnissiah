@@ -21,21 +21,25 @@
       token="$(cat "$prompts/token")"
 
       cat > "$out/token" <<EOF
-      TOKEN=$token
+      $token
       EOF
     '';
   };
 
-  services.gitea-actions-runner = {
+  services.forgejo-runner = {
     package = pkgs.forgejo-runner;
     instances.cerberus = {
       enable = true;
-      name = "cerberus-nix";
-      url = "http://localhost:9000";
-      tokenFile = config.clan.core.vars.generators.forgejo-runner-token.files."token".path;
       # Jobs `runs-on: nix` run directly on this host (no container), so they can
       # use the host's Nix store as a build cache.
       labels = ["nix:host"];
+      # `secrets` values are credential paths templated into `settings`, so only
+      # the token goes there; the uuid is a plain setting.
+      settings.server.connections.default = {
+          uuid = "3b8648e6-8454-4a2b-bc6a-2b651e8a2f6e";
+      url = "http://localhost:9000";
+      token_url = config.clan.core.vars.generators.forgejo-runner-token.files."token".path;
+      };
       # PATH available to host-executed jobs: the workflow needs node (for
       # actions/checkout), devenv (the build), nix (devenv shells out to it),
       # and the usual coreutils/git/tar.

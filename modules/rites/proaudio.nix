@@ -270,7 +270,7 @@
         type = types.listOf types.package;
         default = with pkgs; [
           # Ship CLAP + VST3 -- the formats SoundCraft can actually host.
-          surge-XT # clap vst3 lv2
+          surge-xt # clap vst3 lv2
           cardinal # clap vst3 vst lv2
           lsp-plugins # clap vst3 vst lv2 ladspa
           zam-plugins # clap vst3 vst lv2 ladspa

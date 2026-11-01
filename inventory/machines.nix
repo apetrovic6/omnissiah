@@ -43,19 +43,19 @@
     };
 
     terra = {
-      tags = ["base" "k8s-base"];
+      tags = ["base" "k8s""k8s-base"];
       deploy.targetHost = "root@192.168.1.138";
       deploy.buildHost = "localhost";
     };
 
     luna = {
-      tags = ["base" "k8s-base" "k8s-server"];
+      tags = ["base" "k8s" "k8s-base" "k8s-server"];
       deploy.targetHost = "root@192.168.1.232";
       deploy.buildHost = "localhost";
     };
 
     sol = {
-      tags = ["base" "k8s-base" "k8s-server"];
+      tags = ["base" "k8s" "k8s-base" "k8s-server"];
       deploy.targetHost = "root@192.168.1.42";
       deploy.buildHost = "localhost";
     };

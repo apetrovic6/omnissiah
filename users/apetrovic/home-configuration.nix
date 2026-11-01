@@ -254,6 +254,7 @@ in {
           "192.168.1.42"
           "192.168.1.44" # mars
           "152.53.34.16" # cypramundi
+          "172.245.55.111" # alfrost
         ];
         identityFile = "~/.ssh/apetrovic.pub";
         identitiesOnly = true;
