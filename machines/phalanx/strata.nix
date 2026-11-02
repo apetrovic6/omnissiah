@@ -109,12 +109,25 @@
   # This re-pins it before every start, reading whatever path the config
   # currently names, so it survives setup.sh regenerating the config with a
   # different CUDA build.
+  #
+  # The venv has the SAME trap: .venv/bin/python is a symlink to the devShell's
+  # python3 in /nix/store (pyvenv.cfg `home`), equally unrooted. It was GC'd
+  # 2026-11-01 and the unit crash-looped on status=203/EXEC ("Unable to locate
+  # executable .venv/bin/python") -- the symlink survives, just dangling. To
+  # recover, from the checkout (Strata's flake.lock reproduces the exact path):
+  #   nix build --impure --out-link .python-gcroot --expr \
+  #     '(builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux.python312'
   pinCuda = pkgs.writeShellScript "strata-pin-cuda" ''
     set -eu
     lib=$(${pkgs.jq}/bin/jq -r '.lib_dirs[0] // empty' ${configFile})
     if [ -n "$lib" ] && [ -e "$lib" ]; then
       ${pkgs.nix}/bin/nix-store --add-root ${checkout}/.cuda-gcroot \
         --indirect -r "$lib" >/dev/null
+    fi
+    py=$(${pkgs.gnused}/bin/sed -n 's|^home = \(.*\)/bin$|\1|p' ${checkout}/.venv/pyvenv.cfg)
+    if [ -n "$py" ] && [ -e "$py" ]; then
+      ${pkgs.nix}/bin/nix-store --add-root ${checkout}/.python-gcroot \
+        --indirect -r "$py" >/dev/null
     fi
   '';
 in {

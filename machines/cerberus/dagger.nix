@@ -13,12 +13,35 @@
 # loopback means the runner needs no container-runtime access at all — it only
 # opens a TCP connection. (`podman-container://` is not an option: dagger
 # v0.21.8 rejects it with `no driver for scheme "podman-container" found`.)
-{...}: let
+{pkgs, ...}: let
   # MUST match the engine version dagger-sdk pins in the fishing repo
   # (ci/Cargo.toml -> dagger-sdk 0.21.8) and the dagger CLI on PATH below.
   # All three move together or sessions fail to start.
   version = "v1.0.0-beta.14";
   port = 8080;
+
+  # Replaces the image's own /etc/dagger/engine.json, so the registry mirror it
+  # ships is restated here.
+  #
+  # The GC limits are the point. With none set, the engine defaults to keeping
+  # 20% of the disk free -- 25 GB of cerberus' 125 GB -- while the rest of the
+  # host already uses ~48 GB and ONE pipeline run materialises a ~27 GB
+  # `devenv shell` layer (each repo has its own). Nearly every run crossed the
+  # line, and the sweep evicted exactly those layers: 27-58 GB reclaimed about
+  # hourly on 2026-11-02, so every run re-fetched its whole environment and
+  # rebuilt its dependencies. Engine logs: `dagql prune applied plan`.
+  #
+  # reservedSpace is never reclaimed, sized for both repos' working sets.
+  # minFreeSpace still protects the host above that floor, and maxUsedSpace
+  # caps the engine outright. Raise all three together if the disk grows.
+  engineConfig = pkgs.writeText "dagger-engine.json" (builtins.toJSON {
+    registries."docker.io".mirrors = ["mirror.gcr.io"];
+    gc = {
+      reservedSpace = "50GB";
+      minFreeSpace = "15GB";
+      maxUsedSpace = "65GB";
+    };
+  });
 in {
   virtualisation.oci-containers.containers.dagger-engine = {
     image = "registry.dagger.io/engine:${version}";
@@ -41,7 +64,10 @@ in {
 
     # Build cache. Worth persisting: without it every job recompiles the whole
     # dependency tree, which is most of the pipeline's runtime.
-    volumes = ["dagger-engine-state:/var/lib/dagger"];
+    volumes = [
+      "dagger-engine-state:/var/lib/dagger"
+      "${engineConfig}:/etc/dagger/engine.json:ro"
+    ];
 
     # Deliberately NO io.containers.autoupdate label. podman-auto-update runs
     # daily on this host (see nopresh.nix); letting it bump the engine would

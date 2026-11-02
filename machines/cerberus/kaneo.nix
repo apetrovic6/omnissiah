@@ -79,7 +79,7 @@ in {
   };
 
   virtualisation.oci-containers.containers.kaneo = {
-    image = "ghcr.io/usekaneo/kaneo:v2.29.2";
+    image = "ghcr.io/usekaneo/kaneo:2.48.0";
     autoStart = true;
     # Host networking so the container reaches Postgres on 127.0.0.1:5432 — the
     # podman bridge (10.88.0.0/16) is not in pg_hba.conf, which only allows

@@ -1,76 +1,18 @@
+# Shared runner setup and registration flow: modules/rites/forgejo-runner.nix.
 {
   self,
-  config,
   pkgs,
   ...
 }: {
-  clan.core.vars.generators.forgejo-runner-token = {
-    files."token" = {
-      secret = true;
-      mode = "0400";
-    };
-    prompts.token = {
-      description = "Forgejo Actions runner registration token (from Forgejo -> Actions -> Runners)";
-      type = "hidden";
-      persist = true;
-    };
-    runtimeInputs = [pkgs.coreutils];
-    script = ''
-      set -eu
+  imports = [self.nixosModules.forgejo-runner];
 
-      token="$(cat "$prompts/token")"
-
-      cat > "$out/token" <<EOF
-      $token
-      EOF
-    '';
-  };
-
-  services.forgejo-runner = {
-    package = pkgs.forgejo-runner;
-    instances.cerberus = {
-      enable = true;
-      # Jobs `runs-on: nix` run directly on this host (no container), so they can
-      # use the host's Nix store as a build cache.
-      labels = ["nix:host"];
-      # `secrets` values are credential paths templated into `settings`, so only
-      # the token goes there; the uuid is a plain setting.
-      settings.server.connections.default = {
-          uuid = "3b8648e6-8454-4a2b-bc6a-2b651e8a2f6e";
-      url = "http://localhost:9000";
-      token_url = config.clan.core.vars.generators.forgejo-runner-token.files."token".path;
-      };
-      # PATH available to host-executed jobs: the workflow needs node (for
-      # actions/checkout), devenv (the build), nix (devenv shells out to it),
-      # and the usual coreutils/git/tar.
-      hostPackages =
-        [config.nix.package]
-        ++ [
-          # Drives the Dagger pipeline in the `fishing` repo. Must match the
-          # engine container version in ./dagger.nix (v0.21.8) — the SDK
-          # refuses to start a session against a different engine.
-          self.inputs.dagger-cli.packages.${pkgs.stdenv.hostPlatform.system}.dagger
-        ]
-        ++ (with pkgs; [
-          bash
-          coreutils
-          gnutar
-          gzip
-          git
-          nodejs
-          devenv
-          cacert
-          mold
-          # Builds the pipeline driver itself (`cargo run -p ci`). The pipeline
-          # then does all real work inside engine containers, so only a
-          # host-side toolchain new enough for edition 2024 is needed here.
-          cargo
-          rustc
-          # cargo needs a linker for build scripts (proc-macro2, libc, ...).
-          # Without it every build script fails with `linker 'cc' not found`.
-          # This wrapper provides cc/gcc/ld.
-          stdenv.cc
-        ]);
-    };
+  services.imperium.forgejoRunner = {
+    enable = true;
+    extraHostPackages = [
+      # Drives the Dagger pipeline in the `fishing` repo. Must match the
+      # engine container version in ./dagger.nix (v0.21.8) — the SDK
+      # refuses to start a session against a different engine.
+      self.inputs.dagger-cli.packages.${pkgs.stdenv.hostPlatform.system}.dagger
+    ];
   };
 }
