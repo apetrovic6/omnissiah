@@ -50,7 +50,9 @@
   # Binary cache the runners push their builds to. apps/ncps reads the public
   # key straight from vars/shared/${ciKeyGenerator}, so renaming the generator
   # means updating that path too.
-  ncpsUrl = "https://ncps.noosphere.uk";
+  # ncps serves uploads under /upload only; a PUT to the root path is a 405
+  # before the signature is even checked.
+  ncpsUploadUrl = "https://ncps.noosphere.uk/upload";
   ciKeyGenerator = "nix-ci-signing-key";
   # `<name>-<n>`: bump the suffix to rotate while the old key is still trusted.
   ciKeyName = "ci.noosphere.uk-1";
@@ -120,7 +122,7 @@ in {
             # shellcheck disable=SC2086 # OUT_PATHS is a space-separated list
             ${pkgs.coreutils}/bin/timeout 600 \
               ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
-              copy --option connect-timeout 5 --to ${ncpsUrl} $OUT_PATHS \
+              copy --option connect-timeout 5 --to ${ncpsUploadUrl} $OUT_PATHS \
               || echo "push-to-ncps: upload failed, continuing" >&2
           '';
         };

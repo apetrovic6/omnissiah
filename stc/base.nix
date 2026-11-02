@@ -42,6 +42,9 @@
         dates = "daily";
         options = "--delete-older-than 10d";
       };
+      optimise = {
+        automatic = true;
+      };
       settings = {
         trusted-users = ["apetrovic"];
         auto-optimise-store = true;
