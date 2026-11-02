@@ -8,17 +8,23 @@ metadata:
     app.kubernetes.io/instance: forgejo
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: forgejo
-    app.kubernetes.io/version: 15.0.10
-    helm.sh/chart: forgejo-17.3.1
-    version: 15.0.10
+    app.kubernetes.io/version: 15.0.11
+    helm.sh/chart: forgejo-17.3.2
+    version: 15.0.11
   name: forgejo-test-connection
   namespace: forgejo
 spec:
   containers:
     - args:
-        - forgejo-http:3000
+        - |
+          for i in $(seq 1 20); do
+            wget -T 5 -O /dev/null 'forgejo-http:3000' && exit 0
+            sleep 3
+          done
+          exit 1
       command:
-        - wget
+        - sh
+        - -c
       image: busybox:latest
       name: wget
   restartPolicy: Never
