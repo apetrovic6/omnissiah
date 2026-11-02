@@ -12,9 +12,12 @@ data:
       download:
         poll-timeout: "30s"
       temp-path: "/tmp/ncps"
+      allow-put-verb: true
 
       sign-narinfo: true
-      require-trusted-signature: false
+      require-trusted-signature: true
+      trusted-upload-keys:
+        - "ci.noosphere.uk-1:IrDmim/4MhExuduoyBxkz9w2o1YT3aIgmJZmvgU5uFs="
 
       upstream:
         urls:

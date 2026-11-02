@@ -46,6 +46,14 @@
   };
 
   generatorName = forge: "forgejo-runner-${forge}";
+
+  # Binary cache the runners push their builds to. apps/ncps reads the public
+  # key straight from vars/shared/${ciKeyGenerator}, so renaming the generator
+  # means updating that path too.
+  ncpsUrl = "https://ncps.noosphere.uk";
+  ciKeyGenerator = "nix-ci-signing-key";
+  # `<name>-<n>`: bump the suffix to rotate while the old key is still trusted.
+  ciKeyName = "ci.noosphere.uk-1";
 in {
   flake.nixosModules.forgejo-runner = {
     config,
@@ -83,6 +91,41 @@ in {
     };
 
     config = mkMerge [
+      (mkIf cfg.enable {
+        # CI signing key, shared by every runner. ncps
+        # (taghmata nixidy apps/ncps) accepts a PUT only when the narinfo
+        # carries this key's signature, so it doubles as the upload credential.
+        # Separate from ncps' own serving key: a leaked runner can push into
+        # the cache, but cannot forge ncps' signature on upstream paths.
+        clan.core.vars.generators.${ciKeyGenerator} = {
+          share = true;
+          files."key".secret = true;
+          files."key.pub".secret = false;
+          runtimeInputs = [pkgs.nix];
+          script = ''
+            nix-store --generate-binary-cache-key ${ciKeyName} "$out/key" "$out/key.pub"
+          '';
+        };
+
+        # The daemon signs everything it builds here with the CI key, and the
+        # hook pushes it to ncps. Only daemon builds count: anything built
+        # inside a container (the Dagger pipelines) has its own store and is
+        # never seen here.
+        nix.settings = {
+          secret-key-files = [gens.${ciKeyGenerator}.files."key".path];
+          post-build-hook = pkgs.writeShellScript "push-to-ncps" ''
+            # Synchronous: the daemon waits for this before its next build,
+            # hence the timeouts. A failed push must never fail the build, and
+            # the cache falls back to upstream for whatever it misses.
+            # shellcheck disable=SC2086 # OUT_PATHS is a space-separated list
+            ${pkgs.coreutils}/bin/timeout 600 \
+              ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
+              copy --option connect-timeout 5 --to ${ncpsUrl} $OUT_PATHS \
+              || echo "push-to-ncps: upload failed, continuing" >&2
+          '';
+        };
+      })
+
       (mkIf cfg.enable {
         clan.core.vars.generators = listToAttrs (map (forge:
           nameValuePair (generatorName forge) {
