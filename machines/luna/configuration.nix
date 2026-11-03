@@ -15,6 +15,11 @@
 
   services.imperium.forgejoRunner = {
     enable = true;
+    # 1.6 TB of free disk: keep CI's store until it gets tight.
+    storeCache = {
+      minFree = 200;
+      maxFree = 400;
+    };
     resources = {
       cpus = 2;
       memory = 3;

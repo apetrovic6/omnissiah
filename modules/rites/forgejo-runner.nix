@@ -29,11 +29,17 @@
   #   host     the machine running it, whose own runner uses localUrl instead
   #   forgejo  command prefix that runs the `forgejo` binary there as an admin,
   #            from the workstation (`register` below appends its arguments)
+  #   lanAddress  pinned in /etc/hosts on every other runner, or null when
+  #            local DNS already answers with a LAN address
   forges = {
     ugalabugala = {
       url = "https://forge.ugalabugala.org";
       host = "cerberus";
       localUrl = "http://localhost:9000";
+      # Public DNS sends this name to the VPS, so without the pin a job's
+      # git and registry traffic (nopresh's image push) hairpins out through
+      # Pangolin and back. cerberus pins it the same way (nopresh.nix).
+      lanAddress = "192.168.1.105";
       # `forgejo-admin` is the wrapper this module installs wherever
       # services.forgejo is enabled.
       forgejo = "ssh root@192.168.1.105 forgejo-admin";
@@ -43,6 +49,8 @@
       url = "https://forge.noosphere.uk";
       host = null;
       localUrl = null;
+      # Technitium already resolves it to the Traefik VIP.
+      lanAddress = null;
       forgejo = "kubectl --context default -n forgejo exec -i deploy/forgejo -c forgejo -- forgejo";
     };
   };
@@ -58,6 +66,10 @@
   ciKeyGenerator = "nix-ci-signing-key";
   # `<name>-<n>`: bump the suffix to rotate while the old key is still trusted.
   ciKeyName = "ci.noosphere.uk-1";
+
+  # Same age as the shared nix.gc (`--delete-older-than 10d`, stc/base.nix),
+  # which `storeCache` replaces.
+  pruneAge = "10d";
 in {
   flake.nixosModules.forgejo-runner = {
     config,
@@ -117,9 +129,63 @@ in {
         });
         default = null;
       };
+
+      # Keeps the local store warm for CI. The shared daily
+      # `nix-collect-garbage --delete-older-than` deletes every unrooted path,
+      # so every crane dependency build and devenv shell would be gone each
+      # morning. With this set, old system generations are still pruned on
+      # that schedule, but store garbage is only collected when free disk
+      # space drops below `minFree`, and then up to `maxFree`. Only for
+      # machines with plenty of disk.
+      storeCache = mkOption {
+        type = types.nullOr (types.submodule {
+          options = {
+            minFree = mkOption {
+              type = types.ints.positive;
+              description = "GiB of free disk below which Nix starts collecting garbage.";
+            };
+            maxFree = mkOption {
+              type = types.ints.positive;
+              description = "GiB of free disk at which collection stops.";
+            };
+          };
+        });
+        default = null;
+      };
     };
 
     config = mkMerge [
+      (mkIf (cfg.enable && cfg.storeCache != null) (let
+        gib = n: n * 1024 * 1024 * 1024;
+      in {
+        nix.settings = {
+          min-free = lib.mkForce (gib cfg.storeCache.minFree);
+          max-free = lib.mkForce (gib cfg.storeCache.maxFree);
+        };
+        nix.gc.automatic = lib.mkForce false;
+        # What nix.gc did besides collecting: dropping old generations. Their
+        # paths become garbage, which the min-free collection gets to later.
+        systemd.services.nix-prune-generations = {
+          description = "Delete system generations older than ${pruneAge}";
+          startAt = "daily";
+          serviceConfig.Type = "oneshot";
+          script = ''
+            ${config.nix.package}/bin/nix-env --profile /nix/var/nix/profiles/system \
+              --delete-generations ${pruneAge}
+          '';
+        };
+      }))
+
+      (mkIf cfg.enable {
+        networking.hosts = mkMerge (map (forge: let
+          f = forges.${forge};
+        in
+          mkIf (f.lanAddress != null && f.host != hostName) {
+            ${f.lanAddress} = [(lib.removePrefix "https://" f.url)];
+          })
+        cfg.forges);
+      })
+
       (mkIf cfg.enable {
         # CI signing key, shared by every runner. ncps
         # (taghmata nixidy apps/ncps) accepts a PUT only when the narinfo
