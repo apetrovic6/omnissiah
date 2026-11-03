@@ -179,6 +179,15 @@ in {
 
         externalURL = "https://harbor.${domain}";
 
+        # Applies only to the deployments with volumes (jobservice, registry).
+        # The jobservice job-log PVC is RWO, so under the chart's default
+        # RollingUpdate a new pod scheduled to another node can never attach
+        # it while the old pod holds it, and the old pod is only removed once
+        # the new one is Ready. That deadlocked the v2.15.4 rollout for 10 days
+        # (2026-10-24). Recreate stops the old pod first: a few seconds of
+        # jobservice downtime per rollout.
+        updateStrategy.type = "Recreate";
+
         persistence = {
           persistentVolumeClaim = {
             registry = {
