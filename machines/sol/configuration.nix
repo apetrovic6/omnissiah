@@ -8,16 +8,27 @@
   imports = [
     self.nixosModules.smb
     self.nixosModules.impermanence
+    self.nixosModules.forgejo-runner
     # self.inputs.impermanence.nixosModules.impermanence
     # self.inputs.magos.nixosModules.default
   ];
 
-networking.interfaces.enp1s0 = {
+  services.imperium.forgejoRunner = {
+    enable = true;
+    resources = {
+      cpus = 2;
+      memory = 4;
+    };
+  };
+
+  networking.interfaces.enp1s0 = {
     useDHCP = false;
-    ipv4.addresses = [{
-      address = "192.168.1.42";
-      prefixLength = 24;
-    }];
+    ipv4.addresses = [
+      {
+        address = "192.168.1.42";
+        prefixLength = 24;
+      }
+    ];
   };
 
   networking.defaultGateway = {
@@ -25,7 +36,7 @@ networking.interfaces.enp1s0 = {
     interface = "enp1s0";
   };
 
-  networking.nameservers = [ "192.168.1.105" ]; 
+  networking.nameservers = ["192.168.1.105"];
 
   # nix = {
   #   extraOptions = ''

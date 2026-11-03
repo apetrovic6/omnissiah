@@ -8,6 +8,9 @@
 
   services.imperium.forgejoRunner = {
     enable = true;
+    # `dagger` is what Dagger pipelines must target: no other runner has the
+    # engine (./dagger.nix) or the matching CLI.
+    labels = ["nix:host" "dagger:host"];
     extraHostPackages = [
       # Drives the Dagger pipeline in the `fishing` repo. Must match the
       # engine container version in ./dagger.nix (v0.21.8) — the SDK

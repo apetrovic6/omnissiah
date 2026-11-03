@@ -21,6 +21,8 @@
 # so a tool on one machine's hostPackages but not another's fails at random.
 # That is why the toolset below is shared, and why dagger stays a cerberus-only
 # extra: it needs the engine container from machines/cerberus/dagger.nix.
+# Dagger pipelines therefore use `runs-on: dagger`, a label only cerberus
+# carries. A Dagger job on `runs-on: nix` fails on any other runner.
 {self, ...}: let
   # Every Forgejo a runner can register with.
   #   url      what runners connect to
@@ -90,6 +92,31 @@ in {
         default = [];
         description = "Added to the shared toolset. Read the label warning at the top of this file first.";
       };
+
+      # For machines that have another job, above all the RKE2 nodes, which
+      # are all etcd members. Runner jobs and Nix builds share one cgroup
+      # slice under these caps. Memory is the hard limit (it cannot be
+      # throttled, only OOM-killed); CPU also yields to everything else under
+      # contention, through a low weight.
+      resources = mkOption {
+        type = types.nullOr (types.submodule {
+          options = {
+            cpus = mkOption {
+              type = types.ints.positive;
+              description = "Most CPU cores CI may use, runner jobs and Nix builds combined.";
+            };
+            memory = mkOption {
+              type = types.ints.positive;
+              description = ''
+                Most GiB of memory CI may use. Where RKE2 runs, the same amount
+                is reserved away from kubelet, so pods are never scheduled into
+                memory CI might take.
+              '';
+            };
+          };
+        });
+        default = null;
+      };
     };
 
     config = mkMerge [
@@ -127,6 +154,42 @@ in {
           '';
         };
       })
+
+      (mkIf (cfg.enable && cfg.resources != null) (let
+        r = cfg.resources;
+      in {
+        systemd.slices.forgejo-ci.sliceConfig = {
+          CPUQuota = "${toString (r.cpus * 100)}%";
+          CPUWeight = 20;
+          IOWeight = 20;
+          # Throttle (reclaim) half a GiB before the hard cap starts OOM-killing.
+          MemoryHigh = "${toString (r.memory * 1024 - 512)}M";
+          MemoryMax = "${toString r.memory}G";
+        };
+        # The daemon has to be in the slice too: Nix builds run in its cgroup,
+        # not the runner's. Deploy-time store copies go through it as well,
+        # which is harmless, since they need little memory.
+        systemd.services."forgejo-runner-${hostName}".serviceConfig.Slice = "forgejo-ci.slice";
+        systemd.services.nix-daemon.serviceConfig.Slice = "forgejo-ci.slice";
+        nix = {
+          settings = {
+            max-jobs = 1;
+            cores = r.cpus;
+          };
+          daemonCPUSchedPolicy = "batch";
+          daemonIOSchedClass = "idle";
+        };
+        # cargo run directly by jobs (outside Nix) otherwise starts one rustc
+        # per core of the whole machine, and they share the memory cap.
+        services.forgejo-runner.instances.${hostName}.settings.runner.envs.CARGO_BUILD_JOBS = toString r.cpus;
+
+        # Lowers what kubelet offers the scheduler. Pods already on the node
+        # stay where they are; changing this restarts rke2, so roll it out one
+        # etcd member at a time.
+        services.rke2.extraFlags = mkIf config.services.rke2.enable [
+          "--kubelet-arg=system-reserved=memory=${toString r.memory}Gi"
+        ];
+      }))
 
       (mkIf cfg.enable {
         clan.core.vars.generators = listToAttrs (map (forge:
@@ -263,6 +326,8 @@ in {
           clan vars get "$machine" "forgejo-runner-$forge/secret" </dev/null \
             | tr -d '\n' \
             | $forgejo forgejo-cli actions register --name "$machine" --secret-stdin=-
+          # It prints the runner uuid with no trailing newline.
+          echo
         done
       '';
     };
