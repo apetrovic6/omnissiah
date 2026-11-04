@@ -289,7 +289,14 @@ in {
           package = pkgs.forgejo-runner;
           instances.${hostName} = {
             enable = true;
-            inherit (cfg) labels;
+            # The instance's own `labels` option was renamed to
+            # `settings.runner.labels` upstream. Nothing else changes: the
+            # nixpkgs module reads the labels back through
+            # `settings.runner.labels` plus any per-connection
+            # `settings.server.connections.<n>.labels`, and derives
+            # `runtimes.host` from a `:host` suffix and `runtimes.docker` /
+            # `runtimes.podman` from a `:docker` infix off that same list.
+            settings.runner.labels = cfg.labels;
             # `secrets` values are credential paths the module turns into
             # `file:$CREDENTIALS_DIRECTORY/...` URLs. A bare path in
             # settings.token_url is rejected at startup ("unsupported secret URL").
