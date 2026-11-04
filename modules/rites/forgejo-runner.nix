@@ -82,6 +82,8 @@ in {
     hostName = config.networking.hostName;
     gens = config.clan.core.vars.generators;
     fcfg = config.services.forgejo;
+    # The nixpkgs module's StateDirectory for our instance (also its HOME).
+    stateDir = "/var/lib/forgejo-runner/${hostName}";
   in {
     options.services.imperium.forgejoRunner = {
       enable = mkEnableOption "a Forgejo Actions runner registered with every forge in `forges`";
@@ -325,8 +327,22 @@ in {
                 stdenv.cc
               ])
               ++ cfg.extraHostPackages;
+            # DynamicUser gives the service a private /tmp and /var/tmp, and
+            # they are a tmpfs sized at a fraction of RAM (1.5 GiB on sol), not
+            # the disk. A job's `mktemp -d` cargo build (check-template's
+            # generated product) fills it: rustc fails with "No space left on
+            # device" and lld with SIGBUS writing its mmap'd output. Point jobs
+            # at the state dir instead, which is on disk.
+            settings.runner.envs.TMPDIR = "${stateDir}/tmp";
           };
         };
+        # As the service's own (dynamic) user, so the directory is theirs.
+        systemd.services."forgejo-runner-${hostName}".serviceConfig.ExecStartPre = [
+          "${pkgs.coreutils}/bin/mkdir -p ${stateDir}/tmp"
+        ];
+        # `e`: clean an existing directory without creating or owning it.
+        # Whatever a job left behind goes after a day.
+        systemd.tmpfiles.rules = ["e ${stateDir}/tmp - - - 1d"];
       })
 
       # `forgejo` as an admin, with the service's own environment -- what the
