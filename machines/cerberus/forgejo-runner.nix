@@ -1,21 +1,6 @@
 # Shared runner setup and registration flow: modules/rites/forgejo-runner.nix.
-{
-  self,
-  pkgs,
-  ...
-}: {
+{self, ...}: {
   imports = [self.nixosModules.forgejo-runner];
 
-  services.imperium.forgejoRunner = {
-    enable = true;
-    # `dagger` is what Dagger pipelines must target: no other runner has the
-    # engine (./dagger.nix) or the matching CLI.
-    labels = ["nix:host" "dagger:host"];
-    extraHostPackages = [
-      # Drives the Dagger pipeline in the `fishing` repo. Must match the
-      # engine container version in ./dagger.nix (v0.21.8) — the SDK
-      # refuses to start a session against a different engine.
-      self.inputs.dagger-cli.packages.${pkgs.stdenv.hostPlatform.system}.dagger
-    ];
-  };
+  services.imperium.forgejoRunner.enable = true;
 }

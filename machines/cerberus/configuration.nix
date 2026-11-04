@@ -20,17 +20,12 @@ in {
     ./memos.nix
     ./davical.nix
     ./forgejo-runner.nix
-    ./dagger.nix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.nixosModules.noosphere
     # self.inputs.magos.nixosModules.default
   ];
   boot.kernelModules = ["i915"];
   hardware.graphics.enable = true;
-
-  environment.systemPackages = [
-    (self.inputs.dagger-cli.packages.${pkgs.system}.dagger)
-  ];
 
   hardware.graphics.extraPackages = with pkgs; [
     intel-media-driver
@@ -474,8 +469,7 @@ in {
       trusted-users = ["apetrovic"];
       auto-optimise-store = true;
       # The daily gc only drops paths older than 10 days, which leaves a
-      # 125 GB root that also holds Dagger's cache and CI workspaces with
-      # little headroom. Nix collects garbage mid-build once free space
+      # 125 GB root that also holds CI workspaces with little headroom. Nix collects garbage mid-build once free space
       # drops below min-free, until max-free.
       # Not the runner module's `storeCache`, which replaces the daily gc.
       min-free = 20 * 1024 * 1024 * 1024;

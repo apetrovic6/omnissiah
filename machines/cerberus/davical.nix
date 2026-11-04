@@ -20,7 +20,6 @@
 }: let
   inherit (self.lib) mkRevProxyVHost mkDomain;
 
-  # 8080 is taken on cerberus by the Dagger engine container (./dagger.nix).
   port = 8081;
 
   # Literal value (no trailing newline) — davicald embeds it in set-password

@@ -32,7 +32,6 @@ in {
     ./apps/garage-main-ui
     ./apps/garage-backup-ui
     ./apps/local-path-provisioner
-    ./apps/dagger
     ./apps/vikunja
     ./apps/pocket-id
     ./apps/ncps

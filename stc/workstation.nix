@@ -266,8 +266,6 @@
       obs-studio
       xwayland
 
-      (self.inputs.dagger-cli.packages.${system}.dagger)
-
       herdr
       (self.inputs.magos.packages.${system}.opencode)
       (self.inputs.magos.packages.${system}.nautili)

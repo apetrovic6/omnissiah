@@ -138,10 +138,6 @@
       flake = false;
     };
 
-    dagger-cli = {
-      url = "github:dagger/nix";
-    };
-
     rustfs = {
       url = "github:rustfs/rustfs";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -234,40 +230,6 @@
           hash = "sha256-4WszOpzLQ5tMIWgLQRLfBQVgf3hBOxYqsEpDyy3/lE4=";
         };
 
-        # nixhelm pins dagger-helm to the vanity host oci://registry.dagger.io,
-        # which is a proxy in front of ghcr.io. Its 401 challenge advertises
-        #   scope="repository:dagger-helm:pull"
-        # with no owner segment, so ghcr.io's token endpoint rejects it:
-        #   GET https://ghcr.io/token?scope=repository%3Adagger-helm%3Apull
-        #   -> 400 name invalid: invalid repository name
-        # That makes charts.dagger-helm.dagger-helm unfetchable and fails the
-        # whole prod env. The identical artifact is served from the real
-        # repository, so pull it from there. Same body as nix-kube-generators'
-        # downloadHelmChart; inlined to avoid taking on another flake input.
-        dagger-helm-chart = pkgs.stdenv.mkDerivation {
-          name = "helm-chart-ghcr.io-dagger-dagger-helm-0.21.9";
-          nativeBuildInputs = [pkgs.cacert];
-
-          phases = ["installPhase"];
-          installPhase = ''
-            export HELM_CACHE_HOME="$TMP/.nix-helm-build-cache"
-            out_dir="$TMP/temp-chart-output"
-            mkdir -p "$out_dir"
-
-            ${pkgs.kubernetes-helm}/bin/helm pull \
-              --version 0.21.9 \
-              oci://ghcr.io/dagger/dagger-helm \
-              -d "$out_dir" \
-              --untar
-
-            mv "$out_dir/dagger-helm" "$out"
-          '';
-
-          outputHashMode = "recursive";
-          outputHashAlgo = "sha256";
-          outputHash = "sha256-TubGkb8PB79zLFfcEuqm4AFzxW0SmMZumubTlCS7GWY=";
-        };
-
         # nixhelm pins the ncps chart at v0.9.4, which predates the fix for
         # opaque upstream NAR URLs (kalbasit/ncps#1331, first in v0.10.0-rc10).
         # Cachix upstreams serve `nar/<uuid>.nar.zst` paths that v0.9.4 rejects
@@ -344,7 +306,6 @@
           # Extra charts beyond nixhelm
           extraCharts = with self.inputs; {
             "kubernetes-csi/csi-driver-nfs" = csi-driver-nfs-chart;
-            "dagger-helm/dagger-helm" = dagger-helm-chart;
             # Overrides the nixhelm v0.9.4 pin — see ncps-chart above.
             "kalbasit/ncps" = ncps-chart;
             # "deuxfleurs/garage" = "${garage}/script/helm/garage";

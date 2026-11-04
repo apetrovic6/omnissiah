@@ -19,10 +19,7 @@
 # EVERY RUNNER CARRYING A LABEL MUST BE ABLE TO RUN EVERY JOB ON IT. Forgejo
 # hands a `runs-on: nix` job to whichever runner with that label asks first,
 # so a tool on one machine's hostPackages but not another's fails at random.
-# That is why the toolset below is shared, and why dagger stays a cerberus-only
-# extra: it needs the engine container from machines/cerberus/dagger.nix.
-# Dagger pipelines therefore use `runs-on: dagger`, a label only cerberus
-# carries. A Dagger job on `runs-on: nix` fails on any other runner.
+# That is why the toolset below is shared and per-machine extras are rare.
 {self, ...}: let
   # Every Forgejo a runner can register with.
   #   url      what runners connect to
@@ -205,9 +202,8 @@ in {
         };
 
         # The daemon signs everything it builds here with the CI key, and the
-        # hook pushes it to ncps. Only daemon builds count: anything built
-        # inside a container (the Dagger pipelines) has its own store and is
-        # never seen here.
+        # hook pushes it to ncps. Only daemon builds count: a cargo build run
+        # directly by a job step never goes through the daemon.
         nix.settings = {
           secret-key-files = [gens.${ciKeyGenerator}.files."key".path];
           post-build-hook = pkgs.writeShellScript "push-to-ncps" ''
@@ -312,8 +308,8 @@ in {
             });
             # PATH available to host-executed jobs: node (for actions/checkout),
             # devenv (the build), nix (devenv shells out to it), the usual
-            # coreutils/git/tar, and a Rust toolchain for repos that build
-            # their own pipeline driver (`cargo run -p ci`).
+            # coreutils/git/tar, and a Rust toolchain for steps that run cargo
+            # outside a devenv shell.
             hostPackages =
               [config.nix.package]
               ++ (with pkgs; [
