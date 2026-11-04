@@ -212,11 +212,17 @@ in {
             # Synchronous: the daemon waits for this before its next build,
             # hence the timeouts. A failed push must never fail the build, and
             # the cache falls back to upstream for whatever it misses.
+            #
+            # zstd, not the http store's default xz: single-threaded xz inside
+            # the capped slice could not get crane's 1.7 GB dependency
+            # artifacts through in 600 s, so only the tiny check stamps ever
+            # reached ncps and every runner recompiled the deps itself.
             # shellcheck disable=SC2086 # OUT_PATHS is a space-separated list
-            ${pkgs.coreutils}/bin/timeout 600 \
+            ${pkgs.coreutils}/bin/timeout 1800 \
               ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
-              copy --option connect-timeout 5 --to ${ncpsUploadUrl} $OUT_PATHS \
-              || echo "push-to-ncps: upload failed, continuing" >&2
+              copy --option connect-timeout 5 \
+              --to '${ncpsUploadUrl}?compression=zstd&parallel-compression=true' $OUT_PATHS \
+              || echo "push-to-ncps: upload failed (exit $?), continuing" >&2
           '';
         };
       })
