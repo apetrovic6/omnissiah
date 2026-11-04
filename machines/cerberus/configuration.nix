@@ -473,6 +473,13 @@ in {
     settings = {
       trusted-users = ["apetrovic"];
       auto-optimise-store = true;
+      # The daily gc only drops paths older than 10 days, which leaves a
+      # 125 GB root that also holds Dagger's cache and CI workspaces with
+      # little headroom. Nix collects garbage mid-build once free space
+      # drops below min-free, until max-free.
+      # Not the runner module's `storeCache`, which replaces the daily gc.
+      min-free = 20 * 1024 * 1024 * 1024;
+      max-free = 40 * 1024 * 1024 * 1024;
     };
   };
 
