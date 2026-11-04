@@ -322,6 +322,13 @@ in {
                 gnutar
                 gzip
                 git
+                # Host steps outside a devenv shell had no `diff` (fishing's
+                # and rust-app-template's reported `diff: command not found`),
+                # and rust-app-template ended up parsing JSON with grep. Shared
+                # list, not extraHostPackages: every runner carries `nix:host`,
+                # so a tool on one machine alone fails those jobs at random.
+                diffutils
+                jq
                 nodejs
                 devenv
                 cacert
