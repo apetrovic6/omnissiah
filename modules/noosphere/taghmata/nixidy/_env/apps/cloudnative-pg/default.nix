@@ -16,6 +16,11 @@
   in {
     inherit namespace;
     createNamespace = true;
+    # Two CNPG CRDs and the cnpg-grafana-dashboard ConfigMap are over the
+    # 256 KiB last-applied-configuration limit of client-side apply, so every
+    # sync failed on them (since 2026-10-07). Server-side apply keeps no such
+    # annotation. Same fix as the garage-operator app.
+    syncPolicy.syncOptions.serverSideApply = true;
 
     helm.releases.cloudnative-pg = {
       chart = charts.cloudnative-pg.cloudnative-pg;

@@ -13,6 +13,11 @@ in {
   applications.garage-operator = {
     inherit namespace;
     createNamespace = true;
+    # The garageclusters CRD is ~1.1 MB. Client-side apply stores the whole
+    # manifest in the last-applied-configuration annotation, capped at 256 KiB,
+    # so every sync failed on that one resource and a CRD change in an operator
+    # upgrade would never apply. Server-side apply keeps no such annotation.
+    syncPolicy.syncOptions.serverSideApply = true;
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/garage-main-rpc-secret/garage-main-rpc-secret/value)
