@@ -1,0 +1,21 @@
+apiVersion: garage.rajsingh.info/v1beta1
+kind: GarageNode
+metadata:
+  name: garage-backup-storage-3
+  namespace: garage-operator
+spec:
+  capacity: 300Gi
+  clusterRef:
+    name: garage-backup
+  nodeSelector:
+    kubernetes.io/hostname: sol
+  storage:
+    data:
+      size: 300Gi
+      storageClassName: synology-nfs
+    metadata:
+      size: 20Gi
+      storageClassName: local-path
+  tags:
+    - garage-backup-storage-3-0
+  zone: main

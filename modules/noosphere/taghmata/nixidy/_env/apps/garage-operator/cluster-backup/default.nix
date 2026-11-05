@@ -81,6 +81,41 @@
       };
     };
 
+    # Third storage node, pinned to sol, so the three storage nodes sit one per
+    # machine (luna / terra / sol) instead of two on luna. Fresh identity: the
+    # operator discovers the Garage node ID from the pod and records it in
+    # status.nodeId - it never writes spec.nodeId for user-created nodes.
+    # Fresh PVCs on purpose: reusing garage-backup-storage-2's claims for a new
+    # identity is rejected by the operator and is not a supported Garage state.
+    #
+    # Push this only after commit 1a has converged: StorageRolloutReady=True
+    # (reason Converged) and status.storageRollout null. The GarageNode webhook
+    # refuses a create while the parent cluster is mid-rollout.
+    resources.garageNodes."garage-backup-storage-3" = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+        zone = "main";
+        capacity = "300Gi";
+        nodeSelector = {"kubernetes.io/hostname" = "sol";};
+        # Pod-name tag only: the operator adds its own ownership/tier tags to the
+        # layout role by itself (cluster:<name>/<ns>, cluster-uid, tier:storage,
+        # rpc-address), and the webhook rejects user tags carrying those reserved
+        # prefixes. This mirrors the debug tag Auto mode put on the other two.
+        tags = ["garage-backup-storage-3-0"];
+        storage = {
+          metadata = {
+            size = "20Gi";
+            storageClassName = "local-path";
+          };
+          data = {
+            size = "300Gi";
+            storageClassName = "synology-nfs";
+          };
+        };
+      };
+    };
+
     resources.services.garage-backup-s3-api = {
       metadata = {inherit namespace;};
       spec = {
