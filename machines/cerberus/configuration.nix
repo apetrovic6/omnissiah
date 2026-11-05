@@ -102,6 +102,14 @@ in {
     subdomain = "audiobookshelf";
   };
 
+  # The media lives on NFS, but the immich module only orders the server after
+  # /var/lib/immich. Without the mount dependency, shutdown can unmount
+  # /mnt/nas/photos while immich still holds files there, and the unmount
+  # waits on it.
+  systemd.services.immich-server.unitConfig.RequiresMountsFor = [
+    config.services.imperium.immich.mediaLocation
+  ];
+
   services.imperium.immich = {
     enable = true;
 
