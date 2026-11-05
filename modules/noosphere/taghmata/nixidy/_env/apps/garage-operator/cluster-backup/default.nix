@@ -81,6 +81,58 @@
       };
     };
 
+    # The two surviving operator-era nodes, adopted into git.
+    #
+    # These specs mirror the live objects field-for-field so that ArgoCD adoption
+    # is a no-op: with no last-applied annotation on a live object kubectl apply
+    # falls back to a two-way merge, which replaces every top-level key it is
+    # given and leaves the rest alone - so anything we declare must already match
+    # what is there. spec.storage.*.existingClaim in particular must be declared:
+    # dropping it would let the operator reach for fresh claims.
+    #
+    # spec.nodeId is stable for these two (the operator never writes spec.nodeId,
+    # it records the discovered ID in status.nodeId) and the webhook treats it as
+    # immutable, so mirroring it is safe and keeps the diff empty.
+    #
+    # tags is the one field deliberately NOT mirrored. The live objects carry
+    # cluster:garage-backup/garage-operator and tier:storage, which the operator
+    # wrote when Auto mode created them; those prefixes are reserved
+    # (operatorManagedNodeLayoutTagPrefixes) and are rejected in user specs. The
+    # operator composes the layout role itself - desiredNodeRoleTags discards
+    # reserved values from spec.tags and re-adds its own - and reports the result
+    # in status.tags, so stripping them from the CR changes nothing in Garage.
+    resources.garageNodes."garage-backup-storage-0" = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+        zone = "main";
+        capacity = "300Gi";
+        gateway = false;
+        nodeId = "89ecc25cb9e15ebbba8989a48cb0a213f2476c21d9ba87b72de02879cd277714";
+        tags = ["garage-backup-storage-0-0"];
+        storage = {
+          metadata.existingClaim = "metadata-garage-backup-0";
+          data.existingClaim = "data-garage-backup-0";
+        };
+      };
+    };
+
+    resources.garageNodes."garage-backup-storage-1" = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+        zone = "main";
+        capacity = "300Gi";
+        gateway = false;
+        nodeId = "0b856d9cc98c64a3258df6d4e019377fdc3fde302f6f3c875827f0f4a5a82b3b";
+        tags = ["garage-backup-storage-1-0"];
+        storage = {
+          metadata.existingClaim = "metadata-garage-backup-1";
+          data.existingClaim = "data-garage-backup-1";
+        };
+      };
+    };
+
     # Third storage node, pinned to sol, so the three storage nodes sit one per
     # machine (luna / terra / sol) instead of two on luna. Fresh identity: the
     # operator discovers the Garage node ID from the pod and records it in

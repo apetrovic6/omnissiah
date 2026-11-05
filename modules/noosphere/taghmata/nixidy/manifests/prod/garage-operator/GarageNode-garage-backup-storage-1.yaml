@@ -1,0 +1,19 @@
+apiVersion: garage.rajsingh.info/v1beta1
+kind: GarageNode
+metadata:
+  name: garage-backup-storage-1
+  namespace: garage-operator
+spec:
+  capacity: 300Gi
+  clusterRef:
+    name: garage-backup
+  gateway: false
+  nodeId: 0b856d9cc98c64a3258df6d4e019377fdc3fde302f6f3c875827f0f4a5a82b3b
+  storage:
+    data:
+      existingClaim: data-garage-backup-1
+    metadata:
+      existingClaim: metadata-garage-backup-1
+  tags:
+    - garage-backup-storage-1-0
+  zone: main
