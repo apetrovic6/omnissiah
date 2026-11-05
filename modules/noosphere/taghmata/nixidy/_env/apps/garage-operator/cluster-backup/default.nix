@@ -2,7 +2,41 @@
   domain,
   namespace,
   ...
-}: {
+}:
+let
+  # One garage-backup storage pod per machine, enforced by the scheduler.
+  #
+  # The operator wires spec.affinity straight into the pod template
+  # (garagenode_controller.go:1251-1253 -> PodSpecConfig.Affinity ->
+  # buildGaragePodSpec, helpers.go:1571). It replaces the storage tier
+  # template's affinity wholesale; garage-backup sets none, so nothing is being
+  # overridden.
+  #
+  # required, not preferred: preferred is a hint, and a hint is what we already
+  # had. The spread we are fixing happened precisely because nothing prevented a
+  # second storage pod from landing on luna when its PVC was provisioned there.
+  #
+  # The selector matches only this cluster's storage pods - garage-main runs its
+  # own three pods on the same three machines and is deliberately out of scope.
+  #
+  # Safe during a rollout: each pod's local-path metadata PV already pins it to
+  # one host, and the operator replaces pods one at a time. When storage-0-0 is
+  # deleted, terra and sol are excluded by anti-affinity and luna - the only host
+  # its PV can bind to - is free because its own pod is gone.
+  storageAntiAffinity = {
+    podAntiAffinity = {
+      requiredDuringSchedulingIgnoredDuringExecution = [{
+        topologyKey = "kubernetes.io/hostname";
+        labelSelector = {
+          matchLabels = {
+            "garage.rajsingh.info/cluster" = "garage-backup";
+            "garage.rajsingh.info/tier" = "storage";
+          };
+        };
+      }];
+    };
+  };
+in {
   applications.garage-operator = {
     resources.garageClusters.garage-backup = {
       metadata = {inherit namespace;};
@@ -109,6 +143,7 @@
         capacity = "300Gi";
         gateway = false;
         nodeId = "89ecc25cb9e15ebbba8989a48cb0a213f2476c21d9ba87b72de02879cd277714";
+        affinity = storageAntiAffinity;
         tags = ["garage-backup-storage-0-0"];
         storage = {
           metadata.existingClaim = "metadata-garage-backup-0";
@@ -125,6 +160,7 @@
         capacity = "300Gi";
         gateway = false;
         nodeId = "0b856d9cc98c64a3258df6d4e019377fdc3fde302f6f3c875827f0f4a5a82b3b";
+        affinity = storageAntiAffinity;
         tags = ["garage-backup-storage-1-0"];
         storage = {
           metadata.existingClaim = "metadata-garage-backup-1";
@@ -150,6 +186,7 @@
         zone = "main";
         capacity = "300Gi";
         nodeSelector = {"kubernetes.io/hostname" = "sol";};
+        affinity = storageAntiAffinity;
         # Pod-name tag only: the operator adds its own ownership/tier tags to the
         # layout role by itself (cluster:<name>/<ns>, cluster-uid, tier:storage,
         # rpc-address), and the webhook rejects user tags carrying those reserved

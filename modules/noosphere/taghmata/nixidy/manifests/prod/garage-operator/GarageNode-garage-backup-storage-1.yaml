@@ -4,6 +4,14 @@ metadata:
   name: garage-backup-storage-1
   namespace: garage-operator
 spec:
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              garage.rajsingh.info/cluster: garage-backup
+              garage.rajsingh.info/tier: storage
+          topologyKey: kubernetes.io/hostname
   capacity: 300Gi
   clusterRef:
     name: garage-backup
