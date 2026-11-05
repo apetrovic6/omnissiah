@@ -49,13 +49,29 @@
           };
         };
 
-        discovery.kubernetes = {enabled = true;};
+        # Garage v2.3.0 + [kubernetes_discovery] is the operator's known
+        # rustls-panic combination (status condition DiscoveryCompatible=False /
+        # GarageVersionCrashesAtStart; upstream #1416, #1526, #1532, #1536, fixed
+        # in Garage v2.4.1). Discovery is also dead weight here: it is a
+        # garagenodes.deuxfleurs.fr CR round-trip, and the garage pods' ServiceAccount
+        # has no RBAC for it, so the 60s publish fails with 403 and the discover
+        # half never runs (Garage only runs it in its bootstrap branch). Peering
+        # comes from bootstrap_peers + each node's on-disk peer_list cache + the
+        # operator's periodic bootstrapCluster/connectNodes nudge, which runs for
+        # storage topologies in Auto and Manual alike.
+        discovery.kubernetes = {enabled = false;};
 
         layoutManagement = {
           autoApply = true;
           minNodesHealthy = 2;
         };
-        layoutPolicy = "Auto";
+        # Manual: we own the storage GarageNodes. One-way (the webhook rejects
+        # Manual -> Auto). Setting this ejects the three operator-owned nodes by
+        # dropping their GarageCluster ownerRef and app.kubernetes.io/managed-by
+        # label - no pod, PVC or layout change. It is required because Auto mode
+        # can only scale down the highest ordinal, so "keep slot 3, retire the
+        # luna duplicate" is not expressible there.
+        layoutPolicy = "Manual";
 
         s3Api = {
           bindPort = 3900;

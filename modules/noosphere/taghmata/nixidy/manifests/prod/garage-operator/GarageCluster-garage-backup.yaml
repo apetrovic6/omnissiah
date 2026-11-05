@@ -13,11 +13,11 @@ spec:
     engine: sqlite
   discovery:
     kubernetes:
-      enabled: true
+      enabled: false
   layoutManagement:
     autoApply: true
     minNodesHealthy: 2
-  layoutPolicy: Auto
+  layoutPolicy: Manual
   network:
     rpcBindPort: 3901
     rpcSecretRef:
