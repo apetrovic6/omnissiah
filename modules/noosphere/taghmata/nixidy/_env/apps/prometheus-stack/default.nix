@@ -254,8 +254,20 @@ in {
                   repeat_interval = "3h";
                 }
                 {
+                  # Warnings are the noisy half -- 97 of the rules loaded in this
+                  # cluster are severity=warning, and paging a phone for
+                  # KubeletPlegDurationHigh or TargetDown on a homelab is how people
+                  # start ignoring the phone. Garage is the thing this whole branch was
+                  # built to watch, and its rules are the only ones whose alerts carry
+                  # a garage_cluster label (stamped by the ServiceMonitor relabel, then
+                  # kept by every rule's `by (garage_cluster)` / `and` expression).
+                  # So that label is the discriminator: Garage warnings page, everything
+                  # else falls out of `routes` to the parent receiver, which is "null".
                   receiver = "ntfy-warning";
-                  matchers = [''severity = "warning"''];
+                  matchers = [
+                    ''severity = "warning"''
+                    ''garage_cluster != ""''
+                  ];
                   group_wait = "30s";
                   repeat_interval = "12h";
                 }
