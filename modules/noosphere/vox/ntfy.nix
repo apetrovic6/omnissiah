@@ -29,8 +29,8 @@
       services.ntfy-sh = {
         enable = true;
         package = cfg.package;
-        user = cfg.user;
-        group = cfg.group;
+        # No user/group: nixpkgs runs ntfy-sh as a DynamicUser now and rejects
+        # a static one, so imperium's user/group options are unused here.
 
         settings = {
           base-url = "https://${cfg.subdomain}.${lib.trim baseDomain}";
