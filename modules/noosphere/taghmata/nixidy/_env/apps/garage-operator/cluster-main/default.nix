@@ -322,6 +322,16 @@
       spec.clusterRef.name = "garage-main";
     };
 
+    # /metrics on the admin port (3903) is the only place Garage exposes its
+    # cluster health, partition quorum, resync state and per-node disk numbers.
+    # Scraping it is what makes the Garage alerts in the prometheus-grafana app
+    # (resources.prometheusRules.garage) evaluate at all.
+    templates.garageAdminMetrics."garage-main-admin" = {
+      inherit namespace;
+      cluster = "garage-main";
+      adminService = "garage-main-admin";
+    };
+
     resources.services.garage-s3-api = {
       metadata = {inherit namespace;};
       spec = {

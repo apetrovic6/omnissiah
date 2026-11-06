@@ -205,6 +205,16 @@ in {
       };
     };
 
+    # Same as garage-main: garage-backup holds every CNPG backup and WAL archive,
+    # and today nothing watches it. Its admin port is the only source of the
+    # cluster/partition/resync/disk gauges the rules in the prometheus-grafana app
+    # alert on.
+    templates.garageAdminMetrics."garage-backup-admin" = {
+      inherit namespace;
+      cluster = "garage-backup";
+      adminService = "garage-backup-admin";
+    };
+
     resources.services.garage-backup-s3-api = {
       metadata = {inherit namespace;};
       spec = {

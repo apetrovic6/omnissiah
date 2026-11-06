@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: garage-main-admin
+  namespace: garage-operator
+spec:
+  endpoints:
+    - interval: 30s
+      path: /metrics
+      port: admin
+      relabelings:
+        - action: replace
+          regex: .*
+          replacement: garage-main
+          sourceLabels:
+            - __address__
+          targetLabel: garage_cluster
+        - action: replace
+          sourceLabels:
+            - __meta_kubernetes_pod_node_name
+          targetLabel: node
+      scheme: http
+      scrapeTimeout: 15s
+  namespaceSelector:
+    matchNames:
+      - garage-operator
+  selector:
+    matchLabels:
+      garage-monitoring/cluster: garage-main
+      garage-monitoring/role: admin-metrics

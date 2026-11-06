@@ -9,7 +9,11 @@
   cluster-main = import ./cluster-main {inherit config namespace domain;};
   cluster-backup = import ./cluster-backup {inherit config namespace domain;};
 in {
-  imports = [cluster-main cluster-backup];
+  imports = [
+    ../../../_modules/templates/garage-admin-metrics.nix
+    cluster-main
+    cluster-backup
+  ];
   applications.garage-operator = {
     inherit namespace;
     createNamespace = true;
