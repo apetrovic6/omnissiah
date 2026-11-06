@@ -227,6 +227,49 @@ in {
           }
         ];
       }
+
+      {
+        name = "garage.bucket";
+        rules = [
+          {
+            # Bucket-level quota numbers come from the OPERATOR's metrics
+            # (garage_operator_bucket_*, scraped by the chart's ServiceMonitor
+            # in apps/garage-operator once its metrics-reader ClusterRole is
+            # bound to Prometheus' ServiceAccount): Garage's own admin
+            # /metrics -- everything the groups above read -- exports no
+            # per-bucket series. The operator polls each GarageBucket's usage
+            # into status.quotaUsage and exports size, limit and the ratio;
+            # the ratio exists only for buckets that set a size limit, which
+            # today is exactly sccache (100 GiB, 30-day expiry -- sccache
+            # never deletes, so the lifecycle rule is the only thing that
+            # empties it, and a fill this fast means the rule is not keeping
+            # up or something is writing junk). max-by collapses the three
+            # operator replicas: only the leader reconciles and sets the
+            # gauge, and a stale ex-leader must not mask the current value.
+            #
+            # The garage_cluster label is stamped statically, not scraped:
+            # these series come from the operator, not from a cluster's admin
+            # endpoint, and the label is what Alertmanager's ntfy-warning
+            # route matches on -- without it a warning falls through to the
+            # null receiver.
+            alert = "GarageBucketQuotaNearing";
+            expr = ''
+              max by (namespace, bucket)
+                (garage_operator_bucket_quota_size_utilization_ratio{bucket="sccache"})
+              > 0.85
+            '';
+            "for" = "15m";
+            labels = {
+              severity = "warning";
+              garage_cluster = "garage-main";
+            };
+            annotations = {
+              summary = "Garage bucket {{ $labels.bucket }} ({{ $labels.garage_cluster }}) is above 85% of its size quota";
+              description = "garage_operator_bucket_quota_size_utilization_ratio has been above 0.85 for over 15 minutes ({{ $value }} of the quota used). The sccache bucket is capped at 100 GiB with objects expiring after 30 days; past the cap, sccache uploads fail and CI/workstation builds fall back to uncached compiles (SCCACHE_IGNORE_SERVER_IO_ERROR keeps them green). Either the churn outgrew the window or the lifecycle worker is not deleting: check the bucket's lifecycle status and consider raising quotas.maxSize or shortening expirationDays.";
+            };
+          }
+        ];
+      }
     ];
   };
 }

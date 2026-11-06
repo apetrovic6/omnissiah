@@ -133,3 +133,17 @@ spec:
           for: 10m
           labels:
             severity: warning
+    - name: garage.bucket
+      rules:
+        - alert: GarageBucketQuotaNearing
+          annotations:
+            description: 'garage_operator_bucket_quota_size_utilization_ratio has been above 0.85 for over 15 minutes ({{ $value }} of the quota used). The sccache bucket is capped at 100 GiB with objects expiring after 30 days; past the cap, sccache uploads fail and CI/workstation builds fall back to uncached compiles (SCCACHE_IGNORE_SERVER_IO_ERROR keeps them green). Either the churn outgrew the window or the lifecycle worker is not deleting: check the bucket''s lifecycle status and consider raising quotas.maxSize or shortening expirationDays.'
+            summary: Garage bucket {{ $labels.bucket }} ({{ $labels.garage_cluster }}) is above 85% of its size quota
+          expr: |
+            max by (namespace, bucket)
+              (garage_operator_bucket_quota_size_utilization_ratio{bucket="sccache"})
+            > 0.85
+          for: 15m
+          labels:
+            garage_cluster: garage-main
+            severity: warning
