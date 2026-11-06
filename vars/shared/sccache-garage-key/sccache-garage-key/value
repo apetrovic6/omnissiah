@@ -1,0 +1,27 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: sccache-s3-import
+    namespace: garage-operator
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:nYWoOslhGgeGXQzJnykfeKs=,iv:SKTvMBwwaIz5bKFpp/fF7mFCRD9+IO0FzP70tL3+okk=,tag:xNpnMXTabWxFa2HCfDZ9Cw==,type:str]
+          type: ENC[AES256_GCM,data:2wZI7ONN,iv:1+A2Fle9FtgITqLBkNIPsbV1t+VY8VsS+t0xr705UVY=,tag:bEYtuc/ZWodHzQ55rpV9Yw==,type:str]
+          stringData:
+            access-key-id: ENC[AES256_GCM,data:4mBPCNf3JIP/gY6m/XZXiiQb69NQIe4Q2WQ=,iv:YY1/QyPZqf00D8I13usGWFJLfa4nw2oyAhwP0/1ZwqQ=,tag:wqw/woAC8WF/Y44vvsIF4Q==,type:str]
+            secret-access-key: ENC[AES256_GCM,data:QRuBkYP9+qP+QSpDTy3vepIgp4KFalquGI43e3TwyWzDGn5tGR3J6/Km1LiCqWxU/AoAcKmkGpua76YLeXGrNA==,iv:xoNQxq5TWv9I5EuzIWIA0rAU0fSFf3gOrqZ8KcxIMMY=,tag:wXILc1iRN+I4zP3v/PVhKg==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBXVWZZaWNZWlNvNDdUeE00
+            SitMN3VmbVBTeklIV0VVbVc5alphY2R1clJrCkFxbFZNRC95WG03VTNrWDBMQzFs
+            RTJGa2QvOW9RZ09yWGhPNGVtak9EUnMKLS0tIDNkdW1melhxb2tOZ2NMQWoyeXBK
+            WVBBYUJMSys2QjlkLzg3Zi84ZXdCdnMKmhmfowk+ZhQ9HouWhVaPRY176FkOc9U0
+            a/kS8BmimjeS4VIb/m4JPAZEmS94CJjqvywb1k4OEJ3wZBsxGwq7MA==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+    encrypted_suffix: Templates
+    lastmodified: "2026-11-06T17:27:02Z"
+    mac: ENC[AES256_GCM,data:jUG66u1F6yhdAubzrasrEn+tMwiG79JDhcBDc+gprLeG/lLBBK6/qtdPVMxoRfWlmSiCCza5yIE4TKmCxQNkcXj3G/f7KLHswLWV3OZRBYXBI2J06j66CY5Mb3qgCV7AwbNetxFKs/ElyFEgJC6QBkzaO83lrPVAN1zAVTio6VU=,iv:MjlOyYGjITMnlQv2/Yr0mjTskz4WwyhNsNU9TdRVVIk=,tag:YdpAKDjFGvwEK64GHgzNtg==,type:str]
+    version: 3.13.3
