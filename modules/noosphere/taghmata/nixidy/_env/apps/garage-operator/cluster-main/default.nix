@@ -346,6 +346,9 @@
             # No owner, unlike kaneo/memos: the owner bit is what authorises
             # bucket-admin calls (PutBucketCors for their browser-facing
             # presigned traffic). sccache only ever GETs and PUTs objects.
+            # Spelled out because the operator defaults it into the list, and
+            # ArgoCD compares the list whole: left out, the key stays OutOfSync.
+            owner = false;
           }
         ];
       };
