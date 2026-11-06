@@ -1,10 +1,128 @@
 {
   config,
   charts,
+  lib,
   ...
 }: let
   namespace = "observability";
   domain = config.noosphere.domain;
+
+  # ntfy lives on cerberus under the Caddy LAB_DOMAIN (ugalabugala.org), read
+  # straight out of the caddy-env var (it carries a trailing newline: caddy.nix
+  # writes it with echo, see machines/cerberus/memos.nix for the same trim).
+  #
+  # Not noosphere.uk: `dig ntfy.noosphere.uk` through Technitium answers the MetalLB
+  # VIP 192.168.1.251, i.e. the request would hairpin through the cluster's own
+  # Traefik looking for an Ingress that does not exist, and if the answer ever came
+  # from the public side it would be the VPS. ugalabugala.org answers 192.168.1.105
+  # from 192.168.1.105 (cerberus, Caddy -> ntfy) and 152.53.34.16 from a public
+  # resolver, so the cluster side pins the zone in CoreDNS (see applications.coredns-
+  # config in _env/prod.nix) instead of leaning on the nodes' resolv.conf.
+  labDomain = lib.removeSuffix "\n" (builtins.readFile ../../../../../../../vars/shared/caddy-env/domain/value);
+  ntfyUrl = "https://ntfy.${labDomain}/";
+  ntfyTopic = "homelab-alerts";
+
+  # Clan var outputs that exist only once the vars have been generated:
+  #   vars/shared/ntfy-access/alertmanager-ntfy/value            (kube-secrets/ntfy)
+  #   vars/shared/alertmanager-heartbeat/alertmanager-heartbeat/value (kube-secrets/alertmanager)
+  # Read them when present, render without them when absent, so the flake evaluates
+  # either way and an unconfigured receiver can never reference a file that is not
+  # mounted (Alertmanager rejects the whole config file for one unreadable path,
+  # which would take every alert down, not just the missing one).
+  ntfySecretName = "alertmanager-ntfy";
+  heartbeatSecretName = "alertmanager-heartbeat";
+  ntfySecretYaml = ../../../../../../../vars/shared/ntfy-access/alertmanager-ntfy/value;
+  heartbeatSecretYaml = ../../../../../../../vars/shared/alertmanager-heartbeat/alertmanager-heartbeat/value;
+  ntfyReady = builtins.pathExists ntfySecretYaml;
+  heartbeatReady = builtins.pathExists heartbeatSecretYaml;
+
+  secretMount = name: "/etc/alertmanager/secrets/${name}";
+
+  # Message body templates, evaluated by Alertmanager per alert group. ntfy takes
+  # title/message as JSON strings in the body -- they are the only two values that go
+  # through a template at all; priority and tags are static JSON values (see
+  # ntfyReceiver, where the reason is recorded: Alertmanager's webhook http_config has
+  # no headers field, and ntfy needs priority as a JSON number).
+  #
+  # The POST goes to the ntfy ROOT url, not to /<topic>: "To publish as JSON, you must
+  # PUT/POST to the ntfy root URL, not to the topic URL", so the topic travels in the
+  # body.
+  ntfyTitle = lib.trim ''
+    {{ if eq .Status "firing" }}{{ .CommonLabels.alertname }}{{ else }}resolved: {{ .CommonLabels.alertname }}{{ end }}
+  '';
+  ntfyMessage = lib.trim ''
+    {{- range .Alerts }}
+    {{ .Labels.severity }} - {{ .Labels.alertname }}
+    {{- if .Labels.garage_cluster }}
+      garage cluster: {{ .Labels.garage_cluster }}
+    {{- end }}
+    {{- if .Labels.namespace }}
+      namespace: {{ .Labels.namespace }}
+    {{- end }}
+    {{- if .Labels.pod }}
+      pod: {{ .Labels.pod }}
+    {{- end }}
+    {{- if .Labels.node }}
+      node: {{ .Labels.node }}
+    {{- end }}
+    {{- if .Annotations.summary }}
+      {{ .Annotations.summary }}
+    {{- end }}
+    {{- if .Annotations.description }}
+      {{ .Annotations.description }}
+    {{- end }}
+    {{- if .GeneratorURL }}
+      {{ .GeneratorURL }}
+    {{- end }}
+    {{- end }}
+  '';
+
+  # ntfy receiver: one per severity.
+  #
+  # Priority and tags ride in the JSON body, NOT in HTTP headers: Alertmanager's
+  # webhook http_config has no `headers` field at all, and its config parser rejects
+  # it outright -- `amtool check-config` on the rendered Secret failed with
+  # "field headers not found in type config.plain", which Alertmanager would have hit
+  # at startup too, i.e. a crash-looping Alertmanager and no alerts at all.
+  #
+  # Verified against a real Alertmanager 0.33.1 delivering to a real ntfy 2.34.0
+  # locally: a payload that carries `priority: 4` and `tags: [rotating_light]` as
+  # plain (non-template) YAML values arrives at ntfy as a JSON *number* and a JSON
+  # array -- priority=4 tags=["rotating_light"], raw types number/array -- which is
+  # the shape ntfy requires. Template leaves were deliberately kept to the two
+  # strings (title, message) so the number never passes through a template at all.
+  ntfyReceiver = name: priority: tags: {
+    inherit name;
+    webhook_configs = [
+      {
+        url = ntfyUrl;
+        send_resolved = true;
+        # ntfy's message-size-limit defaults to 4k; a group of eight alerts with
+        # summary+description is already close to it, and the point of a phone
+        # notification is the first line, not the whole group.
+        max_alerts = 8;
+        http_config = {
+          # The only credential handling this needs: the write token from the
+          # SopsSecret the operator mounts (see alertmanagerSpec.secrets below).
+          authorization = {
+            type = "Bearer";
+            credentials_file = "${secretMount ntfySecretName}/token";
+          };
+        };
+        payload = {
+          # Publishing as JSON must POST to the ntfy root URL, not to /<topic>, so
+          # the topic is part of the body.
+          topic = ntfyTopic;
+          title = ntfyTitle;
+          message = ntfyMessage;
+          # Static values on purpose (see the note above): ntfy wants priority as a
+          # number, 1=min .. 5=max, 3=default.
+          inherit priority;
+          inherit tags;
+        };
+      }
+    ];
+  };
 in {
   applications.prometheus-crds = {
     inherit namespace;
@@ -85,10 +203,123 @@ in {
           };
         };
 
-        alertManager = {
-          fullNameOverride = "alertmanager";
+        # --- Alertmanager: routes, receivers, storage ---------------------------
+        #
+        # This file used to configure `alertManager` (capital M). The chart's values
+        # key is `alertmanager`, so that block never reached the chart: fullNameOverride
+        # and ingress.enabled were inert, and Alertmanager has been running the chart's
+        # default config -- one `null` receiver, i.e. every alert, the Garage ones
+        # included, went nowhere. The block is now spelled correctly.
+        #
+        # fullNameOverride is deliberately NOT re-applied: making it take effect would
+        # rename the StatefulSet (prometheus-alertmanager -> alertmanager-alertmanager),
+        # orphan the running one and its state for no gain. ingress.enabled stays at the
+        # chart default (false).
+        alertmanager = {
           enabled = true;
-          ingress.enabled = false;
+
+          # Helm merges these maps into the chart default, so global/inhibit_rules/
+          # templates stay as they are; `routes` and `receivers` are lists and are
+          # replaced whole, which is why the null receiver is re-declared below.
+          config = {
+            route.routes =
+              lib.optionals heartbeatReady [
+                {
+                  # Watchdog is expr: vector(1) with severity: none -- it fires on
+                  # every evaluation, and it is the only alert whose *absence* is the
+                  # signal. Silence here means Prometheus, Alertmanager, the cluster,
+                  # the network or the lab's power are down together, and this route is
+                  # the one thing that notices, because the check lives outside the
+                  # pipeline it is watching.
+                  #
+                  # repeat_interval must stay clearly below what the external check
+                  # considers late: pinging every 5m against a check that alerts after
+                  # ~15m of silence gives three misses before anyone is told, and it is
+                  # Alertmanager's own group cadence that has to be tight -- the check
+                  # cannot see a slow Alertmanager, only a silent one.
+                  receiver = "heartbeat";
+                  matchers = [''alertname = "Watchdog"''];
+                  group_by = ["alertname"];
+                  group_wait = "0s";
+                  group_interval = "1m";
+                  repeat_interval = "5m";
+                  send_resolved = false;
+                }
+              ]
+              ++ lib.optionals ntfyReady [
+                {
+                  receiver = "ntfy-critical";
+                  matchers = [''severity = "critical"''];
+                  group_wait = "10s";
+                  repeat_interval = "3h";
+                }
+                {
+                  receiver = "ntfy-warning";
+                  matchers = [''severity = "warning"''];
+                  group_wait = "30s";
+                  repeat_interval = "12h";
+                }
+              ];
+
+            receivers =
+              [ {name = "null";} ]
+              ++ lib.optionals heartbeatReady [
+                {
+                  name = "heartbeat";
+                  webhook_configs = [
+                    {
+                      # The ping URL is a credential: anyone holding it can mark the
+                      # check healthy. It lives in the var-rendered Secret the operator
+                      # mounts, and Alertmanager reads the URL from the file.
+                      url_file = "${secretMount heartbeatSecretName}/url";
+                      send_resolved = false;
+                      max_alerts = 1;
+                    }
+                  ];
+                }
+              ]
+              ++ lib.optionals ntfyReady [
+                (ntfyReceiver "ntfy-critical" 4 [ "rotating_light" ])
+                (ntfyReceiver "ntfy-warning" 3 [ "warning" ])
+              ];
+          };
+
+          alertmanagerSpec = {
+            # Silences, inhibition state and the Alertmanager WAL live in the pod's
+            # emptyDir today: restart the pod and every silence you set to keep a
+            # known-bad node quiet disappears, along with the inhibition state, and
+            # the group timers reset -- which is how a re-notified alert after a
+            # restart looks identical to a new one. 2Gi is oversized for what
+            # Alertmanager actually keeps (silences + a small bucket WAL); it is the
+            # smallest size that leaves room for a burst of alert groups, and at
+            # Longhorn's 2 replicas that is 4Gi of the ~590Gi schedulable pool.
+            # Same storage class as Prometheus above, for the same reason: replicas=1
+            # with a *preferred* anti-affinity, so the pod can move nodes and the
+            # volume has to follow it.
+            #
+            # Adding volumeClaimTemplates is an immutable change: the operator has to
+            # recreate the StatefulSet, so this change costs one Alertmanager restart,
+            # and the state in the emptyDir is lost exactly once, on the way onto the
+            # volume. From here on it survives restarts.
+            storage.volumeClaimTemplate.spec = {
+              accessModes = ["ReadWriteOnce"];
+              storageClassName = "longhorn";
+              resources.requests.storage = "2Gi";
+            };
+
+            persistentVolumeClaimRetentionPolicy = {
+              whenDeleted = "Retain";
+              whenScaled = "Retain";
+            };
+
+            # The operator mounts each of these into the alertmanager container at
+            # /etc/alertmanager/secrets/<name>/, which is where url_file and
+            # credentials_file above point. Declaring a secret that does not exist
+            # would leave the pod unschedulable, hence the guards.
+            secrets =
+              lib.optionals ntfyReady [ntfySecretName]
+              ++ lib.optionals heartbeatReady [heartbeatSecretName];
+          };
         };
 
         grafana = {
@@ -171,7 +402,20 @@ in {
             encrypted_suffix: Templates
             version: 3.11.0
       ''
-    ];
+    ]
+    # Cluster-side credentials for the Alertmanager receivers, generated by
+    # kube-secrets/ntfy and kube-secrets/alertmanager and read straight out of the var
+    # store, exactly like garage-operator reads its rpc/admin SopsSecrets. They are
+    # sops-encrypted manifests: the plaintext token and ping URL never appear in a
+    # rendered manifest, only in the Secret the sops-secrets-operator produces from
+    # them in observability.
+    #
+    # Guarded because they do not exist until the vars are generated
+    #   clan vars generate cerberus --generator ntfy-access
+    #   clan vars generate cerberus --generator alertmanager-heartbeat
+    # and the flake must evaluate before then (see the let block).
+    ++ lib.optionals ntfyReady [(builtins.readFile ntfySecretYaml)]
+    ++ lib.optionals heartbeatReady [(builtins.readFile heartbeatSecretYaml)];
 
     resources.ingresses.grafana-ip-root = {
       metadata = {

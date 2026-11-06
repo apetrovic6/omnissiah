@@ -41,10 +41,15 @@ spec:
   nodeSelector:
     kubernetes.io/os: linux
   paused: false
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   portName: http-web
   replicas: 1
   retention: 120h
   routePrefix: /
+  secrets:
+    - alertmanager-ntfy
   securityContext:
     fsGroup: 2000
     runAsGroup: 2000
@@ -53,4 +58,13 @@ spec:
     seccompProfile:
       type: RuntimeDefault
   serviceAccountName: prometheus-alertmanager
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
+        storageClassName: longhorn
   version: v0.34.2

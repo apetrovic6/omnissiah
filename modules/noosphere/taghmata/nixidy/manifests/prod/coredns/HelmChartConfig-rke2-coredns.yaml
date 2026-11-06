@@ -43,3 +43,29 @@ spec:
         parameters: 30
       - name: forward
         parameters: . 192.168.1.105
+    # Split-horizon for the Caddy LAB_DOMAIN zone, the same way noosphere.uk
+    # is pinned above, for one concrete reason: Alertmanager publishes to
+    # https://ntfy.ugalabugala.org (machines/cerberus/ntfy.nix), and that name
+    # must answer 192.168.1.105 from inside a pod. Measured on 2026-11-06:
+    #   dig @192.168.1.105 ntfy.ugalabugala.org -> 192.168.1.105   (Technitium,
+    #     zone is wildcarded, and CoreDNS' `forward . /etc/resolv.conf` lands
+    #     on the same server because rke2 gives the coredns pod the node's
+    #     resolver: its /etc/resolv.conf is `nameserver 192.168.1.105`)
+    #   dig @1.1.1.1 ha.ugalabugala.org          -> 152.53.34.16   (the VPS)
+    # So it works today only because every node's resolver is Technitium, and
+    # this lab has already lost that once: cerberus ran NetworkManager and
+    # networkd on one NIC at the same time and "both pushed the router's DNS
+    # onto the link", while machines/cerberus/configuration.nix documents that
+    # the router and 9.9.9.9 answer these names with the VPS. A node handed
+    # DHCP DNS again would silently start sending a pod's ugalabugala.org
+    # lookups to the public answer, and the alert webhook would go to the VPS
+    # instead of to ntfy. Pinned, the zone does not depend on that.
+    - zones:
+      - zone: ugalabugala.org
+      port: 53
+      plugins:
+      - name: errors
+      - name: cache
+        parameters: 30
+      - name: forward
+        parameters: . 192.168.1.105
