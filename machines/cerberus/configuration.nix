@@ -20,6 +20,7 @@ in {
     ./memos.nix
     ./davical.nix
     ./forgejo-runner.nix
+    ./ntfy.nix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.nixosModules.noosphere
     # self.inputs.magos.nixosModules.default
@@ -150,6 +151,22 @@ in {
   users.users.plex.extraGroups = ["media"];
 
   # Pin the client WireGuard port so remote clients have a STABLE endpoint.
+  #
+  # Phone access to ntfy (machines/cerberus/ntfy.nix, https://ntfy.ugalabugala.org)
+  # needs NO new connector resource: the `ugala-bugala` host resource below already
+  # carries alias *.ugalabugala.org with tcp-ports including 443 to 192.168.1.105,
+  # which is exactly where Caddy fronts ntfy. What the phone needs is SITE ACCESS --
+  # in the Pangolin dashboard, add the phone's user/role to the site this newt
+  # client belongs to (site niceId downright-southern-red-backed-salamander), so
+  # newt delivers that wildcard route to the phone, and olm answers
+  # ntfy.ugalabugala.org locally. Do NOT add an "ntfy" host resource for
+  # 192.168.1.105: newt keeps one route per destination IP and the last written
+  # port list wins, which is what blackholed 53/80/22/2222 on 2026-08-29.
+  #
+  # If a dashboard-clickable Endpoint is wanted instead (Perimeter/browser access),
+  # point it at 192.168.1.105:102 with no Access Policy: ntfy does its own login,
+  # and Pangolin's own cookie wall would break the ntfy mobile apps (they send
+  # Basic/Bearer auth, not a Perimeter session).
   #
   # This router does symmetric NAT: it hands out a different external port per
   # destination and stops preserving the internal port under load. Pangolin
