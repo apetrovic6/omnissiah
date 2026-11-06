@@ -41,7 +41,7 @@ spec:
                 garage.rajsingh.info/tier: storage
             topologyKey: kubernetes.io/hostname
     data:
-      size: 200Gi
+      size: 1Ti
       storageClassName: local-path
     metadata:
       size: 10Gi
