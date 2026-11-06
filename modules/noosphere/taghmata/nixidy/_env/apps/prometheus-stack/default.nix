@@ -47,8 +47,40 @@
   # The POST goes to the ntfy ROOT url, not to /<topic>: "To publish as JSON, you must
   # PUT/POST to the ntfy root URL, not to the topic URL", so the topic travels in the
   # body.
+  #
+  # WHY THE TITLE CANNOT CONTAIN A COLON (measured, not stylistic).
+  #
+  # Alertmanager infers each payload leaf's JSON type from the text its template
+  # renders, and a leaf that reads as a YAML mapping -- `something: value` -- leaves as
+  # a JSON OBJECT, not a string. ntfy requires title and message to be strings, and
+  # answers 400 {"code":40024,"error":"invalid request: request body must be valid
+  # JSON"} when they are not. The first version of this title used
+  # `resolved: {{ .CommonLabels.alertname }}`; on 2026-11-06 16:16:47Z the live
+  # Alertmanager logged exactly that for the resolved half of a test alert group whose
+  # firing half had been accepted a few minutes earlier:
+  #   level=ERROR source=dispatch.go msg="Notify for alerts failed"
+  #   aggrGroup="{}/{severity=\"critical\"}:{}" num_alerts=2
+  #   err="ntfy-critical/webhook[0]: ... unexpected status code 400:
+  #        {\"code\":40024,...request body must be valid JSON}"
+  # Isolated locally (real Alertmanager 0.33.1 -> a capturing HTTP server that JSON
+  # -parses every body; four title templates, each fired and then resolved):
+  #   "VariantColonPrefix"                 str   accepted   (firing text has no colon)
+  #   {"resolved": "VariantColonPrefix"}   dict  REJECTED   (resolved text is a mapping)
+  #   "VariantNoColon resolved"            str   accepted   (both states)
+  #   "VariantDash - resolved"             str   accepted   (both states)
+  #   {"note": "VariantColonMid"}          dict  REJECTED   (the colon only has to make
+  #                                                        the whole leaf a mapping)
+  # So the title renders `<alertname>` when firing and `<alertname> resolved` when it is
+  # not: no colon, therefore a string in both states.
+  #
+  # The message leaf is safe for a different reason, visible in the same captures: its
+  # first rendered line is always `<severity> - <alertname>` (no colon; and a colon in a
+  # severity value would still need `: ` with a space to become a mapping), and the leaf
+  # is multi-line, so the indented `garage cluster: ...` / `namespace: ...` lines are
+  # plain content of a scalar rather than a top-level mapping -- which is how they came
+  # through as strings in every capture above.
   ntfyTitle = lib.trim ''
-    {{ if eq .Status "firing" }}{{ .CommonLabels.alertname }}{{ else }}resolved: {{ .CommonLabels.alertname }}{{ end }}
+    {{ .CommonLabels.alertname }}{{ if ne .Status "firing" }} resolved{{ end }}
   '';
   ntfyMessage = lib.trim ''
     {{- range .Alerts }}
