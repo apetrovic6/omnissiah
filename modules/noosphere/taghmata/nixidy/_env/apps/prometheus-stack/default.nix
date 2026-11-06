@@ -24,7 +24,7 @@
 
   # Clan var outputs that exist only once the vars have been generated:
   #   vars/shared/ntfy-access/alertmanager-ntfy/value            (kube-secrets/ntfy)
-  #   vars/shared/alertmanager-heartbeat/alertmanager-heartbeat/value (kube-secrets/alertmanager)
+  #   vars/shared/alertmanager-heartbeat/alertmanager-heartbeat/value (kube-secrets/_alertmanager, parked)
   # Read them when present, render without them when absent, so the flake evaluates
   # either way and an unconfigured receiver can never reference a file that is not
   # mounted (Alertmanager rejects the whole config file for one unreadable path,

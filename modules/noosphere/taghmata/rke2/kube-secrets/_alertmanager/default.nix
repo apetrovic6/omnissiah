@@ -1,3 +1,8 @@
+# PARKED (2026-11-06): the `_` prefix keeps import-tree from loading this, so
+# deploys stop prompting for a URL nobody has yet. To enable the heartbeat: create
+# the external check, rename this directory back to `alertmanager`, then run the
+# generate command below.
+#
 # Dead man's switch for the alerting pipeline: the URL of the external heartbeat.
 #
 # `Watchdog` is `expr: vector(1)` -- it fires on every evaluation, by design. That
