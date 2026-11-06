@@ -1,0 +1,17 @@
+apiVersion: garage.rajsingh.info/v1beta1
+kind: GarageKey
+metadata:
+  name: sccache
+  namespace: garage-operator
+spec:
+  bucketPermissions:
+    - bucketRef:
+        name: sccache
+      read: true
+      write: true
+  clusterRef:
+    name: garage-main
+  importKey:
+    secretRef:
+      name: sccache-s3-import
+      namespace: garage-operator

@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/instance: garage-operator
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: garage-operator
+    app.kubernetes.io/version: 0.8.2
+    control-plane: controller-manager
+    helm.sh/chart: garage-operator-0.8.2
+    release: kube-prometheus-stack
+  name: garage-operator
+  namespace: garage-operator
+spec:
+  endpoints:
+    - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      interval: 30s
+      path: /metrics
+      port: https
+      scheme: https
+      scrapeTimeout: 10s
+      tlsConfig:
+        insecureSkipVerify: true
+  namespaceSelector:
+    matchNames:
+      - garage-operator
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: metrics
+      app.kubernetes.io/instance: garage-operator
+      app.kubernetes.io/name: garage-operator
+      control-plane: controller-manager

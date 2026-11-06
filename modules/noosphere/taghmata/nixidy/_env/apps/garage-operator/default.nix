@@ -30,6 +30,7 @@ in {
       (builtins.readFile ../../../../../../../vars/shared/garage-backup-admin-token/garage-backup-admin-token/value)
       (builtins.readFile ../../../../../../../vars/shared/kaneo-s3-key/kaneo-s3-key/value)
       (builtins.readFile ../../../../../../../vars/shared/memos-s3-key/memos-s3-key/value)
+      (builtins.readFile ../../../../../../../vars/shared/sccache-garage-key/sccache-garage-key/value)
     ];
 
     helm.releases.garage-operator = {
@@ -50,6 +51,19 @@ in {
           labels.grafana_dashboard = "1";
         };
 
+        # The operator's own /metrics (HTTPS :8443, authn/authz through
+        # TokenReview + SubjectAccessReview) is the only source of per-bucket
+        # quota series (garage_operator_bucket_*): Garage's admin /metrics,
+        # scraped by the two garageAdminMetrics ServiceMonitors, has no
+        # per-bucket numbers at all. The sccache bucket's quota alert
+        # (prometheus-stack/garage-alerts.nix, group garage.bucket) reads the
+        # utilization ratio from here, so this monitor is load-bearing. The
+        # release label is the observability Prometheus' serviceMonitorSelector.
+        serviceMonitor = {
+          enabled = true;
+          labels.release = "kube-prometheus-stack";
+        };
+
         # Deliberately left off. The chart's bundled rule set covers the same ground as
         # resources.prometheusRules.garage in _env/apps/prometheus-stack/garage-alerts.nix
         # -- and three of its names (GarageClusterUnhealthy, GarageClusterUnavailable,
@@ -58,6 +72,27 @@ in {
         # on the same topic. Verified on 2026-11-06: `kubectl get prometheusrule -A`
         # shows no garage-operator rules, so nothing is colliding today.
       };
+    };
+
+    # The chart creates the `garage-operator-metrics-reader` ClusterRole
+    # (get on the /metrics non-resource URL) but binds it to nobody -- the
+    # kubebuilder scaffold leaves that to the installation. Without this
+    # binding the operator's SubjectAccessReview rejects Prometheus' token and
+    # the ServiceMonitor above scrapes 401s. Subject: the Prometheus CR's own
+    # ServiceAccount (observability/prometheus-prometheus).
+    resources.clusterRoleBindings.garage-operator-metrics-reader-prometheus = {
+      roleRef = {
+        apiGroup = "rbac.authorization.k8s.io";
+        kind = "ClusterRole";
+        name = "garage-operator-metrics-reader";
+      };
+      subjects = [
+        {
+          kind = "ServiceAccount";
+          name = "prometheus-prometheus";
+          namespace = "observability";
+        }
+      ];
     };
   };
 }

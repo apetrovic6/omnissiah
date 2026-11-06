@@ -1,0 +1,16 @@
+apiVersion: garage.rajsingh.info/v1beta1
+kind: GarageBucket
+metadata:
+  name: sccache
+  namespace: garage-operator
+spec:
+  clusterRef:
+    name: garage-main
+  lifecycle:
+    rules:
+      - abortIncompleteMultipartUploadDays: 7
+        expirationDays: 30
+        id: expire-after-30-days
+        status: Enabled
+  quotas:
+    maxSize: 107374182400
