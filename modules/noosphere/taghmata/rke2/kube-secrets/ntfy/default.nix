@@ -51,6 +51,11 @@ in {
       files.${envFile} = {
         secret = true;
         mode = "0400";
+        # ntfy reads its users and tokens once, at start. Without this, a deploy
+        # that only rotates the var leaves the server on the old credentials
+        # (seen 2026-11-06: the phone got "not authorized" with the new
+        # password until ntfy-sh was restarted by hand).
+        restartUnits = ["ntfy-sh.service"];
       };
 
       files.${secretName}.secret = false;
