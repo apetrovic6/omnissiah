@@ -1,0 +1,26 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: alertmanager-ntfy
+    namespace: observability
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:YLuGtdHLlKsOV4UB8RG8C/c=,iv:BiKuzBkffSv5gsHkKqGHIZVnVZpus++JlZxHpiUW7Ws=,tag:7eLt+NTWgT2fbUbReS6QoA==,type:str]
+          type: ENC[AES256_GCM,data:s5xSHzC2,iv:mAaboCpC1CCbBjz3t2WusQCdW3QZXfcNOfDZW+uCsLg=,tag:2asDj7BSBlPWUQuvq+btCw==,type:str]
+          stringData:
+            token: ENC[AES256_GCM,data:WiLzkhU6c5roI/CkEmksTZZe7asJ39MB4+mXxTTrAuY=,iv:tUGcLBZXyNJmEWPSlYlskfmpCHEGuCd8XjRHgYVPpW4=,tag:2pUg8E0cZ6p6aQkJzhYj1Q==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBnZkRrcFNJWjhzdG5BSTFv
+            bVNGSk4vV2hFTWNqcmtiRU92cjhFR0lrQkhNClZpdDZEamUvMmhReFVFYm5jUlFY
+            VUlCVDlKd08yQlRaU0c1U0w5M1NJOXcKLS0tIHFhZzRSZ3FhYjVRZThnZDhYdlEw
+            OHcxV2diSk12NmVvSjdVWDROYmt3RkEK0qoDzYqUE22xPpUROQ5kmaxB2M/chOch
+            0VKq33GjN7et7KFzkCTrzrxhLft8JjUe9UJ14olbsF+1G+kzJLRlcg==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+    encrypted_suffix: Templates
+    lastmodified: "2026-11-06T14:12:39Z"
+    mac: ENC[AES256_GCM,data:/tmPsnaMMd/OjCAnBvqs9//eLX/L54NqiCco8G1zx4JvGY/jZL91unzxdcVDyCFKBECJD572CVTRThjGCY889jaA5+H1gIOyAlE+nH7bKY1QELme51Sx28Jj8gjUnhdFwhp5fVrrPWFBzLMDf3wRQr6p0ELD/H5SdB41IPp1tX0=,iv:gzkQcLgpPEsbApa/kzRMFUXLCYlN86CCuDqVLtzdIwM=,tag:8JNdqprftvV5RBrLFTOGpw==,type:str]
+    version: 3.13.3
