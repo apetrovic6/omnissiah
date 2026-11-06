@@ -17,6 +17,7 @@ in {
     # ./apps/crowci
     ./apps/woodpecker-ci
     ./apps/prometheus-stack
+    ./apps/prometheus-stack/garage-alerts.nix
     ./apps/yarr/seerr
     ./apps/csi-driver-nfs
     ./apps/excalidraw
