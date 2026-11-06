@@ -55,6 +55,15 @@ in {
 
       files.${secretName}.secret = false;
 
+      # The phone account's plaintext password. ntfy.env only carries its bcrypt
+      # hash, and the ntfy apps log in with username + password (they don't take an
+      # empty username with a token). Not deployed anywhere: read it with
+      #   clan vars get cerberus ntfy-access/reader-password
+      files.reader-password = {
+        secret = true;
+        deploy = false;
+      };
+
       runtimeInputs = [
         pkgs.coreutils
         pkgs.openssl
@@ -109,14 +118,14 @@ in {
         cat > "$out/${envFile}" <<EOF
         NTFY_AUTH_USERS='${publisherUser}:''${publisher_hash}:user,${readerUser}:''${reader_hash}:user'
         NTFY_AUTH_ACCESS='${publisherUser}:${topic}:wo,${readerUser}:${topic}:ro'
-        NTFY_AUTH_TOKENS='${publisherUser}:''${publisher_token}:Alertmanager write token for ${topic}',${readerUser}:''${reader_token}:Read token for ${readerUser} on ${topic}'
+        NTFY_AUTH_TOKENS='${publisherUser}:''${publisher_token}:Alertmanager write token for ${topic},${readerUser}:''${reader_token}:Read token for ${readerUser} on ${topic}'
         EOF
 
-        # The reader's password and token live only in the secret env file above.
-        # Read them from a machine that has the var (cerberus):
-        #   sudo cat /run/secrets/vars/shared/ntfy-access/ntfy.env
-        # or from this repo with sops. They are never in the nix store, never in a
-        # rendered manifest, and never printed by anything here.
+        printf '%s' "$reader_password" > "$out/reader-password"
+
+        # The reader's password (reader-password, not deployed) and token (in the
+        # env file) are never in the nix store, never in a rendered manifest, and
+        # never printed by anything here.
 
         sops encrypt \
           --age "${ageKey}" \
