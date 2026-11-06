@@ -13,7 +13,7 @@ spec:
     engine: sqlite
   discovery:
     kubernetes:
-      enabled: true
+      enabled: false
   layoutManagement:
     autoApply: true
     minNodesHealthy: 2
@@ -32,6 +32,14 @@ spec:
     region: main
     rootDomain: .s3.main.garage.noosphere.uk
   storage:
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                garage.rajsingh.info/cluster: garage-main
+                garage.rajsingh.info/tier: storage
+            topologyKey: kubernetes.io/hostname
     data:
       size: 200Gi
       storageClassName: local-path

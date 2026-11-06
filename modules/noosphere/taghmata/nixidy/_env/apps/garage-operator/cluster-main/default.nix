@@ -19,6 +19,21 @@
             size = "10Gi";
             storageClassName = "local-path";
           };
+          # One storage node per machine, required. The nodes already sit on
+          # luna, terra and sol, but only because their local-path volumes
+          # happen to be pinned there. In Auto mode the operator-owned nodes
+          # inherit this from the storage tier, so a rollout puts each pod
+          # back on its own machine (where its volumes are) and a new node can
+          # never share one. garage-backup sets the same rule per node.
+          affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution = [
+            {
+              topologyKey = "kubernetes.io/hostname";
+              labelSelector.matchLabels = {
+                "garage.rajsingh.info/cluster" = "garage-main";
+                "garage.rajsingh.info/tier" = "storage";
+              };
+            }
+          ];
         };
 
         database = {engine = "sqlite";};
@@ -41,7 +56,13 @@
           };
         };
 
-        discovery.kubernetes = {enabled = true;};
+        # Off for the same reason as garage-backup: Garage v2.3.0 with
+        # [kubernetes_discovery] can panic at start (the operator's
+        # DiscoveryCompatible=False / GarageVersionCrashesAtStart), and the
+        # affinity above restarts every pod. Discovery never worked here
+        # anyway: the pods' ServiceAccount has no RBAC for it, so it 403'd
+        # every minute. Peering comes from the operator's connectNodes.
+        discovery.kubernetes = {enabled = false;};
 
         layoutManagement = {
           autoApply = true;
