@@ -13,4 +13,4 @@ spec:
         id: expire-after-30-days
         status: Enabled
   quotas:
-    maxSize: 107374182400
+    maxSize: 100Gi

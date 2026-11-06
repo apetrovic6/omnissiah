@@ -355,8 +355,10 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
-        # 100 GiB. maxSize is bytes (v1beta1 GarageBucketSpecQuotas).
-        quotas.maxSize = 107374182400;
+        # 100 GiB. maxSize is an int-or-string quantity: the API server stores
+        # a bare number as the string "107374182400", so a number here keeps
+        # ArgoCD OutOfSync forever. A quantity string round-trips unchanged.
+        quotas.maxSize = "100Gi";
         lifecycle.rules = [
           {
             # sccache never deletes anything from S3 -- it only writes objects
