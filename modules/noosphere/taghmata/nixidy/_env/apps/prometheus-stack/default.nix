@@ -26,6 +26,65 @@ in {
         crds.enabled = true;
         fullnameOverride = "prometheus";
 
+        # Storage. `storageSpec: {}` today means the operator falls back to an
+        # emptyDir named prometheus-prometheus-prometheus-db: the 30d retention
+        # below would then delete nothing, because a pod restart wipes the TSDB.
+        # (Observed: retention=10d, but the oldest queryable sample was the pod's
+        # own start time, 3d15h back.)
+        #
+        # storageClassName = longhorn, because that is what every other
+        # stateful-but-unpinned workload here uses (harbor, forgejo, woodpecker,
+        # the *arr stack, vikunja, karakeep, bytestash), and Prometheus is one of
+        # them: replicas=1 with only a *preferred* anti-affinity, so the pod can
+        # land on any node and the volume has to follow it over the network.
+        # local-path is what Garage's own pods use, and for a reason that does
+        # not apply here: those are pinned one-per-machine by required
+        # anti-affinity, Garage replicates its own data, and the operator owns
+        # those claims. local-path is node-bound (WaitForFirstConsumer, Retain) so
+        # a Prometheus pod rescheduled onto another node could not bind its old
+        # volume -- which is exactly the failure mode the new volume is meant to
+        # remove -- and it has allowVolumeExpansion=false, so a 30-day TSDB could
+        # never grow. Longhorn gives Retain, 2 replicas (numberOfReplicas=2 /
+        # persistence.defaultClassReplicaCount=2), expansion, and it is the one
+        # storage class with a backup target (NFS on the NAS) and snapshot
+        # RecurringJobs already defined. CNPG's longhorn-cnpg-strict-local is the
+        # wrong shape: it is dataLocality=strict-local for latency-sensitive
+        # random IO, and a TSDB is sequential appends + compaction.
+        # Cost: 2 replicas x 50Gi = 100Gi of the 590Gi-per-node schedulable
+        # Longhorn pool, on nodes with ~1.6TB free on /var/lib/longhorn.
+        #
+        # Size is set from the measured rate, not a guess. Before the change:
+        # prometheus_tsdb_head_series = 282810,
+        # rate(prometheus_tsdb_head_samples_appended_total[15m]) = 10362 samples/s,
+        # sum(prometheus_tsdb_storage_blocks_bytes) = 4.46GB for 3d15h of data
+        # => 1.31 GB/day => 1.37 bytes per sample. Adding Garage is 6 targets x
+        # ~3.3-3.5k samples per scrape at 30s = ~680 samples/s (+6.6%), so
+        # ~11.0k samples/s => 1.41 GB/day => 30d ~= 42GB, plus the WAL.
+        # 50Gi leaves ~19% headroom; retentionSize 45GB is the guard rail: it is
+        # above the 30d figure, so time-based retention decides when data goes
+        # away, and a cardinality spike evicts old data instead of filling the
+        # volume and crash-looping Prometheus.
+        prometheus.prometheusSpec = {
+          retention = "30d";
+          retentionSize = "45GB";
+
+          storageSpec.volumeClaimTemplate.spec = {
+            accessModes = ["ReadWriteOnce"];
+            storageClassName = "longhorn";
+            resources.requests.storage = "50Gi";
+          };
+
+          # Not load-bearing today: the API server already defaults a
+          # StatefulSet to Retain/Retain. Declared because switching from
+          # emptyDir to a volumeClaimTemplate changes an immutable field, and the
+          # operator may have to delete and recreate the StatefulSet to do it.
+          # That is also the restart this change causes.
+          persistentVolumeClaimRetentionPolicy = {
+            whenDeleted = "Retain";
+            whenScaled = "Retain";
+          };
+        };
+
         alertManager = {
           fullNameOverride = "alertmanager";
           enabled = true;
