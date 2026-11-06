@@ -25,6 +25,8 @@
   # Nix binary cache keys are named `<host>-<n>`; the suffix is what lets you
   # rotate by adding a second key while clients still trust the first.
   keyName = "ncps.${domain}-1";
+  uploadAuth = "ncps-upload-auth";
+  uploadUser = "forgejo-runner";
 in {
   flake.nixosModules.noosphere = {pkgs, ...}: {
     clan.core.vars.generators.${fileName} = {
@@ -61,6 +63,54 @@ in {
               type: Opaque
               stringData:
                 signing-key: "$secret_key"
+        EOF
+      '';
+    };
+
+    # Basic auth on ncps' /upload, so only the Forgejo runners can reach the
+    # upload endpoint at all. ncps also rejects an upload not signed by the CI
+    # key; this closes the endpoint itself (uploads of junk, load on it).
+    #   - netrc               (secret) the runners' credential, which nix sends
+    #                         through nix.settings.netrc-file (modules/rites/
+    #                         forgejo-runner.nix).
+    #   - ncps-upload-auth    (non-secret) sops-encrypted SopsSecret with the
+    #                         bcrypt htpasswd line, read by Traefik's basicAuth
+    #                         middleware in the ncps app. Traefik reads the
+    #                         `users` key.
+    clan.core.vars.generators.${uploadAuth} = {
+      share = true;
+
+      files.netrc.secret = true;
+      files.${uploadAuth}.secret = false;
+
+      runtimeInputs = [pkgs.coreutils pkgs.openssl pkgs.apacheHttpd pkgs.sops];
+
+      script = ''
+        set -euo pipefail
+
+        # Hex, so nothing in it needs quoting in a netrc or an htpasswd line.
+        password="$(openssl rand -hex 32)"
+
+        printf 'machine ncps.${domain}\nlogin ${uploadUser}\npassword %s\n' "$password" > "$out/netrc"
+
+        users="$(htpasswd -nbB ${uploadUser} "$password")"
+
+        sops encrypt \
+          --age "${ageKey}" \
+          --encrypted-suffix "Templates" \
+          --input-type yaml --output-type yaml \
+          /dev/stdin > "$out/${uploadAuth}" <<EOF
+        apiVersion: isindir.github.com/v1alpha3
+        kind: SopsSecret
+        metadata:
+          name: ${uploadAuth}
+          namespace: ${namespace}
+        spec:
+          secretTemplates:
+            - name: ${uploadAuth}
+              type: Opaque
+              stringData:
+                users: "$users"
         EOF
       '';
     };

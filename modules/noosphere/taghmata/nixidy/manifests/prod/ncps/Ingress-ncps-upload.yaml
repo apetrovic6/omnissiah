@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: ncps-ncps-upload-auth@kubernetescrd
+  name: ncps-upload
+  namespace: ncps
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ncps.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: ncps
+                port:
+                  number: 8501
+            path: /upload
+            pathType: Prefix
+  tls:
+    - hosts:
+        - ncps.noosphere.uk
+      secretName: ncps-tls

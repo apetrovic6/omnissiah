@@ -60,6 +60,10 @@
   # ncps serves uploads under /upload only; a PUT to the root path is a 405
   # before the signature is even checked.
   ncpsUploadUrl = "https://ncps.noosphere.uk/upload";
+  # Basic auth on /upload. The generator lives with the Traefik side in
+  # noosphere's rke2/kube-secrets/ncps, which every runner host imports. Only
+  # the push hook gets the netrc, not nix as a whole.
+  ncpsUploadAuth = "ncps-upload-auth";
   ciKeyGenerator = "nix-ci-signing-key";
   # `<name>-<n>`: bump the suffix to rotate while the old key is still trusted.
   ciKeyName = "ci.noosphere.uk-1";
@@ -219,6 +223,7 @@ in {
             ${pkgs.coreutils}/bin/timeout 1800 \
               ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
               copy --option connect-timeout 5 \
+              --option netrc-file ${gens.${ncpsUploadAuth}.files.netrc.path} \
               --to '${ncpsUploadUrl}?compression=zstd&parallel-compression=true' $OUT_PATHS \
               || echo "push-to-ncps: upload failed (exit $?), continuing" >&2
           '';

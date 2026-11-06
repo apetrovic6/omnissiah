@@ -12,6 +12,7 @@
   db-cluster-name = "pg-${db-cluster-instance}";
   objectStoreName = "ncps-object-store";
   signingKeySecret = "ncps-signing-key";
+  uploadAuth = "ncps-upload-auth";
 in {
   imports = [
     ../../../_modules/templates/database-template.nix
@@ -24,7 +25,50 @@ in {
 
     yamls = [
       (builtins.readFile ../../../../../../../vars/shared/${signingKeySecret}/${signingKeySecret}/value)
+      # The htpasswd line for /upload; see rke2/kube-secrets/ncps.
+      (builtins.readFile ../../../../../../../vars/shared/${uploadAuth}/${uploadAuth}/value)
     ];
+
+    # Only the Forgejo runners may reach /upload, where ncps takes PUTs. The
+    # chart's Ingress serves everything else unauthenticated, as a cache must.
+    # Traefik routes the longer rule first, so /upload always lands on this
+    # Ingress and its basic auth, never on the chart's `/`.
+    resources.middlewares.${uploadAuth}.spec.basicAuth = {
+      secret = uploadAuth;
+      realm = "ncps upload";
+      # ncps has no use for the credential, so don't pass it on.
+      removeHeader = true;
+    };
+
+    resources.ingresses.ncps-upload = {
+      metadata.annotations."traefik.ingress.kubernetes.io/router.middlewares" = "${namespace}-${uploadAuth}@kubernetescrd";
+      spec = {
+        ingressClassName = "traefik";
+        rules = [
+          {
+            host = "ncps.${domain}";
+            http.paths = [
+              {
+                path = "/upload";
+                pathType = "Prefix";
+                backend.service = {
+                  name = "ncps";
+                  port.number = 8501;
+                };
+              }
+            ];
+          }
+        ];
+        # The chart's Ingress owns the certificate (cert-manager annotation);
+        # this one only reuses the secret.
+        tls = [
+          {
+            secretName = "ncps-tls";
+            hosts = ["ncps.${domain}"];
+          }
+        ];
+      };
+    };
 
     # CNPG backups and WAL archiving for the cluster below. Without this the
     # `barman-cloud.cloudnative-pg.io` plugin has no ObjectStore to write to,
@@ -89,10 +133,11 @@ in {
             # The chart requires the data key to be named `signing-key`.
             existingSecret = signingKeySecret;
 
-            # The signature is the only access control on PUT: the endpoint is
-            # reachable by anyone, so an upload is stored only when its narinfo
-            # is signed by the runners' CI key (the `nix-ci-signing-key` clan
-            # var). Fail-closed: an empty key list rejects every upload.
+            # Second line of defence on PUT, behind the basic auth on /upload
+            # (the `ncps-upload` Ingress below): an upload is stored only when
+            # its narinfo is signed by the runners' CI key (the
+            # `nix-ci-signing-key` clan var). Fail-closed: an empty key list
+            # rejects every upload.
             requireTrustedSignature = true;
             trustedUploadKeys = [
               (lib.removeSuffix "\n" (builtins.readFile ../../../../../../../vars/shared/nix-ci-signing-key/key.pub/value))

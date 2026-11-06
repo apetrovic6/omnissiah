@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ncps-upload-auth
+  namespace: ncps
+spec:
+  basicAuth:
+    realm: ncps upload
+    removeHeader: true
+    secret: ncps-upload-auth
