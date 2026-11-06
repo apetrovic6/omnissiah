@@ -9,9 +9,14 @@
     self.nixosModules.smb
     self.nixosModules.impermanence
     self.nixosModules.forgejo-runner
+    self.nixosModules.sccache
     # self.inputs.impermanence.nixosModules.impermanence
     # self.inputs.magos.nixosModules.default
   ];
+
+  # Host-step cargo builds cache into the `sccache` bucket on garage-main
+  # (modules/rites/sccache.nix); wired into the runner by forgejo-runner.nix.
+  services.imperium.sccache.enable = true;
 
   services.imperium.forgejoRunner = {
     enable = true;

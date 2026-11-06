@@ -10,6 +10,7 @@
     self.nixosModules.impermanence
     self.nixosModules.noosphere
     self.nixosModules.forgejo-runner
+    self.nixosModules.sccache
 
     # self.inputs.impermanence.nixosModules.impermanence
     # self.inputs.magos.nixosModules.default
@@ -17,6 +18,10 @@
 
   # Sets the private key secret for sops secrets operator in the cluster
   noosphere.taghmata.sopsAgeKey.enable = true;
+
+  # Host-step cargo builds cache into the `sccache` bucket on garage-main
+  # (modules/rites/sccache.nix); wired into the runner by forgejo-runner.nix.
+  services.imperium.sccache.enable = true;
 
   services.imperium.forgejoRunner = {
     enable = true;

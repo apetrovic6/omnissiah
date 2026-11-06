@@ -14,6 +14,7 @@
   }: {
     imports = [
       self.nixosModules.flatpak
+      self.nixosModules.sccache
       self.inputs.magos.nixosModules.desktop
       self.inputs.magos.nixosModules.pi
       self.inputs.magos.nixosModules.omp
@@ -79,6 +80,20 @@
     systemd.user.services.niri.serviceConfig.CPUWeight = 100;
 
     services.imperium.flatpak.enable = true;
+
+    # ── sccache: shared compile cache on garage-main ────────────────────
+    # The NixOS side is just the plumbing: the clan var generator (which is
+    # what deploys the credentials file to this machine), the file's owner
+    # override -- root on the runner hosts, the user here, whose sccache
+    # server opens it directly -- and the sccache binary on the system path,
+    # so `sccache --show-stats` works in any shell, including root's.
+    # The user-facing environment (RUSTC_WRAPPER and friends) belongs to
+    # home-manager: it is per-user session state, and putting it in
+    # environment.sessionVariables would leak it to every service and root
+    # shell on the box, which cannot read the user-owned credentials anyway.
+    # See users/apetrovic/home-configuration.nix.
+    services.imperium.sccache.enable = true;
+    clan.core.vars.generators.sccache-garage-key.files.credentials.owner = "apetrovic";
 
     services.imperium.virtualisation.podman = {
       enable = true;
@@ -225,6 +240,11 @@
         "com.jetbrains.kmm"
       ];
     in [
+      # bare sccache client for `sccache --show-stats` in any shell; the
+      # RUSTC_WRAPPER cargo uses is the home-manager wrapper (users/apetrovic/
+      # home-configuration.nix), which carries the Garage credentials.
+      sccache
+
       thunar
       zathura
       file-roller

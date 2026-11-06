@@ -80,6 +80,7 @@ in {
   }: let
     inherit (lib) mkIf mkMerge mkOption mkEnableOption types genAttrs listToAttrs nameValuePair;
     cfg = config.services.imperium.forgejoRunner;
+    scfg = config.services.imperium.sccache;
     hostName = config.networking.hostName;
     gens = config.clan.core.vars.generators;
     fcfg = config.services.forgejo;
@@ -358,6 +359,58 @@ in {
         # `e`: clean an existing directory without creating or owning it.
         # Whatever a job left behind goes after a day.
         systemd.tmpfiles.rules = ["e ${stateDir}/tmp - - - 1d"];
+      })
+
+      # sccache: the shared compilation cache in the `sccache` bucket on
+      # garage-main, for the host steps that run cargo outside the Nix sandbox
+      # (Nix builds are ncps' job). Generator and values: modules/rites/sccache.nix.
+      #
+      # Credentials: the DynamicUser cannot own files, and /run/secrets is
+      # root-only, so the var file travels through systemd LoadCredential and
+      # the job steps read it at $CREDENTIALS_DIRECTORY/sccache-credentials.
+      # The path is handed to jobs as a plain unit-level Environment=, NOT
+      # through settings.runner.envs: the runner writes those into job env
+      # verbatim, and "$CREDENTIALS_DIRECTORY/..." would arrive unexpanded.
+      # Unit-level Environment= reaches the steps because act merges the
+      # daemon's own environment into every job (act/runner/run_context.go,
+      # the os.Environ() loop, "don't override").
+      (mkIf (cfg.enable && (config.services.imperium.sccache.enable or false)) {
+        services.forgejo-runner.instances.${hostName} = {
+          hostPackages = [pkgs.sccache];
+          settings.runner.envs = {
+            RUSTC_WRAPPER = "sccache";
+            SCCACHE_BUCKET = scfg.bucket;
+            SCCACHE_ENDPOINT = scfg.endpoint;
+            SCCACHE_REGION = scfg.region;
+            # A job that cannot reach Garage (a runner away from the LAN, an
+            # outage) must still compile -- uncached, not red.
+            SCCACHE_IGNORE_SERVER_IO_ERROR = "1";
+            # The SAME absolute path on every runner. sccache 0.19 hashes
+            # rustc's arguments (which spell the registry-source paths under
+            # CARGO_HOME), its cwd and every CARGO_* env var verbatim --
+            # SCCACHE_BASEDIRS exists in 0.19 but is wired only into the
+            # C-family key, rust.rs never reads it -- so identical paths are
+            # the only sharing lever there is. The extra StateDirectory below
+            # shows up as /var/lib/forgejo-runner-cargo inside every unit's
+            # namespace (on disk it is /var/lib/private/forgejo-runner-cargo,
+            # per host), which is what makes the value host-independent.
+            CARGO_HOME = "/var/lib/forgejo-runner-cargo";
+          };
+        };
+        systemd.services."forgejo-runner-${hostName}" = {
+          environment.AWS_SHARED_CREDENTIALS_FILE =
+            "/run/credentials/forgejo-runner-${hostName}.service/sccache-credentials";
+          serviceConfig = {
+            LoadCredential = [
+              "sccache-credentials:${gens.sccache-garage-key.files.credentials.path}"
+            ];
+            StateDirectory = ["forgejo-runner-cargo"];
+            # Same reason the nixpkgs module lists the state dir here: under
+            # DynamicUser the id-mapped mounts are noexec, and CARGO_HOME/bin
+            # tools a job cargo-installs have to run.
+            ExecPaths = ["/var/lib/forgejo-runner-cargo"];
+          };
+        };
       })
 
       # `forgejo` as an admin, with the service's own environment -- what the

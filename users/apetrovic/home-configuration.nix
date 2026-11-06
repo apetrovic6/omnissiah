@@ -11,6 +11,23 @@
 
   atticSubstituter =
     osConfig.clan.core.vars.generators.attic-pull-token.files.attic-substituter.path;
+
+  # sccache on garage-main. The NixOS half (generator, credentials owner,
+  # system package) is in stc/workstation.nix; the values live in
+  # modules/rites/sccache.nix and are read through osConfig so the machines
+  # and the bucket cannot drift apart.
+  sccacheCfg = osConfig.services.imperium.sccache;
+  sccacheCredentials =
+    osConfig.clan.core.vars.generators.sccache-garage-key.files.credentials.path;
+
+  # RUSTC_WRAPPER points at this, not at bare sccache: it is what carries the
+  # credentials file, and it carries it ONLY into sccache's own process tree.
+  # A global AWS_SHARED_CREDENTIALS_FILE would redirect the aws CLI and every
+  # AWS SDK tool in the session to a key that can see exactly one bucket.
+  sccacheGarage = pkgs.writeShellScriptBin "sccache-garage" ''
+    export AWS_SHARED_CREDENTIALS_FILE='${sccacheCredentials}'
+    exec ${pkgs.sccache}/bin/sccache "$@"
+  '';
 in {
   imports = [
     # self.inputs.magos.homeManagerModules.default
@@ -260,6 +277,37 @@ in {
         identitiesOnly = true;
       };
     };
+  };
+
+  # ── sccache: shared compile cache in the `sccache` bucket on garage-main ──
+  #
+  # Here rather than in environment.sessionVariables (stc/workstation.nix):
+  # this is user environment. Session variables in the NixOS module leak to
+  # every user, every service and every root shell -- which cannot even read
+  # the 0400 user-owned credentials file -- while home.sessionVariables is
+  # scoped to apetrovic's sessions, which is exactly where cargo runs
+  # (terminals, devenv shells, and the agent worktrees inherit them too).
+  #
+  # The endpoint is the LAN/VPN VIP only (no Pangolin route, by decision), and
+  # SCCACHE_IGNORE_SERVER_IO_ERROR=1 is what keeps a build away from home, or
+  # during a Garage outage, working -- uncached instead of failed.
+  home.packages = [
+    pkgs.sccache # bare client: `sccache --show-stats`, `sccache --zero-stats`
+    sccacheGarage
+  ];
+
+  home.sessionVariables = {
+    RUSTC_WRAPPER = "${sccacheGarage}/bin/sccache-garage";
+    SCCACHE_BUCKET = sccacheCfg.bucket;
+    SCCACHE_ENDPOINT = sccacheCfg.endpoint;
+    SCCACHE_REGION = sccacheCfg.region;
+    SCCACHE_IGNORE_SERVER_IO_ERROR = "1";
+    # sccache 0.19 strips basedirs from C-family cache keys only (rust.rs
+    # never reads them; Rust keys hash cwd, argument paths and CARGO_* env
+    # verbatim), so this helps build-script cc compilations (ring, aws-lc-sys,
+    # zstd-sys, ...) hit across worktrees under ~/programming, and does
+    # nothing for -- and nothing to, Rust.
+    SCCACHE_BASEDIRS = "/home/apetrovic/programming";
   };
 
   home.file = {
