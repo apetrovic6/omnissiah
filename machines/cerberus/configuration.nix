@@ -21,6 +21,7 @@ in {
     ./davical.nix
     ./forgejo-runner.nix
     ./monitoring.nix
+    ./heartbeat.nix
     ./ntfy.nix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.nixosModules.noosphere
