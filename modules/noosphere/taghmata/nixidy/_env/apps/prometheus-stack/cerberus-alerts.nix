@@ -11,7 +11,8 @@
   #
   # cerberus has one disk and one data partition (machines/cerberus/disko.nix:
   # a 500M vfat ESP at /boot and a 100%-of-remainder ext4 at /), so today this
-  # matches exactly one mountpoint: /. /var/lib is NOT a separate mount, so the
+  # matches exactly one mountpoint: / (the other ext4 the exporter reports is the
+  # read-only bind at /nix/store, excluded below). /var/lib is NOT a separate mount, so the
   # "same rule for /var/lib" question in the brief has no separate mount to apply
   # to — /var/lib is inside /, which is also why the 2026-11-06 98% event was a
   # root-disk event.
@@ -25,8 +26,32 @@
   #   - tmpfs/ramfs (node_exporter 1.12.1 does NOT exclude tmpfs by default, so
   #     they are scraped; they are not capacity),
   #   - NFS/SMB (excluded from the collector entirely in machines/cerberus/
-  #     monitoring.nix).
-  localFs = ''fstype=~"ext4|btrfs|xfs"'';
+  #     monitoring.nix),
+  #   - /nix/store, which on this host is not a second filesystem but a read-only
+  #     bind of the same one (`findmnt /nix/store` ->
+  #     `/dev/vda3[/nix/store] ext4 ro,nosuid,nodev`). node_exporter reports it as
+  #     its own mountpoint with the same device and the same numbers, so without
+  #     this exclusion one full-disk event fires CerberusFilesystemHighUsage and
+  #     CerberusFilesystemAlmostFull twice -- two ntfy messages, each carrying a
+  #     duplicated line, for one physical disk. Measured 2026-11-07 with promtool
+  #     3.15.1 against the deployed rule file: the duplicated series produced 2
+  #     HighUsage alerts (`/` and `/nix/store`); with this filter, exactly one, on
+  #     `/`.
+  #
+  # Why name the mountpoint instead of reusing the `readonly == 0` guard, which on
+  # today's layout would drop /nix/store just as well: a readonly guard silences
+  # these alerts precisely when they matter most. ext4 remounts read-only on errors
+  # (the ESP here is even configured `errors=remount-ro`), and a root filesystem
+  # that has just done that is exactly the state in which you want to be told its
+  # free space -- the ratio may be frozen, but the reason it froze is the alert. A
+  # mountpoint exclusion states the actual problem, "this is the second view of the
+  # same disk", and leaves / judged whatever its ro/rw state happens to be. The
+  # filling rule keeps its own readonly guard for its own reason: a flat avail has
+  # slope 0, so the predictor would be describing a disk that cannot fill at all.
+  #
+  # If /nix/store ever becomes a real second filesystem (its own partition or disk),
+  # this exclusion has to go with it -- `findmnt /nix/store` says which case it is.
+  localFs = ''fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"'';
 
   # Warnings that carry this label are routed to the phone by the second
   # severity=warning route in default.nix. It is the general mechanism, not a

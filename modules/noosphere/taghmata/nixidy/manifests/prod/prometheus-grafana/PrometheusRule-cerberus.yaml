@@ -33,9 +33,9 @@ spec:
             summary: cerberus filesystem {{ $labels.mountpoint }} is over 85% full
           expr: |
             1 - (
-              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"}
               /
-              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"}
             ) > 0.85
           for: 15m
           labels:
@@ -47,9 +47,9 @@ spec:
             summary: cerberus filesystem {{ $labels.mountpoint }} is over 95% full
           expr: |
             1 - (
-              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"}
               /
-              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"}
             ) > 0.95
           for: 10m
           labels:
@@ -60,17 +60,17 @@ spec:
             summary: cerberus filesystem {{ $labels.mountpoint }} is predicted to fill within 24 hours
           expr: |
             (
-              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"}
               /
-              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"} < 0.20
+              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"} < 0.20
             )
             and
             (
-              predict_linear(node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}[6h], 24*60*60) < 0
+              predict_linear(node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"}[6h], 24*60*60) < 0
             )
             and
             (
-              node_filesystem_readonly{job="cerberus-node",fstype=~"ext4|btrfs|xfs"} == 0
+              node_filesystem_readonly{job="cerberus-node",fstype=~"ext4|btrfs|xfs",mountpoint!="/nix/store"} == 0
             )
           for: 30m
           labels:
