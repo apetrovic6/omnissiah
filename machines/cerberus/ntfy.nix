@@ -23,18 +23,16 @@
 # drops to its dynamic user, so the credentials stay in the sops secret store and
 # never enter the nix store or a manifest.
 {
-  self,
   config,
   ...
 }: let
   access = config.clan.core.vars.generators."ntfy-access";
 in {
-  imports = [self.nixosModules.vox];
-
   services.imperium.ntfy-sh = {
     enable = true;
 
-    # The vox module renders https://ntfy.<domain> from this subdomain
+    # The imperium ntfy-sh module (modules/noosphere/vox/ntfy.nix) renders
+    # https://ntfy.<domain> from this subdomain
     # (base-url + a Caddy virtual host on {$LAB_DOMAIN}), and points ntfy at
     # :<port>. openFirewall stays false: only Caddy (local) talks to ntfy.
     subdomain = "ntfy";
@@ -102,7 +100,7 @@ in {
   # and subscribes to homelab-alerts.
   #
   # Push reachability is worth being clear about: `upstream-base-url = ntfy.sh` comes
-  # from the vox module, which is what lets iOS wake up through UnifiedPush -- but
+  # from the imperium ntfy-sh module, which is what lets iOS wake up through UnifiedPush -- but
   # UnifiedPush only *wakes* the phone; the app then fetches the message from this
   # server. So the phone must be able to reach ntfy.ugalabugala.org, and from outside
   # the lab that means through Pangolin. No new connector resource is needed for it:
