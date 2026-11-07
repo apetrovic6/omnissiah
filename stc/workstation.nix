@@ -85,8 +85,10 @@
     # The NixOS side is just the plumbing: the clan var generator (which is
     # what deploys the credentials file to this machine), the file's owner
     # override -- root on the runner hosts, the user here, whose sccache
-    # server opens it directly -- and the sccache binary on the system path,
-    # so `sccache --show-stats` works in any shell, including root's.
+    # server opens it directly -- and the wrapper (modules/rites/sccache.nix)
+    # as `sccache` on the system path, so `sccache --show-stats` works in
+    # any shell, including root's, and cannot start a credential-less
+    # server.
     # The user-facing environment (RUSTC_WRAPPER and friends) belongs to
     # home-manager: it is per-user session state, and putting it in
     # environment.sessionVariables would leak it to every service and root
@@ -240,10 +242,16 @@
         "com.jetbrains.kmm"
       ];
     in [
-      # bare sccache client for `sccache --show-stats` in any shell; the
-      # RUSTC_WRAPPER cargo uses is the home-manager wrapper (users/apetrovic/
-      # home-configuration.nix), which carries the Garage credentials.
-      sccache
+      # The sccache wrapper (modules/rites/sccache.nix) under the name
+      # `sccache`, NOT the bare binary: a plain `sccache --show-stats` in a
+      # fresh shell autostarts the daemon on 127.0.0.1:4226, and a bare
+      # binary would start it WITHOUT the Garage credentials (or worse,
+      # with the ambient AWS_* of the omnissiah .envrc, which reqsign's env
+      # provider prefers) -- and that server then serves every later client,
+      # cargo included, until its idle timeout. The wrapper defaults
+      # AWS_SHARED_CREDENTIALS_FILE to the deployed var file, so every
+      # invocation is credentialed.
+      config.services.imperium.sccache.wrapper
 
       thunar
       zathura

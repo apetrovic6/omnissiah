@@ -13,21 +13,17 @@
     osConfig.clan.core.vars.generators.attic-pull-token.files.attic-substituter.path;
 
   # sccache on garage-main. The NixOS half (generator, credentials owner,
-  # system package) is in stc/workstation.nix; the values live in
-  # modules/rites/sccache.nix and are read through osConfig so the machines
-  # and the bucket cannot drift apart.
+  # wrapper on the system path) is in modules/rites/sccache.nix and
+  # stc/workstation.nix; the values are read through osConfig so the
+  # machines and the bucket cannot drift apart. The wrapper scrubs what
+  # used to need a separate sccache-garage script here: it unsets
+  # CARGO_INSTALL_ROOT (devenv exports it per checkout, and sccache 0.19
+  # hashes it into every cache key) and the ambient AWS_* variables that
+  # reqsign's env provider would otherwise prefer over the credentials
+  # file, and it defaults AWS_SHARED_CREDENTIALS_FILE to this machine's
+  # deployed var file -- scoped to sccache's own process tree, so the aws
+  # CLI and other AWS SDK tools in the session keep their own credentials.
   sccacheCfg = osConfig.services.imperium.sccache;
-  sccacheCredentials =
-    osConfig.clan.core.vars.generators.sccache-garage-key.files.credentials.path;
-
-  # RUSTC_WRAPPER points at this, not at bare sccache: it is what carries the
-  # credentials file, and it carries it ONLY into sccache's own process tree.
-  # A global AWS_SHARED_CREDENTIALS_FILE would redirect the aws CLI and every
-  # AWS SDK tool in the session to a key that can see exactly one bucket.
-  sccacheGarage = pkgs.writeShellScriptBin "sccache-garage" ''
-    export AWS_SHARED_CREDENTIALS_FILE='${sccacheCredentials}'
-    exec ${pkgs.sccache}/bin/sccache "$@"
-  '';
 in {
   imports = [
     # self.inputs.magos.homeManagerModules.default
@@ -292,12 +288,17 @@ in {
   # SCCACHE_IGNORE_SERVER_IO_ERROR=1 is what keeps a build away from home, or
   # during a Garage outage, working -- uncached instead of failed.
   home.packages = [
-    pkgs.sccache # bare client: `sccache --show-stats`, `sccache --zero-stats`
-    sccacheGarage
+    # The wrapper under the name `sccache`, replacing the old bare client +
+    # sccache-garage pair: a bare `sccache --show-stats` in a fresh shell
+    # autostarts the daemon on 127.0.0.1:4226, and without credentials (or
+    # with the omnissiah .envrc's AWS_*) that server then serves every
+    # later client -- cargo included -- until its idle timeout. There must
+    # be no plain invocation that can start it.
+    sccacheCfg.wrapper
   ];
 
   home.sessionVariables = {
-    RUSTC_WRAPPER = "${sccacheGarage}/bin/sccache-garage";
+    RUSTC_WRAPPER = "${sccacheCfg.wrapper}/bin/sccache";
     SCCACHE_BUCKET = sccacheCfg.bucket;
     SCCACHE_ENDPOINT = sccacheCfg.endpoint;
     SCCACHE_REGION = sccacheCfg.region;

@@ -75,6 +75,75 @@ in {
         readOnly = true;
         description = "S3 region; garage-main's s3Api.region.";
       };
+
+      # The only `sccache` binary consumers should ever invoke: a wrapper
+      # around pkgs.sccache that scrubs the two classes of environment
+      # pollution that break the shared cache (per-checkout CARGO_* in every
+      # cache key; ambient AWS_* beating the credentials file). Defined once
+      # here so the runners (forgejo-runner.nix) and the workstations
+      # (stc/workstation.nix, users/apetrovic/home-configuration.nix) cannot
+      # drift apart, and shipped under the name `sccache` so that no plain
+      # invocation on any PATH can bypass it.
+      wrapper = lib.mkOption {
+        type = lib.types.package;
+        readOnly = true;
+        default = pkgs.writeShellScriptBin "sccache" ''
+          # 1. Cache keys. sccache 0.19 hashes EVERY CARGO_* env var of the
+          #    client process verbatim into the Rust key (compiler/rust.rs;
+          #    the client snapshots its own environment in cmdline.rs and
+          #    sends it with the compile request -- the wrapper IS the client
+          #    process, so unsetting here really removes it from the key).
+          #    devenv's languages.rust exports
+          #    CARGO_INSTALL_ROOT=<project>/.devenv/state/cargo-install, and
+          #    CI jobs run `devenv shell` in per-job act work dirs, so
+          #    without this unset every key carries the checkout path and
+          #    nothing is shared between worktrees or jobs. rustc never reads
+          #    CARGO_INSTALL_ROOT -- it only steers where `cargo install`
+          #    puts binaries, which happens in the shell, not through the
+          #    wrapper -- so dropping it on the rustc side is safe.
+          unset CARGO_INSTALL_ROOT
+
+          # 2. Credential chain. reqsign's default AWS chain (via opendal)
+          #    is env -> profile -> sso -> web-identity -> process -> ecs ->
+          #    imds: AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in the ambient
+          #    environment (e.g. the tofunix S3 key from the omnissiah
+          #    .envrc) BEAT the AWS_SHARED_CREDENTIALS_FILE profile the
+          #    server is supposed to use, and server startup then fails
+          #    ("refreshed signing credential expires before the requested
+          #    operation deadline"). That failure is NOT covered by
+          #    SCCACHE_IGNORE_SERVER_IO_ERROR -- it only downgrades IO errors
+          #    while talking to an already-running server -- so every cargo
+          #    build fails hard, and a server that does come up with the
+          #    wrong env keeps serving every later client on
+          #    127.0.0.1:4226 until its idle timeout. AWS_PROFILE goes too:
+          #    the credentials file has only [default], and a foreign profile
+          #    would send the profile provider looking for a section that
+          #    does not exist, falling through the rest of the chain.
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE
+
+          # 3. Credentials. Keep an AWS_SHARED_CREDENTIALS_FILE that is
+          #    already set (the runners hand it to the unit through systemd
+          #    LoadCredential + Environment=; the wrapper never unsets it);
+          #    otherwise fall back to this machine's deployed clan var file
+          #    (the workstations: user-owned there, and the sccache server
+          #    opens it directly). Scoped to sccache's own process tree -- a
+          #    session-wide export would redirect the aws CLI and every AWS
+          #    SDK tool to a key that can see exactly one bucket.
+          export AWS_SHARED_CREDENTIALS_FILE="''${AWS_SHARED_CREDENTIALS_FILE:-${config.clan.core.vars.generators.${generatorName}.files.${credentialsFile}.path}}"
+
+          exec ${pkgs.sccache}/bin/sccache "$@"
+        '';
+        defaultText = lib.literalExpression ''
+          writeShellScriptBin "sccache" -- unsets CARGO_INSTALL_ROOT and the
+          ambient AWS_* credential vars, defaults AWS_SHARED_CREDENTIALS_FILE
+          to the machine's clan var file, execs pkgs.sccache
+        '';
+        description = ''
+          Credentialed, cache-key-scrubbing sccache wrapper. Use this
+          everywhere instead of the bare binary: as RUSTC_WRAPPER and as the
+          `sccache` on PATH.
+        '';
+      };
     };
 
     config = lib.mkIf cfg.enable {

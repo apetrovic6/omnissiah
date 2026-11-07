@@ -376,9 +376,16 @@ in {
       # the os.Environ() loop, "don't override").
       (mkIf (cfg.enable && (config.services.imperium.sccache.enable or false)) {
         services.forgejo-runner.instances.${hostName} = {
-          hostPackages = [pkgs.sccache];
+          # The wrapper, not bare sccache (modules/rites/sccache.nix): it
+          # unsets CARGO_INSTALL_ROOT -- the job's `devenv shell` sets it to
+          # <act work dir>/.devenv/state/cargo-install, a per-job path that
+          # sccache 0.19 hashes into every cache key, which is what stopped
+          # jobs from sharing even registry deps -- and the ambient AWS_*
+          # variables that reqsign's env provider would otherwise prefer
+          # over the unit's AWS_SHARED_CREDENTIALS_FILE.
+          hostPackages = [scfg.wrapper];
           settings.runner.envs = {
-            RUSTC_WRAPPER = "sccache";
+            RUSTC_WRAPPER = "${scfg.wrapper}/bin/sccache";
             SCCACHE_BUCKET = scfg.bucket;
             SCCACHE_ENDPOINT = scfg.endpoint;
             SCCACHE_REGION = scfg.region;
@@ -398,6 +405,10 @@ in {
           };
         };
         systemd.services."forgejo-runner-${hostName}" = {
+          # The wrapper only DEFAULTS AWS_SHARED_CREDENTIALS_FILE when unset
+          # (`:-`) and never touches it otherwise, so this unit-level value
+          # -- unreadable /run/secrets path swapped for the LoadCredential
+          # mount -- is what the job's sccache server ends up using.
           environment.AWS_SHARED_CREDENTIALS_FILE =
             "/run/credentials/forgejo-runner-${hostName}.service/sccache-credentials";
           serviceConfig = {
