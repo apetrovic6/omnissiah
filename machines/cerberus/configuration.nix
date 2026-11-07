@@ -20,6 +20,7 @@ in {
     ./memos.nix
     ./davical.nix
     ./forgejo-runner.nix
+    ./monitoring.nix
     ./ntfy.nix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.nixosModules.noosphere
