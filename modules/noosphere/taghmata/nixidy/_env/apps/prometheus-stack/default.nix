@@ -88,6 +88,9 @@
     {{- if .Labels.garage_cluster }}
       garage cluster: {{ .Labels.garage_cluster }}
     {{- end }}
+    {{- if .Labels.host }}
+      host: {{ .Labels.host }}
+    {{- end }}
     {{- if .Labels.namespace }}
       namespace: {{ .Labels.namespace }}
     {{- end }}
@@ -303,6 +306,35 @@ in {
                     ''severity = "warning"''
                     ''garage_cluster != ""''
                   ];
+                  group_wait = "30s";
+                  repeat_interval = "12h";
+                }
+                {
+                  # The general version of the rule above, and the reason the Garage
+                  # route can stay exactly as it is: a warning pages when the rule that
+                  # produced it says so, instead of when it happens to carry a label
+                  # that belongs to a different subsystem. `notify: phone` is stamped by
+                  # the cerberus rules in ./cerberus-alerts.nix (their pageLabels).
+                  #
+                  # Nothing else in this cluster carries the label today, so a warning
+                  # that is neither Garage nor cerberus (KubeletPlegDurationHigh,
+                  # TargetDown on a cluster job, KubeVersionMismatch, ...) still falls
+                  # out of `routes` to the parent receiver, which is "null" — the
+                  # behaviour that keeps 97 cluster warnings off the phone is unchanged.
+                  #
+                  # group_by is deliberately narrower than the inherited [namespace]:
+                  # every cerberus series has namespace="" (it is not a pod), so with
+                  # the inherited grouping all of cerberus' warnings would land in one
+                  # group whose title renders empty and whose re-notification timer is
+                  # shared. Grouping by alertname gives each rule its own group, which
+                  # is also what makes the ntfy `title` (rendered from
+                  # .CommonLabels.alertname) mean something.
+                  receiver = "ntfy-warning";
+                  matchers = [
+                    ''severity = "warning"''
+                    ''notify = "phone"''
+                  ];
+                  group_by = ["alertname"];
                   group_wait = "30s";
                   repeat_interval = "12h";
                 }

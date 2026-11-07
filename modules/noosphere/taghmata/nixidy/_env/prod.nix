@@ -18,6 +18,10 @@ in {
     ./apps/woodpecker-ci
     ./apps/prometheus-stack
     ./apps/prometheus-stack/garage-alerts.nix
+    # cerberus is a host, not a cluster workload: its scrape config and its rules
+    # live next to the stack's, for the same reason garage-alerts.nix does.
+    ./apps/prometheus-stack/cerberus-scrape.nix
+    ./apps/prometheus-stack/cerberus-alerts.nix
     ./apps/yarr/seerr
     ./apps/csi-driver-nfs
     ./apps/excalidraw

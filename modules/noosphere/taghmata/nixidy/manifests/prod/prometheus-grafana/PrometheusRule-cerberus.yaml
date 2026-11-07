@@ -1,0 +1,101 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: cerberus
+  namespace: observability
+spec:
+  groups:
+    - name: cerberus.availability
+      rules:
+        - alert: CerberusTargetDown
+          annotations:
+            description: The scrape of 192.168.1.105:9100 has failed for over 3 minutes. Either the host is down, prometheus-node-exporter.service is not running, or the four node-IP firewall rules no longer match the node the Prometheus pod is on. When cerberus is down the LAN has no DNS (Technitium runs here) and Forgejo, ntfy, immich, Plex and Postgres go with it.
+            summary: cerberus is not answering its metrics scrape
+          expr: up{job="cerberus-node"} == 0
+          for: 3m
+          labels:
+            severity: critical
+        - alert: CerberusTargetAbsent
+          annotations:
+            description: 'No target for job=cerberus-node exists in the Prometheus configuration for over 3 minutes. The target is not failing — it is missing: check the ScrapeConfig cerberus-node in observability, its release label, and the Targets page.'
+            summary: cerberus is not being scraped at all
+          expr: absent(up{job="cerberus-node"})
+          for: 3m
+          labels:
+            severity: critical
+    - name: cerberus.storage
+      rules:
+        - alert: CerberusFilesystemHighUsage
+          annotations:
+            description: 'Used has been above 85% for over 15 minutes ({{ $value | humanizePercentage }} used on {{ $labels.mountpoint }}, device {{ $labels.device }}). This is the level where a single runaway writer stops being survivable: the 2026-11-06 event reached 98% on a 125 GiB root because of one stale 50 GiB container volume, and nothing was watching. First suspects: nix store/gc margins (min-free=20GiB in configuration.nix), runner workspaces, /var/lib container volumes.'
+            summary: cerberus filesystem {{ $labels.mountpoint }} is over 85% full
+          expr: |
+            1 - (
+              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+              /
+              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+            ) > 0.85
+          for: 15m
+          labels:
+            notify: phone
+            severity: warning
+        - alert: CerberusFilesystemAlmostFull
+          annotations:
+            description: Used has been above 95% for over 10 minutes ({{ $value | humanizePercentage }}). At this level Postgres, Forgejo and the nix daemon start failing writes, and a CI job failing 'mysteriously' is usually the first visible symptom — that was the only signal during the 2026-11-06 event.
+            summary: cerberus filesystem {{ $labels.mountpoint }} is over 95% full
+          expr: |
+            1 - (
+              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+              /
+              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+            ) > 0.95
+          for: 10m
+          labels:
+            severity: critical
+        - alert: CerberusFilesystemSpaceFillingUp
+          annotations:
+            description: 'predict_linear over 6h projects node_filesystem_avail_bytes on {{ $labels.mountpoint }} crossing zero within the next 24 hours while available is already under 20% (available now: {{ $value | humanizePercentage }} of the filesystem). Find the writer before it fills: nix store growth against min-free/max-free, runner job workspaces, container volumes, journal growth.'
+            summary: cerberus filesystem {{ $labels.mountpoint }} is predicted to fill within 24 hours
+          expr: |
+            (
+              node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}
+              /
+              node_filesystem_size_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"} < 0.20
+            )
+            and
+            (
+              predict_linear(node_filesystem_avail_bytes{job="cerberus-node",fstype=~"ext4|btrfs|xfs"}[6h], 24*60*60) < 0
+            )
+            and
+            (
+              node_filesystem_readonly{job="cerberus-node",fstype=~"ext4|btrfs|xfs"} == 0
+            )
+          for: 30m
+          labels:
+            notify: phone
+            severity: warning
+    - name: cerberus.system
+      rules:
+        - alert: CerberusSystemdUnitFailed
+          annotations:
+            description: node_systemd_unit_state{name={{ $labels.name }},state=failed} has been 1 for over 5 minutes (unit type {{ $labels.type }}). Failed units persist until `systemctl reset-failed`, so check the unit and then reset it. Mount units are deliberately included (Forgejo stateDir and immich media live on /mnt/nas); .automount/.device/.scope/.slice units are excluded by the exporter's unit filter.
+            summary: systemd unit {{ $labels.name }} is failed on cerberus
+          expr: node_systemd_unit_state{job="cerberus-node",state="failed"} == 1
+          for: 5m
+          labels:
+            notify: phone
+            severity: warning
+        - alert: CerberusMemoryPressure
+          annotations:
+            description: node_memory_MemAvailable_bytes has been under 10% of node_memory_MemTotal_bytes for over 15 minutes ({{ $value | humanizePercentage }} available). Sustained pressure here means the OOM killer is next, and on this host that means Postgres or Forgejo. Check immich's ML worker, Plex transcodes, HA and the runner's builds.
+            summary: cerberus has been low on available memory for 15 minutes
+          expr: |
+            node_memory_MemAvailable_bytes{job="cerberus-node"}
+            /
+            node_memory_MemTotal_bytes{job="cerberus-node"} < 0.10
+          for: 15m
+          labels:
+            notify: phone
+            severity: warning
