@@ -1,8 +1,3 @@
-# PARKED (2026-11-06): the `_` prefix keeps import-tree from loading this, so
-# deploys stop prompting for a URL nobody has yet. To enable the heartbeat: create
-# the external check, rename this directory back to `alertmanager`, then run the
-# generate command below.
-#
 # Dead man's switch for the alerting pipeline: the URL of the external heartbeat.
 #
 # `Watchdog` is `expr: vector(1)` -- it fires on every evaluation, by design. That
@@ -50,7 +45,7 @@ in {
       files.${secretName}.secret = false;
 
       prompts.url = {
-        description = "Ping URL of the external dead man's switch (the full https://.../ping/<uuid> URL of a healthchecks.io-style check that expects a hit every ~5 minutes and alerts when it stops)";
+        description = "Ping URL of the external dead man's switch (the full https://hc-ping.com/<uuid> URL of the healthchecks.io check, period 1 minute, grace 5 minutes)";
         type = "hidden";
         persist = true;
       };

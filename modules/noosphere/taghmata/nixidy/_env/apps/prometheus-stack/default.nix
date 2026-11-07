@@ -24,7 +24,7 @@
 
   # Clan var outputs that exist only once the vars have been generated:
   #   vars/shared/ntfy-access/alertmanager-ntfy/value            (kube-secrets/ntfy)
-  #   vars/shared/alertmanager-heartbeat/alertmanager-heartbeat/value (kube-secrets/_alertmanager, parked)
+  #   vars/shared/alertmanager-heartbeat/alertmanager-heartbeat/value (kube-secrets/alertmanager)
   # Read them when present, render without them when absent, so the flake evaluates
   # either way and an unconfigured receiver can never reference a file that is not
   # mounted (Alertmanager rejects the whole config file for one unreadable path,
@@ -264,18 +264,21 @@ in {
                   # the one thing that notices, because the check lives outside the
                   # pipeline it is watching.
                   #
-                  # repeat_interval must stay clearly below what the external check
-                  # considers late: pinging every 5m against a check that alerts after
-                  # ~15m of silence gives three misses before anyone is told, and it is
-                  # Alertmanager's own group cadence that has to be tight -- the check
-                  # cannot see a slow Alertmanager, only a silent one.
+                  # The healthchecks.io check expects a ping every 1m and alerts
+                  # after 5m of grace, so Alertmanager re-sends Watchdog every
+                  # minute: a notification goes out when both group_interval and
+                  # repeat_interval have elapsed, hence both at 1m. Five missed
+                  # pings before anyone is told.
+                  #
+                  # No send_resolved here: that is a receiver field (set below),
+                  # and an unknown field in a route makes Alertmanager reject the
+                  # whole config.
                   receiver = "heartbeat";
                   matchers = [''alertname = "Watchdog"''];
                   group_by = ["alertname"];
                   group_wait = "0s";
                   group_interval = "1m";
-                  repeat_interval = "5m";
-                  send_resolved = false;
+                  repeat_interval = "1m";
                 }
               ]
               ++ lib.optionals ntfyReady [
