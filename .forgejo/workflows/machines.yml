@@ -1,0 +1,287 @@
+# Every third day: update the flake's inputs, commit the new flake.lock, then
+# build every machine in `checks` (flake.nix perSystem.checks) so the results
+# land in the ncps binary cache (taghmata nixidy apps/ncps) before the machines
+# pull them at their own next deploy.
+#
+# Jobs run on the NixOS host runners (`nix:host`, modules/rites/forgejo-runner.nix)
+# so they build against the host's /nix/store. Those runners' nix-daemon already
+# signs every build with the `nix-ci-signing-key` clan var and PUTs it to
+# https://ncps.noosphere.uk/upload from its post-build-hook, so a plain
+# `nix build` is what fills the cache. The last step proves the toplevel actually
+# reached ncps and fails the job if the hook's push died silently; the explicit
+# `nix copy` there is the fallback for a runner without the hook, and it needs
+# NCPS_NETRC + NCPS_SIGNING_KEY as Actions secrets (see that step).
+#
+# Runner hosts substitute from ncps themselves (stc/base.nix): a warm cache
+# turns these builds into downloads, a cold one (every fresh flake.lock) is real
+# compilation on 2-core/4-GiB runners.
+#
+# Replaces the flake-update half of .woodpecker/update.yaml: keep only one of
+# the two, or their crons will race each other to push flake.lock.
+
+name: Machines
+
+on:
+  # `*/3` counts days from the start of the month, so the gap is 3 days except
+  # across a month boundary, where it is shorter. A build slot nobody wants.
+  # 04:00 keeps out of the way of the 02:00 CNPG backups and the 03:00 ncps fsck.
+  schedule:
+    - cron: "0 4 */3 * *"
+  workflow_dispatch:
+    inputs:
+      update:
+        description: "'yes' also updates the flake inputs and commits flake.lock (the cron always does)"
+        required: false
+        default: "no"
+      machines:
+        description: "Space-separated machine names, empty = every check"
+        required: false
+        default: ""
+
+concurrency:
+  # A scheduled run must not overlap the previous one: they would race on the
+  # flake.lock push and duplicate builds across the four runners.
+  group: machines-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: Update flake inputs
+    runs-on: nix
+    timeout-minutes: 120
+    outputs:
+      machines: ${{ steps.out.outputs.machines }}
+    env:
+      # A repo Actions secret if you want the commit to be authored by a token
+      # of your own (a plain Forgejo access token with write on this repo);
+      # otherwise the run's built-in token, which needs the `contents: write`
+      # permission above. Same role as `forgejo_token` in .woodpecker/update.yaml.
+      FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN || secrets.GITHUB_TOKEN }}
+      # A scheduled run has no inputs, so both arrive empty and the defaults
+      # below apply: the cron always updates the lock. `inputs.` is the newer
+      # spelling of the dispatch inputs; the fallback covers either one.
+      UPDATE_INPUT: ${{ github.event.inputs.update || inputs.update }}
+      REQUESTED: ${{ github.event.inputs.machines || inputs.machines }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update every flake input
+        run: |
+          set -uo pipefail
+
+          # An empty UPDATE_INPUT is the cron: it always updates. Only a manual
+          # run (default `no`) can rebuild without a lock update.
+          if [ "${UPDATE_INPUT:-yes}" = "no" ]; then
+            echo "skipping the input update (manual run with update: no)"
+            exit 0
+          fi
+
+          # Inputs the cron must not move. Nothing right now: the flake's tag-
+          # and commit-pinned inputs (strata, strata-llama-cpp, lanzaboote)
+          # resolve to the same commit under `nix flake update` anyway, and
+          # nix-craftapps is meant to follow upstream's daily releases like
+          # everything else -- a bad ArtCraft release fails a gaming build here
+          # rather than surprising a deploy. Add a name to freeze one.
+          SKIP=()
+
+          # The direct inputs, from the lock file's root node: `.nodes` itself
+          # also lists every transitive one, and `nix flake update` rejects
+          # those names.
+          inputs=()
+          while read -r name; do
+            skip=0
+            for s in "${SKIP[@]}"; do [ "$name" = "$s" ] && skip=1; done
+            [ "$skip" = 0 ] && inputs+=("$name")
+          done < <(jq -r '.nodes.root.inputs | keys[]' flake.lock)
+          echo "${#inputs[@]} inputs to update${SKIP:+, skipping: ${SKIP[*]}}"
+
+          # One input per invocation, retried. `nix flake update` with no
+          # arguments re-resolves every input in one go, and a single GitHub
+          # API 403 (rate limit) then throws the whole update away -- measured:
+          # woodpecker-ci failed twice on api.github.com and succeeded on the
+          # third try. Per input, a rate-limited one is a warning, not a red run.
+          # Naming each input also means an input listed nowhere is not moved.
+          failed=()
+          for name in "${inputs[@]}"; do
+            ok=0
+            for try in 1 2 3; do
+              if nix flake update --option max-connection-attempts 3 "$name"; then
+                ok=1
+                break
+              fi
+              echo "$name: attempt $try failed"
+              sleep 30
+            done
+            [ "$ok" = 1 ] || failed+=("$name")
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::warning::not updated (rate limit or a dead input): ${failed[*]}"
+          fi
+
+          nix fmt || {
+            echo "::error::nix fmt failed"
+            exit 1
+          }
+
+      - name: Commit and push flake.lock
+        run: |
+          set -uo pipefail
+
+          # -u, not -A: only tracked files, so a stray result symlink or a
+          # leftover build artifact can never end up in the commit.
+          git add -u
+          if git diff --staged --quiet; then
+            echo "nothing changed (no input moved, no formatting fix)"
+            exit 0
+          fi
+
+          # The credential helper is a shell command, so the token only ever
+          # lives in git's stdin -- not in a URL in .git/config, and not in the
+          # runner's process list. It is written into this job's ephemeral
+          # .git/config, which the runner deletes with the workspace.
+          git config user.name "Forgejo CI"
+          git config user.email "ci@noosphere.uk"
+          git config credential.helper \
+            '!f() { echo "username=x-access-token"; echo "password=$FORGEJO_TOKEN"; }; f'
+
+          git commit -m "chore(flake): update inputs (Forgejo CI)"
+
+          # Machines push `vars: update via generator ...` commits to master on
+          # their own schedule, so this push is routinely non-fast-forward: fetch
+          # deeper (the checkout is shallow at depth 1) and rebase onto the tip.
+          pushed=0
+          for attempt in 1 2 3; do
+            if git push origin HEAD:master; then
+              pushed=1
+              break
+            fi
+            echo "push rejected (attempt $attempt), rebasing onto the current master"
+            git fetch --depth 50 origin master || true
+            if ! git rebase FETCH_HEAD; then
+              git rebase --abort
+              echo "::error::flake.lock conflicts with what landed on master; leaving it to a human"
+              exit 1
+            fi
+          done
+          if [ "$pushed" = 0 ]; then
+            echo "::warning::could not push; the builds below run against the lock that IS in master"
+          fi
+          git log --oneline -1
+
+      - id: out
+        name: What to build
+        run: |
+          set -euo pipefail
+
+          # Read the matrix from the tree just committed to master: a machine
+          # removed from `checks` must not get a build job here. `treefmt` is a
+          # check as well, but it is a formatter gate, not a machine -- `nix fmt`
+          # above already ran it, so it gets no job of its own.
+          all=$(nix eval --json .#checks.x86_64-linux \
+            --apply 'cs: builtins.attrNames (builtins.removeAttrs cs ["treefmt"])')
+
+          if [ -n "${REQUESTED:-}" ]; then
+            # Keep only the names that really are checks, so a typo says so here
+            # instead of failing after an hours-long lock update.
+            machines=$(jq -cn --argjson all "$all" \
+              '[$ARGS.positional[] | select(. as $n | $all | index($n))] | unique' \
+              --args $REQUESTED)
+            if [ "$machines" = "[]" ]; then
+              echo "::error::none of '$REQUESTED' is in .#checks.x86_64-linux ($all)"
+              exit 1
+            fi
+          else
+            machines="$all"
+          fi
+
+          echo "machines=$machines" >> "$GITHUB_OUTPUT"
+          echo "building: $machines"
+
+  build:
+    name: Build ${{ matrix.machine }}
+    needs: update
+    runs-on: nix
+    timeout-minutes: 240
+    strategy:
+      # One machine's broken build must not cancel the others: they are the
+      # cache warm-up for every other machine, and one clan var bump should not
+      # throw away the rest of the run.
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        machine: ${{ fromJSON(needs.update.outputs.machines) }}
+    steps:
+      # master as it is when this job starts, which is the tip the update job
+      # just pushed (or its successor). Pinning the run's own start commit would
+      # build a tree whose flake.lock no longer exists after that push, and the
+      # store paths it caches would then match nothing.
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Build the system toplevel
+        run: |
+          set -euo pipefail
+          echo "building $(git rev-parse --short HEAD)"
+          nix build --no-link --print-out-paths --print-build-logs \
+            ".#checks.x86_64-linux.${{ matrix.machine }}" \
+            > "${RUNNER_TEMP:-$GITHUB_WORKSPACE}/outpath"
+
+      - name: Confirm the closure is in ncps
+        env:
+          # Optional, and deliberately not required: on the four runner hosts
+          # the daemon's post-build-hook has already pushed everything. Fill
+          # them in (Repository → Settings → Actions → Secrets) only to let this
+          # workflow push by itself:
+          #   NCPS_NETRC       from `clan vars get shared ncps-upload-auth/netrc`
+          #   NCPS_SIGNING_KEY from `clan vars get shared nix-ci-signing-key/key`
+          # ncps stores an upload only when its narinfo is signed by the CI key
+          # (config.signing.trustedUploadKeys in apps/ncps), so both are needed
+          # together.
+          NCPS_NETRC: ${{ secrets.NCPS_NETRC }}
+          NCPS_SIGNING_KEY: ${{ secrets.NCPS_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+
+          tmp="${RUNNER_TEMP:-$GITHUB_WORKSPACE}"
+
+          # The runners' shared hostPackages (forgejo-runner.nix) has nix, git,
+          # jq and nodejs, but no curl: ask node when curl is not installed.
+          http_code() {
+            if command -v curl >/dev/null 2>&1; then
+              curl -sSo "$tmp/narinfo" -w '%{http_code}' "$1"
+            else
+              node -e 'fetch(process.argv[1]).then(r => console.log(r.status)).catch(() => console.log(0))' "$1"
+            fi
+          }
+
+          out=$(cat "$tmp/outpath")
+          hash=$(basename "$out" | cut -c1-32)
+          narinfo="https://ncps.noosphere.uk/$hash.narinfo"
+
+          code=$(http_code "$narinfo")
+          echo "$out -> $narinfo (HTTP $code)"
+
+          if [ "$code" != 200 ] && [ -n "${NCPS_NETRC:-}" ] && [ -n "${NCPS_SIGNING_KEY:-}" ]; then
+            printf '%s\n' "$NCPS_NETRC" > "$tmp/netrc"
+            printf '%s\n' "$NCPS_SIGNING_KEY" > "$tmp/key"
+            chmod 600 "$tmp/netrc" "$tmp/key"
+            # Same flags the post-build-hook uses: zstd, not the http store's
+            # default xz, which is too slow for a system closure.
+            nix copy --option connect-timeout 5 \
+              --option netrc-file "$tmp/netrc" \
+              --to "https://ncps.noosphere.uk/upload?compression=zstd&parallel-compression=true&secret-key=$tmp/key" \
+              "$out"
+            code=$(http_code "$narinfo")
+            echo "$out -> $narinfo (HTTP $code after an explicit push)"
+          fi
+
+          if [ "$code" != 200 ]; then
+            echo "::error::$hash.narinfo is not in ncps: a runner without a working post-build-hook built this, or the push failed."
+            exit 1
+          fi
+
+          nix path-info --size --closure-size "$out"

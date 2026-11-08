@@ -103,8 +103,12 @@
     };
 
     # SoundCraft + the other 11 ArtCraft apps. Upstream (storytold) is
-    # pre-alpha and cuts releases daily, so leave this pinned and bump it
-    # deliberately -- `nix flake update nix-craftapps`.
+    # pre-alpha and cuts releases daily, and this tracks its default branch:
+    # the Machines cron (.forgejo/workflows/machines.yml) bumps it along with
+    # every other input every three days, so a bad day upstream shows up as a
+    # red gaming build there rather than as a surprise at deploy time. Pin it
+    # to a tag (`?ref=vX.Y.Z`) if a build breaks and you want a known-good set
+    # until upstream recovers.
     nix-craftapps = {
       url = "github:olafkfreund/nix-craftapps";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -278,16 +282,19 @@
           outputHash = "sha256-UrRli9J8vorLAahyvctzxue06nHEklZYUH5p8/cqFo0=";
         };
       in {
-        checks = {
+        checks = let
+          configs = self.nixosConfigurations;
+        in {
           enginseer =
-            self.nixosConfigurations.enginseer.config.system.build.toplevel;
-          sol = self.nixosConfigurations.sol.config.system.build.toplevel;
-          terra = self.nixosConfigurations.terra.config.system.build.toplevel;
-          luna = self.nixosConfigurations.luna.config.system.build.toplevel;
-          phalanx = self.nixosConfigurations.phalanx.config.system.build.toplevel;
-          cerberus = self.nixosConfigurations.cerberus.config.system.build.toplevel;
-          alfrost = self.nixosConfigurations.alfrost.config.system.build.toplevel;
-          cypramundi = self.nixosConfigurations.cypramundi.config.system.build.toplevel;
+            configs.enginseer.config.system.build.toplevel;
+          sol = configs.sol.config.system.build.toplevel;
+          terra = configs.terra.config.system.build.toplevel;
+          luna = configs.luna.config.system.build.toplevel;
+          phalanx = configs.phalanx.config.system.build.toplevel;
+          cerberus = configs.cerberus.config.system.build.toplevel;
+          alfrost = configs.alfrost.config.system.build.toplevel;
+          cypramundi = configs.cypramundi.config.system.build.toplevel;
+          mars = configs.mars.config.system.build.toplevel;
         };
 
         noosphere.nixidy = {
