@@ -209,6 +209,20 @@ in {
         # The daemon signs everything it builds here with the CI key, and the
         # hook pushes it to ncps. Only daemon builds count: a cargo build run
         # directly by a job step never goes through the daemon.
+        #
+        # `secret-key` in the URL, not only nix.settings.secret-key-files above:
+        # a narinfo goes up with whatever signature the local store already
+        # holds for it, and the daemon records one only for paths it built
+        # itself. A path that arrived another way -- the closure copy a clan
+        # deploy pushes over ssh, a substitution from cache.nixos.org that ncps
+        # never proxied -- holds none, so ncps answers with
+        #   HTTP 500 rejecting untrusted narinfo: narinfo has no trusted signature
+        # nix aborts the copy mid-closure, and the root of that closure -- the
+        # system toplevel, always copied last -- never lands. Measured on
+        # cerberus: 23623 CI-pushed paths in ncps, none of them a
+        # `nixos-system-*`, while every check job built its toplevel fine. Give
+        # the copy the key and it signs those paths too; the same 10 GB cerberus
+        # closure then finishes uploading in 32 s, toplevel included.
         nix.settings = {
           secret-key-files = [gens.${ciKeyGenerator}.files."key".path];
           post-build-hook = pkgs.writeShellScript "push-to-ncps" ''
@@ -225,7 +239,7 @@ in {
               ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
               copy --option connect-timeout 5 \
               --option netrc-file ${gens.${ncpsUploadAuth}.files.netrc.path} \
-              --to '${ncpsUploadUrl}?compression=zstd&parallel-compression=true' $OUT_PATHS \
+              --to '${ncpsUploadUrl}?compression=zstd&parallel-compression=true&secret-key=${gens.${ciKeyGenerator}.files."key".path}' $OUT_PATHS \
               || echo "push-to-ncps: upload failed (exit $?), continuing" >&2
           '';
         };
