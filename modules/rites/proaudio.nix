@@ -329,6 +329,11 @@
         }
       ];
 
+      # ir-lv2's UI still links gtk2, which nixpkgs marked broken ahead of its
+      # removal before 27.05 (NixOS/nixpkgs#410814). Downgraded to a warning
+      # until then -- drop ir-lv2 or find a gtk3 replacement before 27.05.
+      nixpkgs.config.problems.handlers."gtk+".broken = "warn";
+
       # ── Impermanence ──────────────────────────────────────────────────
       # phalanx rolls the root subvolume back to pristine on every boot, so
       # anything not listed here is gone at reboot. Without it the whole Wine

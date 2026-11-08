@@ -45,6 +45,9 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  # Forgejo's automatic per-run token already has write on this repository; the
+  # block states what this workflow actually needs rather than depending on a
+  # default.
   contents: write
 
 jobs:
@@ -55,11 +58,19 @@ jobs:
     outputs:
       machines: ${{ steps.out.outputs.machines }}
     env:
-      # A repo Actions secret if you want the commit to be authored by a token
-      # of your own (a plain Forgejo access token with write on this repo);
-      # otherwise the run's built-in token, which needs the `contents: write`
-      # permission above. Same role as `forgejo_token` in .woodpecker/update.yaml.
-      FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN || secrets.GITHUB_TOKEN }}
+      # Nothing to configure for the push: Forgejo mints a per-run token and
+      # exports it into the environment of every step as FORGEJO_TOKEN (with
+      # GITHUB_TOKEN as an alias), and it has write permission on this
+      # repository -- pushing commits included. Changes authored with it also
+      # trigger no workflow, so this job's flake.lock commit cannot start a
+      # second run.
+      #
+      # Define a CI_PUSH_TOKEN secret only if you want the commit authored by a
+      # dedicated account (an access token scoped to this repo, the role
+      # `forgejo_token` plays in .woodpecker/update.yaml); it wins here.
+      # FORGEJO_TOKEN is not a name you can define yourself -- it is reserved by
+      # the automatic token.
+      CI_PUSH_TOKEN: ${{ secrets.CI_PUSH_TOKEN }}
       # A scheduled run has no inputs, so both arrive empty and the defaults
       # below apply: the cron always updates the lock. `inputs.` is the newer
       # spelling of the dispatch inputs; the fallback covers either one.
@@ -138,14 +149,15 @@ jobs:
             exit 0
           fi
 
-          # The credential helper is a shell command, so the token only ever
-          # lives in git's stdin -- not in a URL in .git/config, and not in the
-          # runner's process list. It is written into this job's ephemeral
-          # .git/config, which the runner deletes with the workspace.
+          # The credential: the run's automatic FORGEJO_TOKEN unless a
+          # CI_PUSH_TOKEN secret overrides it. Single quotes keep the expansion
+          # inside the helper, so the token only ever reaches git's stdin -- not
+          # a URL in .git/config, not the runner's process list -- and that
+          # .git/config is deleted with the workspace.
           git config user.name "Forgejo CI"
           git config user.email "ci@noosphere.uk"
           git config credential.helper \
-            '!f() { echo "username=x-access-token"; echo "password=$FORGEJO_TOKEN"; }; f'
+            '!f() { echo "username=x-access-token"; echo "password=${CI_PUSH_TOKEN:-$FORGEJO_TOKEN}"; }; f'
 
           git commit -m "chore(flake): update inputs (Forgejo CI)"
 
