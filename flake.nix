@@ -4,6 +4,11 @@
 
     nixpkgs-stable.url = "github:nixos/nixpkgs?ref=nixos-26.05";
 
+    # Last 26.05 rev that still ships brave (1.94.121); it was removed from
+    # both unstable and 26.05 on 2026-11-03. Pinned by rev, so brave gets no
+    # security updates from here -- revisit (flake/overlay) before long.
+    nixpkgs-brave.url = "github:nixos/nixpkgs/d58a46e3bc02d91ebe04667f8397752a749c0024";
+
     nix-index-database = {
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";

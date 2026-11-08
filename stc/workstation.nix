@@ -55,6 +55,16 @@
       # self.overlays.pangolin-cli
       self.overlays.helix
       self.overlays.herdr
+      # brave was removed from nixpkgs on 2026-11-03 (no committer among its
+      # maintainers); take it from the pinned pre-removal rev.
+      (_final: prev: let
+        pinned = import self.inputs.nixpkgs-brave {
+          inherit (prev.stdenv.hostPlatform) system;
+          config.allowUnfree = true;
+        };
+      in {
+        inherit (pinned) brave;
+      })
     ];
 
     programs.nix-index-database.comma.enable = true;
