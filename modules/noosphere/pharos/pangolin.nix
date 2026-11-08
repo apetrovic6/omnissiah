@@ -10,7 +10,7 @@ in {
       mkdir -p $out
       tar xzf ${pkgs.fetchurl {
         url = "https://github.com/GitSquared/node-geolite2-redist/raw/refs/heads/master/redist/GeoLite2-Country.tar.gz";
-        hash = "sha256-5vVCSEUn2IH1+jjA/IVhJVG1xdQGxn7TEvfP5vV9oIs=";
+        hash = "sha256-yEpPlZMX0AWWCoe73MqjL0e0Vj6jJT4lcFs3+tHwlG8=";
       }} --strip-components=1
       cp GeoLite2-Country.mmdb $out/
     '';
