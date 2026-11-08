@@ -47,6 +47,12 @@
         mode = "0400";
       };
 
+      files."deepseek-api-key" = {
+        secret = true;
+        owner = "apetrovic";
+        mode = "0400";
+      };
+
       # Add more provider keys as needed:
       # files."anthropic-api-key" = {
       #   secret = true;
@@ -65,9 +71,16 @@
         persist = true;
       };
 
+      prompts."deepseek-api-key" = {
+        description = "DeepSeek API key (DEEPSEEK_API_KEY) — get one at https://platform.deepseek.com/api_keys";
+        type = "hidden";
+        persist = true;
+      };
+
       runtimeInputs = [pkgs.coreutils];
       script = ''
         cp "$prompts/qwen-api-key" "$out/qwen-api-key"
+        cp "$prompts/deepseek-api-key" "$out/deepseek-api-key"
       '';
     };
   };

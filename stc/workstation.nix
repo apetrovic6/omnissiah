@@ -33,6 +33,7 @@
     magos.agents.pi = {
       enable = true;
       apiKeys.qwen = config.clan.core.vars.generators.pi-api-keys.files."qwen-api-key".path;
+      apiKeys.deepseek = config.clan.core.vars.generators.pi-api-keys.files."deepseek-api-key".path;
       # apiKeys.anthropic = config.clan.core.vars.generators.pi-api-keys.files."anthropic-api-key".path;
       # apiKeys.openai    = config.clan.core.vars.generators.pi-api-keys.files."openai-api-key".path;
 
