@@ -15,6 +15,7 @@
     imports = [
       self.nixosModules.flatpak
       self.nixosModules.sccache
+      self.nixosModules.github-token
       self.inputs.magos.nixosModules.desktop
       self.inputs.magos.nixosModules.pi
       self.inputs.magos.nixosModules.omp
