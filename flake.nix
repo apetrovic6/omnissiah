@@ -160,6 +160,24 @@
       url = "github:olafkfreund/mcp-nixarchy";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Strata, the local inference engine on phalanx (machines/phalanx/strata.nix).
+    # `flake = false`: its flake only carries a devShell, no package.
+    # Pinned to a release tag, not main -- main moves through rc branches daily.
+    # To update: bump the tag here, then `nix flake update strata`.
+    strata = {
+      url = "github:Niko1221/Strata/v0.2.11";
+      flake = false;
+    };
+
+    # The llama.cpp tree Strata's engine builds ggml from. MUST be the commit in
+    # Strata's setup.py (LLAMA_CPP_COMMIT); machines/phalanx/strata-package.nix
+    # refuses to evaluate when the two disagree, so a Strata bump that moves it
+    # fails loudly instead of building against the wrong ggml.
+    strata-llama-cpp = {
+      url = "github:ggml-org/llama.cpp/3cf03257f219afbe7334045ff7c6a06ac68c627d";
+      flake = false;
+    };
   };
 
   outputs = inputs @ {
