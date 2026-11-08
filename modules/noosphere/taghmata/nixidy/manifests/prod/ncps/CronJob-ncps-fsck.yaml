@@ -18,7 +18,7 @@ spec:
       template:
         metadata:
           annotations:
-            checksum/config: ff72df1ee865886ed9b8424743787c51d639104ee7dadb41b9828d6f1e8cff94
+            checksum/config: 55bdde70ebfdf6f7e8a52fa43428d394e31968a626da0b893ab47ce225452fd2
             checksum/secret: efc18bb980d59d18d1ed0c36fe13dbcd9242b063532d96ced2adc4af881b8ccf
           labels:
             app.kubernetes.io/component: fsck

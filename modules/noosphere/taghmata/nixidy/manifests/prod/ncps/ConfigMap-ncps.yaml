@@ -8,7 +8,7 @@ data:
 
     cache:
       hostname: "ncps.noosphere.uk"
-      max-size: "250G"
+      max-size: "500G"
       download:
         poll-timeout: "30s"
       temp-path: "/tmp/ncps"

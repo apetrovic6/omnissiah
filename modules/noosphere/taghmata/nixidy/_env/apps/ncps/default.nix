@@ -144,7 +144,7 @@ in {
             ];
           };
 
-          cache.maxSize = "250G";
+          cache.maxSize = "500G";
 
           storage = {
             type = "s3";

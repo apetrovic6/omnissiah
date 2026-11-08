@@ -16,7 +16,7 @@
             # neither enforces nor resizes a volume, and the existing nodes
             # keep their claims. Each node's /mnt/storage is a 1.8 TB NVMe
             # shared with other local-path volumes. At 200Gi, ncps alone
-            # (cache.maxSize 250G) could outgrow what Garage thinks it has;
+            # (cache.maxSize 500G) could outgrow what Garage thinks it has;
             # 1Ti leaves room for it and the sccache bucket.
             size = "1Ti";
             storageClassName = "local-path";
