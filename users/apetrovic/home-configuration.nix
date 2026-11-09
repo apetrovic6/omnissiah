@@ -27,6 +27,8 @@
 in {
   imports = [
     # self.inputs.magos.homeManagerModules.default
+    self.inputs.magos.homeModules.skills
+    self.inputs.magos.homeModules.herdr
     self.inputs.omnishell.homeManagerModules.default
 
     ./firefox
@@ -167,6 +169,13 @@ in {
       nixos.command = lib.getExe self.inputs.mcp-nixarchy.packages.${pkgs.stdenv.hostPlatform.system}.mcp-nixarchy;
     };
   };
+
+  # Agent Skills from magos (the herdr orchestration skill, so far) for Claude
+  # Code, pi and omp at once, and herdr's Claude Code lifecycle integration.
+  # pi's and omp's herdr integrations come with magos.agents.pi / .omp in
+  # stc/workstation.nix.
+  magos.skills.enable = true;
+  magos.herdr.claude.enable = true;
 
   programs.claude-code = {
     enable = true;
