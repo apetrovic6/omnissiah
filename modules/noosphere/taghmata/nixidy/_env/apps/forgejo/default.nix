@@ -202,6 +202,17 @@ in {
               HOST = "${db-cluster-name}-rw";
             };
 
+            actions = {
+              # Default 3h: Forgejo cancels a task that keeps reporting progress
+              # but never ends, which is exactly what a long NixOS system build
+              # looks like from here -- phalanx and enginseer were cut off at 3h
+              # ("ctx: context deadline exceeded"). The runner's own ceiling
+              # (6h, modules/rites/forgejo-runner.nix) and the Machines
+              # workflow's `timeout-minutes` (5h) sit under this, so nothing
+              # kills a job before the workflow says it should.
+              ENDLESS_TASK_TIMEOUT = "6h";
+            };
+
             storage = {
               STORAGE_TYPE = "minio";
               SERVE_DIRECT = false;

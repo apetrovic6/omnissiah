@@ -216,7 +216,12 @@ jobs:
     name: Build ${{ matrix.machine }}
     needs: update
     runs-on: nix
-    timeout-minutes: 240
+    # 5h. A cold closure -- every fresh flake.lock, on runners capped at 2 cpus
+    # and max-jobs 1 -- put phalanx (Strata + llama.cpp built from source) and
+    # enginseer (~50 GB closure) past the 3h that forgejo-runner and Forgejo
+    # both default to. Both ceilings are set to 6h in the runner module and the
+    # forgejo app so this value is the binding one.
+    timeout-minutes: 300
     strategy:
       # One machine's broken build must not cancel the others: they are the
       # cache warm-up for every other machine, and one clan var bump should not

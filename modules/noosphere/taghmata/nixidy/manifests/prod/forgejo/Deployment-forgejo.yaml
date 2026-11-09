@@ -22,7 +22,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 392ed0d31bae41d7a90d5dee40f06579c52a967af076b255c5d9cbecb23910e4
+        checksum/config: 5e084308f05e53b5c71aa8403f923051a274e13ae26c5d970e3625694d190b66
         checksum/oauth_0: 1235cb8d117ff073769a438f8fde36b2d6934e6741e53db04212479b8a555022
       labels:
         app: forgejo

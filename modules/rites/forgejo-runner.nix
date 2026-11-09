@@ -313,6 +313,17 @@ in {
             # `runtimes.host` from a `:host` suffix and `runtimes.docker` /
             # `runtimes.podman` from a `:docker` infix off that same list.
             settings.runner.labels = cfg.labels;
+            # forgejo-runner's job timeout defaults to 3h (its config.example
+            # says so, and nothing here overrode it), which is what killed the
+            # phalanx and enginseer builds:
+            #   [runner]: this step has been cancelled: ctx: context deadline
+            #   exceeded, exec: RUN signal: killed
+            # Three deadlines apply to one job -- the instance's
+            # `ENDLESS_TASK_TIMEOUT`, this one, and the workflow's
+            # `timeout-minutes` -- and the shortest wins, so this is kept above
+            # the workflow's 5h: the workflow owns the deadline you see in the
+            # UI, and the runner never cuts a job short underneath it.
+            settings.runner.timeout = "6h";
             # `secrets` values are credential paths the module turns into
             # `file:$CREDENTIALS_DIRECTORY/...` URLs. A bare path in
             # settings.token_url is rejected at startup ("unsupported secret URL").
@@ -423,8 +434,7 @@ in {
           # (`:-`) and never touches it otherwise, so this unit-level value
           # -- unreadable /run/secrets path swapped for the LoadCredential
           # mount -- is what the job's sccache server ends up using.
-          environment.AWS_SHARED_CREDENTIALS_FILE =
-            "/run/credentials/forgejo-runner-${hostName}.service/sccache-credentials";
+          environment.AWS_SHARED_CREDENTIALS_FILE = "/run/credentials/forgejo-runner-${hostName}.service/sccache-credentials";
           serviceConfig = {
             LoadCredential = [
               "sccache-credentials:${gens.sccache-garage-key.files.credentials.path}"
