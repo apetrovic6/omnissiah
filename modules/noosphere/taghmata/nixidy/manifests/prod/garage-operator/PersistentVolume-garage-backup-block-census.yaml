@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  labels:
+    app.kubernetes.io/name: garage-block-census
+    garage-monitoring/cluster: garage-backup
+  name: garage-backup-block-census
+spec:
+  accessModes:
+    - ReadOnlyMany
+  capacity:
+    storage: 1Gi
+  claimRef:
+    name: garage-backup-block-census
+    namespace: garage-operator
+  csi:
+    driver: nfs.csi.k8s.io
+    readOnly: true
+    volumeAttributes:
+      server: 192.168.1.61
+      share: /volume1/selfhosted/garage-operator
+    volumeHandle: 192.168.1.61#/volume1/selfhosted/garage-operator#garage-backup-block-census
+  mountOptions:
+    - proto=tcp
+    - noresvport
+    - nfsvers=4
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""

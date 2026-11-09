@@ -13,6 +13,7 @@ in {
     ../../../_modules/templates/garage-admin-metrics.nix
     cluster-main
     cluster-backup
+    ./block-census.nix
   ];
   applications.garage-operator = {
     inherit namespace;

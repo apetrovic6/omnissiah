@@ -1,0 +1,99 @@
+#!/bin/sh
+# Counts the block files in every garage-backup data directory on the NAS and
+# serves the result as Prometheus text on :9101/metrics.txt.
+#
+# Why this exists: on 2026-11-07 part of data-garage-backup-0 (5250 blocks and
+# its garage-marker) was deleted by hand on the Synology. Garage's own metrics
+# never noticed -- a running node only checks the marker at startup, its
+# block_rc_size counts metadata rather than files, and block_resync_errored_blocks
+# stayed at 0 -- so the damage sat for 28 hours until a restart crashlooped on
+# the missing marker. Counting the files directly is the only signal that sees it.
+#
+# ROOT is mounted read-only. GLOB selects the data directories under it, in one
+# of the two layouts the cluster's provisioners produce:
+#   csi-driver-nfs (garage-backup): ROOT/<pvc-name>/<pv-name>
+#   local-path     (garage-main):   ROOT/<pv-name>_<namespace>_<pvc-name>
+# Blocks live two levels below either: <dir>/ab/cd/<hash>[.zst]. The alerts
+# join on the pv name against kube_persistentvolume_status_phase, so leftover
+# directories of deleted volumes are ignored there rather than here.
+set -u
+
+ROOT=${ROOT:-/census}
+GLOB=${GLOB:-data-garage-backup*/pvc-*}
+OUT=${OUT:-/www}
+INTERVAL=${INTERVAL:-900}
+PORT=${PORT:-9101}
+
+mkdir -p "$OUT"
+# .txt so busybox httpd answers Content-Type: text/plain. Prometheus 3 refuses
+# a scrape whose content type it cannot map to a format.
+busybox httpd -f -p "$PORT" -h "$OUT" &
+
+while :; do
+  start=$(date +%s)
+  tmp="$OUT/.metrics.tmp"
+  blocks=""
+  markers=""
+  errors=""
+
+  for d in "$ROOT"/$GLOB; do
+    [ -d "$d" ] || continue
+    b=$(basename "$d")
+    case "$b" in
+      pvc-*_*_*)
+        # local-path: names contain no underscores, so the split is exact.
+        pv=${b%%_*}
+        pvc=${b##*_}
+        ;;
+      *)
+        pv=$b
+        pvc=$(basename "$(dirname "$d")")
+        ;;
+    esac
+    labels="persistentvolumeclaim=\"$pvc\",persistentvolume=\"$pv\""
+
+    # Counted as a stream: a file list of a few hundred thousand paths would
+    # not fit the emptyDir. In-flight writes are <hash>.tmp*; not blocks yet.
+    rm -f "$OUT/.rc"
+    n=$( { find "$d" -mindepth 3 -maxdepth 3 -type f ! -name '*.tmp*' 2>/dev/null; echo "$?" >"$OUT/.rc"; } | wc -l )
+    rc=$(cat "$OUT/.rc" 2>/dev/null || echo missing)
+
+    if [ "$rc" = "0" ]; then
+      blocks="${blocks}garage_census_blocks{$labels} $n
+"
+      errors="${errors}garage_census_scan_error{$labels} 0
+"
+    else
+      # A partial count would look exactly like lost blocks, so emit none:
+      # the series goes missing and GarageBlockCensusIncomplete fires instead.
+      errors="${errors}garage_census_scan_error{$labels} 1
+"
+    fi
+
+    if [ -f "$d/garage-marker" ]; then m=1; else m=0; fi
+    markers="${markers}garage_census_marker_present{$labels} $m
+"
+  done
+
+  end=$(date +%s)
+  {
+    echo "# HELP garage_census_blocks Block files in a Garage data directory, counted on the NAS."
+    echo "# TYPE garage_census_blocks gauge"
+    printf '%s' "$blocks"
+    echo "# HELP garage_census_marker_present 1 if the data directory still holds its garage-marker file."
+    echo "# TYPE garage_census_marker_present gauge"
+    printf '%s' "$markers"
+    echo "# HELP garage_census_scan_error 1 if the last count of this directory failed and was discarded."
+    echo "# TYPE garage_census_scan_error gauge"
+    printf '%s' "$errors"
+    echo "# HELP garage_census_last_scan_timestamp_seconds When the last full scan finished."
+    echo "# TYPE garage_census_last_scan_timestamp_seconds gauge"
+    echo "garage_census_last_scan_timestamp_seconds $end"
+    echo "# HELP garage_census_scan_duration_seconds How long the last full scan took."
+    echo "# TYPE garage_census_scan_duration_seconds gauge"
+    echo "garage_census_scan_duration_seconds $((end - start))"
+  } >"$tmp"
+  mv "$tmp" "$OUT/metrics.txt"
+
+  sleep "$INTERVAL"
+done

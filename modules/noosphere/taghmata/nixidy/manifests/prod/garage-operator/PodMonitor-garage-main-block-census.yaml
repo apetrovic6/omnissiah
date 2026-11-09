@@ -1,0 +1,30 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: garage-main-block-census
+  namespace: garage-operator
+spec:
+  namespaceSelector:
+    matchNames:
+      - garage-operator
+  podMetricsEndpoints:
+    - interval: 60s
+      path: /metrics.txt
+      port: metrics
+      relabelings:
+        - action: replace
+          regex: .*
+          replacement: garage-main
+          sourceLabels:
+            - __address__
+          targetLabel: garage_cluster
+        - action: replace
+          sourceLabels:
+            - __meta_kubernetes_pod_node_name
+          targetLabel: node
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: garage-block-census
+      garage-monitoring/cluster: garage-main

@@ -7,6 +7,20 @@
   # what every expression below groups on.
   sel = "garage_cluster=~\"garage-main|garage-backup\"";
 
+  # Census series (apps/garage-operator/block-census.nix) restricted to data
+  # directories whose PV is still Bound. The scans glob the NAS and the node
+  # disks, so a directory left behind by a deleted volume would otherwise drag
+  # the minimum down and page forever. `* on (persistentvolume) group_left ()
+  # (x == 1)` multiplies by 1 and keeps the census labels.
+  bound = metric: ''
+    (
+      ${metric}{${sel}}
+      * on (persistentvolume) group_left ()
+      (kube_persistentvolume_status_phase{phase="Bound"} == 1)
+    )
+  '';
+  censusBlocks = bound "garage_census_blocks";
+
   # Garage's own cluster gauges are per-node views: each storage pod reports
   # what it sees of the whole cluster. min-by-cluster therefore asks "what is
   # the worst view any node has", which is the one that matters. max-by-cluster
@@ -266,6 +280,81 @@ in {
             annotations = {
               summary = "Garage bucket {{ $labels.bucket }} ({{ $labels.garage_cluster }}) is above 85% of its size quota";
               description = "garage_operator_bucket_quota_size_utilization_ratio has been above 0.85 for over 15 minutes ({{ $value }} of the quota used). The sccache bucket is capped at 100 GiB with objects expiring after 30 days; past the cap, sccache uploads fail and CI/workstation builds fall back to uncached compiles (SCCACHE_IGNORE_SERVER_IO_ERROR keeps them green). Either the churn outgrew the window or the lifecycle worker is not deleting: check the bucket's lifecycle status and consider raising quotas.maxSize or shortening expirationDays.";
+            };
+          }
+        ];
+      }
+
+      {
+        # Fed by the block census pods, which count block files every 15
+        # minutes: one pod reading garage-backup's NFS export, one per machine
+        # for garage-main's local disks. These are the only rules that see
+        # blocks deleted underneath a running node: Garage's own metrics stayed
+        # green for 28 hours after 5250 blocks were removed from
+        # data-garage-backup-0 on 2026-11-07. The `for` windows are sized to
+        # that 15-minute cadence.
+        name = "garage.census";
+        rules = [
+          {
+            # The marker is the canary: it was deleted along with the blocks,
+            # and its absence is what makes the node refuse to start. Catching
+            # it here means repairing before a restart, not after.
+            alert = "GarageDataMarkerMissing";
+            expr = "${bound "garage_census_marker_present"} == 0";
+            "for" = "1m";
+            labels = {severity = "critical";};
+            annotations = {
+              summary = "Garage data directory {{ $labels.persistentvolumeclaim }} ({{ $labels.garage_cluster }}) has lost its garage-marker";
+              description = "The garage-marker file is gone from a live data directory of {{ $labels.garage_cluster }} (on the NAS for garage-backup, on the node's /mnt/storage/garage for garage-main). Something deleted files there. The node keeps running, but the next restart crashloops with `Could not find expected marker file`. Do not restart it: restore the marker (its value is in data_layout in the node's metadata directory, written without a trailing newline), then run `garage repair --yes blocks` on that node and compare its block count with a peer.";
+            };
+          }
+          {
+            # Both clusters run replication factor 3 on 3 nodes, so every node
+            # holds every block (garage-main: 236,383 on each on 2026-11-09).
+            # 1% of garage-backup's ~155k blocks is ~1550; the 2026-11-07
+            # deletion was 3.4%. Healthy nodes differ by the handful of blocks written while
+            # the scan walks one directory and not yet the next, and a node
+            # catching up after downtime converges within the resync window,
+            # hence two full scans' worth of `for`.
+            alert = "GarageBlockCountDivergence";
+            expr = ''
+              (
+                max by (garage_cluster) (${censusBlocks})
+                -
+                min by (garage_cluster) (${censusBlocks})
+              )
+              /
+              max by (garage_cluster) (${censusBlocks})
+              > 0.01
+            '';
+            "for" = "40m";
+            labels = {severity = "warning";};
+            annotations = {
+              summary = "Garage cluster {{ $labels.garage_cluster }} nodes hold different numbers of blocks";
+              description = "With replication factor 3 every node holds every block, but the nodes' block counts have differed by more than 1% for over 40 minutes ({{ $value | humanizePercentage }} of the largest count). One node is missing blocks: deleted by hand, lost to the filesystem, or still resyncing after downtime. Find the low node with `garage_census_blocks`, then run `garage repair --yes blocks` on it.";
+            };
+          }
+          {
+            # Without this, a dead census would silently turn the two rules
+            # above off. min, not max: garage-main has one census pod per
+            # machine and the oldest scan is the one that matters. absent()
+            # keeps its equality matcher as a label, so each cluster's term
+            # still carries garage_cluster and routes like every Garage warning.
+            alert = "GarageBlockCensusIncomplete";
+            expr = ''
+              (time() - min by (garage_cluster) (garage_census_last_scan_timestamp_seconds{${sel}}) > 3600)
+              or
+              absent(garage_census_last_scan_timestamp_seconds{garage_cluster="garage-backup"})
+              or
+              absent(garage_census_last_scan_timestamp_seconds{garage_cluster="garage-main"})
+              or
+              (count by (garage_cluster) (${censusBlocks}) < 3)
+            '';
+            "for" = "40m";
+            labels = {severity = "warning";};
+            annotations = {
+              summary = "The {{ $labels.garage_cluster }} block census is stale or missing a node";
+              description = "The census (garage-operator/garage-backup-block-census, or the garage-main-block-census DaemonSet) has not finished a scan in over an hour, or has fewer than 3 live data directories to report. While this fires, missing blocks and missing markers go undetected. Check the pod's logs and the garage_census_scan_error series; a directory whose scan fails is left out instead of being reported with a partial count.";
             };
           }
         ];

@@ -147,3 +147,70 @@ spec:
           labels:
             garage_cluster: garage-main
             severity: warning
+    - name: garage.census
+      rules:
+        - alert: GarageDataMarkerMissing
+          annotations:
+            description: 'The garage-marker file is gone from a live data directory of {{ $labels.garage_cluster }} (on the NAS for garage-backup, on the node''s /mnt/storage/garage for garage-main). Something deleted files there. The node keeps running, but the next restart crashloops with `Could not find expected marker file`. Do not restart it: restore the marker (its value is in data_layout in the node''s metadata directory, written without a trailing newline), then run `garage repair --yes blocks` on that node and compare its block count with a peer.'
+            summary: Garage data directory {{ $labels.persistentvolumeclaim }} ({{ $labels.garage_cluster }}) has lost its garage-marker
+          expr: |-
+            (
+              garage_census_marker_present{garage_cluster=~"garage-main|garage-backup"}
+              * on (persistentvolume) group_left ()
+              (kube_persistentvolume_status_phase{phase="Bound"} == 1)
+            )
+             == 0
+          for: 1m
+          labels:
+            severity: critical
+        - alert: GarageBlockCountDivergence
+          annotations:
+            description: 'With replication factor 3 every node holds every block, but the nodes'' block counts have differed by more than 1% for over 40 minutes ({{ $value | humanizePercentage }} of the largest count). One node is missing blocks: deleted by hand, lost to the filesystem, or still resyncing after downtime. Find the low node with `garage_census_blocks`, then run `garage repair --yes blocks` on it.'
+            summary: Garage cluster {{ $labels.garage_cluster }} nodes hold different numbers of blocks
+          expr: |
+            (
+              max by (garage_cluster) ((
+              garage_census_blocks{garage_cluster=~"garage-main|garage-backup"}
+              * on (persistentvolume) group_left ()
+              (kube_persistentvolume_status_phase{phase="Bound"} == 1)
+            )
+            )
+              -
+              min by (garage_cluster) ((
+              garage_census_blocks{garage_cluster=~"garage-main|garage-backup"}
+              * on (persistentvolume) group_left ()
+              (kube_persistentvolume_status_phase{phase="Bound"} == 1)
+            )
+            )
+            )
+            /
+            max by (garage_cluster) ((
+              garage_census_blocks{garage_cluster=~"garage-main|garage-backup"}
+              * on (persistentvolume) group_left ()
+              (kube_persistentvolume_status_phase{phase="Bound"} == 1)
+            )
+            )
+            > 0.01
+          for: 40m
+          labels:
+            severity: warning
+        - alert: GarageBlockCensusIncomplete
+          annotations:
+            description: The census (garage-operator/garage-backup-block-census, or the garage-main-block-census DaemonSet) has not finished a scan in over an hour, or has fewer than 3 live data directories to report. While this fires, missing blocks and missing markers go undetected. Check the pod's logs and the garage_census_scan_error series; a directory whose scan fails is left out instead of being reported with a partial count.
+            summary: The {{ $labels.garage_cluster }} block census is stale or missing a node
+          expr: |
+            (time() - min by (garage_cluster) (garage_census_last_scan_timestamp_seconds{garage_cluster=~"garage-main|garage-backup"}) > 3600)
+            or
+            absent(garage_census_last_scan_timestamp_seconds{garage_cluster="garage-backup"})
+            or
+            absent(garage_census_last_scan_timestamp_seconds{garage_cluster="garage-main"})
+            or
+            (count by (garage_cluster) ((
+              garage_census_blocks{garage_cluster=~"garage-main|garage-backup"}
+              * on (persistentvolume) group_left ()
+              (kube_persistentvolume_status_phase{phase="Bound"} == 1)
+            )
+            ) < 3)
+          for: 40m
+          labels:
+            severity: warning
