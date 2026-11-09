@@ -5,6 +5,7 @@
     ./forgejo-nix
     ./kubernetes
     ./projects
+    ./products
     ./pocket-id
   ];
 
