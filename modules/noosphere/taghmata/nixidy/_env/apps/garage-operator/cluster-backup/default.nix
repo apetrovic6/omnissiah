@@ -523,6 +523,41 @@ in {
       };
     };
 
+    resources.garageKeys.pilot = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+
+        bucketPermissions = [
+          {
+            bucketRef.name = "pilot";
+            read = true;
+            write = true;
+            owner = true;
+          }
+        ];
+
+        secretTemplate = {
+          name = "pilot-s3-secret-key";
+          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
+          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
+          annotations = {
+            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "pilot";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
+            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "pilot";
+          };
+        };
+      };
+    };
+
+    resources.garageBuckets.pilot = {
+      metadata = {inherit namespace;};
+      spec = {
+        clusterRef.name = "garage-backup";
+      };
+    };
+
     resources.garageKeys.woodpecker = {
       metadata = {inherit namespace;};
       spec = {
