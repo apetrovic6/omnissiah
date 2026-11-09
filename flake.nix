@@ -385,13 +385,13 @@
                 owner = "hashicorp";
                 repo = "local";
                 version = "2.9.1";
-                hash = "sha256-awO5iaFNVaN3CYjS0ZauX+E7uuQ19tgZPPSSVTuOjq0=";
+                hash = "sha256-nqtdLyIRKh0OFKycGjUB5CUP2b5joFNLSZ65M8GRhqI=";
               })
               (tofu.mkOpentofuProvider {
                 owner = "goharbor";
                 repo = "harbor";
                 version = "3.12.5";
-                hash = "sha256-DuGy/HBCVR4HKn9dwHzLeQbIakAOYndGvogX6RILmyc=";
+                hash = "sha256-mbFowZuYGVRKyZLp6AX1G89bBvbhYSY/OCW38gx7nss=";
               })
 
               # (tofu.mkOpentofuProvider {
@@ -405,7 +405,7 @@
                 owner = "adyxax";
                 repo = "forgejo";
                 version = "1.5.8";
-                hash = "sha256-SCw6/yyBlwRNPA3J2gcb/0WIQMxgtFSLnMvDs9besLE=";
+                hash = "sha256-vvwHjIcX79hWe2xjuw+LSTArTQ61zNUMGL02YgGGvp8=";
               })
 
               # (tofu.mkOpentofuProvider {
@@ -419,21 +419,21 @@
                 owner = "carlpett";
                 repo = "sops";
                 version = "1.4.1";
-                hash = "sha256-56pJdj4qrcCpZ3BoB5Uw5NEZ1x6fH+uIV39UOkPKpg4=";
+                hash = "sha256-AlnuMNkmsTTRVI7VVoC8q7y64zx/+K833RtgEFK8A2s=";
               })
 
               (tofu.mkOpentofuProvider {
                 owner = "trozz";
                 repo = "pocketid";
                 version = "2.3.0";
-                hash = "sha256-splZqWbXZHqXBTz0eNiKYE7QlCPPOlyMt40+5mFlF88=";
+                hash = "sha256-MEMEPn5PerMIh+CfFYyEqM0142RyfT4Eoq/gu4ijFTQ=";
               })
 
               (tofu.mkOpentofuProvider {
                 owner = "hashicorp";
                 repo = "kubernetes";
                 version = "3.2.1";
-                hash = "sha256-Sh2s1fyGrtSQG/V2yT1wQxT32j+vlYVpTFeJmFcxMzo=";
+                hash = "sha256-U9ZcNapbdiR0xzb/1j8Q2bPO4U2kh+VWse9OaSdehKs=";
               })
             ];
             moduleConfig = ./modules/noosphere/taghmata/_tofunix/default.nix;
