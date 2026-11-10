@@ -40,6 +40,7 @@ in {
     ./apps/vikunja
     ./apps/pocket-id
     ./apps/ncps
+    ./apps/pilot
   ];
 
   # CRD imports are now auto-discovered by the flake-module

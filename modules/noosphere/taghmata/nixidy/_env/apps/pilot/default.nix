@@ -72,9 +72,7 @@ in {
     templates.rust-service.pilot = {
       inherit namespace;
       image = "harbor.${domain}/pilot/api";
-      # TODO(M1): the first image's revision. pilot's first master push publishes
-      # harbor.noosphere.uk/pilot/api:<rev>; until then this app stays out of prod.nix.
-      tag = "0000000000000000000000000000000000000000";
+      tag = "05b016c6844bd581902ec5a904daf16655fd05c8";
       database.cluster = "pg-pilot";
       host = "pilot.${domain}";
       glance = {

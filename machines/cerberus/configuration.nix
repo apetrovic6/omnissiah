@@ -23,6 +23,7 @@ in {
     ./monitoring.nix
     ./heartbeat.nix
     ./ntfy.nix
+    ./pilot.nix
     # self.inputs.impermanence.nixosModules.impermanence
     # self.nixosModules.noosphere
     # self.inputs.magos.nixosModules.default

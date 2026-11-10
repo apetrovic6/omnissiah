@@ -187,6 +187,11 @@
       url = "github:ggml-org/llama.cpp/3cf03257f219afbe7334045ff7c6a06ac68c627d";
       flake = false;
     };
+
+    pilot = {
+      url = "git+https://forge.ugalabugala.org/manjo/pilot";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs @ {

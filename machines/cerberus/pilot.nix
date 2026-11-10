@@ -1,14 +1,7 @@
 # The M1 pilot (forge.ugalabugala.org/manjo/pilot) as a NixOS service: the same build the
 # cluster's image is made from, run by the product's own nixosModules.api.
 #
-# NOT imported yet. To enable, once the pilot repo has its first master commit:
-#   1. flake.nix inputs:
-#        pilot = {
-#          url = "git+https://forge.ugalabugala.org/manjo/pilot";
-#          inputs.nixpkgs.follows = "nixpkgs";
-#        };
-#      then `nix flake update pilot`.
-#   2. add ./pilot.nix to the imports in ./configuration.nix and deploy.
+# The `pilot` flake input pins the revision; a rollout is `nix flake update pilot` plus a deploy.
 #
 # Peer auth over the socket: the service runs as a fixed `pilot` account, and Postgres maps
 # the OS user to the role of the same name (`local all all peer` in rites/postgresql.nix).
@@ -30,7 +23,9 @@
   port = 5101;
   account = "pilot";
 in {
-  imports = [self.inputs.pilot.nixosModules.api];
+  # The product wrapper picks its module from `pkgs` inside `imports`, which NixOS cannot
+  # evaluate (infinite recursion); hand it the system directly until the template fixes it.
+  imports = [(self.inputs.pilot.nixosModules.api {pkgs.stdenv.hostPlatform.system = "x86_64-linux";})];
 
   services.imperium.postgresql.users.${account} = {
     databases = [account];
