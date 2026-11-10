@@ -40,7 +40,7 @@ in {
       '';
     };
 
-    resources.deployments.sabnzbd= {
+    resources.deployments.sabnzbd = {
       metadata = {
         inherit namespace labels;
       };
@@ -55,8 +55,14 @@ in {
             image = "busybox:latest";
             command = ["sh" "/scripts/init-config.sh"];
             volumeMounts = [
-              {name = "config"; mountPath = "/config";}
-              {name = "init-scripts"; mountPath = "/scripts";}
+              {
+                name = "config";
+                mountPath = "/config";
+              }
+              {
+                name = "init-scripts";
+                mountPath = "/scripts";
+              }
             ];
           }
         ];
@@ -96,7 +102,6 @@ in {
                 name = "data";
                 mountPath = "/data";
               }
-
             ];
 
             env = [

@@ -43,7 +43,7 @@
     };
 
     terra = {
-      tags = ["base" "k8s""k8s-base"];
+      tags = ["base" "k8s" "k8s-base"];
       deploy.targetHost = "root@192.168.1.138";
       deploy.buildHost = "localhost";
     };

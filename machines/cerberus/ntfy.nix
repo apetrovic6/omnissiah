@@ -22,10 +22,7 @@
 # is loaded via EnvironmentFile, which systemd parses as root before the service
 # drops to its dynamic user, so the credentials stay in the sops secret store and
 # never enter the nix store or a manifest.
-{
-  config,
-  ...
-}: let
+{config, ...}: let
   access = config.clan.core.vars.generators."ntfy-access";
 in {
   services.imperium.ntfy-sh = {

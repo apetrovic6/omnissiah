@@ -2,8 +2,7 @@
   domain,
   namespace,
   ...
-}:
-let
+}: let
   # One garage-backup storage pod per machine, enforced by the scheduler.
   #
   # The operator wires spec.affinity straight into the pod template
@@ -25,15 +24,17 @@ let
   # its PV can bind to - is free because its own pod is gone.
   storageAntiAffinity = {
     podAntiAffinity = {
-      requiredDuringSchedulingIgnoredDuringExecution = [{
-        topologyKey = "kubernetes.io/hostname";
-        labelSelector = {
-          matchLabels = {
-            "garage.rajsingh.info/cluster" = "garage-backup";
-            "garage.rajsingh.info/tier" = "storage";
+      requiredDuringSchedulingIgnoredDuringExecution = [
+        {
+          topologyKey = "kubernetes.io/hostname";
+          labelSelector = {
+            matchLabels = {
+              "garage.rajsingh.info/cluster" = "garage-backup";
+              "garage.rajsingh.info/tier" = "storage";
+            };
           };
-        };
-      }];
+        }
+      ];
     };
   };
 in {

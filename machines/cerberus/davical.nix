@@ -37,8 +37,7 @@
   # The image has no shell, only the four static binaries; the admin and cron
   # one-shots reuse the same image with --entrypoint pointing at a different
   # one. Single-line so it can be interpolated into `if …; then` in scripts.
-  podmanRun = entrypoint: args:
-    ''${config.virtualisation.podman.package}/bin/podman run --rm --network=host --env-file ${envFile} --entrypoint ${entrypoint} ${imageName} ${args}'';
+  podmanRun = entrypoint: args: ''${config.virtualisation.podman.package}/bin/podman run --rm --network=host --env-file ${envFile} --entrypoint ${entrypoint} ${imageName} ${args}'';
 in {
   # Podman is already enabled on cerberus by ./nopresh.nix (which is the only
   # module that may import self.nixosModules.virtualisation — importing it a
@@ -85,11 +84,10 @@ in {
     after = ["podman.service"];
     wants = ["podman.service"];
     wantedBy = ["podman-davical.service"];
-    before =
-      [
-        "podman-davical.service"
-        "davical-db-init.service"
-      ];
+    before = [
+      "podman-davical.service"
+      "davical-db-init.service"
+    ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;

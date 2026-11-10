@@ -48,10 +48,11 @@
     # the `|| true` guard would turn a missing binary into a silent no-op --
     # registering nothing, and leaving `sync` to find no plugins at all.
     ybAddDirs = concatStringsSep "\n" (map (d: ''
-      if [ -d "$WINEPREFIX/${d}" ]; then
-        ${pkgs.yabridgectl}/bin/yabridgectl add "$WINEPREFIX/${d}" >/dev/null 2>&1 || true
-      fi
-    '') yb.pluginDirs);
+        if [ -d "$WINEPREFIX/${d}" ]; then
+          ${pkgs.yabridgectl}/bin/yabridgectl add "$WINEPREFIX/${d}" >/dev/null 2>&1 || true
+        fi
+      '')
+      yb.pluginDirs);
 
     yabridgeSync = pkgs.writeShellApplication {
       name = "yabridge-sync";
@@ -241,18 +242,17 @@
       };
 
       ilok = {
-        enable =
-          mkEnableOption ''
-            iLok License Manager inside the yabridge Wine prefix.
+        enable = mkEnableOption ''
+          iLok License Manager inside the yabridge Wine prefix.
 
-            Only machine ("PC") activation and iLok Cloud have any chance of
-            working. The iLok USB dongle does NOT: there is no Linux driver
-            for the key and Wine cannot pass it through, so even USB-over-IP
-            forwarding leaves nothing able to talk to it. Plugins whose
-            license is USB-only cannot be authorised on this machine at all.
+          Only machine ("PC") activation and iLok Cloud have any chance of
+          working. The iLok USB dongle does NOT: there is no Linux driver
+          for the key and Wine cannot pass it through, so even USB-over-IP
+          forwarding leaves nothing able to talk to it. Plugins whose
+          license is USB-only cannot be authorised on this machine at all.
 
-            Unsupported by PACE either way -- treat it as empirical
-          '';
+          Unsupported by PACE either way -- treat it as empirical
+        '';
       };
 
       daws = mkOption {
@@ -320,99 +320,99 @@
 
     config = mkIf cfg.enable (mkMerge [
       {
-      # iLok rides on the yabridge prefix and the Wine pinned with it, so it
-      # has nothing to install into on its own.
-      assertions = [
-        {
-          assertion = cfg.ilok.enable -> yb.enable;
-          message = "services.imperium.proaudio.ilok.enable requires yabridge.enable (it installs into the yabridge Wine prefix).";
-        }
-      ];
+        # iLok rides on the yabridge prefix and the Wine pinned with it, so it
+        # has nothing to install into on its own.
+        assertions = [
+          {
+            assertion = cfg.ilok.enable -> yb.enable;
+            message = "services.imperium.proaudio.ilok.enable requires yabridge.enable (it installs into the yabridge Wine prefix).";
+          }
+        ];
 
-      # ir-lv2's UI still links gtk2, which nixpkgs marked broken ahead of its
-      # removal before 27.05 (NixOS/nixpkgs#410814). Downgraded to a warning
-      # until then -- drop ir-lv2 or find a gtk3 replacement before 27.05.
-      nixpkgs.config.problems.handlers."gtk+".broken = "warn";
+        # ir-lv2's UI still links gtk2, which nixpkgs marked broken ahead of its
+        # removal before 27.05 (NixOS/nixpkgs#410814). Downgraded to a warning
+        # until then -- drop ir-lv2 or find a gtk3 replacement before 27.05.
+        nixpkgs.config.problems.handlers."gtk+".broken = "warn";
 
-      # ── Impermanence ──────────────────────────────────────────────────
-      # phalanx rolls the root subvolume back to pristine on every boot, so
-      # anything not listed here is gone at reboot. Without it the whole Wine
-      # prefix, every installed Windows plugin, the yabridgectl index and the
-      # generated stubs are destroyed nightly -- and for iLok machine
-      # activation that means burning an activation on every single boot.
-      #
-      # ~/.local/share is already persisted wholesale by the impermanence
-      # module, which is why the NAM model directory lives under it and needs
-      # no entry of its own.
-      environment.persistence."/persist".users.${cfg.user}.directories =
-        mkIf config.services.imperium.impermanence.enable
-        ([".lv2" ".vst3" ".clap" ".lxvst" ".ladspa" ".dssi"]
-          ++ optionals yb.enable [
-            ".vst"
-            ".config/yabridgectl"
-            # Relative to the home dir, which is how impermanence wants it;
-            # keep in step with yabridge.prefix if that is ever changed.
-            ".wine-yabridge"
-          ]);
+        # ── Impermanence ──────────────────────────────────────────────────
+        # phalanx rolls the root subvolume back to pristine on every boot, so
+        # anything not listed here is gone at reboot. Without it the whole Wine
+        # prefix, every installed Windows plugin, the yabridgectl index and the
+        # generated stubs are destroyed nightly -- and for iLok machine
+        # activation that means burning an activation on every single boot.
+        #
+        # ~/.local/share is already persisted wholesale by the impermanence
+        # module, which is why the NAM model directory lives under it and needs
+        # no entry of its own.
+        environment.persistence."/persist".users.${cfg.user}.directories =
+          mkIf config.services.imperium.impermanence.enable
+          ([".lv2" ".vst3" ".clap" ".lxvst" ".ladspa" ".dssi"]
+            ++ optionals yb.enable [
+              ".vst"
+              ".config/yabridgectl"
+              # Relative to the home dir, which is how impermanence wants it;
+              # keep in step with yabridge.prefix if that is ever changed.
+              ".wine-yabridge"
+            ]);
 
-      # ── Plugin discovery ──────────────────────────────────────────────
-      environment.sessionVariables = {
-        CLAP_PATH = pluginPath "clap";
-        LV2_PATH = pluginPath "lv2";
-        VST_PATH = pluginPath "vst";
-        VST3_PATH = pluginPath "vst3";
-        LXVST_PATH = pluginPath "lxvst";
-        LADSPA_PATH = pluginPath "ladspa";
-        DSSI_PATH = pluginPath "dssi";
-      };
+        # ── Plugin discovery ──────────────────────────────────────────────
+        environment.sessionVariables = {
+          CLAP_PATH = pluginPath "clap";
+          LV2_PATH = pluginPath "lv2";
+          VST_PATH = pluginPath "vst";
+          VST3_PATH = pluginPath "vst3";
+          LXVST_PATH = pluginPath "lxvst";
+          LADSPA_PATH = pluginPath "ladspa";
+          DSSI_PATH = pluginPath "dssi";
+        };
 
-      services.pipewire = {
-        jack.enable = cfg.jack;
+        services.pipewire = {
+          jack.enable = cfg.jack;
 
-        # A separate drop-in rather than extending rocksmith.nix's
-        # "92-low-latency": extraConfig.pipewire.<name> is a JSON-valued
-        # option, so two modules defining the same name is an evaluation
-        # conflict, not a merge. 93- sorts later, and PipeWire applies
-        # conf.d files in lexical order with later keys winning.
-        extraConfig.pipewire."93-proaudio" = {
-          "context.properties" = {
-            "default.clock.allowed-rates" = cfg.allowedRates;
-            "default.clock.max-quantum" = cfg.maxQuantum;
+          # A separate drop-in rather than extending rocksmith.nix's
+          # "92-low-latency": extraConfig.pipewire.<name> is a JSON-valued
+          # option, so two modules defining the same name is an evaluation
+          # conflict, not a merge. 93- sorts later, and PipeWire applies
+          # conf.d files in lexical order with later keys winning.
+          extraConfig.pipewire."93-proaudio" = {
+            "context.properties" = {
+              "default.clock.allowed-rates" = cfg.allowedRates;
+              "default.clock.max-quantum" = cfg.maxQuantum;
+            };
           };
         };
-      };
 
-      environment.systemPackages =
-        cfg.daws
-        ++ cfg.plugins
-        ++ cfg.tools
-        # yabridgectl finds libyabridge-chainloader-*.so by searching
-        # NIX_PROFILES, and /run/current-system/sw is first in it, so simply
-        # installing yabridge here is enough -- no `yabridgectl set --path`.
-        ++ optionals yb.enable [
-          pkgs.yabridge
-          pkgs.yabridgectl
-          yabridgeInstall
-          yabridgeSync
-          yabridgeWinetricks
-        ]
-        ++ optionals cfg.ilok.enable [ilokInstall ilok];
+        environment.systemPackages =
+          cfg.daws
+          ++ cfg.plugins
+          ++ cfg.tools
+          # yabridgectl finds libyabridge-chainloader-*.so by searching
+          # NIX_PROFILES, and /run/current-system/sw is first in it, so simply
+          # installing yabridge here is enough -- no `yabridgectl set --path`.
+          ++ optionals yb.enable [
+            pkgs.yabridge
+            pkgs.yabridgectl
+            yabridgeInstall
+            yabridgeSync
+            yabridgeWinetricks
+          ]
+          ++ optionals cfg.ilok.enable [ilokInstall ilok];
 
-      # ── SoundCraft ────────────────────────────────────────────────────
-      # nix-craftapps packages all twelve ArtCraft apps; enableAll stays off
-      # so only SoundCraft lands. These are upstream prebuilt binaries
-      # (sourceProvenance = binaryNativeCode) autoPatchelf'd into place, and
-      # upstream cuts releases daily -- flake.lock is the stability mechanism.
-      programs.craftapps = mkIf cfg.soundcraft.enable {
-        enable = true;
-        apps.soundcraft.enable = true;
+        # ── SoundCraft ────────────────────────────────────────────────────
+        # nix-craftapps packages all twelve ArtCraft apps; enableAll stays off
+        # so only SoundCraft lands. These are upstream prebuilt binaries
+        # (sourceProvenance = binaryNativeCode) autoPatchelf'd into place, and
+        # upstream cuts releases daily -- flake.lock is the stability mechanism.
+        programs.craftapps = mkIf cfg.soundcraft.enable {
+          enable = true;
+          apps.soundcraft.enable = true;
 
-        # The apps read fonts only from /usr/share/fonts and ignore
-        # fontconfig. linkFonts (default true) tmpfiles-symlinks that to
-        # /run/current-system/sw/share/X11/fonts. It is recreated every boot,
-        # so impermanence on this host is not a problem.
-        linkFonts = true;
-      };
+          # The apps read fonts only from /usr/share/fonts and ignore
+          # fontconfig. linkFonts (default true) tmpfiles-symlinks that to
+          # /run/current-system/sw/share/X11/fonts. It is recreated every boot,
+          # so impermanence on this host is not a problem.
+          linkFonts = true;
+        };
       }
 
       # ── yabridge re-sync ────────────────────────────────────────────────

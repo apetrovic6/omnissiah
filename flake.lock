@@ -843,11 +843,11 @@
     "garage-operator": {
       "flake": false,
       "locked": {
-        "lastModified": 1794063953,
-        "narHash": "sha256-F+CWfHxQ6NlR7G11HRov7v5E31zos+1DmB4I4778eQ0=",
+        "lastModified": 1794275135,
+        "narHash": "sha256-h+DrPNm3jwEIXU/S3aJ/aVHaUrzjZ3D0C046/qExOrE=",
         "owner": "rajsinghtech",
         "repo": "garage-operator",
-        "rev": "e91ca7081cf582a4c13e60b36619c28bf76a3e2f",
+        "rev": "66274cbfc68002281388dc706ae34337677952a1",
         "type": "github"
       },
       "original": {
@@ -4633,11 +4633,11 @@
     "tofunix": {
       "locked": {
         "dir": "lib",
-        "lastModified": 1793994603,
-        "narHash": "sha256-XzoEgR3MDbTFQk2aghg2vZYJU3Ar8yhtWbQDugoXd7E=",
+        "lastModified": 1794244181,
+        "narHash": "sha256-M9NgjDbPoQpUkgIklDW4xjexCP5xN06+VcL5hzmho48=",
         "owner": "TECHNOFAB",
         "repo": "tofunix",
-        "rev": "0d78d12dd9b7dc0e154a4642de876ef278e79876",
+        "rev": "16795f095e247f5b341eb2260d8c26f655bb6569",
         "type": "gitlab"
       },
       "original": {
@@ -4875,11 +4875,11 @@
     "woodpecker-ci": {
       "flake": false,
       "locked": {
-        "lastModified": 1793536679,
-        "narHash": "sha256-EWbYuqQxJOQJCaculUj2dDrm6kbdHP/mPlf9OZKcEMk=",
+        "lastModified": 1794145543,
+        "narHash": "sha256-576Vn/5JDAkyswcTdWJrZWxBGXiJ36GCoFNpIjPpj24=",
         "owner": "woodpecker-ci",
         "repo": "helm",
-        "rev": "180a33ff47432dae6ec722a6bcf4b2c25e31c913",
+        "rev": "6ff06fd7fc6b920694e63db20955d3efbca5c44d",
         "type": "github"
       },
       "original": {

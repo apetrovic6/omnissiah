@@ -65,7 +65,11 @@ in {
       };
     };
 
-    output = {name, config, ...}: {
+    output = {
+      name,
+      config,
+      ...
+    }: {
       # A template's output is spliced under `applications.<app>.resources`, so
       # the keys below are resource kinds, not full option paths (same shape as
       # _modules/templates/garage-object-store.nix emitting `objectStores.${name}`).

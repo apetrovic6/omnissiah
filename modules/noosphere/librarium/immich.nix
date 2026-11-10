@@ -79,7 +79,7 @@
         secretsFile = config.clan.core.vars.generators."${serviceName}-secrets".files."${serviceName}.env".path;
 
         accelerationDevices = cfg.accelerationDevices;
-        
+
         settings.server = {
           externalDomain = "https://${cfg.subdomain}.${lib.trim baseDomain}";
         };
@@ -87,15 +87,13 @@
         redis = {
           enable = true;
         };
-        
+
         database = with cfg.database; {
           enable = false;
           createDB = false;
 
           inherit user port host name;
         };
-
-        
       };
 
       systemd.services.immich.after = ["immich-db-setup.service"];
@@ -143,7 +141,6 @@
           echo "DB_PASSWORD=$PASSWORD" > "$out/${serviceName}.env"
         '';
       };
-
     };
   };
 }

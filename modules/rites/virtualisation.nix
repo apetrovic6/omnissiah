@@ -19,7 +19,6 @@ in {
         default = false;
       };
 
-
       enableDockerCompat = mkOption {
         type = types.bool;
         description = "Create an alias mapping docker to podman.";

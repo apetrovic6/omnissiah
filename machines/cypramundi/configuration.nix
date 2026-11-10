@@ -17,28 +17,28 @@
     src = pangolinSrc;
 
     npmDeps = pkgs.fetchNpmDeps {
-     name = "pangolin-1.17.1-npm-deps";
+      name = "pangolin-1.17.1-npm-deps";
       src = pangolinSrc;
       hash = "sha256-DyPfylne9Ku7sEUNN0LLlN0EOnCjcklsh+F6YP+rXv4=";
     };
 
-    npmFlags = [ "--legacy-peer-deps" ];
+    npmFlags = ["--legacy-peer-deps"];
 
     postPatch = ''
-            substituteInPlace src/app/layout.tsx --replace-fail \
-              '{ Inter } from "next/font/google"' \
-              'localFont from "next/font/local"'
+      substituteInPlace src/app/layout.tsx --replace-fail \
+        '{ Inter } from "next/font/google"' \
+        'localFont from "next/font/local"'
 
-            substituteInPlace src/app/layout.tsx --replace-fail \
-              'Inter({' \
-              'localFont({'
+      substituteInPlace src/app/layout.tsx --replace-fail \
+        'Inter({' \
+        'localFont({'
 
-            substituteInPlace src/app/layout.tsx --replace-fail \
-              'subsets: ["latin"]' \
-              "src: './Inter.ttf'"
+      substituteInPlace src/app/layout.tsx --replace-fail \
+        'subsets: ["latin"]' \
+        "src: './Inter.ttf'"
 
 
-            cp "${pkgs.inter}/share/fonts/truetype/InterVariable.ttf" src/app/Inter.ttf
+      cp "${pkgs.inter}/share/fonts/truetype/InterVariable.ttf" src/app/Inter.ttf
     '';
 
     preBuild = ''
@@ -211,12 +211,17 @@ in {
   networking.networkmanager.enable = false;
   networking.useDHCP = false;
   networking.interfaces.ens3 = {
-    ipv4.addresses = [{
-      address = "152.53.34.16";
-      prefixLength = 22;
-    }];
+    ipv4.addresses = [
+      {
+        address = "152.53.34.16";
+        prefixLength = 22;
+      }
+    ];
   };
-  networking.defaultGateway  ={ address= "152.53.32.1"; interface = "ens3";};
+  networking.defaultGateway = {
+    address = "152.53.32.1";
+    interface = "ens3";
+  };
 
   networking.firewall = {
     enable = true;
@@ -264,7 +269,7 @@ in {
   };
 
   # nixpkgs.config.allowUnfree = true;
-  
+
   environment.systemPackages = with pkgs; [
     helix
     vim

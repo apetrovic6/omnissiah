@@ -11,7 +11,6 @@ in {
     api_token = "\${data.sops_file.forgejo_nix_secrets.data[\"forgejo_token\"]}";
   };
 
-  
   # resource.forgejo_organization.monolith-softworks-cerberus = {
   #   provider = ref.forgejo.cerberus;
   #   name = "monolith-softworks";
@@ -75,5 +74,4 @@ in {
   #   sync_on_commit = true;
   #   use_ssh = true;
   # };
-
 }

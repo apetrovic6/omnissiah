@@ -20,7 +20,6 @@
     )
   '';
   censusBlocks = bound "garage_census_blocks";
-
   # Garage's own cluster gauges are per-node views: each storage pod reports
   # what it sees of the whole cluster. min-by-cluster therefore asks "what is
   # the worst view any node has", which is the one that matters. max-by-cluster

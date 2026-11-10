@@ -207,7 +207,6 @@ in {
       '';
     };
 
-
     clan.core.vars.generators."${harborPostgresSecret}" = {
       share = true;
 

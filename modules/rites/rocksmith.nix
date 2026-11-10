@@ -189,17 +189,19 @@
           # Disable node suspension — prevents audio pops / xruns caused
           # by PipeWire putting the USB interface to sleep after 5 s idle.
           wireplumber.extraConfig."99-disable-suspend" = {
-            "monitor.alsa.rules" = [{
-              matches = [
-                {"node.name" = "~alsa_input.*";}
-                {"node.name" = "~alsa_output.*";}
-              ];
-              actions = {
-                update-props = {
-                  "session.suspend-timeout-seconds" = 0;
+            "monitor.alsa.rules" = [
+              {
+                matches = [
+                  {"node.name" = "~alsa_input.*";}
+                  {"node.name" = "~alsa_output.*";}
+                ];
+                actions = {
+                  update-props = {
+                    "session.suspend-timeout-seconds" = 0;
+                  };
                 };
-              };
-            }];
+              }
+            ];
           };
         };
 
