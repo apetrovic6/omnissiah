@@ -22,7 +22,7 @@ spec:
         - env:
             - name: APP__DATABASE__URL_FILE
               value: /run/secrets/database/uri
-          image: harbor.noosphere.uk/pilot/api:05b016c6844bd581902ec5a904daf16655fd05c8
+          image: harbor.noosphere.uk/pilot/api:da26f7732fd2284244261e2285e4ff27ec4a8507
           livenessProbe:
             httpGet:
               path: /healthz
@@ -74,7 +74,7 @@ spec:
           env:
             - name: APP__DATABASE__URL_FILE
               value: /run/secrets/database/uri
-          image: harbor.noosphere.uk/pilot/api:05b016c6844bd581902ec5a904daf16655fd05c8
+          image: harbor.noosphere.uk/pilot/api:da26f7732fd2284244261e2285e4ff27ec4a8507
           name: migrate
           securityContext:
             allowPrivilegeEscalation: false
