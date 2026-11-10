@@ -7,6 +7,7 @@
 #     pull);
 #   - HARBOR_USERNAME/HARBOR_PASSWORD as REPO action secrets, which the template's publish step
 #     maps into `just publish::push`. Never user-level: those would reach the template repo.
+#   - for a product with `auth`, a public Pocket ID client named after the product.
 #
 # builtins only, and a fixed top-level shape: `pkgs`/`lib` arrive through `_module.args`, so
 # computing this module's attribute names from them is an infinite recursion.
@@ -91,4 +92,27 @@ in {
       name = "HARBOR_PASSWORD";
       data = robotSecret name;
     });
+
+  # A public OIDC client for each product with `auth`, client_id = the product name, so there is
+  # no secret to keep: the service checks access tokens (aud = client_id) and the clients log in
+  # with PKCE. `http://127.0.0.1/callback` is the native desktop loopback redirect, and Pocket ID
+  # ignores the port for loopback, so that single entry covers any port. A product without
+  # `auth` gets nothing.
+  resource.pocketid_client = builtins.listToAttrs (map (name: {
+    inherit name;
+    value = let
+      hosts = products.${name}.auth.webHosts;
+    in {
+      inherit name;
+      client_id = name;
+      is_public = true;
+      pkce_enabled = true;
+      callback_urls =
+        (map (host: "https://${host}/auth/callback") hosts)
+        ++ ["http://127.0.0.1/callback"];
+      logout_callback_urls = map (host: "https://${host}") hosts;
+      launch_url = "https://${builtins.head hosts}";
+      allowed_user_groups = [ref.pocketid_group.users.id];
+    };
+  }) (builtins.filter (name: builtins.hasAttr "auth" products.${name}) (builtins.attrNames products)));
 }
