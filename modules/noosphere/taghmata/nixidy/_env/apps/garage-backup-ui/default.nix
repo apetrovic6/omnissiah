@@ -27,7 +27,6 @@ in {
           "glance/url" = "https://ui.backup.garage.${domain}";
           "glance/description" = "Distributed S3 Storage (Backup)";
           "glance/id" = "garage-backup";
-          "glance/parent" = "garage";
           "category" = "storage";
         };
       };
