@@ -8,9 +8,9 @@
 # No password exists anywhere. The imperium user also enrols the database in the nightly
 # pg_dump.
 #
-# The product module's option namespace is the service's crate name (`services.api`), so a
-# second product with an `api` service cannot share this host until the template namespaces
-# it; see the M1 notes.
+# The template namespaces the module by product: `services.pilot.api`, unit `pilot-api.service`,
+# `/etc/pilot/api.toml`. The account is pinned to `pilot` below rather than the default
+# `pilot-api`, because the Postgres role is named after it.
 #
 # Reachable at https://pilot.<lab-domain> via Caddy on the LAN/VPN only, like kaneo.
 {
@@ -23,9 +23,7 @@
   port = 5101;
   account = "pilot";
 in {
-  # The product wrapper picks its module from `pkgs` inside `imports`, which NixOS cannot
-  # evaluate (infinite recursion); hand it the system directly until the template fixes it.
-  imports = [(self.inputs.pilot.nixosModules.api {pkgs.stdenv.hostPlatform.system = "x86_64-linux";})];
+  imports = [self.inputs.pilot.nixosModules.api];
 
   services.imperium.postgresql.users.${account} = {
     databases = [account];
@@ -34,7 +32,7 @@ in {
     generatePassword = true;
   };
 
-  services.api = {
+  services.pilot.api = {
     enable = true;
     inherit port;
     host = "127.0.0.1";

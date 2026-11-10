@@ -72,7 +72,7 @@ in {
     templates.rust-service.pilot = {
       inherit namespace;
       image = "harbor.${domain}/pilot/api";
-      tag = "05b016c6844bd581902ec5a904daf16655fd05c8";
+      tag = "da26f7732fd2284244261e2285e4ff27ec4a8507";
       database.cluster = "pg-pilot";
       host = "pilot.${domain}";
       glance = {

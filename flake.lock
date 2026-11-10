@@ -3977,11 +3977,11 @@
         "template": "template"
       },
       "locked": {
-        "lastModified": 1794317188,
-        "narHash": "sha256-1QJN8EqBKysJ0K6xCsuX/VPZrL2owiaW3jvSzkxaeAo=",
+        "lastModified": 1794333500,
+        "narHash": "sha256-Ez/K6BwiGWk2ztkYKPXEoBU7FoWMkozmOHgZqgCdD9w=",
         "ref": "refs/heads/master",
-        "rev": "05b016c6844bd581902ec5a904daf16655fd05c8",
-        "revCount": 2,
+        "rev": "da26f7732fd2284244261e2285e4ff27ec4a8507",
+        "revCount": 4,
         "type": "git",
         "url": "https://forge.ugalabugala.org/manjo/pilot"
       },
@@ -4702,16 +4702,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1794252129,
-        "narHash": "sha256-8QIvLyYJ4W2LNzFtQe8H5QEPwN9+TZv+cAoBMbyjovU=",
+        "lastModified": 1794330061,
+        "narHash": "sha256-9Gig09eozPglto+sRowT4lD8FsVodxsyzkT77mEL1/Y=",
         "ref": "refs/heads/master",
-        "rev": "37fde37b658bcabbbffaa17454e5596a8371824e",
-        "revCount": 355,
+        "rev": "73f4322c3191af8a8fd43ae6e6843ebc0234dc36",
+        "revCount": 366,
         "type": "git",
         "url": "https://forge.ugalabugala.org/manjo/rust-app-template"
       },
       "original": {
-        "rev": "37fde37b658bcabbbffaa17454e5596a8371824e",
+        "rev": "73f4322c3191af8a8fd43ae6e6843ebc0234dc36",
         "type": "git",
         "url": "https://forge.ugalabugala.org/manjo/rust-app-template"
       }
