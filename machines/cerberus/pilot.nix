@@ -30,6 +30,8 @@ in {
   services.imperium.postgresql.users.${account} = {
     databases = [account];
     ensureDBOwnership = true;
+    # Peer auth only, so nothing ever types it; it exists because every imperium user gets one.
+    generatePassword = true;
   };
 
   services.api = {

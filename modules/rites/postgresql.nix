@@ -121,6 +121,15 @@
               '';
             };
 
+            generatePassword = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Generate a random password instead of prompting for one. For users that only
+                connect over the socket with peer auth, where nothing ever types the password.
+              '';
+            };
+
             extensions = mkOption {
               type = types.listOf types.str;
               default = [];
@@ -244,7 +253,7 @@
 
       # One clan vars generator per user for password management.
       # If passwordDependency is set, the password is sourced from another generator
-      # (no prompt); otherwise a prompt is shown.
+      # (no prompt); with generatePassword it is random; otherwise a prompt is shown.
       clan.core.vars.generators =
         mapAttrs' (
           userName: u:
@@ -264,6 +273,24 @@
 
                 script = ''
                   cp "$in/${u.passwordDependency}/password" "$out/password"
+                '';
+              }
+              else if u.generatePassword
+              then {
+                share = false;
+
+                files.password = {
+                  secret = true;
+                  owner = "postgres";
+                  group = "postgres";
+                  mode = "0400";
+                };
+
+                runtimeInputs = [pkgs.openssl];
+
+                # Hex, so it is safe inside the single-quoted ALTER USER in postgresql-password-init.
+                script = ''
+                  openssl rand -hex 32 | tr -d '\n' > "$out/password"
                 '';
               }
               else {
