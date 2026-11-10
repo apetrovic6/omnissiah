@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    category: dev
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: rust-app-template pilot
+    glance/icon: di:rust
+    glance/id: pilot
+    glance/name: Pilot
+    glance/url: https://pilot.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: pilot
+  namespace: pilot
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: pilot.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: pilot
+                port:
+                  name: http
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - pilot.noosphere.uk
+      secretName: pilot-tls

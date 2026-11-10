@@ -8,7 +8,6 @@ metadata:
     glance/icon: di:garage
     glance/id: garage-backup
     glance/name: Garage Backup
-    glance/parent: garage
     glance/url: https://ui.backup.garage.noosphere.uk
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
   name: garage-backup-ui

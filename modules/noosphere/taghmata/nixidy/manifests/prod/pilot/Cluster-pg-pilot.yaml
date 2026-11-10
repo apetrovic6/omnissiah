@@ -1,0 +1,47 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    release: kube-prometheus-stack
+  name: pg-pilot
+  namespace: pilot
+spec:
+  backup:
+    retentionPolicy: 30d
+    target: prefer-standby
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.1-minimal-trixie
+  instances: 1
+  monitoring:
+    customQueriesConfigMap:
+      - key: queries
+        name: cnpg-default-monitoring
+    enablePodMonitor: true
+    podMonitorMetricRelabelings:
+      - action: replace
+        sourceLabels:
+          - cluster
+        targetLabel: cnpg_cluster
+    podMonitorRelabelings:
+      - action: replace
+        sourceLabels:
+          - __meta_kubernetes_pod_name
+        targetLabel: pod
+  plugins:
+    - isWALArchiver: true
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: pilot-object-store
+  postgresql:
+    parameters:
+      log_statement: ddl
+      max_connections: "50"
+      shared_buffers: 128MB
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: 1Gi
+    storageClass: longhorn-cnpg-strict-local
+  walStorage:
+    size: 1Gi
+    storageClass: longhorn-cnpg-strict-local

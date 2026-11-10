@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: pilot
+  name: pilot
+  namespace: pilot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/name: pilot
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: server
+        app.kubernetes.io/name: pilot
+    spec:
+      containers:
+        - env:
+            - name: APP__DATABASE__URL_FILE
+              value: /run/secrets/database/uri
+          image: harbor.noosphere.uk/pilot/api:05b016c6844bd581902ec5a904daf16655fd05c8
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          name: server
+          ports:
+            - containerPort: 5000
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 25m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+          startupProbe:
+            failureThreshold: 6
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - mountPath: /run/secrets/database
+              name: database
+              readOnly: true
+            - mountPath: /tmp
+              name: tmp
+      initContainers:
+        - command:
+            - /bin/api
+            - migrate
+          env:
+            - name: APP__DATABASE__URL_FILE
+              value: /run/secrets/database/uri
+          image: harbor.noosphere.uk/pilot/api:05b016c6844bd581902ec5a904daf16655fd05c8
+          name: migrate
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+          volumeMounts:
+            - mountPath: /run/secrets/database
+              name: database
+              readOnly: true
+            - mountPath: /tmp
+              name: tmp
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: database
+          secret:
+            defaultMode: 288
+            items:
+              - key: uri
+                path: uri
+            secretName: pg-pilot-app
+        - emptyDir:
+            sizeLimit: 64Mi
+          name: tmp
