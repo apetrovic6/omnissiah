@@ -35,6 +35,7 @@
       enable = true;
       apiKeys.qwen = config.clan.core.vars.generators.pi-api-keys.files."qwen-api-key".path;
       apiKeys.deepseek = config.clan.core.vars.generators.pi-api-keys.files."deepseek-api-key".path;
+      extraEnabledModels = ["openai-codex/*"]; # ChatGPT Plus via /login
       # apiKeys.anthropic = config.clan.core.vars.generators.pi-api-keys.files."anthropic-api-key".path;
       # apiKeys.openai    = config.clan.core.vars.generators.pi-api-keys.files."openai-api-key".path;
 
@@ -50,6 +51,7 @@
       blockAmbientCredentials = ["amazon-bedrock"];
     };
     magos.agents.omp.enable = true; # piggybacks on pi's apiKeys
+    magos.agents.omp.extraEnabledModels = ["openai-codex/*"]; # ChatGPT Plus via /login
 
     nixpkgs.overlays = [
       # self.overlays.pangolin-cli
