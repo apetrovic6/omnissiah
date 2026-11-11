@@ -42,6 +42,10 @@ in {
     group = account;
 
     database.url = "postgres:///${account}?host=/run/postgresql";
+
+    # The OIDC provider the service checks access tokens against; it refuses to start without
+    # one. The same Pocket ID client (`pilot`) as the cluster deployment.
+    environment.APP__AUTH__ISSUER = "https://id.noosphere.uk";
   };
 
   services.caddy.virtualHosts."${mkDomain "pilot"}".extraConfig =

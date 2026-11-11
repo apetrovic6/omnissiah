@@ -72,9 +72,13 @@ in {
     templates.rust-service.pilot = {
       inherit namespace;
       image = "harbor.${domain}/pilot/api";
-      tag = "da26f7732fd2284244261e2285e4ff27ec4a8507";
+      tag = "0f767c0c30ff2d12841cb67119dec0298b7ca7e4";
       database.cluster = "pg-pilot";
       host = "pilot.${domain}";
+      # The OIDC provider the service checks access tokens against (crates/oidc, ADR 0027);
+      # the service refuses to start without it. Pocket ID's client for this product is `pilot`,
+      # which is also the audience the committed config names.
+      env.APP__AUTH__ISSUER = "https://id.${domain}";
       glance = {
         name = "Pilot";
         icon = "di:rust";
