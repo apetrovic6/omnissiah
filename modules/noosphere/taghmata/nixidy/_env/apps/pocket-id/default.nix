@@ -48,7 +48,7 @@ in {
         host = "id.${domain}";
 
         pocketID.image = {
-          tag = "v2.9.0";
+          tag = "v2.19.2";
         };
 
         config = {
