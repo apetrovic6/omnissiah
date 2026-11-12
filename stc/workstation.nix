@@ -68,7 +68,8 @@
     # which would override Technitium and cause intermittent split-horizon failures.
     networking.networkmanager.dns = lib.mkForce "none";
     # Remove compiled-in fallback DNS servers so only Technitium is used.
-    services.resolved.fallbackDns = [];
+    services.resolved.settings.Resolve.FallbackDNS = [];
+
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.login.enableGnomeKeyring = true;

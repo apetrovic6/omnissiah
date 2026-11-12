@@ -62,7 +62,7 @@ in {
   # for the split-horizon names: ncps.noosphere.uk resolved to the VPS, which
   # served Traefik's default certificate, and CI substitution from ncps failed.
   networking.nameservers = ["192.168.1.105"];
-  services.resolved.fallbackDns = [];
+  services.resolved.settings.Resolve.FallbackDNS = [];
 
   # nixpkgs.overlays = [self.overlays.newt];
   services.qemuGuest.enable = true;
