@@ -40,6 +40,13 @@ in {
     };
   };
 
+  # Lets theme switches tint Chromium/Chrome/Brave by giving this user the
+  # browsers' policy directories (/etc/<browser>/policies/managed). That also
+  # lets anything running as this user set browser policy machine-wide -- fine
+  # here only because this laptop has a single user. Without it every theme
+  # switch notifies that the browser theme could not be set.
+  programs.nixarchy.browserThemeUser = "apetrovic";
+
   # Intel + NVIDIA. Bus IDs read from sysfs and converted to decimal.
   hardware.nvidia.prime = {
     offload.enable = true;
