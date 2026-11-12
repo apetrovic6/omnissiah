@@ -57,21 +57,6 @@
       # self.overlays.pangolin-cli
       self.overlays.helix
       self.overlays.herdr
-      # brave was removed from nixpkgs on 2026-11-03 (no committer among its
-      # maintainers); take its RECIPE from the pinned pre-removal rev, but
-      # build it with this system's packages.
-      #
-      # Taking the pinned rev's whole `brave` linked it against that rev's
-      # glibc (2.42), so it could not load the system Mesa (needs 2.43+):
-      # "MESA-LOADER: failed to open dri ... GLIBC_2.43 not found". Brave then
-      # fell back to the NVIDIA render node ("picking nvidia-drm"), handed
-      # Hyprland on the Intel GPU buffers it could not import, and Mesa
-      # aborted with "execbuf ioctl keeps returning ENOMEM" -- killing the
-      # whole session. The recipe just repackages the upstream .deb, so
-      # callPackage'ing it here is enough to get one glibc.
-      (_final: prev: {
-        brave = prev.callPackage "${self.inputs.nixpkgs-brave}/pkgs/by-name/br/brave/package.nix" {};
-      })
     ];
 
     programs.nix-index-database.comma.enable = true;
