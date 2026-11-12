@@ -68,6 +68,16 @@
       url = "github:apetrovic6/magos";
       # url = "path:/home/apetrovic/clan/magos";
       inputs.nixpkgs.follows = "nixpkgs";
+      # magos.nixosModules.nixarchy imports nixarchy's NixOS module, which
+      # imports these three itself. Each must be the very store path this
+      # flake already imports, or every option they declare is declared twice
+      # and the machine stops evaluating. sops-nix follows clan-core's so clan
+      # stays authoritative over secrets.
+      inputs.nixarchy.inputs = {
+        home-manager.follows = "home-manager";
+        nix-flatpak.follows = "nix-flatpak";
+        sops-nix.follows = "clan-core/sops-nix";
+      };
     };
 
     home-manager = {

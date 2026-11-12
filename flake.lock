@@ -1229,28 +1229,6 @@
         "nixpkgs": [
           "magos",
           "nixarchy",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1787661347,
-        "narHash": "sha256-THmnBAdAIV+jT348f3r/vyoeb6ilhcVLwVXkBU7Pai8=",
-        "owner": "nix-community",
-        "repo": "home-manager",
-        "rev": "52c3a5881c821ad7367bbde075e52b76cdb378ab",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "repo": "home-manager",
-        "type": "github"
-      }
-    },
-    "home-manager_5": {
-      "inputs": {
-        "nixpkgs": [
-          "magos",
-          "nixarchy",
           "nix-skills",
           "nixpkgs"
         ]
@@ -1270,7 +1248,7 @@
         "type": "github"
       }
     },
-    "home-manager_6": {
+    "home-manager_5": {
       "inputs": {
         "nixpkgs": [
           "magos",
@@ -1293,7 +1271,7 @@
         "type": "github"
       }
     },
-    "home-manager_7": {
+    "home-manager_6": {
       "inputs": {
         "nixpkgs": [
           "magos",
@@ -1316,7 +1294,7 @@
         "type": "github"
       }
     },
-    "home-manager_8": {
+    "home-manager_7": {
       "inputs": {
         "nixpkgs": "nixpkgs_14"
       },
@@ -2284,11 +2262,11 @@
         "wrapper-modules": "wrapper-modules"
       },
       "locked": {
-        "lastModified": 1794420235,
-        "narHash": "sha256-MGIGWOMmJz18lwAGdmLfe1PU7oSiIdvw9UPCZvlSbEk=",
+        "lastModified": 1794497055,
+        "narHash": "sha256-Ji8Q1JHC1ykv1MHajOpxBHJgZOGJD2455DBzYZ4Qdo4=",
         "owner": "apetrovic6",
         "repo": "magos",
-        "rev": "612a2ccee58216b9931f6fda67b3fd76a172b7e0",
+        "rev": "585a23417f638a97d53372fbf0f8253dd8a617c1",
         "type": "github"
       },
       "original": {
@@ -2455,22 +2433,6 @@
     },
     "nix-flatpak": {
       "locked": {
-        "lastModified": 1791644091,
-        "narHash": "sha256-nw4/Nzl13+A45km82FF4rXo9O7fGfXNk98UqyTRozog=",
-        "owner": "gmodena",
-        "repo": "nix-flatpak",
-        "rev": "7c7c1739cf476c2f85642f441f967cd91f479d2c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "gmodena",
-        "ref": "v0.8.0",
-        "repo": "nix-flatpak",
-        "type": "github"
-      }
-    },
-    "nix-flatpak_2": {
-      "locked": {
         "lastModified": 1790428548,
         "narHash": "sha256-OsZ/I7v3ArCrk0XOUvkiU1dFtGtE1qZTHRGjvBXIKUU=",
         "owner": "gmodena",
@@ -2611,7 +2573,7 @@
     },
     "nix-skills": {
       "inputs": {
-        "home-manager": "home-manager_5",
+        "home-manager": "home-manager_4",
         "nixpkgs": [
           "magos",
           "nixarchy",
@@ -2663,13 +2625,17 @@
         "ai-mirror": "ai-mirror",
         "disko": "disko_2",
         "gliff": "gliff",
-        "home-manager": "home-manager_4",
+        "home-manager": [
+          "home-manager"
+        ],
         "home-manager-stable": "home-manager-stable",
         "hyprland": "hyprland_2",
         "mcp-nixarchy": "mcp-nixarchy",
         "mcp-servers-nix": "mcp-servers-nix",
         "microvm": "microvm",
-        "nix-flatpak": "nix-flatpak",
+        "nix-flatpak": [
+          "nix-flatpak"
+        ],
         "nix-index-database": "nix-index-database",
         "nix-skills": "nix-skills",
         "nixarchy-devenv": "nixarchy-devenv",
@@ -2696,7 +2662,10 @@
         ],
         "nixpkgs-stable": "nixpkgs-stable",
         "omarchy": "omarchy",
-        "sops-nix": "sops-nix_2",
+        "sops-nix": [
+          "clan-core",
+          "sops-nix"
+        ],
         "systems": "systems_8",
         "zen-browser": "zen-browser"
       },
@@ -3160,7 +3129,7 @@
           "nixarchy",
           "ai-mirror"
         ],
-        "home-manager": "home-manager_6",
+        "home-manager": "home-manager_5",
         "nixpkgs": [
           "magos",
           "nixarchy",
@@ -3945,7 +3914,7 @@
       "inputs": {
         "flake-parts": "flake-parts_12",
         "helix": "helix_2",
-        "home-manager": "home-manager_8",
+        "home-manager": "home-manager_7",
         "import-tree": "import-tree_3",
         "nixpkgs": [
           "nixpkgs"
@@ -4128,7 +4097,7 @@
         "magos": "magos",
         "mcp-nixarchy": "mcp-nixarchy_2",
         "nix-craftapps": "nix-craftapps",
-        "nix-flatpak": "nix-flatpak_2",
+        "nix-flatpak": "nix-flatpak",
         "nix-homebrew": "nix-homebrew",
         "nix-index-database": "nix-index-database_2",
         "nix-jetbrains-plugins": "nix-jetbrains-plugins",
@@ -4323,29 +4292,6 @@
       "original": {
         "owner": "Mic92",
         "repo": "sops-nix",
-        "type": "github"
-      }
-    },
-    "sops-nix_2": {
-      "inputs": {
-        "nixpkgs": [
-          "magos",
-          "nixarchy",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1793657466,
-        "narHash": "sha256-GoOvpdsjO5hqZuO6T6ok9u6sJEjO0iPli2zRr9oNUNw=",
-        "owner": "Mic92",
-        "repo": "sops-nix",
-        "rev": "b18e01ce148eb3efff5de2f2d3181ca53b2b2a54",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Mic92",
-        "repo": "sops-nix",
-        "rev": "b18e01ce148eb3efff5de2f2d3181ca53b2b2a54",
         "type": "github"
       }
     },
@@ -5213,7 +5159,7 @@
     },
     "zen-browser": {
       "inputs": {
-        "home-manager": "home-manager_7",
+        "home-manager": "home-manager_6",
         "nixpkgs": [
           "magos",
           "nixarchy",
