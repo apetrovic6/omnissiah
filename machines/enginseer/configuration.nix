@@ -47,6 +47,21 @@ in {
   # switch notifies that the browser theme could not be set.
   programs.nixarchy.browserThemeUser = "apetrovic";
 
+  # Stylix's GTK target declares ~/.config/gtk-{3,4}.0/gtk.css through
+  # home-manager, and omatheme's hyprchroma rewrites that same file -- it turns
+  # the symlink into a real file with `@import url("hyprchroma.css");` added at
+  # the top, keeping stylix's rules below it. home-manager then backs the file
+  # up on every activation, and from the second deploy on the old .bak is in
+  # the way and activation fails ("would be clobbered by backing up").
+  #
+  # force = overwrite without a backup. Safe because hyprchroma only layers on
+  # top: home-manager puts stylix's file back, and hyprchromad re-adds its
+  # import when it restarts at the end of the same activation.
+  home-manager.users.apetrovic.xdg.configFile = {
+    "gtk-3.0/gtk.css".force = true;
+    "gtk-4.0/gtk.css".force = true;
+  };
+
   # Intel + NVIDIA. Bus IDs read from sysfs and converted to decimal.
   hardware.nvidia.prime = {
     offload.enable = true;
