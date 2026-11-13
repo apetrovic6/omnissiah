@@ -43,8 +43,11 @@ spec:
     data:
       size: 1Ti
       storageClassName: local-path
+    dataFsync: true
     metadata:
       size: 10Gi
       storageClassName: local-path
+    metadataAutoSnapshotInterval: 6h
+    metadataFsync: true
     replicas: 3
   zone: main

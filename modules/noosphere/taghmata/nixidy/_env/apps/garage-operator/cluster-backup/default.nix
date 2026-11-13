@@ -62,6 +62,7 @@ in {
           };
           # Safe to fsync metadata now that it's on local SSD (crash durability).
           metadataFsync = true;
+          metadataAutoSnapshotInterval = "6h";
         };
 
         database = {engine = "sqlite";};

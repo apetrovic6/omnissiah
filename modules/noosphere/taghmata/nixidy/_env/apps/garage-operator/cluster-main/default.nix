@@ -25,6 +25,17 @@
             size = "10Gi";
             storageClassName = "local-path";
           };
+          # Without fsync Garage runs SQLite with synchronous=OFF, so a power
+          # cut can leave a torn DB: the 2026-11-13 outage left sol's node
+          # panicking at merkle.rs:207 until db.sqlite was wiped and resynced.
+          # Data blocks on local disk need the same treatment, or a block
+          # file can survive the cut truncated.
+          metadataFsync = true;
+          dataFsync = true;
+          # Consistent copies kept next to the DB (Garage keeps the newest
+          # two) under metadata_dir/snapshots, so a corrupted node can copy
+          # the newest one back over db.sqlite instead of a full resync.
+          metadataAutoSnapshotInterval = "6h";
           # One storage node per machine, required. The nodes already sit on
           # luna, terra and sol, but only because their local-path volumes
           # happen to be pinned there. In Auto mode the operator-owned nodes

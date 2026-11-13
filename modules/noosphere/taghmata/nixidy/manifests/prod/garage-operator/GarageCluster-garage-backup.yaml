@@ -38,6 +38,7 @@ spec:
     metadata:
       size: 20Gi
       storageClassName: local-path
+    metadataAutoSnapshotInterval: 6h
     metadataFsync: true
     replicas: 3
   zone: main
