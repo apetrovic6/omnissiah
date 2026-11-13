@@ -308,6 +308,10 @@
 
       claude-code
       claude-monitor
+      # The Omarchy agents widget reads ChatGPT plan limits through
+      # `codex app-server` (signed in once with `codex login`); those limits
+      # also cover omp's openai-codex usage.
+      codex
 
       exercism
 
