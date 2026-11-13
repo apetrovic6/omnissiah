@@ -2262,11 +2262,11 @@
         "wrapper-modules": "wrapper-modules"
       },
       "locked": {
-        "lastModified": 1794580041,
-        "narHash": "sha256-rXW6SffOPWmKT7QNgcol1YWnWVXO8ZVC/HtDZWr7sa0=",
+        "lastModified": 1794583588,
+        "narHash": "sha256-vUU59Eg00wZjxoJHf5+m/owvB1ezbKAYxYZbQIbQNME=",
         "owner": "apetrovic6",
         "repo": "magos",
-        "rev": "54448a5a8e12d19e34ce5d60ec8a3002dab83ea0",
+        "rev": "de7f6361e90ddd498e121ce642ac1280b97d9552",
         "type": "github"
       },
       "original": {
