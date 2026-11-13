@@ -8,7 +8,18 @@
   imports = [
     self.inputs.nix-homebrew.darwinModules.nix-homebrew
     ../../users/apetrovic/home-darwin.nix
+    self.inputs.magos.darwinModules.claude-accounts
   ];
+
+  # Per-session Claude subscription (`claude-as <id>`); see stc/workstation.nix.
+  magos.claudeAccounts = {
+    enable = true;
+    accounts = {
+      main.label = "Personal";
+      devzero.label = "DevZero";
+      codilas.label = "Codilas";
+    };
+  };
 
   nixpkgs.config = {allowUnfree = true;};
 

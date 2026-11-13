@@ -87,6 +87,9 @@
             # Without it the first-run marker is wiped every boot, so the
             # "Learn Keybindings" and "Update System" toasts return each login.
             ".local/state/omarchy"
+            # claude-as's account homes (logins) on machines without nixarchy;
+            # with it they live under .local/state/omarchy above.
+            ".local/state/claude-accounts"
             # Full nixarchy (enginseer): runtime-installed themes and plugins,
             # the Install-menu app selection, and the enabled-once markers that
             # stop default plugins being re-enabled after you turn them off.

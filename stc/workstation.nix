@@ -19,6 +19,7 @@
       self.inputs.magos.nixosModules.desktop
       self.inputs.magos.nixosModules.pi
       self.inputs.magos.nixosModules.omp
+      self.inputs.magos.nixosModules.claude-accounts
       # self.nixosModules.flatpak
       self.nixosModules.bluetooth
       self.nixosModules.virtualisation
@@ -52,6 +53,20 @@
     };
     magos.agents.omp.enable = true; # piggybacks on pi's apiKeys
     magos.agents.omp.extraEnabledModels = ["openai-codex/*"]; # ChatGPT Plus via /login
+
+    # Per-session Claude subscription: `claude-as <id>` (or the launcher
+    # entries / herdr prefix+alt+c picker). Signing in stays a runtime step:
+    # `claude-as add <Name>`. On nixarchy this is the agents widget's registry;
+    # elsewhere ~/.local/state/claude-accounts (persisted in impermanence.nix).
+    # Keep in step with machines/genetor/configuration.nix.
+    magos.claudeAccounts = {
+      enable = true;
+      accounts = {
+        main.label = "Personal";
+        devzero.label = "DevZero";
+        codilas.label = "Codilas";
+      };
+    };
 
     nixpkgs.overlays = [
       # self.overlays.pangolin-cli
