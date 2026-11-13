@@ -3930,11 +3930,11 @@
         "template": "template"
       },
       "locked": {
-        "lastModified": 1794508688,
-        "narHash": "sha256-/lplvs0Lgv+MktG6UUg9Qq5TR+qhxfhG0jEwmUrAy8w=",
+        "lastModified": 1794558855,
+        "narHash": "sha256-4hsOjspyagIezK9GTtFD6C8z4QCoIw/JUA6tfCOCUdo=",
         "ref": "refs/heads/master",
-        "rev": "bec411d9f8ec448ad46d9d65e580053e681eef24",
-        "revCount": 10,
+        "rev": "f28a7a60e5872ef93f9820a9e11e95aec5dabc72",
+        "revCount": 12,
         "type": "git",
         "url": "https://forge.ugalabugala.org/manjo/pilot"
       },
