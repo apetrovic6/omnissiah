@@ -19,6 +19,7 @@
 
     # A public OIDC client in Pocket ID, client_id = the product name (no secret anywhere):
     # the service checks access tokens (aud = client_id), the clients log in with PKCE.
-    auth.webHosts = ["pilot.noosphere.uk"];
+    # Both deployments: the cluster (noosphere.uk) and cerberus (ugalabugala.org).
+    auth.webHosts = ["pilot.noosphere.uk" "pilot.ugalabugala.org"];
   };
 }

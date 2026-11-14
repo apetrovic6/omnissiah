@@ -15,9 +15,17 @@
 # Reachable at https://pilot.<lab-domain> via Caddy on the LAN/VPN only, like kaneo.
 {
   self,
+  config,
+  lib,
+  pkgs,
   ...
 }: let
   inherit (self.lib) mkRevProxyVHost mkDomain;
+
+  # mkDomain is a Caddy placeholder, and the service needs the literal origin. The caddy-env
+  # `domain` var ends in a newline, hence removeSuffix.
+  domain = lib.removeSuffix "\n" config.clan.core.vars.generators."caddy-env".files."domain".value;
+  cookieKey = config.clan.core.vars.generators.pilot-cookie-key.files."cookie-key";
 
   # 5000, the service's committed port, is already taken on this host.
   port = 5101;
@@ -46,6 +54,25 @@ in {
     # The OIDC provider the service checks access tokens against; it refuses to start without
     # one. The same Pocket ID client (`pilot`) as the cluster deployment.
     environment.APP__AUTH__ISSUER = "https://id.noosphere.uk";
+
+    # Web login through the service (template ADR 0029). The public origin is the redirect
+    # target registered in Pocket ID (`auth.webHosts` in taghmata/_products.nix) and the CSRF
+    # origin; the cookie key encrypts the session cookie. Rotating the key signs everyone out.
+    environment.APP__AUTH__PUBLIC_URL = "https://pilot.${domain}";
+    credentials.APP__AUTH__COOKIE_KEY = cookieKey.path;
+  };
+
+  # 32 random bytes, base64: what `auth.cookie_key` expects. Generated, never typed. Root-owned:
+  # systemd reads it for LoadCredential (the module's `credentials`), the service reads the copy.
+  clan.core.vars.generators.pilot-cookie-key = {
+    files."cookie-key" = {
+      secret = true;
+      mode = "0400";
+    };
+    runtimeInputs = [pkgs.openssl];
+    script = ''
+      openssl rand -base64 32 > "$out/cookie-key"
+    '';
   };
 
   services.caddy.virtualHosts."${mkDomain "pilot"}".extraConfig =
