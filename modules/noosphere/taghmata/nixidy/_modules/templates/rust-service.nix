@@ -12,6 +12,8 @@
 #   - migrations run in an init container (`<bin> migrate`, the same binary), before the server
 #     starts. The service takes a Postgres advisory lock, so replicas do not race.
 #   - /healthz is liveness and touches nothing; /readyz checks the database and is readiness.
+#   - other secret settings (`secretFiles`) follow the database URL's shape: one Secret key
+#     mounted as a file, named by `<VAR>_FILE`.
 #
 # The CNPG cluster itself comes from database-template.nix, its backups from
 # garage-object-store.nix, and the bucket/key from garage-operator's cluster-backup.
@@ -94,6 +96,33 @@ in {
         description = "Extra environment variables (configuration overrides, `APP__…`).";
       };
 
+      secretFiles = mkOption {
+        type = types.attrsOf (types.submodule {
+          options = {
+            secret = mkOption {
+              type = types.str;
+              description = "The Secret in the service's namespace.";
+            };
+            key = mkOption {
+              type = types.str;
+              description = "The key in that Secret whose value is the setting.";
+            };
+          };
+        });
+        default = {};
+        example = {
+          APP__AUTH__COOKIE_KEY = {
+            secret = "pilot-cookie-key";
+            key = "cookie-key";
+          };
+        };
+        description = ''
+          Secret settings, each read from one Secret key mounted as a file and named by
+          `<VAR>_FILE` (`crates/settings` reads `_FILE` variables), so the value never enters
+          the environment. Mounted in the migrate init container too: it loads the same config.
+        '';
+      };
+
       resources = mkOption {
         type = types.attrs;
         default = {
@@ -129,6 +158,31 @@ in {
         mountPath = "/tmp";
       };
 
+      # One read-only volume per secret setting, at /run/secrets/<volume>/<key>.
+      secretVolumeName = var: "secret-${lib.toLower (lib.replaceStrings ["_"] ["-"] var)}";
+      secretMounts =
+        lib.mapAttrsToList (var: _: {
+          name = secretVolumeName var;
+          mountPath = "/run/secrets/${secretVolumeName var}";
+          readOnly = true;
+        })
+        cfg.secretFiles;
+      secretVolumes =
+        lib.mapAttrsToList (var: s: {
+          name = secretVolumeName var;
+          secret = {
+            secretName = s.secret;
+            items = [
+              {
+                inherit (s) key;
+                path = s.key;
+              }
+            ];
+            defaultMode = 288; # 0440
+          };
+        })
+        cfg.secretFiles;
+
       containerSecurity = {
         allowPrivilegeEscalation = false;
         readOnlyRootFilesystem = true;
@@ -142,6 +196,9 @@ in {
         optionalAttrs hasDatabase {
           APP__DATABASE__URL_FILE = "${dbMount.mountPath}/uri";
         }
+        // lib.mapAttrs' (var: s:
+          lib.nameValuePair "${var}_FILE" "/run/secrets/${secretVolumeName var}/${s.key}")
+        cfg.secretFiles
         // cfg.env
       );
 
@@ -178,7 +235,7 @@ in {
                 inherit image env;
                 # The entrypoint is `/bin/<bin> serve`; migrate is the same binary.
                 command = ["/bin/${cfg.binary}" "migrate"];
-                volumeMounts = [dbMount tmpMount];
+                volumeMounts = [dbMount tmpMount] ++ secretMounts;
                 securityContext = containerSecurity;
               };
 
@@ -197,7 +254,7 @@ in {
                   startupProbe = probe "/healthz" // {failureThreshold = 6;};
                   livenessProbe = probe "/healthz";
                   readinessProbe = probe "/readyz";
-                  volumeMounts = optional hasDatabase dbMount ++ [tmpMount];
+                  volumeMounts = optional hasDatabase dbMount ++ [tmpMount] ++ secretMounts;
                   securityContext = containerSecurity;
                   inherit (cfg) resources;
                 }
@@ -222,7 +279,8 @@ in {
                     name = "tmp";
                     emptyDir.sizeLimit = "64Mi";
                   }
-                ];
+                ]
+                ++ secretVolumes;
             };
           };
         };
