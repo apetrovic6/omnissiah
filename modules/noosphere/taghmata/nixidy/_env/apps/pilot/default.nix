@@ -78,7 +78,7 @@ in {
     templates.rust-service.pilot = {
       inherit namespace;
       image = "harbor.${domain}/pilot/api";
-      tag = "bec411d9f8ec448ad46d9d65e580053e681eef24";
+      tag = "647a09e1c87f760bf26bdfbd236a221b560cf538";
       database.cluster = "pg-pilot";
       host = "pilot.${domain}";
       # The OIDC provider the service checks access tokens against (crates/oidc, ADR 0027);
