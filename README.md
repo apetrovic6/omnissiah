@@ -16,6 +16,7 @@ what they do.
 | `modules/rites/` | Reusable NixOS modules, each exported as `nixosModules.<name>` |
 | `modules/litanies/` | `flake.lib` helper functions |
 | `modules/noosphere/` | Self-hosted services, grouped by domain (below) |
+| `modules/manufactorum/` | What the flake builds for itself: checks, packages, the dev shell and formatter |
 | `modules/vars/` | Flake-wide values (domain, SSO, age key) and shared clan vars |
 | `overlays/` | Nixpkgs overlays, exported as `overlays.<name>` |
 | `services/` | Packages built from source in this repo |

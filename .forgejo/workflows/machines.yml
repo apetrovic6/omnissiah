@@ -1,5 +1,5 @@
 # Every third day: update the flake's inputs, commit the new flake.lock, then
-# build every machine in `checks` (flake.nix perSystem.checks) so the results
+# build every machine in `checks` (modules/manufactorum/checks.nix) so the results
 # land in the ncps binary cache (taghmata nixidy apps/ncps) before the machines
 # pull them at their own next deploy.
 #

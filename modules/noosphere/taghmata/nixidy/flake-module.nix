@@ -7,7 +7,7 @@
 # - gen-crd app generation
 # - nixidy environment configuration
 #
-# Usage in flake.nix:
+# Usage (see ./charts.nix):
 #   perSystem.noosphere.nixidy = {
 #     repository = "https://github.com/user/repo.git";
 #     branch = "master";
