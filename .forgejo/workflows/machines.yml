@@ -15,9 +15,6 @@
 # Runner hosts substitute from ncps themselves (stc/base.nix): a warm cache
 # turns these builds into downloads, a cold one (every fresh flake.lock) is real
 # compilation on 2-core/4-GiB runners.
-#
-# Replaces the flake-update half of .woodpecker/update.yaml: keep only one of
-# the two, or their crons will race each other to push flake.lock.
 
 name: Machines
 
@@ -66,8 +63,7 @@ jobs:
       # second run.
       #
       # Define a CI_PUSH_TOKEN secret only if you want the commit authored by a
-      # dedicated account (an access token scoped to this repo, the role
-      # `forgejo_token` plays in .woodpecker/update.yaml); it wins here.
+      # dedicated account (an access token scoped to this repo); it wins here.
       # FORGEJO_TOKEN is not a name you can define yourself -- it is reserved by
       # the automatic token.
       CI_PUSH_TOKEN: ${{ secrets.CI_PUSH_TOKEN }}

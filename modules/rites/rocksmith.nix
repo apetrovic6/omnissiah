@@ -60,11 +60,11 @@
     '';
 
     # CDLC enabler: the classic 133 KB RSCDLCEnabler D3DX9_42.dll proxy
-    # (vendored in blobs/rocksmith/). The exe stays untouched so the CRC
+    # (vendored in relics/rocksmith/). The exe stays untouched so the CRC
     # remains 0xd1b38fcb — RS_ASIO refuses unknown CRCs. Do NOT use the
     # newer "TooManyCoresFix" builds: their SetProcessAffinityMask hack
     # crashes RS2014 at startup under Proton (only needed for >32 threads).
-    cdlcDll = ../../blobs/rocksmith/D3DX9_42.dll;
+    cdlcDll = ../../relics/rocksmith/D3DX9_42.dll;
 
     # Home Manager overrides on top of the nixos-rocksmith HM module:
     # PipeASIO with 2 input channels + Zen-Go RS_ASIO.ini channel map

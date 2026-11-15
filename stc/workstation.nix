@@ -217,7 +217,7 @@
 
     magos.stylix = {
       enable = true;
-      image = ../wallpapers/everforest/1.png;
+      image = ../relics/wallpapers/everforest/1.png;
       base16Scheme = "everforest-dark-soft";
       # base16Scheme = "nord";
     };

@@ -23,7 +23,7 @@
 # syncs them: the list is read from the rendered manifests, so it is exactly
 # the set of images the cluster is about to need.
 #
-# Usage:  ./scripts/prepull-critical-images.sh [--dry-run]
+# Usage:  ./rituals/prepull-critical-images.sh [--dry-run]
 
 set -euo pipefail
 

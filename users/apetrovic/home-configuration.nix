@@ -6,12 +6,6 @@
   osConfig,
   ...
 }: let
-  atticToken =
-    osConfig.clan.core.vars.generators.attic-pull-token.files.token.path;
-
-  atticSubstituter =
-    osConfig.clan.core.vars.generators.attic-pull-token.files.attic-substituter.path;
-
   # sccache on garage-main. The NixOS half (generator, credentials owner,
   # wrapper on the system path) is in modules/rites/sccache.nix and
   # stc/workstation.nix; the values are read through osConfig so the
@@ -32,10 +26,6 @@ in {
     self.inputs.omnishell.homeManagerModules.default
 
     ./firefox
-  ];
-
-  nixpkgs.overlays = [
-    self.overlays.bitwarden-desktop
   ];
 
   nixpkgs.config.permittedInsecurePackages = ["electron-39.8.10"];
@@ -103,8 +93,8 @@ in {
 
   # magos.hm.stylix = {
   #   enable = true;
-  #   image = ../../wallpapers/everforest/1.png; # optional
-  #   # image = ../../wallpapers/everforest/1.png; # optional
+  #   image = ../../relics/wallpapers/everforest/1.png; # optional
+  #   # image = ../../relics/wallpapers/everforest/1.png; # optional
   #   polarity = "dark";
   #   base16Scheme = "everforest-dark-soft";
 

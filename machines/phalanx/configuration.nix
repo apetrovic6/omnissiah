@@ -82,18 +82,6 @@ in {
   };
 
   virtualisation.waydroid.enable = true;
-  # nix = {
-  #   extraOptions = ''
-  #     !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
-  #     netrc-file = /home/apetrovic/.config/nix/netrc
-  #   '';
-
-  #   settings = {
-  #     trusted-public-keys = [
-  #       "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
-  #     ];
-  #   };
-  # };
 
   networking.nftables.enable = true;
 
