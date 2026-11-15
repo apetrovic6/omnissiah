@@ -1,0 +1,16 @@
+github_token: ENC[AES256_GCM,data:GMU9VQ9vU0h8W4EyOVa3pexBENi3mMC+Ij/EAZSi+Q/s4j7jq0YcazTPwTIxQ4m+cx2S7R+1L8YcWI448e1P0oWP6tcTwbP12xam8YorW8HK0Gz4+FXXJMFpKjcB,iv:ZG6YqqN/G2EgzRV8RQSz3nlfxCqU+yc4hQDm2BAzHjo=,tag:iyaFZeFOOYLOWPZllTiXMg==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBnRXhRbE1ZNnlFazZBaURj
+            K3l5cGhlT0w2QStidzEvSXgzM0U4VUtHVnc0CjMzUW4rMmtlZ0RweHBPTG5LN0Nx
+            Z0xIME12cW54TlhmNm5WZm9Ob1lVZW8KLS0tIHlGc1BXbzdLUFVZMDFxUWQ3aUtK
+            VXE2dng2SVR2MnR2NUFMaFJrM3JBRHMK/Sz2NfhuTc3qfL6n/Q8eDLt/BFx4IjMB
+            aaw0iIAnVyIR/RKL4m1V4eYyRuXB0hyRuJm/cZdmaXpDoeMQpw4vPw==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+    lastmodified: "2026-11-15T11:18:48Z"
+    mac: ENC[AES256_GCM,data:uadnM0VBqc1K5maj4FsuALRJrv4RpWbY7coq2PyrOf17QXoKFa6w221X+p3rYz/NiN28dlCXoMTUuVImVCUHXy6aOh8/R762KFA2ZeQ8cZmxqx+AdYpkEsYf98pU2Vrq5AIQOydNT5uI0AJtAQ34Nvv2+nMtwJgv/88HukBZT4U=,iv:7+xEflDeThFW80Xjf6PiWltNywNfFkYGcy7W7zli2XM=,tag:lVLLyzeVo9m22WR0J0UnzQ==,type:str]
+    unencrypted_suffix: _unencrypted
+    version: 3.13.3
