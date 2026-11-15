@@ -1,4 +1,8 @@
-{charts, ...}: let
+{
+  charts,
+  cartographa,
+  ...
+}: let
   namespace = "csi-nfs";
 in {
   applications.csi-driver-nfs = {
@@ -15,7 +19,7 @@ in {
       allowVolumeExpansion = true;
 
       parameters = {
-        server = "192.168.1.61";
+        server = cartographa.hosts.manjaca;
         share = "/volume1/selfhosted";
         subDir = "\${pvc.metadata.namespace}/\${pvc.metadata.name}/\${pv.metadata.name}";
         # onDelete = "delete"; # delete|retain|archive

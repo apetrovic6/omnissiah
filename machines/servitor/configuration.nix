@@ -1,4 +1,5 @@
 {
+  self,
   pkgs,
   lib,
   ...
@@ -18,16 +19,16 @@
     useDHCP = false;
     ipv4.addresses = [
       {
-        address = "192.168.1.13";
+        address = self.lib.hosts.servitor;
         prefixLength = 24;
       }
     ];
   };
   networking.defaultGateway = {
-    address = "192.168.1.1";
+    address = self.lib.lan.gateway;
     interface = "end0";
   };
-  networking.nameservers = ["192.168.1.105"];
+  networking.nameservers = [self.lib.lan.dns];
 
   environment.etc."NetworkManager/conf.d/unmanaged-end0.conf".text = ''
     [keyfile]
@@ -79,7 +80,7 @@
 
     # Applied to <Location />, /admin and /admin/conf alike, so this is also
     # what lets you reach the web UI on http://192.168.1.13:631 from the LAN.
-    allowFrom = ["localhost" "192.168.1.0/24"];
+    allowFrom = ["localhost" self.lib.lan.cidr];
 
     # Both default to false and both are needed: defaultShared marks newly
     # added queues shared, browsing makes cupsd actually advertise them.
@@ -162,7 +163,7 @@
     # empty device list rather than an error. Note this is a plain host
     # allow-list: saned has no authentication, so anyone on the subnet can
     # drive the scanner.
-    extraConfig = "192.168.1.0/24";
+    extraConfig = self.lib.lan.cidr;
   };
 
   # The admin clan service (clan.nix, roles.default.tags.all) authorises the

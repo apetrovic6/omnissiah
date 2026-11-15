@@ -1,4 +1,8 @@
-{charts, ...}: {
+{
+  charts,
+  cartographa,
+  ...
+}: {
   applications.metallb = let
     namespace = "metallb-system";
   in {
@@ -30,7 +34,7 @@
           # for whichever clients cached the wrong MAC. Do not put .250 back in
           # the pool unless that device has actually been found and fixed.
           addresses = [
-            "192.168.1.251-192.168.1.253"
+            cartographa.vips.pool
           ];
         };
       };

@@ -1,6 +1,7 @@
 {
   charts,
   config,
+  cartographa,
   ...
 }: let
   domain = config.noosphere.domain;
@@ -152,7 +153,7 @@ in {
               - name: cache
                 parameters: 30
               - name: forward
-                parameters: . 192.168.1.105
+                parameters: . ${cartographa.hosts.cerberus}
             # Split-horizon for the Caddy LAB_DOMAIN zone, the same way noosphere.uk
             # is pinned above, for one concrete reason: Alertmanager publishes to
             # https://ntfy.ugalabugala.org (machines/cerberus/ntfy.nix), and that name
@@ -178,7 +179,7 @@ in {
               - name: cache
                 parameters: 30
               - name: forward
-                parameters: . 192.168.1.105
+                parameters: . ${cartographa.hosts.cerberus}
       ''
     ];
   };
@@ -224,7 +225,7 @@ in {
                 type: LoadBalancer
               annotations:
                 metallb.io/allow-shared-ip: "noosphere"
-                metallb.io/loadBalancerIPs: "192.168.1.251"
+                metallb.io/loadBalancerIPs: "${cartographa.vips.traefik}"
 
             providers:
               kubernetesGateway:

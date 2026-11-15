@@ -1,68 +1,70 @@
-{...}: {
+{...}: let
+  inherit (import ../modules/cartographa/_chart.nix) hosts;
+in {
   inventory.machines = {
     phalanx = {
       tags = ["base" "workstation" "dev" "gaming"];
-      deploy.targetHost = "root@192.168.1.75";
+      deploy.targetHost = "root@${hosts.phalanx}";
       deploy.buildHost = "localhost";
     };
 
     enginseer = {
       tags = ["base" "laptop" "workstation" "dev" "gaming"];
-      deploy.targetHost = "root@192.168.1.146";
+      deploy.targetHost = "root@${hosts.enginseer}";
       deploy.buildHost = "localhost";
     };
 
     genetor = {
       machineClass = "darwin";
-      deploy.targetHost = "root@192.168.1.109";
+      deploy.targetHost = "root@${hosts.genetor}";
     };
 
     cerberus = {
       tags = ["base" "server"];
-      deploy.targetHost = "root@192.168.1.105";
+      deploy.targetHost = "root@${hosts.cerberus}";
       deploy.buildHost = "localhost";
     };
 
     alfrost = {
       tags = [];
 
-      deploy.targetHost = "root@172.245.55.111";
+      deploy.targetHost = "root@${hosts.alfrost}";
       deploy.buildHost = "localhost";
     };
 
     servitor = {
       tags = ["base"];
-      deploy.targetHost = "root@192.168.1.13";
+      deploy.targetHost = "root@${hosts.servitor}";
       deploy.buildHost = "localhost";
     };
 
     cypramundi = {
       tags = [];
-      deploy.targetHost = "root@152.53.34.16";
+      deploy.targetHost = "root@${hosts.cypramundi}";
       deploy.buildHost = "localhost";
     };
 
     terra = {
       tags = ["base" "k8s" "k8s-base"];
-      deploy.targetHost = "root@192.168.1.138";
+      deploy.targetHost = "root@${hosts.terra}";
       deploy.buildHost = "localhost";
     };
 
     luna = {
       tags = ["base" "k8s" "k8s-base" "k8s-server"];
-      deploy.targetHost = "root@192.168.1.232";
+      deploy.targetHost = "root@${hosts.luna}";
       deploy.buildHost = "localhost";
     };
 
     sol = {
       tags = ["base" "k8s" "k8s-base" "k8s-server"];
-      deploy.targetHost = "root@192.168.1.42";
+      deploy.targetHost = "root@${hosts.sol}";
       deploy.buildHost = "localhost";
     };
 
     mars = {
       tags = ["base" "k8s" "k8s-master"];
-      deploy.targetHost = "root@192.168.1.44";
+      deploy.targetHost = "root@${hosts.mars}";
       deploy.buildHost = "localhost";
     };
   };

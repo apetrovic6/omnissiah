@@ -1,7 +1,7 @@
 {ref, ...}: let
-  secretsFile = "${../../../../../vars/shared/tofunix-harbor-secrets/tofunix-harbor-secrets/value}";
-  woodpeckerSecretsFile = "${../../../../../vars/shared/tofunix-harbor-woodpecker-secret/tofunix-harbor-woodpecker-secret/value}";
-  noosphere = import ../../../../vars/_noosphere-values.nix;
+  inherit (import ../../../../cartographa/_cartographa.nix) noosphere vars;
+  secretsFile = "${(vars.shared "tofunix-harbor-secrets" "tofunix-harbor-secrets")}";
+  woodpeckerSecretsFile = "${(vars.shared "tofunix-harbor-woodpecker-secret" "tofunix-harbor-woodpecker-secret")}";
   inherit (noosphere) domain;
 in {
   data.sops_file.secrets = {

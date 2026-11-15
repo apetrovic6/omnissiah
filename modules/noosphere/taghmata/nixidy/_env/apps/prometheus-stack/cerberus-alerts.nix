@@ -1,10 +1,10 @@
-{...}: let
+{cartographa, ...}: let
   namespace = "observability";
 
   # Every series below comes from the ScrapeConfig in ./cerberus-scrape.nix:
   #   job="cerberus-node", instance="cerberus", host="cerberus"
   jobName = "cerberus-node";
-  target = "192.168.1.105:9100";
+  target = "${cartographa.hosts.cerberus}:9100";
   sel = ''job="${jobName}"'';
 
   # The filesystems that actually hold data on this host.

@@ -6,8 +6,9 @@
 # and the mirror over HTTPS with the same token, so nothing is set up by hand on either forge.
 # Until the `tofunix-github-secret` var exists, only the Forgejo repository is planned.
 {ref, ...}: let
+  inherit (import ../../../../../cartographa/_cartographa.nix) vars;
   hasGithubToken =
-    builtins.pathExists ../../../../../../vars/shared/tofunix-github-secret/tofunix-github-secret/value;
+    builtins.pathExists (vars.shared "tofunix-github-secret" "tofunix-github-secret");
 in {
   # One `resource` set, merged one level down: a top-level `//` would replace it wholesale.
   resource =

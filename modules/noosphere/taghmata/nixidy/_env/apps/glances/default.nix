@@ -3,6 +3,7 @@
   lib,
   pkgs,
   charts,
+  vars,
   ...
 }: let
   namespace = "glance";
@@ -17,7 +18,7 @@
   # Absent until `clan vars generate` has been run, so every consumer below is
   # guarded by pathExists: without the secret the deployment renders exactly as
   # it did before (unauthenticated GitHub calls) rather than failing to eval.
-  githubTokenVarFile = ../../../../../../../vars/shared/glance-secrets/glance-secrets/value;
+  githubTokenVarFile = vars.shared "glance-secrets" "glance-secrets";
   hasGithubToken = builtins.pathExists githubTokenVarFile;
 
   importConfig = name:

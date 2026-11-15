@@ -36,10 +36,10 @@
       # Public DNS sends this name to the VPS, so without the pin a job's
       # git and registry traffic (nopresh's image push) hairpins out through
       # Pangolin and back. cerberus pins it the same way (nopresh.nix).
-      lanAddress = "192.168.1.105";
+      lanAddress = self.lib.hosts.cerberus;
       # `forgejo-admin` is the wrapper this module installs wherever
       # services.forgejo is enabled.
-      forgejo = "ssh root@192.168.1.105 forgejo-admin";
+      forgejo = "ssh root@${self.lib.hosts.cerberus} forgejo-admin";
     };
     # The in-cluster Forgejo (taghmata, nixidy apps/forgejo).
     noosphere = {

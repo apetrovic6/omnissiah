@@ -1,6 +1,7 @@
 {
   charts,
   config,
+  vars,
   ...
 }: let
   namespace = "pocket-id";
@@ -18,7 +19,7 @@ in {
     createNamespace = true;
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/pocket-id-encryption-key/pocket-id-encryption-key/value)
+      (builtins.readFile (vars.shared "pocket-id-encryption-key" "pocket-id-encryption-key"))
     ];
 
     templates.garageObjectStore."${objectStoreName}" = {

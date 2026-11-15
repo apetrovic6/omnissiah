@@ -1,5 +1,6 @@
 {ref, ...}: let
-  secretsFile = "${../../../../../vars/shared/tofunix-forgejo-nix-secret/tofunix-forgejo-nix-secret/value}";
+  inherit (import ../../../../cartographa/_cartographa.nix) vars;
+  secretsFile = "${(vars.shared "tofunix-forgejo-nix-secret" "tofunix-forgejo-nix-secret")}";
 in {
   data.sops_file.forgejo_nix_secrets = {
     source_file = secretsFile;

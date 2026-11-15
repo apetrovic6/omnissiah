@@ -55,7 +55,7 @@
         # too would just make Nix query the same cache twice on every miss.
         substituters = ["https://ncps.noosphere.uk"];
         trusted-public-keys = [
-          (builtins.readFile ../vars/shared/ncps-signing-key/ncps-signing-key.pub/value)
+          (builtins.readFile (self.lib.vars.shared "ncps-signing-key" "ncps-signing-key.pub"))
         ];
       };
     };

@@ -35,16 +35,16 @@
     useDHCP = false;
     ipv4.addresses = [
       {
-        address = "192.168.1.232";
+        address = self.lib.hosts.luna;
         prefixLength = 24;
       }
     ];
   };
   networking.defaultGateway = {
-    address = "192.168.1.1";
+    address = self.lib.lan.gateway;
     interface = "enp1s0";
   };
-  networking.nameservers = ["192.168.1.105"];
+  networking.nameservers = [self.lib.lan.dns];
 
   services.imperium.smb.enable = false;
 
@@ -78,7 +78,7 @@
   # boot.kernelModules = [ "i915" ];
 
   services.imperium.smb.hosts.manjaca = {
-    host = "192.168.1.61";
+    host = self.lib.hosts.manjaca;
     credentialsVarName = "manjaca-nas-credentials";
 
     shares.data = {

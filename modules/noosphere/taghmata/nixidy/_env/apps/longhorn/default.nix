@@ -1,6 +1,7 @@
 {
   charts,
   config,
+  cartographa,
   ...
 }: let
   domain = config.noosphere.domain;
@@ -105,7 +106,7 @@ in {
           name: default
           namespace: longhorn-system
         spec:
-          backupTargetURL: "nfs://192.168.1.61:/volume1/longhorn_backup"
+          backupTargetURL: "nfs://${cartographa.hosts.manjaca}:/volume1/longhorn_backup"
           credentialSecret: ""
           # Kubernetes canonicalises metav1.Duration on write, so "300s" comes
           # back as "5m0s" and Argo CD reports a diff it can never reconcile.

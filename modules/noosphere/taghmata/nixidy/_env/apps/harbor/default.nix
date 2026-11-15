@@ -1,6 +1,7 @@
 {
   charts,
   config,
+  vars,
   ...
 }: let
   namespace = "harbor";
@@ -22,14 +23,14 @@ in {
     resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/harbor-admin-password-secret/harbor-admin-password-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/harbor-secret-secret-key/harbor-secret-secret-key/value)
-      (builtins.readFile ../../../../../../../vars/shared/harbor-job-service-secret/harbor-job-service-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/harbor-registry-http-secret/harbor-registry-http-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/harbor-registry-credentials-secret/harbor-registry-credentials-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/harbor-redis-password-secret/harbor-redis-password-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/pg-harbor-postgres-secret/pg-harbor-postgres-secret/value)
-      (builtins.readFile ../../../../../../../vars/shared/harbor-core-secret/harbor-core-secret/value)
+      (builtins.readFile (vars.shared "harbor-admin-password-secret" "harbor-admin-password-secret"))
+      (builtins.readFile (vars.shared "harbor-secret-secret-key" "harbor-secret-secret-key"))
+      (builtins.readFile (vars.shared "harbor-job-service-secret" "harbor-job-service-secret"))
+      (builtins.readFile (vars.shared "harbor-registry-http-secret" "harbor-registry-http-secret"))
+      (builtins.readFile (vars.shared "harbor-registry-credentials-secret" "harbor-registry-credentials-secret"))
+      (builtins.readFile (vars.shared "harbor-redis-password-secret" "harbor-redis-password-secret"))
+      (builtins.readFile (vars.shared "pg-harbor-postgres-secret" "pg-harbor-postgres-secret"))
+      (builtins.readFile (vars.shared "harbor-core-secret" "harbor-core-secret"))
 
       ''
         apiVersion: networking.k8s.io/v1

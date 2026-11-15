@@ -1,6 +1,7 @@
 {
   domain,
   namespace,
+  cartographa,
   ...
 }: let
   labels = {app = "sabnzbd";};
@@ -82,7 +83,7 @@ in {
           {
             name = "data";
             nfs = {
-              server = "192.168.1.61";
+              server = cartographa.hosts.manjaca;
               path = "/volume1/data/";
             };
           }

@@ -1,6 +1,7 @@
 {
   charts,
   config,
+  vars,
   ...
 }: let
   namespace = "bytestash";
@@ -11,7 +12,7 @@ in {
     createNamespace = true;
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/bytestash-jwt-secret/bytestash-jwt-secret/value)
+      (builtins.readFile (vars.shared "bytestash-jwt-secret" "bytestash-jwt-secret"))
     ];
 
     helm.releases.bytestash = {

@@ -47,13 +47,13 @@ in {
     useDHCP = lib.mkForce false;
     ipv4.addresses = [
       {
-        address = "192.168.1.105";
+        address = self.lib.hosts.cerberus;
         prefixLength = 24;
       }
     ];
   };
   networking.defaultGateway = {
-    address = "192.168.1.1";
+    address = self.lib.lan.gateway;
     interface = "ens18";
   };
 
@@ -61,7 +61,7 @@ in {
   # (stc/workstation.nix). The router and 9.9.9.9 both give the public answer
   # for the split-horizon names: ncps.noosphere.uk resolved to the VPS, which
   # served Traefik's default certificate, and CI substitution from ncps failed.
-  networking.nameservers = ["192.168.1.105"];
+  networking.nameservers = [self.lib.lan.dns];
   services.resolved.settings.Resolve.FallbackDNS = [];
 
   services.qemuGuest.enable = true;
@@ -71,7 +71,7 @@ in {
     "${mkDomain "syn"}" = {
       extraConfig = mkRevProxyVHost {
         port = 5000;
-        host = "192.168.1.61";
+        host = self.lib.hosts.manjaca;
       };
     };
   };
@@ -79,7 +79,7 @@ in {
   services.caddy.virtualHosts = {
     "${mkDomain "proxmox"}" = {
       extraConfig = ''
-        reverse_proxy "https://192.168.1.10:8006" {
+        reverse_proxy "https://${self.lib.hosts.proxmox}:8006" {
           transport http {
             tls_insecure_skip_verify
           }
@@ -216,7 +216,7 @@ in {
         ugala-bugala = {
           name = "Ugala Bugala";
           mode = "host";
-          destination = "192.168.1.105";
+          destination = self.lib.hosts.cerberus;
           alias = "*.ugalabugala.org";
           site = siteCerberus;
           disable-icmp = true;
@@ -233,7 +233,7 @@ in {
         plex = {
           name = "plex";
           mode = "host";
-          destination = "192.168.1.105";
+          destination = self.lib.hosts.cerberus;
           alias = "plex.ugalabugala.org";
           site = siteCerberus;
           disable-icmp = true;
@@ -245,7 +245,7 @@ in {
         noosphere = {
           name = "Noosphere";
           mode = "host";
-          destination = "192.168.1.251";
+          destination = self.lib.vips.traefik;
           alias = "*.noosphere.uk";
           site = siteCerberus;
           disable-icmp = true;
@@ -296,7 +296,7 @@ in {
     hosts.manjaca = let
       nasRoot = "/volume1";
     in {
-      host = "192.168.1.61";
+      host = self.lib.hosts.manjaca;
 
       exports.backup = {
         remotePath = "${nasRoot}/postgres_backup"; # path on the NAS
@@ -481,7 +481,7 @@ in {
   # boot.kernelModules = [ "i915" ];
 
   services.imperium.smb.hosts.manjaca = {
-    host = "192.168.1.61";
+    host = self.lib.hosts.manjaca;
     credentialsVarName = "manjaca-nas-credentials";
 
     shares.data = {
@@ -648,7 +648,7 @@ in {
   services.caddy.virtualHosts = {
     "*.noosphere.uk" = {
       extraConfig = ''
-        reverse_proxy https://192.168.1.251 {
+        reverse_proxy https://${self.lib.vips.traefik} {
           header_up Host {http.request.host}
           transport http {
             tls_server_name {http.request.host}
@@ -698,7 +698,7 @@ in {
   services.caddy.virtualHosts = {
     "*.keksic.xyz" = {
       extraConfig = ''
-        reverse_proxy https://192.168.1.243 {
+        reverse_proxy https://${self.lib.hosts.keksic} {
           header_up Host {http.request.host}
           transport http {
             tls_server_name {http.request.host}

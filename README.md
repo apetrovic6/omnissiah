@@ -17,7 +17,7 @@ what they do.
 | `modules/litanies/` | `flake.lib` helper functions |
 | `modules/noosphere/` | Self-hosted services, grouped by domain (below) |
 | `modules/manufactorum/` | What the flake builds for itself: checks, packages, the dev shell and formatter |
-| `modules/vars/` | Flake-wide values (domain, SSO, age key) and shared clan vars |
+| `modules/cartographa/` | The chart of the estate: host and network addresses (`_chart.nix`), flake-wide values such as the domain and SSO provider, paths into the vars store, and shared clan vars |
 | `overlays/` | Nixpkgs overlays, exported as `overlays.<name>` |
 | `services/` | Packages built from source in this repo |
 | `users/` | Home Manager configuration |
@@ -71,3 +71,16 @@ nix fmt
 
 `checks` contains every NixOS machine for the system, so new machines are
 built by CI without being listed anywhere.
+
+## Addresses and secrets paths
+
+No module writes an IP address or a `../../vars/...` path itself. Both come
+from `modules/cartographa`:
+
+| Where | Addresses | Vars files |
+|---|---|---|
+| NixOS and Home Manager modules | `self.lib.hosts.cerberus`, `self.lib.lan.gateway`, `self.lib.vips.traefik` | `self.lib.vars.shared "<generator>" "<file>"` |
+| nixidy apps | the `cartographa` module argument | the `vars` module argument |
+| OpenTofu config, clan inventory | `import .../cartographa/_cartographa.nix` | the same import's `vars` |
+
+A new host or device gets one line in `modules/cartographa/_chart.nix`.

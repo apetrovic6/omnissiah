@@ -12,7 +12,7 @@
 
     services.imperium.taghmata.rke2.server = {
       enable = true;
-      serverAddr = "https://192.168.1.138:9345";
+      serverAddr = "https://${self.lib.hosts.terra}:9345";
     };
   };
 }

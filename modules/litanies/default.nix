@@ -1,5 +1,10 @@
-{lib, ...}: {
+{lib, ...}: let
+  cartographa = import ../cartographa/_cartographa.nix;
+in {
   flake.lib = {
+    # The network chart and the vars store, see modules/cartographa.
+    inherit (cartographa) lan hosts vips vars;
+
     mkDomain = subdomain: "${subdomain}.{$LAB_DOMAIN}";
 
     # `resolvers` is not optional here. After writing the _acme-challenge TXT

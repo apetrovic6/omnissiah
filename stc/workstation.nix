@@ -35,7 +35,7 @@
     };
 
     # ── Pi / OMP: declarative API key injection via sops ──────────
-    # The pi-api-keys clan vars generator (in modules/vars) creates and
+    # The pi-api-keys clan vars generator (in modules/cartographa) creates and
     # sops-encrypts the key. Enable the agents here once the secret is
     # generated:
     #   clan vars generate --generator pi-api-keys <machine>
@@ -86,7 +86,7 @@
 
     services.udev.packages = [pkgs.probe-rs-tools];
 
-    networking.nameservers = ["192.168.1.105"];
+    networking.nameservers = [self.lib.lan.dns];
     # Prevent NetworkManager from pushing DHCP-provided DNS to systemd-resolved,
     # which would override Technitium and cause intermittent split-horizon failures.
     networking.networkmanager.dns = lib.mkForce "none";
@@ -176,7 +176,7 @@
       # short-lived process per connection, and a per-connection process
       # never registers a service. Confirmed on servitor: `avahi-browse -rtp
       # _sane-port._tcp` returns nothing while _ipp._tcp lists the printer.
-      netConf = "192.168.1.13";
+      netConf = self.lib.hosts.servitor;
     };
 
     services.avahi = {

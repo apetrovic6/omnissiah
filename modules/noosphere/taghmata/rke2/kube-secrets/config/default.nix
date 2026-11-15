@@ -7,12 +7,12 @@
   inherit (lib) mkIf mkMerge mkDefault;
 in {
   # flake-parts options (import shared module)
-  imports = [../../../../../vars/_noosphere-options.nix];
+  imports = [../../../../../cartographa/_noosphere-options.nix];
 
   # exported NixOS module
   config.flake.nixosModules.noosphere = {lib, ...}: {
     # Import shared noosphere options module
-    imports = [../../../../../vars/_noosphere-options.nix];
+    imports = [../../../../../cartographa/_noosphere-options.nix];
 
     # propagate flake values into NixOS config as defaults
     config = mkMerge [

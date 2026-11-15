@@ -223,7 +223,7 @@ in {
       };
 
       "forge.ugalabugala.org" = {
-        hostname = "192.168.1.105";
+        hostname = self.lib.hosts.cerberus;
         port = 2222;
         # The wildcard *.ugalabugala.org record resolves to cerberus for every
         # name, so the IP is pinned above and the host-IP check would fail.
@@ -256,17 +256,17 @@ in {
           "luna"
           "sol"
           "servitor"
-          "192.168.1.75" # phalanx
-          "192.168.1.146" # enginseer
-          "192.168.1.13" # servitor
-          "192.168.1.109"
-          "192.168.1.105" # cerberus
-          "192.168.1.138" # terra
-          "192.168.1.232"
-          "192.168.1.42"
-          "192.168.1.44" # mars
-          "152.53.34.16" # cypramundi
-          "172.245.55.111" # alfrost
+          self.lib.hosts.phalanx # phalanx
+          self.lib.hosts.enginseer # enginseer
+          self.lib.hosts.servitor # servitor
+          self.lib.hosts.genetor
+          self.lib.hosts.cerberus # cerberus
+          self.lib.hosts.terra # terra
+          self.lib.hosts.luna
+          self.lib.hosts.sol
+          self.lib.hosts.mars # mars
+          self.lib.hosts.cypramundi # cypramundi
+          self.lib.hosts.alfrost # alfrost
         ];
         identityFile = "~/.ssh/apetrovic.pub";
         identitiesOnly = true;
