@@ -1,4 +1,4 @@
 {ref, ...}: let
-  noosphere = import ../../../../vars/_noosphere-values.nix;
+  inherit (import ../../../../cartographa/_cartographa.nix) noosphere;
   inherit (noosphere) domain;
 in {}

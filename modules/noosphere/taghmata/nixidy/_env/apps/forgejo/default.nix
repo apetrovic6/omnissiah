@@ -1,6 +1,8 @@
 {
   config,
   charts,
+  cartographa,
+  vars,
   ...
 }: let
   name = "forgejo";
@@ -22,8 +24,8 @@ in {
     createNamespace = true;
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/${forgejo-admin-secret}/${forgejo-admin-secret}/value)
-      (builtins.readFile ../../../../../../../vars/shared/${forgejo-keycloak-oauth-secret}/${forgejo-keycloak-oauth-secret}/value)
+      (builtins.readFile (vars.shared forgejo-admin-secret forgejo-admin-secret))
+      (builtins.readFile (vars.shared forgejo-keycloak-oauth-secret forgejo-keycloak-oauth-secret))
     ];
 
     templates.garageObjectStore."${objectStoreName}" = {
@@ -120,7 +122,7 @@ in {
           annotations = {
             # sharing key (same key on both Services you want to share an IP)
             "metallb.io/allow-shared-ip" = "noosphere";
-            "metallb.io/loadBalancerIPs" = "192.168.1.251";
+            "metallb.io/loadBalancerIPs" = cartographa.vips.traefik;
           };
         };
 

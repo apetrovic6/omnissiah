@@ -2,6 +2,7 @@
   charts,
   config,
   lib,
+  vars,
   ...
 }: let
   namespace = "garage-operator";
@@ -12,8 +13,8 @@ in {
     inherit namespace;
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/garage-main-ui-admin-token/garage-main-ui-admin-token/value)
-      (builtins.readFile ../../../../../../../vars/shared/garage-main-ui-jwt-token-secret/garage-main-ui-jwt-token-secret/value)
+      (builtins.readFile (vars.shared "garage-main-ui-admin-token" "garage-main-ui-admin-token"))
+      (builtins.readFile (vars.shared "garage-main-ui-jwt-token-secret" "garage-main-ui-jwt-token-secret"))
     ];
 
     resources.ingresses.garage-main-ui = {

@@ -2,6 +2,7 @@
   config,
   charts,
   lib,
+  vars,
   ...
 }: let
   namespace = "observability";
@@ -18,7 +19,7 @@
   # from 192.168.1.105 (cerberus, Caddy -> ntfy) and 152.53.34.16 from a public
   # resolver, so the cluster side pins the zone in CoreDNS (see applications.coredns-
   # config in _env/prod.nix) instead of leaning on the nodes' resolv.conf.
-  labDomain = lib.removeSuffix "\n" (builtins.readFile ../../../../../../../vars/shared/caddy-env/domain/value);
+  labDomain = lib.removeSuffix "\n" (builtins.readFile (vars.shared "caddy-env" "domain"));
   ntfyUrl = "https://ntfy.${labDomain}/";
   ntfyTopic = "homelab-alerts";
 
@@ -31,8 +32,8 @@
   # which would take every alert down, not just the missing one).
   ntfySecretName = "alertmanager-ntfy";
   heartbeatSecretName = "alertmanager-heartbeat";
-  ntfySecretYaml = ../../../../../../../vars/shared/ntfy-access/alertmanager-ntfy/value;
-  heartbeatSecretYaml = ../../../../../../../vars/shared/alertmanager-heartbeat/alertmanager-heartbeat/value;
+  ntfySecretYaml = vars.shared "ntfy-access" "alertmanager-ntfy";
+  heartbeatSecretYaml = vars.shared "alertmanager-heartbeat" "alertmanager-heartbeat";
   ntfyReady = builtins.pathExists ntfySecretYaml;
   heartbeatReady = builtins.pathExists heartbeatSecretYaml;
 

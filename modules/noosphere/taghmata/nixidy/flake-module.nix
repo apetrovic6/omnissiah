@@ -355,6 +355,12 @@ in {
           legacyPackages.nixidyEnvs.${system} = nixidy.lib.mkEnvs {
             inherit pkgs;
             inherit charts;
+            # The network chart and the vars store (modules/cartographa),
+            # as module arguments of every app.
+            extraSpecialArgs = {
+              cartographa = import ../../../cartographa/_chart.nix;
+              vars = import ../../../cartographa/_vars.nix;
+            };
             envs = lib.mapAttrs mkEnv enabledEnvs;
           };
 

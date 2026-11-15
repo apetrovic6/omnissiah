@@ -141,7 +141,7 @@ in {
       };
 
       gerbil = {
-        base_endpoint = "152.53.34.16";
+        base_endpoint = self.lib.hosts.cypramundi;
       };
 
       domains = {
@@ -213,7 +213,7 @@ in {
   networking.interfaces.ens3 = {
     ipv4.addresses = [
       {
-        address = "152.53.34.16";
+        address = self.lib.hosts.cypramundi;
         prefixLength = 22;
       }
     ];

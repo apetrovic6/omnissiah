@@ -2,6 +2,7 @@
   charts,
   lib,
   config,
+  vars,
   ...
 }: let
   namespace = "ncps";
@@ -24,9 +25,9 @@ in {
     createNamespace = true;
 
     yamls = [
-      (builtins.readFile ../../../../../../../vars/shared/${signingKeySecret}/${signingKeySecret}/value)
+      (builtins.readFile (vars.shared signingKeySecret signingKeySecret))
       # The htpasswd line for /upload; see rke2/kube-secrets/ncps.
-      (builtins.readFile ../../../../../../../vars/shared/${uploadAuth}/${uploadAuth}/value)
+      (builtins.readFile (vars.shared uploadAuth uploadAuth))
     ];
 
     # Only the Forgejo runners may reach /upload, where ncps takes PUTs. The
@@ -140,7 +141,7 @@ in {
             # rejects every upload.
             requireTrustedSignature = true;
             trustedUploadKeys = [
-              (lib.removeSuffix "\n" (builtins.readFile ../../../../../../../vars/shared/nix-ci-signing-key/key.pub/value))
+              (lib.removeSuffix "\n" (builtins.readFile (vars.shared "nix-ci-signing-key" "key.pub")))
             ];
           };
 

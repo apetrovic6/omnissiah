@@ -74,9 +74,9 @@ in {
   };
 
   networking = {
-    nameservers = ["192.168.1.105"];
+    nameservers = [self.lib.lan.dns];
     defaultGateway = {
-      address = "192.168.1.1";
+      address = self.lib.lan.gateway;
       interface = "enp6s0";
     };
   };
@@ -308,7 +308,7 @@ in {
   services.imperium.smb.enable = true;
 
   services.imperium.smb.hosts.manjaca = {
-    host = "192.168.1.61";
+    host = self.lib.hosts.manjaca;
     credentialsVarName = "manjaca-nas-credentials";
 
     shares.games = {

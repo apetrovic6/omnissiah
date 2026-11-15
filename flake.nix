@@ -214,7 +214,7 @@
         (import-tree ./overlays)
       ];
 
-      noosphere = import ./modules/vars/_noosphere-values.nix;
+      noosphere = import ./modules/cartographa/_noosphere-values.nix;
 
       # https://docs.clan.lol/guides/flake-parts
       clan = {

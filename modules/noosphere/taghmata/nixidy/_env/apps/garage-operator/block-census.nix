@@ -16,14 +16,14 @@
 #
 # Everything is read-only: these pods sit on top of the live data of every
 # Garage node, and they exist because something once deleted files there.
-{...}: let
+{cartographa, ...}: let
   namespace = "garage-operator";
   script = "block-census";
 
   # The garage-operator directory of the share that the synology-nfs
   # StorageClass provisions into (apps/csi-driver-nfs): every garage-backup
   # data PV is <this>/<pvc-name>/<pv-name>.
-  nfsServer = "192.168.1.61";
+  nfsServer = cartographa.hosts.manjaca;
   nfsPath = "/volume1/selfhosted/garage-operator";
 
   # local-path-provisioner's directory for this namespace's volumes

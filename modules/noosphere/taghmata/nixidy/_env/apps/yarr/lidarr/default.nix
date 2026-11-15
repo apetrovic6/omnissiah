@@ -2,6 +2,8 @@
   domain,
   namespace,
   db-cluster-name,
+  cartographa,
+  vars,
   ...
 }: {
   imports = [
@@ -51,7 +53,7 @@
           {
             name = "data";
             nfs = {
-              server = "192.168.1.61";
+              server = cartographa.hosts.manjaca;
               path = "/volume1/data/";
             };
           }
@@ -196,7 +198,7 @@
     };
 
     yamls = [
-      (builtins.readFile ../../../../../../../../vars/shared/pg-lidarr-sopssecret/pg-lidarr-sopssecret/value)
+      (builtins.readFile (vars.shared "pg-lidarr-sopssecret" "pg-lidarr-sopssecret"))
     ];
   };
 }

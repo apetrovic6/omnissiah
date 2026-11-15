@@ -2,6 +2,7 @@
   domain,
   namespace,
   db-cluster-name,
+  vars,
   ...
 }: {
   imports = [
@@ -175,7 +176,7 @@
     };
 
     yamls = [
-      (builtins.readFile ../../../../../../../../vars/shared/pg-prowlarr-sopssecret/pg-prowlarr-sopssecret/value)
+      (builtins.readFile (vars.shared "pg-prowlarr-sopssecret" "pg-prowlarr-sopssecret"))
     ];
   };
 }

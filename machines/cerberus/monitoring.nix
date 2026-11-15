@@ -1,4 +1,5 @@
 {
+  self,
   config,
   lib,
   ...
@@ -23,10 +24,10 @@
   # attrname = node name, value = that node's IP, so the iptables comment can
   # say which machine a rule belongs to when someone reads `iptables -L nixos-fw`.
   scrapeSources = {
-    luna = "192.168.1.232";
-    terra = "192.168.1.138";
-    sol = "192.168.1.42";
-    mars = "192.168.1.44";
+    luna = self.lib.hosts.luna;
+    terra = self.lib.hosts.terra;
+    sol = self.lib.hosts.sol;
+    mars = self.lib.hosts.mars;
   };
 
   exporterPort = 9100;

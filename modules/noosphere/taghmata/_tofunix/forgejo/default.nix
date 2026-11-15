@@ -1,6 +1,6 @@
 {ref, ...}: let
-  secretsFile = "${../../../../../vars/shared/tofunix-forgejo-secret/tofunix-forgejo-secret/value}";
-  noosphere = import ../../../../vars/_noosphere-values.nix;
+  inherit (import ../../../../cartographa/_cartographa.nix) noosphere vars;
+  secretsFile = "${(vars.shared "tofunix-forgejo-secret" "tofunix-forgejo-secret")}";
   inherit (noosphere) domain;
 in {
   data.sops_file.forgejo_secrets = {

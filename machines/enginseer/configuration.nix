@@ -91,7 +91,7 @@ in {
   services.imperium.smb.enable = true;
 
   services.imperium.smb.hosts.manjaca = {
-    host = "192.168.1.61";
+    host = self.lib.hosts.manjaca;
     credentialsVarName = "manjaca-nas-credentials";
 
     shares.games = {
@@ -216,9 +216,9 @@ in {
 
       # First match wins, bare address last as the default.
       server = [
-        "/ugalabugala.org/192.168.1.105"
-        "/noosphere.uk/192.168.1.105"
-        "/keksic.xyz/192.168.1.105"
+        "/ugalabugala.org/${self.lib.hosts.cerberus}"
+        "/noosphere.uk/${self.lib.hosts.cerberus}"
+        "/keksic.xyz/${self.lib.hosts.cerberus}"
         "9.9.9.9"
       ];
 

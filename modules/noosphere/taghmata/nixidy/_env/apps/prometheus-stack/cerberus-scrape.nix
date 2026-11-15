@@ -1,10 +1,10 @@
-{...}: let
+{cartographa, ...}: let
   namespace = "observability";
 
   # The host being scraped. cerberus is not a Kubernetes node: there is no
   # kubelet, no node-exporter DaemonSet pod and no Service for it, so the
   # kube-prometheus-stack has nothing in-cluster to discover it from.
-  address = "192.168.1.105";
+  address = cartographa.hosts.cerberus;
   port = 9100;
   host = "cerberus";
 

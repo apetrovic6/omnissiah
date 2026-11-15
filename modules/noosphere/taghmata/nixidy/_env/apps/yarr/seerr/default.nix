@@ -1,14 +1,19 @@
-{config, ...}: let
+{
+  config,
+  vars,
+  cartographa,
+  ...
+}: let
   namespace = "yarr";
   domain = config.noosphere.domain;
   db-cluster-name = "pg-yarr-2";
   objectStoreName = "yarr-object-store";
 
-  prowlarr = import ../prowlarr {inherit domain namespace db-cluster-name;};
-  sonarr = import ../sonarr {inherit domain namespace db-cluster-name;};
-  radarr = import ../radarr {inherit domain namespace db-cluster-name;};
-  lidarr = import ../lidarr {inherit domain namespace db-cluster-name;};
-  sabnzbd = import ../sabnzbd {inherit domain namespace;};
+  prowlarr = import ../prowlarr {inherit domain namespace db-cluster-name cartographa vars;};
+  sonarr = import ../sonarr {inherit domain namespace db-cluster-name cartographa vars;};
+  radarr = import ../radarr {inherit domain namespace db-cluster-name cartographa vars;};
+  lidarr = import ../lidarr {inherit domain namespace db-cluster-name cartographa vars;};
+  sabnzbd = import ../sabnzbd {inherit domain namespace cartographa vars;};
 in {
   imports = [
     ../../../../_modules/templates/garage-object-store.nix
@@ -212,7 +217,7 @@ in {
     };
 
     yamls = [
-      (builtins.readFile ../../../../../../../../vars/shared/pg-seerr-sopssecret/pg-seerr-sopssecret/value)
+      (builtins.readFile (vars.shared "pg-seerr-sopssecret" "pg-seerr-sopssecret"))
     ];
 
     templates.cnpg-database-cluster.yarr-2 = {
