@@ -26,7 +26,6 @@
   nixpkgs.overlays = [
     self.overlays.helix
     self.overlays.herdr
-    self.overlays.pi
   ];
 
   system.primaryUser = "apetrovic";
@@ -93,7 +92,6 @@
     xcodes
     helix
     herdr
-    pi-coding-agent
   ];
 
   nix.enable = false;
