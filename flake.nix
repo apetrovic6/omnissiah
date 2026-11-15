@@ -428,6 +428,12 @@
               })
 
               (tofu.mkOpentofuProvider {
+                owner = "integrations";
+                repo = "github";
+                version = "6.6.0";
+                hash = "sha256-4YaFJfGo7NPRGS51musdgGTtDTeYUtkkZYjDW7ISgHE=";
+              })
+              (tofu.mkOpentofuProvider {
                 owner = "trozz";
                 repo = "pocketid";
                 version = "2.3.0";

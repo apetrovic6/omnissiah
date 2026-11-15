@@ -7,6 +7,7 @@
     ./projects
     ./products
     ./pocket-id
+    ./github
   ];
 
   terraform.backend = {
