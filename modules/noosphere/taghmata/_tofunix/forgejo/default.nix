@@ -1,5 +1,5 @@
 {ref, ...}: let
-  secretsFile = toString ../../../../../vars/shared/tofunix-forgejo-secret/tofunix-forgejo-secret/value;
+  secretsFile = "${../../../../../vars/shared/tofunix-forgejo-secret/tofunix-forgejo-secret/value}";
   noosphere = import ../../../../vars/_noosphere-values.nix;
   inherit (noosphere) domain;
 in {

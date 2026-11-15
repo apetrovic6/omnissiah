@@ -1,6 +1,6 @@
 {ref, ...}: let
-  secretsFile = toString ../../../../../vars/shared/tofunix-harbor-secrets/tofunix-harbor-secrets/value;
-  woodpeckerSecretsFile = toString ../../../../../vars/shared/tofunix-harbor-woodpecker-secret/tofunix-harbor-woodpecker-secret/value;
+  secretsFile = "${../../../../../vars/shared/tofunix-harbor-secrets/tofunix-harbor-secrets/value}";
+  woodpeckerSecretsFile = "${../../../../../vars/shared/tofunix-harbor-woodpecker-secret/tofunix-harbor-woodpecker-secret/value}";
   noosphere = import ../../../../vars/_noosphere-values.nix;
   inherit (noosphere) domain;
 in {

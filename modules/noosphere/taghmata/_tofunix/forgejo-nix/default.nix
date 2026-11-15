@@ -1,5 +1,5 @@
 {ref, ...}: let
-  secretsFile = toString ../../../../../vars/shared/tofunix-forgejo-nix-secret/tofunix-forgejo-nix-secret/value;
+  secretsFile = "${../../../../../vars/shared/tofunix-forgejo-nix-secret/tofunix-forgejo-nix-secret/value}";
 in {
   data.sops_file.forgejo_nix_secrets = {
     source_file = secretsFile;

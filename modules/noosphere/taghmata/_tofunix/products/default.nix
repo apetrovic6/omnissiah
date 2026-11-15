@@ -32,7 +32,7 @@ in {
   data.sops_file = each sops (name: _: let
     var = "tofunix-harbor-robot-${name}";
   in {
-    source_file = toString ../../../../../vars/shared/${var}/${var}/value;
+    source_file = "${../../../../../vars/shared/${var}/${var}/value}";
     input_type = "yaml";
   });
 
