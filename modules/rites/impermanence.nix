@@ -111,6 +111,16 @@
               directory = ".ssh";
               mode = "0700";
             }
+            # AWS SSO tokens and assumed-role credential caches. ~/.aws/config
+            # itself is a symlink into /run, rebuilt every boot (awscli.nix).
+            {
+              directory = ".aws/sso";
+              mode = "0700";
+            }
+            {
+              directory = ".aws/cli";
+              mode = "0700";
+            }
             {
               directory = ".local/share/keyrings";
               mode = "0700";
