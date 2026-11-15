@@ -131,12 +131,61 @@ in {
           #    SDK tool to a key that can see exactly one bucket.
           export AWS_SHARED_CREDENTIALS_FILE="''${AWS_SHARED_CREDENTIALS_FILE:-${config.clan.core.vars.generators.${generatorName}.files.${credentialsFile}.path}}"
 
+          # 4. Garage unreachable = uncached, never a failed build (RT-77).
+          #    sccache 0.19 runs a storage check (`.sccache_check` GET)
+          #    when it starts its server. If that check fails, every
+          #    compile fails with "Server startup failed", and
+          #    SCCACHE_IGNORE_SERVER_IO_ERROR does not cover it (it only
+          #    covers IO errors against a server that is already up).
+          #    Measured against `cargo build -p xtask` in
+          #    rust-app-template: refused endpoint rc=101 after 0 s,
+          #    black-holed endpoint rc=101 after the 10 s startup timeout.
+          #    SCCACHE_SKIP_CACHE_CHECK=1 is not the fix: it starts the
+          #    server, but against a black hole each lookup waits out the
+          #    60 s lookup timeout (646 s against 15 s).
+          #
+          #    So, for a compiler invocation (the first argument is not an
+          #    sccache flag) with no server listening, start the server
+          #    here. If that fails, run the compiler directly and leave a
+          #    marker so that the next 5 minutes of rustc invocations go
+          #    straight to the compiler instead of paying the startup
+          #    timeout each time. A server that is already listening is
+          #    trusted: once it is up, a storage error is a cache miss and
+          #    the compile runs locally (sccache's own CacheReadError path).
+          #    Still uncovered: Garage starting to hang after a server came
+          #    up. That's slow (up to the 60 s lookup timeout per unit), and
+          #    long enough to reach a job timeout. Also skipped entirely: a
+          #    server on a Unix socket (SCCACHE_SERVER_UDS), which nothing
+          #    here uses, because /dev/tcp can't probe one. The port is
+          #    resolved the way sccache does it (commands.rs, get_addr): a
+          #    value that isn't a number means 4226, so a garbage
+          #    SCCACHE_SERVER_PORT can't make the probe miss a live server.
+          if [ "$#" -gt 0 ] && [ "''${1#-}" = "$1" ] && [ -z "''${SCCACHE_SERVER_UDS:-}" ]; then
+            port="''${SCCACHE_SERVER_PORT:-4226}"
+            case "$port" in "" | *[!0-9]*) port=4226 ;; esac
+            [ "''${#port}" -le 5 ] && [ "$port" -le 65535 ] || port=4226
+            listening() { (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; }
+            if ! listening; then
+              marker="''${TMPDIR:-/tmp}/sccache-unavailable-$(${pkgs.coreutils}/bin/id -u)-$port"
+              if [ -n "$(${pkgs.findutils}/bin/find "$marker" -mmin -5 2>/dev/null)" ]; then
+                exec "$@"
+              fi
+              if ! ${pkgs.sccache}/bin/sccache --start-server >/dev/null 2>&1 && ! listening; then
+                ${pkgs.coreutils}/bin/touch "$marker" 2>/dev/null || true
+                echo "sccache: cache storage unreachable, compiling locally for the next 5 minutes" >&2
+                exec "$@"
+              fi
+              ${pkgs.coreutils}/bin/rm -f "$marker"
+            fi
+          fi
+
           exec ${pkgs.sccache}/bin/sccache "$@"
         '';
         defaultText = lib.literalExpression ''
           writeShellScriptBin "sccache" -- unsets CARGO_INSTALL_ROOT and the
           ambient AWS_* credential vars, defaults AWS_SHARED_CREDENTIALS_FILE
-          to the machine's clan var file, execs pkgs.sccache
+          to the machine's clan var file, runs the compiler directly when the
+          sccache server cannot start (Garage unreachable), execs pkgs.sccache
         '';
         description = ''
           Credentialed, cache-key-scrubbing sccache wrapper. Use this
