@@ -292,20 +292,14 @@
           outputHash = "sha256-UrRli9J8vorLAahyvctzxue06nHEklZYUH5p8/cqFo0=";
         };
       in {
-        checks = let
-          configs = self.nixosConfigurations;
-        in {
-          enginseer =
-            configs.enginseer.config.system.build.toplevel;
-          sol = configs.sol.config.system.build.toplevel;
-          terra = configs.terra.config.system.build.toplevel;
-          luna = configs.luna.config.system.build.toplevel;
-          phalanx = configs.phalanx.config.system.build.toplevel;
-          cerberus = configs.cerberus.config.system.build.toplevel;
-          alfrost = configs.alfrost.config.system.build.toplevel;
-          cypramundi = configs.cypramundi.config.system.build.toplevel;
-          mars = configs.mars.config.system.build.toplevel;
-        };
+        # Every NixOS machine built for this system, so a new machine is
+        # covered without being listed here. The Machines workflow
+        # (.forgejo/workflows/machines.yml) builds `checks.x86_64-linux`.
+        checks =
+          lib.mapAttrs (_: machine: machine.config.system.build.toplevel)
+          (lib.filterAttrs
+            (_: machine: machine.pkgs.stdenv.hostPlatform.system == system)
+            self.nixosConfigurations);
 
         noosphere.nixidy = {
           repository = "https://github.com/apetrovic6/omnissiah.git";

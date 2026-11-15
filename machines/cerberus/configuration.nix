@@ -64,7 +64,6 @@ in {
   networking.nameservers = ["192.168.1.105"];
   services.resolved.settings.Resolve.FallbackDNS = [];
 
-  # nixpkgs.overlays = [self.overlays.newt];
   services.qemuGuest.enable = true;
   nixpkgs.config.allowUnfree = true; # can't set with external pkgs from pkgsForSystem
 
@@ -414,20 +413,6 @@ in {
   users.groups.backup = {
     gid = 65539;
   };
-
-  # nix = {
-  #   extraOptions = ''
-  #     !include ${config.clan.core.vars.generators.attic-pull-token.files.token.path}
-  #     netrc-file = /home/apetrovic/.config/nix/netrc
-  #   '';
-
-  #   settings = {
-  #     trusted-public-keys = [
-  #       "manjo:NYye+6m7jUVm3d9GUoIjXeX55/sz9xnRP/gl8THza6k="
-  #     ];
-  #   };
-  # };
-  #
 
   services.imperium.smb.enable = true;
 
