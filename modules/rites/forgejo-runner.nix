@@ -103,6 +103,16 @@ in {
         default = ["nix:host"];
       };
 
+      # One slot is shared by every forge. While it is taken the daemon stops
+      # polling the forges the job did NOT come from, so they show the runner
+      # offline until the job ends (checked 2026-11-14: not a hang). A second
+      # slot hides that, at the price of two jobs sharing `resources`.
+      capacity = mkOption {
+        type = types.ints.positive;
+        default = 1;
+        description = "Jobs this runner runs at once, across all forges.";
+      };
+
       extraHostPackages = mkOption {
         type = types.listOf types.package;
         default = [];
@@ -324,6 +334,7 @@ in {
             # the workflow's 5h: the workflow owns the deadline you see in the
             # UI, and the runner never cuts a job short underneath it.
             settings.runner.timeout = "6h";
+            settings.runner.capacity = cfg.capacity;
             # `secrets` values are credential paths the module turns into
             # `file:$CREDENTIALS_DIRECTORY/...` URLs. A bare path in
             # settings.token_url is rejected at startup ("unsupported secret URL").

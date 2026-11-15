@@ -16,6 +16,7 @@
       self.nixosModules.flatpak
       self.nixosModules.sccache
       self.nixosModules.github-token
+      self.nixosModules.awscli
       self.inputs.magos.nixosModules.desktop
       self.inputs.magos.nixosModules.pi
       self.inputs.magos.nixosModules.omp
@@ -25,6 +26,13 @@
       self.nixosModules.virtualisation
       self.inputs.nix-index-database.nixosModules.default
     ];
+
+    # AWS CLI profiles, one clan vars secret each (modules/rites/awscli.nix).
+    # Add `<name> = "sso";` (or "keys"), then: clan vars generate --generator aws-profile-<name>
+    services.imperium.awscli = {
+      enable = true;
+      profiles.natl = "sso";
+    };
 
     # ── Pi / OMP: declarative API key injection via sops ──────────
     # The pi-api-keys clan vars generator (in modules/vars) creates and
@@ -84,7 +92,6 @@
     networking.networkmanager.dns = lib.mkForce "none";
     # Remove compiled-in fallback DNS servers so only Technitium is used.
     services.resolved.settings.Resolve.FallbackDNS = [];
-
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.login.enableGnomeKeyring = true;

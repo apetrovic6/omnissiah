@@ -369,20 +369,20 @@
       metadata = {inherit namespace;};
       spec = {
         clusterRef.name = "garage-main";
-        # 100 GiB. maxSize is an int-or-string quantity: the API server stores
-        # a bare number as the string "107374182400", so a number here keeps
+        # 250 GiB. maxSize is an int-or-string quantity: the API server stores
+        # a bare number as the string "268435456000", so a number here keeps
         # ArgoCD OutOfSync forever. A quantity string round-trips unchanged.
-        quotas.maxSize = "100Gi";
+        quotas.maxSize = "250Gi";
         lifecycle.rules = [
           {
             # sccache never deletes anything from S3 -- it only writes objects
             # it later reads back -- so without expiry this bucket only grows.
-            # 30 days is longer than any plausible rebuild gap (a cache entry
-            # nobody has compiled against in a month is dead weight) and, at
-            # the measured churn, comfortably inside the quota.
-            id = "expire-after-30-days";
+            # 7 days (the owner's call, 2026-11-15) caps it at about a week
+            # of churn. Expiry counts from upload, not last read, so even a
+            # hot entry is recompiled and re-uploaded once a week.
+            id = "expire-after-7-days";
             status = "Enabled";
-            expirationDays = 30;
+            expirationDays = 7;
             # Large objects go up as multipart uploads; a build killed mid-
             # upload leaves parts behind that Expiration does not cover and
             # that still count against the quota.

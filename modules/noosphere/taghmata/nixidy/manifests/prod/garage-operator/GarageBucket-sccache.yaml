@@ -9,8 +9,8 @@ spec:
   lifecycle:
     rules:
       - abortIncompleteMultipartUploadDays: 7
-        expirationDays: 30
-        id: expire-after-30-days
+        expirationDays: 7
+        id: expire-after-7-days
         status: Enabled
   quotas:
-    maxSize: 100Gi
+    maxSize: 250Gi

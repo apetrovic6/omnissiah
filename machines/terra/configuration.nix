@@ -30,6 +30,9 @@
       minFree = 200;
       maxFree = 400;
     };
+    # Trial: two jobs at once so noosphere does not show terra offline while
+    # it runs an ugalabugala job. Both share the 2 CPU / 4 GiB cap below.
+    capacity = 2;
     resources = {
       cpus = 2;
       memory = 4;
