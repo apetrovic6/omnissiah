@@ -240,4 +240,9 @@ in {
       };
     };
   };
+
+  garage.keys.woodpecker = {
+    cluster = "backup";
+    secret.namespace = "woodpecker";
+  };
 }

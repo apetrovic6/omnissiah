@@ -317,4 +317,9 @@ in {
       };
     };
   };
+
+  garage.keys.yarr = {
+    cluster = "backup";
+    secret.namespace = "yarr";
+  };
 }

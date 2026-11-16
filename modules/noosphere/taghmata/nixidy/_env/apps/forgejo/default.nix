@@ -323,4 +323,18 @@ in {
       };
     };
   };
+
+  # Named `forgejo-backup` rather than `forgejo`: the garage-main cluster
+  # already owns a `forgejo` bucket/key pair (Gitea attachments + LFS) in
+  # this same namespace, and its secret is `forgejo-s3-secret-key`.
+  garage.keys.forgejo-backup = {
+    cluster = "backup";
+    secret.namespace = "forgejo";
+  };
+
+  garage.keys.forgejo = {
+    cluster = "main";
+    buckets = ["forgejo" "forgejo-lfs"];
+    secret.namespace = "forgejo";
+  };
 }

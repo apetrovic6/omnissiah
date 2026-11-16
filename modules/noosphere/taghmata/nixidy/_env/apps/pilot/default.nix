@@ -102,4 +102,9 @@ in {
       };
     };
   };
+
+  garage.keys.pilot = {
+    cluster = "backup";
+    secret.namespace = "pilot";
+  };
 }

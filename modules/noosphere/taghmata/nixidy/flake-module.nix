@@ -307,6 +307,9 @@ in {
             # Noosphere options for nixidy apps
             ./_modules/noosphere-options.nix
 
+            # `garage.keys`: S3 keys and buckets, declared by the application that uses them
+            ./_modules/garage-keys.nix
+
             # Pass global values into nixidy module graph
             ({lib, ...}: {
               noosphere.domain = lib.mkDefault global.domain;

@@ -418,4 +418,26 @@ in {
       };
     };
   };
+
+  # Named `harbor-backup` for the same reason as `forgejo-backup`: garage-main
+  # already owns a `harbor` bucket/key pair (registry blobs) in this namespace.
+  garage.keys.harbor-backup = {
+    cluster = "backup";
+    secret.namespace = "harbor";
+  };
+
+  # Harbor's registry chart reads its S3 credentials from a plain
+  # `existingSecret`, so the key names here must be exactly what the
+  # chart looks for -- not the operator's default access-key-id /
+  # secret-access-key -- and the secret has to be reflected into the
+  # `harbor` namespace, since GarageKeys all live in garage-operator.
+  garage.keys.harbor = {
+    cluster = "main";
+    secret = {
+      name = "harbor-main-s3-secret-key";
+      namespace = "harbor";
+      accessKeyIdKey = "REGISTRY_STORAGE_S3_ACCESSKEY";
+      secretAccessKeyKey = "REGISTRY_STORAGE_S3_SECRETKEY";
+    };
+  };
 }

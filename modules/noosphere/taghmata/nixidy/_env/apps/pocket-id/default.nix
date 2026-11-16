@@ -160,4 +160,9 @@ in {
       };
     };
   };
+
+  garage.keys.pocket-id = {
+    cluster = "backup";
+    secret.namespace = "pocket-id";
+  };
 }

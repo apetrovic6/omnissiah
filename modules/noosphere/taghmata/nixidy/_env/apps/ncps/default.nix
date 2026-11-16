@@ -342,4 +342,25 @@ in {
       };
     };
   };
+
+  # Named `ncps-backup` for the same reason as `forgejo-backup` below:
+  # garage-main already owns an `ncps` bucket/key pair (the binary cache's
+  # own NAR storage) in this namespace. This one only holds CNPG backups and
+  # WAL for pg-ncps-rev1.
+  garage.keys.ncps-backup = {
+    cluster = "backup";
+    secret.namespace = "ncps";
+  };
+
+  # The key names are left at the operator's defaults (access-key-id /
+  # secret-access-key) on purpose: those are exactly the two keys the
+  # ncps chart reads when config.storage.s3.existingSecret is set.
+  garage.keys.ncps = {
+    cluster = "main";
+    secret = {
+      namespace = "ncps";
+      accessKeyIdKey = null;
+      secretAccessKeyKey = null;
+    };
+  };
 }

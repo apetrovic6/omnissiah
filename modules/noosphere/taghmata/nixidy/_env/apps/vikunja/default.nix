@@ -188,4 +188,9 @@ in {
       };
     };
   };
+
+  garage.keys.vikunja = {
+    cluster = "backup";
+    secret.namespace = "vikunja";
+  };
 }
