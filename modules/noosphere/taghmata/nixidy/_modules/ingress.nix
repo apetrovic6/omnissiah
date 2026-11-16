@@ -28,7 +28,7 @@
   issuerName = "letsencrypt-cloudflare";
 
   # The Glance dashboard discovers services from these annotations
-  # (apps/glances): `category` is the group, `id` and `parent` build the tree.
+  # (apps/augur/glances): `category` is the group, `id` and `parent` build the tree.
   glanceAnnotations = glance:
     mapAttrs' (key: value:
       nameValuePair (

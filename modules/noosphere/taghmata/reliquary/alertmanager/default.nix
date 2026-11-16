@@ -21,7 +21,7 @@
 #     read into the prometheus-grafana app with builtins.readFile.
 #
 # Until the var exists there is no value to render, so
-# nixidy/_env/apps/prometheus-stack/default.nix skips the heartbeat receiver and
+# nixidy/_env/apps/augur/prometheus-stack/default.nix skips the heartbeat receiver and
 # Watchdog keeps falling through to the `null` receiver instead of referencing a
 # file that does not exist (which would make Alertmanager reject its whole config).
 # The repo renders either way -- verified: the committed prod manifests build without

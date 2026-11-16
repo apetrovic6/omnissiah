@@ -1,7 +1,7 @@
 # The web UI of one Garage cluster. Both clusters get one, from the same
 # chart and in the garage-operator namespace:
 #
-#   (import ./apps/garage-ui { cluster = "main"; ... })
+#   (import ./apps/datavault/garage-ui { cluster = "main"; ... })
 {
   # "main" or "backup".
   cluster,

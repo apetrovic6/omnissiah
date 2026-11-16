@@ -14,7 +14,7 @@
   barmanPluginName = "barman-cloud.cloudnative-pg.io";
   volumeSize = "2Gi";
 in {
-  imports = [../../../_modules/templates/garage-object-store.nix];
+  imports = [../../../../_modules/templates/garage-object-store.nix];
 
   applications.${name} = {
     inherit namespace;

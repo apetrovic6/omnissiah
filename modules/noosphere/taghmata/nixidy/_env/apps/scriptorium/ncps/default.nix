@@ -17,8 +17,8 @@
   uploadAuth = "ncps-upload-auth";
 in {
   imports = [
-    ../../../_modules/templates/database-template.nix
-    ../../../_modules/templates/garage-object-store.nix
+    ../../../../_modules/templates/database-template.nix
+    ../../../../_modules/templates/garage-object-store.nix
   ];
 
   applications.ncps = {
