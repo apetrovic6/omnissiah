@@ -9,7 +9,7 @@
     inherit (self.lib) mkRevProxyVHost mkDomain;
     inherit (lib) mkDefault mkIf mkOption mkEnableOption types mkPackageOption;
 
-    imperiumBase = import ../../rites/imperium-service.nix {
+    imperiumBase = self.lib.mkImperiumService {
       inherit lib pkgs;
       name = serviceName;
     };

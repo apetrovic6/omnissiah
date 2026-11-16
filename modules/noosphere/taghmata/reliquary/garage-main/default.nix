@@ -1,71 +1,17 @@
-{config, ...}: let
-  ageKey = config.noosphere.agePublicKey;
-  fileNameRpc = "garage-main-rpc-secret";
-  fileNameAdmin = "garage-main-admin-token";
-in {
+{self, ...}: {
   flake.nixosModules.reliquary = {pkgs, ...}: {
-    clan.core.vars.generators.${fileNameRpc} = {
-      share = true;
+    clan.core.vars.generators = self.lib.mkSopsGenerators pkgs {
+      garage-main-rpc-secret = {
+        namespace = "garage-operator";
+        random.secret = "-hex 32";
+        data.rpc-secret = "$secret";
+      };
 
-      files.${fileNameRpc}.secret = false;
-
-      runtimeInputs = [pkgs.coreutils pkgs.sops pkgs.openssl];
-
-      script = ''
-               set -euo pipefail
-
-               secret="$(openssl rand -hex 32)"
-
-        sops encrypt \
-          --age "${ageKey}" \
-          --encrypted-suffix "Templates" \
-          --input-type yaml --output-type yaml \
-          /dev/stdin > "$out/${fileNameRpc}" <<EOF
-        apiVersion: isindir.github.com/v1alpha3
-        kind: SopsSecret
-        metadata:
-          name: ${fileNameRpc}
-          namespace: garage-operator
-        spec:
-          secretTemplates:
-            - name: ${fileNameRpc}
-              type: Opaque
-              stringData:
-                rpc-secret: "$secret"
-        EOF
-      '';
-    };
-
-    clan.core.vars.generators.${fileNameAdmin} = {
-      share = true;
-
-      files.${fileNameAdmin}.secret = false;
-
-      runtimeInputs = [pkgs.coreutils pkgs.sops pkgs.openssl];
-
-      script = ''
-               set -euo pipefail
-
-               secret="$(openssl rand -hex 32)"
-
-        sops encrypt \
-          --age "${ageKey}" \
-          --encrypted-suffix "Templates" \
-          --input-type yaml --output-type yaml \
-          /dev/stdin > "$out/${fileNameAdmin}" <<EOF
-        apiVersion: isindir.github.com/v1alpha3
-        kind: SopsSecret
-        metadata:
-          name: ${fileNameAdmin}
-          namespace: garage-operator
-        spec:
-          secretTemplates:
-            - name: ${fileNameAdmin}
-              type: Opaque
-              stringData:
-                admin-token: "$secret"
-        EOF
-      '';
+      garage-main-admin-token = {
+        namespace = "garage-operator";
+        random.secret = "-hex 32";
+        data.admin-token = "$secret";
+      };
     };
   };
 }

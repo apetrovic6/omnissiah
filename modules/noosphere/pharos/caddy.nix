@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   flake.nixosModules.pharos = {
     config,
     lib,
@@ -7,7 +7,7 @@
   }: let
     serviceName = "caddy";
 
-    imperiumBase = import ../../rites/imperium-service.nix {
+    imperiumBase = self.lib.mkImperiumService {
       inherit lib pkgs;
       name = serviceName;
     };

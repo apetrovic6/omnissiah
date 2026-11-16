@@ -1,4 +1,6 @@
-# modules/imperium.nix
+# mkImperiumService: the options every `services.imperium.<name>` wrapper shares
+# (enable, package, host, port, user, group, openFirewall, subdomain, Caddy
+# virtual hosts). Returns a NixOS module to put in `imports`.
 {
   lib,
   pkgs,

@@ -1,61 +1,28 @@
-{config, ...}: let
-  ageKey = config.noosphere.agePublicKey;
-  fileName = "s3-longhorn-backup";
-in {
+{self, ...}: {
   flake.nixosModules.reliquary = {pkgs, ...}: {
-    clan.core.vars.generators.${fileName} = {
-      share = true;
-
-      prompts.access-key-id = {
-        description = "Enter Access Key ID: ";
-        type = "line";
-        persist = false;
+    clan.core.vars.generators = self.lib.mkSopsGenerators pkgs {
+      s3-longhorn-backup = {
+        namespace = "longhorn-system";
+        secretName = "s3-backup-secret";
+        prompts.access-key-id = {
+          description = "Enter Access Key ID: ";
+          type = "line";
+          var = "access_key";
+        };
+        prompts.access-key-secret = {
+          description = "Enter Access Key Secret: ";
+          var = "secret_key";
+        };
+        prompts.endpoint = {
+          description = "Enter s3 endpoint: ";
+          type = "line";
+        };
+        data = {
+          AWS_ACCESS_KEY_ID = "$access_key";
+          AWS_SECRET_ACCESS_KEY = "$secret_key";
+          AWS_ENDPOINTS = "$endpoint";
+        };
       };
-
-      prompts.access-key-secret = {
-        description = "Enter Access Key Secret: ";
-        type = "hidden";
-        persist = false;
-      };
-
-      prompts.endpoint = {
-        description = "Enter s3 endpoint: ";
-        type = "line";
-        persist = false;
-      };
-
-      files.${fileName}.secret = false;
-
-      runtimeInputs = [pkgs.coreutils pkgs.sops];
-
-      script = ''
-                set -euo pipefail
-
-                access_key="$(tr -d '\r\n' < "$prompts/access-key-id")"
-                secret_key="$(tr -d '\r\n' < "$prompts/access-key-secret")"
-                endpoint="$(tr -d '\r\n' < "$prompts/endpoint")"
-
-
-        sops encrypt \
-          --age "${ageKey}" \
-          --encrypted-suffix "Templates" \
-          --input-type yaml --output-type yaml \
-          /dev/stdin > "$out/${fileName}" <<EOF
-        apiVersion: isindir.github.com/v1alpha3
-        kind: SopsSecret
-        metadata:
-          name: s3-backup-secret
-          namespace: longhorn-system
-        spec:
-          secretTemplates:
-            - name: s3-backup-secret
-              type: Opaque
-              stringData:
-                AWS_ACCESS_KEY_ID: "$access_key"
-                AWS_SECRET_ACCESS_KEY: "$secret_key"
-                AWS_ENDPOINTS: "$endpoint"
-        EOF
-      '';
     };
   };
 }

@@ -11,7 +11,7 @@
     baseDomain =
       config.clan.core.vars.generators."caddy-env".files."domain".value;
 
-    imperiumBase = import ../../rites/imperium-service.nix {
+    imperiumBase = self.lib.mkImperiumService {
       inherit lib pkgs;
       name = serviceName;
     };
