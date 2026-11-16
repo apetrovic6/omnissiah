@@ -33,6 +33,10 @@ in {
       "harbor-core-secret"
     ];
 
+    # Harbor's Ingress is written out here. The chart is set to
+    # `expose.type = "clusterIP"` below and renders none: declaring the Ingress
+    # through the chart's own ingress values caused problems. Keep it this way;
+    # `ingresses.<name>` does not fit either, since this one routes several paths.
     yamls = [
       ''
         apiVersion: networking.k8s.io/v1
