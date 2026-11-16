@@ -17,47 +17,18 @@ in {
       "garage-main-ui-jwt-token-secret"
     ];
 
-    resources.ingresses.garage-main-ui = {
-      metadata = {
-        inherit namespace;
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Garage Main";
-          "glance/icon" = "di:garage";
-          "glance/url" = "https://ui.main.garage.${domain}";
-          "glance/description" = "Distributed S3 Storage (Main)";
-          "glance/id" = "garage-main";
-          "category" = "storage";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "garage-main-ui-tls";
-            hosts = ["ui.main.garage.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "ui.main.garage.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "garage-main-ui";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
+    ingresses.garage-main-ui = {
+      inherit namespace;
+      host = "ui.main.garage.${domain}";
+      service = "garage-main-ui";
+      port = 80;
+      tlsSecret = "garage-main-ui-tls";
+      glance = {
+        name = "Garage Main";
+        icon = "di:garage";
+        description = "Distributed S3 Storage (Main)";
+        id = "garage-main";
+        category = "storage";
       };
     };
 

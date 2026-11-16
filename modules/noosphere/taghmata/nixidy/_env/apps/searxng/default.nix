@@ -170,49 +170,20 @@ in {
       };
     };
 
-    resources.ingresses.searxng-ip-root = {
-      metadata = {
-        inherit namespace;
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Searxng";
-          "glance/icon" = "di:searxng";
-          "glance/url" = "https://searx.${domain}";
-          "glance/description" = "Private Meta Search Engine";
-          "glance/id" = "searxng";
-          "glance/parent" = "searxng";
-          "category" = "search";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "searxng-tls";
-            hosts = ["searx.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "searx.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "searxng";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
+    ingresses.searxng-ip-root = {
+      inherit namespace;
+      host = "searx.${domain}";
+      service = "searxng";
+      port = 80;
+      tlsSecret = "searxng-tls";
+      protect = true;
+      glance = {
+        name = "Searxng";
+        icon = "di:searxng";
+        description = "Private Meta Search Engine";
+        id = "searxng";
+        parent = "searxng";
+        category = "search";
       };
     };
   };

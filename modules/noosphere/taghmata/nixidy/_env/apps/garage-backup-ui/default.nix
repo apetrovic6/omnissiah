@@ -14,47 +14,18 @@ in {
 
     sopsSecrets = ["garage-backup-ui-jwt-token-secret"];
 
-    resources.ingresses.garage-backup-ui = {
-      metadata = {
-        inherit namespace;
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Garage Backup";
-          "glance/icon" = "di:garage";
-          "glance/url" = "https://ui.backup.garage.${domain}";
-          "glance/description" = "Distributed S3 Storage (Backup)";
-          "glance/id" = "garage-backup";
-          "category" = "storage";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "garage-backup-ui-tls";
-            hosts = ["ui.backup.garage.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "ui.backup.garage.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "garage-backup-ui";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
+    ingresses.garage-backup-ui = {
+      inherit namespace;
+      host = "ui.backup.garage.${domain}";
+      service = "garage-backup-ui";
+      port = 80;
+      tlsSecret = "garage-backup-ui-tls";
+      glance = {
+        name = "Garage Backup";
+        icon = "di:garage";
+        description = "Distributed S3 Storage (Backup)";
+        id = "garage-backup";
+        category = "storage";
       };
     };
 

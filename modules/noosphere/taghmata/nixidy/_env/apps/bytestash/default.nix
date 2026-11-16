@@ -2,6 +2,7 @@
   charts,
   config,
   vars,
+  ingressAnnotations,
   ...
 }: let
   namespace = "bytestash";
@@ -41,15 +42,16 @@ in {
           host = "bytestash.${domain}";
           path = "/";
           pathType = "Prefix";
-          annotations = {
-            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-            "glance/name" = "ByteStash";
-            "glance/icon" = "di:bytestash";
-            "glance/url" = "https://bytestash.${domain}";
-            "glance/description" = "Code Snipet Solution";
-            "glance/id" = "bytestash";
-            "glance/parent" = "bytestash";
-            "category" = "utils";
+          annotations = ingressAnnotations {
+            glance = {
+              name = "ByteStash";
+              icon = "di:bytestash";
+              url = "https://bytestash.${domain}";
+              description = "Code Snipet Solution";
+              id = "bytestash";
+              parent = "bytestash";
+              category = "utils";
+            };
           };
           tls = [
             {

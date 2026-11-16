@@ -1,6 +1,7 @@
 {
   charts,
   config,
+  ingressAnnotations,
   ...
 }: let
   namespace = "vikunja";
@@ -93,16 +94,17 @@ in {
         ingress = {
           main = {
             enabled = true;
-            annotations = {
-              "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-              "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-              "glance/name" = "Vikunja";
-              "glance/icon" = "di:vikunja";
-              "glance/url" = "https://vikunja.${domain}";
-              "glance/description" = "Project Planning";
-              "glance/id" = "vikunja";
-              "glance/parent" = "vikunja";
-              "category" = "productivity";
+            annotations = ingressAnnotations {
+              entrypoints = "websecure";
+              glance = {
+                name = "Vikunja";
+                icon = "di:vikunja";
+                url = "https://vikunja.${domain}";
+                description = "Project Planning";
+                id = "vikunja";
+                parent = "vikunja";
+                category = "productivity";
+              };
             };
 
             hosts = [

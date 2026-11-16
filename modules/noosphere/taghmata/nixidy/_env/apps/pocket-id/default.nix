@@ -2,6 +2,7 @@
   charts,
   config,
   vars,
+  ingressAnnotations,
   ...
 }: let
   namespace = "pocket-id";
@@ -68,17 +69,18 @@ in {
 
         ingress = {
           enabled = true;
-          annotations = {
-            "traefik.ingress.kubernetes.io/router.entrypoints" = "web,websecure";
-            "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
-            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-            "glance/name" = "Pocket ID";
-            "glance/icon" = "di:pocket-id";
-            "glance/url" = "https://id.${domain}";
-            "glance/description" = "Identity Provider";
-            "glance/id" = "pocket-id";
-            "glance/parent" = "pocket-id";
-            "category" = "security";
+          annotations = ingressAnnotations {
+            entrypoints = "web,websecure";
+            protect = true;
+            glance = {
+              name = "Pocket ID";
+              icon = "di:pocket-id";
+              url = "https://id.${domain}";
+              description = "Identity Provider";
+              id = "pocket-id";
+              parent = "pocket-id";
+              category = "security";
+            };
           };
 
           className = "traefik";

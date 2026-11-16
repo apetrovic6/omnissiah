@@ -2,6 +2,7 @@
   config,
   charts,
   vars,
+  ingressAnnotations,
   ...
 }: let
   name = "woodpecker";
@@ -73,15 +74,16 @@ in {
 
           ingress = {
             enabled = true;
-            annotations = {
-              "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-              "glance/name" = "Woodpecker CI";
-              "glance/icon" = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/woodpecker-ci.svg";
-              "glance/url" = "https://${url}";
-              "glance/description" = "CI/CD";
-              "glance/id" = name;
-              "glance/parent" = name;
-              "category" = "gitops";
+            annotations = ingressAnnotations {
+              glance = {
+                name = "Woodpecker CI";
+                icon = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/woodpecker-ci.svg";
+                url = "https://${url}";
+                description = "CI/CD";
+                id = name;
+                parent = name;
+                category = "gitops";
+              };
             };
             tls = [
               {

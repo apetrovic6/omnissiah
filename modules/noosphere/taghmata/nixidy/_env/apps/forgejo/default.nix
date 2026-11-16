@@ -3,6 +3,7 @@
   charts,
   cartographa,
   vars,
+  ingressAnnotations,
   ...
 }: let
   name = "forgejo";
@@ -73,16 +74,17 @@ in {
         ingress = {
           enabled = true;
           className = "traefik";
-          annotations = {
-            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-            "traefik.ingress.kubernetes.io/router.entrypoints" = "web,websecure";
-            "glance/name" = "Forgejo";
-            "glance/icon" = "di:forgejo";
-            "glance/url" = "https://${url}";
-            "glance/description" = "Git Forge";
-            "glance/id" = name;
-            "glance/parent" = name;
-            "category" = "gitops";
+          annotations = ingressAnnotations {
+            entrypoints = "web,websecure";
+            glance = {
+              name = "Forgejo";
+              icon = "di:forgejo";
+              url = "https://${url}";
+              description = "Git Forge";
+              id = name;
+              parent = name;
+              category = "gitops";
+            };
           };
           hosts = [
             {

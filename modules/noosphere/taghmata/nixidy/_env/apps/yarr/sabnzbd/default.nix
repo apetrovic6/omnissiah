@@ -142,49 +142,20 @@ in {
       };
     };
 
-    resources.ingresses.sabnzbd-ip-root = {
-      metadata = {
-        inherit namespace;
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "sabnzbd";
-          "glance/icon" = "di:sabnzbd";
-          "glance/url" = "https://sab.${domain}";
-          "glance/description" = "Binary newsreader";
-          "glance/id" = "sabnzbd";
-          "glance/parent" = "sabnzbd";
-          "category" = "yarr";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "sabnzbd-tls";
-            hosts = ["sab.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "sab.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "sabnzbd";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
+    ingresses.sabnzbd-ip-root = {
+      inherit namespace;
+      host = "sab.${domain}";
+      service = "sabnzbd";
+      port = 80;
+      tlsSecret = "sabnzbd-tls";
+      protect = true;
+      glance = {
+        name = "sabnzbd";
+        icon = "di:sabnzbd";
+        description = "Binary newsreader";
+        id = "sabnzbd";
+        parent = "sabnzbd";
+        category = "yarr";
       };
     };
   };

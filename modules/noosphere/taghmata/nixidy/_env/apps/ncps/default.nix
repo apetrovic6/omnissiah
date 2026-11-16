@@ -3,6 +3,7 @@
   lib,
   config,
   vars,
+  ingressAnnotations,
   ...
 }: let
   namespace = "ncps";
@@ -234,15 +235,16 @@ in {
         ingress = {
           enabled = true;
           className = "traefik";
-          annotations = {
-            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-            "glance/name" = "Ncps";
-            "glance/icon" = "di:nixos";
-            "glance/url" = "https://ncps.${domain}";
-            "glance/description" = "Nix Binary Cache";
-            "glance/id" = "ncps";
-            "glance/parent" = "ncps";
-            "category" = "storage";
+          annotations = ingressAnnotations {
+            glance = {
+              name = "Ncps";
+              icon = "di:nixos";
+              url = "https://ncps.${domain}";
+              description = "Nix Binary Cache";
+              id = "ncps";
+              parent = "ncps";
+              category = "storage";
+            };
           };
 
           hosts = [

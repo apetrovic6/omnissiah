@@ -35,41 +35,13 @@ in {
       ''
     ];
 
-    resources.ingresses.alloy-ip-root = {
-      metadata = {
-        namespace = "observability";
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "alloy-tls";
-            hosts = ["alloy.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "alloy.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "default-alloy";
-                  port.number = 12345;
-                };
-              }
-            ];
-          }
-        ];
-      };
+    ingresses.alloy-ip-root = {
+      namespace = "observability";
+      host = "alloy.${domain}";
+      service = "default-alloy";
+      port = 12345;
+      tlsSecret = "alloy-tls";
+      issuer = false;
     };
 
     resources.alloys.default = {

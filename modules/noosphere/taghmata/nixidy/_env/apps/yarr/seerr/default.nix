@@ -123,49 +123,20 @@ in {
       };
     };
 
-    resources.ingresses.seerr-ip-root = {
-      metadata = {
-        inherit (yarr) namespace;
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Seerr";
-          "glance/icon" = "di:jellyseerr";
-          "glance/url" = "https://seerr.${domain}";
-          "glance/description" = "Media Management";
-          "glance/id" = "seerr";
-          "glance/parent" = "seerr";
-          "category" = "yarr";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "seerr-tls";
-            hosts = ["seerr.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "seerr.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "seerr";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
+    ingresses.seerr-ip-root = {
+      inherit (yarr) namespace;
+      host = "seerr.${domain}";
+      service = "seerr";
+      port = 80;
+      tlsSecret = "seerr-tls";
+      protect = true;
+      glance = {
+        name = "Seerr";
+        icon = "di:jellyseerr";
+        description = "Media Management";
+        id = "seerr";
+        parent = "seerr";
+        category = "yarr";
       };
     };
 

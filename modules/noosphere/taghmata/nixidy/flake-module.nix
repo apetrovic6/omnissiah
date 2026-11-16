@@ -329,11 +329,15 @@ in {
                 autoDiscoverCrds
                 ++ [
                   (import ./_modules/sops-secrets.nix {vars = import ../../../cartographa/_vars.nix;})
+                  ingress.module
                 ];
             })
           ]
           ++ envModules;
       };
+
+      # `ingresses.<name>` for applications and the `ingressAnnotations` argument.
+      ingress = import ./_modules/ingress.nix {inherit lib;};
 
       # Build charts attrset
       charts =
@@ -365,6 +369,7 @@ in {
             extraSpecialArgs = {
               cartographa = import ../../../cartographa/_chart.nix;
               vars = import ../../../cartographa/_vars.nix;
+              inherit (ingress) ingressAnnotations;
             };
             envs = lib.mapAttrs mkEnv enabledEnvs;
           };

@@ -171,49 +171,20 @@ in {
       };
     };
 
-    resources.ingresses."${name}-ip-root" = {
-      metadata = {
-        inherit (yarr) namespace;
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "argocd.argoproj.io/sync-options" = "Prune=false,Delete=false";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = title;
-          "glance/icon" = "di:${name}";
-          "glance/url" = "https://${name}.${domain}";
-          "glance/description" = description;
-          "glance/id" = "${name}";
-          "glance/parent" = "${name}";
-          "category" = "yarr";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "${name}-tls";
-            hosts = ["${name}.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "${name}.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "${name}";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
+    ingresses."${name}-ip-root" = {
+      inherit (yarr) namespace;
+      host = "${name}.${domain}";
+      service = "${name}";
+      port = 80;
+      tlsSecret = "${name}-tls";
+      protect = true;
+      glance = {
+        name = title;
+        icon = "di:${name}";
+        description = description;
+        id = "${name}";
+        parent = "${name}";
+        category = "yarr";
       };
     };
 

@@ -40,48 +40,19 @@ in {
       };
     };
 
-    resources.ingresses.excalidraw-ip-root = {
-      metadata = {
-        inherit namespace;
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Excalidraw";
-          "glance/icon" = "di:excalidraw";
-          "glance/url" = "https://excalidraw.${domain}";
-          "glance/description" = "Draw diagrams";
-          "glance/id" = "excalidraw";
-          "glance/parent" = "excalidraw";
-          "category" = "utils";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "excalidraw-tls";
-            hosts = ["excalidraw.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "excalidraw.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "excalidraw";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
+    ingresses.excalidraw-ip-root = {
+      inherit namespace;
+      host = "excalidraw.${domain}";
+      service = "excalidraw";
+      port = 80;
+      tlsSecret = "excalidraw-tls";
+      glance = {
+        name = "Excalidraw";
+        icon = "di:excalidraw";
+        description = "Draw diagrams";
+        id = "excalidraw";
+        parent = "excalidraw";
+        category = "utils";
       };
     };
 
