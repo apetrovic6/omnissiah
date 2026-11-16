@@ -1,9 +1,11 @@
 {
-  domain,
-  namespace,
+  yarr,
+  config,
   cartographa,
   ...
 }: let
+  inherit (yarr) namespace;
+  domain = config.noosphere.domain;
   labels = {app = "sabnzbd";};
 in {
   applications.sabnzbd = {

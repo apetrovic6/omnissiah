@@ -21,7 +21,7 @@ in {
     # live next to the stack's, for the same reason garage-alerts.nix does.
     ./apps/prometheus-stack/cerberus-scrape.nix
     ./apps/prometheus-stack/cerberus-alerts.nix
-    ./apps/yarr/seerr
+    ./apps/yarr
     ./apps/csi-driver-nfs
     ./apps/excalidraw
     ./apps/karakeep
