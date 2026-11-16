@@ -19,9 +19,9 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    yamls = [
-      (builtins.readFile (vars.shared "woodpecker-default-agent-secret" "woodpecker-default-agent-secret"))
-      (builtins.readFile (vars.shared "woodpecker-forgejo-oauth-secret" "woodpecker-forgejo-oauth-secret"))
+    sopsSecrets = [
+      "woodpecker-default-agent-secret"
+      "woodpecker-forgejo-oauth-secret"
     ];
 
     templates.garageObjectStore."${objectStoreName}" = {

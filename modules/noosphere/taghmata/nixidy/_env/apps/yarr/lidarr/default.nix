@@ -197,8 +197,6 @@
       };
     };
 
-    yamls = [
-      (builtins.readFile (vars.shared "pg-lidarr-sopssecret" "pg-lidarr-sopssecret"))
-    ];
+    sopsSecrets = ["pg-lidarr-sopssecret"];
   };
 }

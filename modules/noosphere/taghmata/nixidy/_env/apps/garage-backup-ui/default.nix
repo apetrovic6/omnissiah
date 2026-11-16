@@ -12,9 +12,7 @@ in {
   applications.garage-backup-ui = {
     inherit namespace;
 
-    yamls = [
-      (builtins.readFile (vars.shared "garage-backup-ui-jwt-token-secret" "garage-backup-ui-jwt-token-secret"))
-    ];
+    sopsSecrets = ["garage-backup-ui-jwt-token-secret"];
 
     resources.ingresses.garage-backup-ui = {
       metadata = {

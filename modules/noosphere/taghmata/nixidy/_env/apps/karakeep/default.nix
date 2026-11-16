@@ -13,10 +13,10 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    yamls = [
-      (builtins.readFile (vars.shared "karakeep-meilisearch-secret" "karakeep-meilisearch-secret"))
-      (builtins.readFile (vars.shared "karakeep-secret" "karakeep-secret"))
-      (builtins.readFile (vars.shared "karakeep-sso-secret" "karakeep-sso-secret"))
+    sopsSecrets = [
+      "karakeep-meilisearch-secret"
+      "karakeep-secret"
+      "karakeep-sso-secret"
     ];
 
     helm.releases.karakeep = {

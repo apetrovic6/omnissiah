@@ -216,9 +216,7 @@ in {
       };
     };
 
-    yamls = [
-      (builtins.readFile (vars.shared "pg-seerr-sopssecret" "pg-seerr-sopssecret"))
-    ];
+    sopsSecrets = ["pg-seerr-sopssecret"];
 
     templates.cnpg-database-cluster.yarr-2 = {
       inherit namespace;

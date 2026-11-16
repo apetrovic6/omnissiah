@@ -23,9 +23,9 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    yamls = [
-      (builtins.readFile (vars.shared forgejo-admin-secret forgejo-admin-secret))
-      (builtins.readFile (vars.shared forgejo-keycloak-oauth-secret forgejo-keycloak-oauth-secret))
+    sopsSecrets = [
+      forgejo-admin-secret
+      forgejo-keycloak-oauth-secret
     ];
 
     templates.garageObjectStore."${objectStoreName}" = {

@@ -18,9 +18,7 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    yamls = [
-      (builtins.readFile (vars.shared "pocket-id-encryption-key" "pocket-id-encryption-key"))
-    ];
+    sopsSecrets = ["pocket-id-encryption-key"];
 
     templates.garageObjectStore."${objectStoreName}" = {
       inherit namespace;

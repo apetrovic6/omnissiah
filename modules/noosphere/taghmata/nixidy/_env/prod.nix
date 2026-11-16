@@ -10,12 +10,10 @@ in {
     ./apps/metrics-server
     ./apps/cloudnative-pg
     ./apps/longhorn
-    ./apps/cloudnative-pg
     ./apps/metallb
     ./apps/sops-secrets-operator
     ./apps/alloy
     ./apps/cert-manager
-    # ./apps/crowci
     ./apps/woodpecker-ci
     ./apps/prometheus-stack
     ./apps/prometheus-stack/garage-alerts.nix
@@ -31,7 +29,6 @@ in {
     ./apps/harbor
     ./apps/glances
     ./apps/reflector
-    # ./apps/keycloak-operator
     ./apps/forgejo
     ./apps/searxng
     ./apps/garage-operator
@@ -53,29 +50,6 @@ in {
     selfHeal = false;
   };
 
-  # applications.prometheus = {
-  #   namespace = "observability";
-  #   helm.releases.prometheus = {
-  #     chart = charts.prometheus-community.prometheus;
-  #     values = {};
-  #   };
-  # };
-
-  # applications.seerr = {
-  #   namespace = "yarr";
-  #   createNamespace = true;
-
-  #   helm.releases.seerr = {
-  #     chart = lib.helm.downloadHelmChart {
-  #       repo = "oci://ghcr.io/fallenbagel/jellyseerr";
-  #       chart = "jellyseer-chart";
-  #       version = "v2.7.3";
-  #       chartHash = "";
-  #     };
-
-  #     # values = {};
-  #   };
-  # };
   applications.calico-config = {
     namespace = "kube-system";
     output.path = "./calico";

@@ -197,8 +197,6 @@
       };
     };
 
-    yamls = [
-      (builtins.readFile (vars.shared "pg-sonarr-sopssecret" "pg-sonarr-sopssecret"))
-    ];
+    sopsSecrets = ["pg-sonarr-sopssecret"];
   };
 }

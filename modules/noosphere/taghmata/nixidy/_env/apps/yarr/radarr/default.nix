@@ -197,8 +197,6 @@
       };
     };
 
-    yamls = [
-      (builtins.readFile (vars.shared "pg-radarr-sopssecret" "pg-radarr-sopssecret"))
-    ];
+    sopsSecrets = ["pg-radarr-sopssecret"];
   };
 }

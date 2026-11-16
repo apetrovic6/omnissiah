@@ -24,10 +24,13 @@ in {
     inherit namespace;
     createNamespace = true;
 
+    sopsSecrets = [
+      signingKeySecret
+      uploadAuth
+    ];
+
     yamls = [
-      (builtins.readFile (vars.shared signingKeySecret signingKeySecret))
       # The htpasswd line for /upload; see reliquary/ncps.
-      (builtins.readFile (vars.shared uploadAuth uploadAuth))
     ];
 
     # Only the Forgejo runners may reach /upload, where ncps takes PUTs. The

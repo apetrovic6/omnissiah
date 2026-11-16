@@ -25,14 +25,14 @@ in {
     # upgrade would never apply. Server-side apply keeps no such annotation.
     syncPolicy.syncOptions.serverSideApply = true;
 
-    yamls = [
-      (builtins.readFile (vars.shared "garage-main-rpc-secret" "garage-main-rpc-secret"))
-      (builtins.readFile (vars.shared "garage-main-admin-token" "garage-main-admin-token"))
-      (builtins.readFile (vars.shared "garage-backup-rpc-secret" "garage-backup-rpc-secret"))
-      (builtins.readFile (vars.shared "garage-backup-admin-token" "garage-backup-admin-token"))
-      (builtins.readFile (vars.shared "kaneo-s3-key" "kaneo-s3-key"))
-      (builtins.readFile (vars.shared "memos-s3-key" "memos-s3-key"))
-      (builtins.readFile (vars.shared "sccache-garage-key" "sccache-garage-key"))
+    sopsSecrets = [
+      "garage-main-rpc-secret"
+      "garage-main-admin-token"
+      "garage-backup-rpc-secret"
+      "garage-backup-admin-token"
+      "kaneo-s3-key"
+      "memos-s3-key"
+      "sccache-garage-key"
     ];
 
     helm.releases.garage-operator = {

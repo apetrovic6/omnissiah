@@ -11,9 +11,7 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    yamls = [
-      (builtins.readFile (vars.shared "bytestash-jwt-secret" "bytestash-jwt-secret"))
-    ];
+    sopsSecrets = ["bytestash-jwt-secret"];
 
     helm.releases.bytestash = {
       chart = charts.bytestash.bytestash;

@@ -22,16 +22,18 @@ in {
 
     resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
 
-    yamls = [
-      (builtins.readFile (vars.shared "harbor-admin-password-secret" "harbor-admin-password-secret"))
-      (builtins.readFile (vars.shared "harbor-secret-secret-key" "harbor-secret-secret-key"))
-      (builtins.readFile (vars.shared "harbor-job-service-secret" "harbor-job-service-secret"))
-      (builtins.readFile (vars.shared "harbor-registry-http-secret" "harbor-registry-http-secret"))
-      (builtins.readFile (vars.shared "harbor-registry-credentials-secret" "harbor-registry-credentials-secret"))
-      (builtins.readFile (vars.shared "harbor-redis-password-secret" "harbor-redis-password-secret"))
-      (builtins.readFile (vars.shared "pg-harbor-postgres-secret" "pg-harbor-postgres-secret"))
-      (builtins.readFile (vars.shared "harbor-core-secret" "harbor-core-secret"))
+    sopsSecrets = [
+      "harbor-admin-password-secret"
+      "harbor-secret-secret-key"
+      "harbor-job-service-secret"
+      "harbor-registry-http-secret"
+      "harbor-registry-credentials-secret"
+      "harbor-redis-password-secret"
+      "pg-harbor-postgres-secret"
+      "harbor-core-secret"
+    ];
 
+    yamls = [
       ''
         apiVersion: networking.k8s.io/v1
         kind: Ingress

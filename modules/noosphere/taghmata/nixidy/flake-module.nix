@@ -324,7 +324,12 @@ in {
               };
 
               # Auto-import discovered CRDs
-              nixidy.applicationImports = autoDiscoverCrds;
+              # ...and the options this repo adds to every application.
+              nixidy.applicationImports =
+                autoDiscoverCrds
+                ++ [
+                  (import ./_modules/sops-secrets.nix {vars = import ../../../cartographa/_vars.nix;})
+                ];
             })
           ]
           ++ envModules;
