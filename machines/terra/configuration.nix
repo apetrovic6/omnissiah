@@ -1,108 +1,12 @@
-{
-  self,
-  lib,
-  config,
-  pkgs,
-  ...
-}: {
-  imports = [
-    self.nixosModules.smb
-    self.nixosModules.impermanence
-    self.nixosModules.forgejo-runner
-    self.nixosModules.sccache
-
-    # self.inputs.impermanence.nixosModules.impermanence
-    # self.inputs.magos.nixosModules.default
-  ];
+{self, ...}: {
+  imports = [self.nixosModules.taghmata-node];
 
   # Sets the private key secret for sops secrets operator in the cluster
   noosphere.taghmata.sopsAgeKey.enable = true;
 
-  # Host-step cargo builds cache into the `sccache` bucket on garage-main
-  # (modules/rites/sccache.nix); wired into the runner by forgejo-runner.nix.
-  services.imperium.sccache.enable = true;
-
-  services.imperium.forgejoRunner = {
-    enable = true;
-    # 1.6 TB of free disk: keep CI's store until it gets tight.
-    storeCache = {
-      minFree = 200;
-      maxFree = 400;
-    };
-    # Trial: two jobs at once so noosphere does not show terra offline while
-    # it runs an ugalabugala job. Both share the 2 CPU / 4 GiB cap below.
-    capacity = 2;
-    resources = {
-      cpus = 2;
-      memory = 4;
-    };
-  };
-
-  networking.interfaces.enp1s0 = {
-    useDHCP = false;
-    ipv4.addresses = [
-      {
-        address = self.lib.hosts.terra;
-        prefixLength = 24;
-      }
-    ];
-  };
-  networking.defaultGateway = {
-    address = self.lib.lan.gateway;
-    interface = "enp1s0";
-  };
-  networking.nameservers = [self.lib.lan.dns];
-
-  services.imperium.smb.enable = false;
-
-  services.imperium.impermanence = {
-    enable = false; # TODO: Setup impermanence
-  };
-
-  environment.persistence."/persist" = {
-    enable = false;
-    directories = [
-      "/etc"
-      "/var/spool"
-      "/root"
-      "/srv"
-      "/var/lib/nixos"
-      "/var/db/sudo/lectured"
-      "/var/lib/systemd/coredump"
-      "/etc/NetworkManager/system-connections"
-    ];
-  };
-
-  users.groups.media = {
-    gid = 1337;
-  };
-
-  # services.xserver.videoDrivers = [ "intel" ];
-  # hardware.enableAllFirmware = true;
-
-  # services.xserver.videoDrivers = [ "intel" ];
-  # hardware.intel-gpu-tools.enable = true;
-  # boot.kernelModules = [ "i915" ];
-
-  services.imperium.smb.hosts.manjaca = {
-    host = self.lib.hosts.manjaca;
-    credentialsVarName = "manjaca-nas-credentials";
-
-    shares.data = {
-      mountPoint = "/mnt/nas/data";
-      gid = 1337;
-    };
-
-    # shares.docker = {
-    #   mountPoint = "/mnt/nas/docker";
-    # };
-
-    # shares.selfhosted = {
-    #   mountPoint = "/mnt/nas/selfhosted";
-    # };
-  };
-
-  services.dbus.enable = true;
+  # Trial: two jobs at once so noosphere does not show terra offline while
+  # it runs an ugalabugala job. Both share the runner's 2 CPU / 4 GiB cap.
+  services.imperium.forgejoRunner.capacity = 2;
 
   # Longhorn's trimFilesystem API hardcodes /usr/bin/fstrim, which doesn't
   # exist on NixOS. This symlink makes it available so Longhorn can trim
