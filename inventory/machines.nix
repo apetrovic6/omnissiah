@@ -44,26 +44,29 @@ in {
       deploy.buildHost = "localhost";
     };
 
+    # The cluster. `taghmata` is every node, for `clan machines update --tags
+    # taghmata`. `fabricator` and `skitarii` assign the roles of the same name
+    # (clan.nix, stc/taghmata.nix): control plane and workloads.
     terra = {
-      tags = ["base" "k8s" "k8s-base"];
+      tags = ["base" "taghmata" "fabricator" "skitarii"];
       deploy.targetHost = "root@${hosts.terra}";
       deploy.buildHost = "localhost";
     };
 
     luna = {
-      tags = ["base" "k8s" "k8s-base" "k8s-server"];
+      tags = ["base" "taghmata" "fabricator" "skitarii"];
       deploy.targetHost = "root@${hosts.luna}";
       deploy.buildHost = "localhost";
     };
 
     sol = {
-      tags = ["base" "k8s" "k8s-base" "k8s-server"];
+      tags = ["base" "taghmata" "fabricator" "skitarii"];
       deploy.targetHost = "root@${hosts.sol}";
       deploy.buildHost = "localhost";
     };
 
     mars = {
-      tags = ["base" "k8s" "k8s-master"];
+      tags = ["base" "taghmata" "fabricator"];
       deploy.targetHost = "root@${hosts.mars}";
       deploy.buildHost = "localhost";
     };

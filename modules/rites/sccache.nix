@@ -8,9 +8,8 @@
 # Garage: their devenv.nix knows nothing about sccache.
 #
 # Same inverted flow as reliquary/{kaneo,memos}, but it lives here
-# rather than under taghmata/reliquary because the machines that need
-# the credentials do not all import the noosphere module: luna and sol are
-# k8s-base (no noosphere import) and the workstations are not servers at all.
+# rather than under taghmata/reliquary because the machines that need the
+# credentials are not all cluster nodes: the workstations use it too.
 # Every machine that enables this module gets the generator, so the clan var is
 # deployed to all of them. The key pair is minted by the var and IMPORTED into
 # Garage via `GarageKey.spec.importKey.secretRef` (see

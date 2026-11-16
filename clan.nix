@@ -13,11 +13,7 @@
   modules."@imperium/workstation" = import ./stc/workstation.nix;
   modules."@imperium/dev" = import ./stc/dev.nix;
   modules."@imperium/gaming" = import ./stc/gaming.nix;
-  modules."@imperium/k8s-server" = import ./stc/k8s-server.nix;
-  modules."@imperium/k8s-base" = import ./stc/k8s-base.nix;
-  modules."@imperium/k8s-agent" = import ./stc/k8s-agent.nix;
-  modules."@imperium/k8s-master" = import ./stc/k8s-master.nix;
-  modules."@imperium/k8s" = import ./stc/k8s.nix;
+  modules."@imperium/taghmata" = import ./stc/taghmata.nix;
 
   # Docs: See https://docs.clan.lol/reference/clanServices
   inventory.instances = {
@@ -67,39 +63,18 @@
       roles.default.tags.gaming = {};
     };
 
-    k8s-agent = {
+    # The RKE2 cluster, see stc/taghmata.nix. Roles follow the machine tags in
+    # inventory/machines.nix: a machine tagged both is a control-plane node
+    # that also takes workloads, `fabricator` alone is control plane only.
+    taghmata = {
       module.input = "self";
-      module.name = "@imperium/k8s-agent";
+      module.name = "@imperium/taghmata";
 
-      roles.default.tags.k8s-agent = {};
-    };
+      roles.fabricator.tags.fabricator = {};
+      roles.skitarii.tags.skitarii = {};
 
-    k8s = {
-      module.input = "self";
-      module.name = "@imperium/k8s";
-
-      roles.default.tags.k8s = {};
-    };
-
-    k8s-server = {
-      module.input = "self";
-      module.name = "@imperium/k8s-server";
-
-      roles.default.tags.k8s-server = {};
-    };
-
-    k8s-base = {
-      module.input = "self";
-      module.name = "@imperium/k8s-base";
-
-      roles.default.tags.k8s-base = {};
-    };
-
-    k8s-master = {
-      module.input = "self";
-      module.name = "@imperium/k8s-master";
-
-      roles.default.tags.k8s-master = {};
+      # The node that initialised the cluster; the others register with it.
+      roles.fabricator.machines.terra.settings.founder = true;
     };
 
     dev = {

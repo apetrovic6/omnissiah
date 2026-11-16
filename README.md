@@ -51,9 +51,28 @@ with `_` are skipped and must be imported explicitly.
 | `cerberus` | Home server: DNS, reverse proxy, Forgejo, PostgreSQL, media, Home Assistant |
 | `cypramundi` | VPS running the Pangolin reverse proxy and Matrix |
 | `alfrost` | VPS |
-| `terra`, `luna`, `sol` | `taghmata` control-plane nodes; terra bootstraps the cluster |
-| `mars` | `taghmata` control-plane node that takes no workloads |
-| `servitor` | Banana Pi BPI-M5, arm64 `taghmata` worker |
+| `terra`, `luna`, `sol` | Bare-metal `taghmata` nodes: control plane and workloads. terra founded the cluster |
+| `mars` | `taghmata` control-plane node (Proxmox VM) that takes no workloads |
+| `servitor` | Banana Pi BPI-M5 single-board computer; not part of the cluster |
+
+### The taghmata cluster roles
+
+`stc/taghmata.nix` is one clan service with two roles, assigned by the machine
+tags of the same name in `inventory/machines.nix`. Every node also carries the
+`taghmata` tag, so `clan machines update --tags taghmata` rolls the cluster and
+`--tags fabricator` only the control plane. A machine may hold either role or
+both:
+
+| Roles held | What the machine runs |
+|---|---|
+| `fabricator` + `skitarii` | RKE2 server that also takes workloads (terra, luna, sol) |
+| `fabricator` | RKE2 server, tainted so only the control plane runs there (mars) |
+| `skitarii` | RKE2 agent (nobody yet) |
+
+`fabricator` is the control plane: etcd, the ArgoCD chart, the cluster's secret
+generators. `skitarii` brings what workloads need from the host: the Longhorn,
+iSCSI and NFS helpers and the swap file. Nodes register with the founder
+(terra) unless `roles.fabricator.settings.joinAddress` is set.
 
 ### Modules
 
