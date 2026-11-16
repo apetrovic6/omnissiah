@@ -13,9 +13,9 @@
   objectStoreName = "pilot-object-store";
 in {
   imports = [
-    ../../../_modules/templates/garage-object-store.nix
-    ../../../_modules/templates/database-template.nix
-    ../../../_modules/templates/rust-service.nix
+    ../../../../_modules/templates/garage-object-store.nix
+    ../../../../_modules/templates/database-template.nix
+    ../../../../_modules/templates/rust-service.nix
   ];
 
   applications.pilot = {

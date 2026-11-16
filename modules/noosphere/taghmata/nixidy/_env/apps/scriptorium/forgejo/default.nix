@@ -16,8 +16,8 @@
   forgejo-keycloak-oauth-secret = "forgejo-keycloak-oauth-secret";
 in {
   imports = [
-    ../../../_modules/templates/garage-object-store.nix
-    ../../../_modules/templates/database-template.nix
+    ../../../../_modules/templates/garage-object-store.nix
+    ../../../../_modules/templates/database-template.nix
   ];
 
   applications.${name} = {

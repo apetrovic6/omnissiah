@@ -122,6 +122,10 @@ built by CI without being listed anywhere.
 
 The applications on taghmata are nixidy modules under
 `modules/noosphere/taghmata/nixidy/_env/apps`, listed in `_env/prod.nix`.
+They are grouped like the noosphere domains, with three groups that exist
+only in the cluster: `enginarium` (what the cluster runs on), `datavault`
+(storage) and `augur` (observability), plus `cogitator` (everyday tools) and
+`fabricata` (products built from rust-app-template).
 Besides nixidy's own options, an application can use:
 
 | Option | For |

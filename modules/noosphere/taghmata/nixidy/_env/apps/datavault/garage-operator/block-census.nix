@@ -21,13 +21,13 @@
   script = "block-census";
 
   # The garage-operator directory of the share that the synology-nfs
-  # StorageClass provisions into (apps/csi-driver-nfs): every garage-backup
+  # StorageClass provisions into (apps/datavault/csi-driver-nfs): every garage-backup
   # data PV is <this>/<pvc-name>/<pv-name>.
   nfsServer = cartographa.hosts.manjaca;
   nfsPath = "/volume1/selfhosted/garage-operator";
 
   # local-path-provisioner's directory for this namespace's volumes
-  # (apps/local-path-provisioner); entries are <pv>_<namespace>_<pvc>.
+  # (apps/datavault/local-path-provisioner); entries are <pv>_<namespace>_<pvc>.
   localPath = "/mnt/storage/garage";
 
   podSpec = {

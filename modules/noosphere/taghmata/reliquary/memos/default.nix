@@ -4,7 +4,7 @@
 # OUTSIDE the k8s cluster, so the operator-mints-a-key flow does not reach it.
 # The key pair is generated here and *imported* into Garage via
 # `GarageKey.spec.importKey.secretRef` (see
-# nixidy/_env/apps/garage-operator/cluster-main/default.nix), so both sides are
+# nixidy/_env/apps/datavault/garage-operator/cluster-main/default.nix), so both sides are
 # fed from one clan var and nothing has to be copied by hand.
 #
 # Three outputs:
@@ -39,7 +39,7 @@
   # out presigned GET URLs (5-day expiry) that the browser itself fetches.
   s3Endpoint = "https://s3.main.garage.${domain}";
   s3Bucket = "memos";
-  # garage-main's s3Api.region (nixidy/_env/apps/garage-operator/cluster-main).
+  # garage-main's s3Api.region (nixidy/_env/apps/datavault/garage-operator/cluster-main).
   s3Region = "main";
 in {
   flake.nixosModules.reliquary-memos = {pkgs, ...}: {

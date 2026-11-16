@@ -41,7 +41,7 @@
       # services.forgejo is enabled.
       forgejo = "ssh root@${self.lib.hosts.cerberus} forgejo-admin";
     };
-    # The in-cluster Forgejo (taghmata, nixidy apps/forgejo).
+    # The in-cluster Forgejo (taghmata, nixidy apps/scriptorium/forgejo).
     noosphere = {
       url = "https://forge.noosphere.uk";
       host = null;
@@ -54,7 +54,7 @@
 
   generatorName = forge: "forgejo-runner-${forge}";
 
-  # Binary cache the runners push their builds to. apps/ncps reads the public
+  # Binary cache the runners push their builds to. apps/scriptorium/ncps reads the public
   # key straight from vars/shared/${ciKeyGenerator}, so renaming the generator
   # means updating that path too.
   # ncps serves uploads under /upload only; a PUT to the root path is a 405
@@ -205,7 +205,7 @@ in {
 
       (mkIf cfg.enable {
         # CI signing key, shared by every runner. ncps
-        # (taghmata nixidy apps/ncps) accepts a PUT only when the narinfo
+        # (taghmata nixidy apps/scriptorium/ncps) accepts a PUT only when the narinfo
         # carries this key's signature, so it doubles as the upload credential.
         # Separate from ncps' own serving key: a leaked runner can push into
         # the cache, but cannot forge ncps' signature on upstream paths.

@@ -7,7 +7,7 @@
   # what every expression below groups on.
   sel = "garage_cluster=~\"garage-main|garage-backup\"";
 
-  # Census series (apps/garage-operator/block-census.nix) restricted to data
+  # Census series (apps/datavault/garage-operator/block-census.nix) restricted to data
   # directories whose PV is still Bound. The scans glob the NAS and the node
   # disks, so a directory left behind by a deleted volume would otherwise drag
   # the minimum down and page forever. `* on (persistentvolume) group_left ()
@@ -247,7 +247,7 @@ in {
           {
             # Bucket-level quota numbers come from the OPERATOR's metrics
             # (garage_operator_bucket_*, scraped by the chart's ServiceMonitor
-            # in apps/garage-operator once its metrics-reader ClusterRole is
+            # in apps/datavault/garage-operator once its metrics-reader ClusterRole is
             # bound to Prometheus' ServiceAccount): Garage's own admin
             # /metrics -- everything the groups above read -- exports no
             # per-bucket series. The operator polls each GarageBucket's usage
