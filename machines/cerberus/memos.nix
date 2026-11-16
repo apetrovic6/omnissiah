@@ -3,7 +3,7 @@
 # Go binary and the upstream module already ships a well-hardened unit.
 #
 # Database: cerberus's existing Postgres (services.imperium.postgresql, set up
-# in stc/server.nix) rather than the module's default embedded SQLite — same
+# in database.nix) rather than the module's default embedded SQLite — same
 # pattern as kaneo.nix / davical.nix / nopresh.nix. The memos-secrets generator
 # produces the password (handed to Postgres via passwordDependency, so the two
 # can never drift) and the env file holding MEMOS_DSN.
@@ -73,7 +73,7 @@
 in {
   imports = [self.nixosModules.reliquary-memos];
 
-  # Database — merges into services.imperium.postgresql from stc/server.nix.
+  # Database — merges into services.imperium.postgresql from database.nix.
   # Also enrols `memos` in the nightly pg_dump (backup.databases defaults to
   # every managed database).
   services.imperium.postgresql.users.memos = {

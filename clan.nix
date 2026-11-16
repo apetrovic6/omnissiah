@@ -9,7 +9,6 @@
 
   modules."@imperium/laptop" = import ./stc/laptop.nix;
   modules."@imperium/base" = import ./stc/base.nix;
-  modules."@imperium/server" = import ./stc/server.nix;
   modules."@imperium/workstation" = import ./stc/workstation.nix;
   modules."@imperium/dev" = import ./stc/dev.nix;
   modules."@imperium/gaming" = import ./stc/gaming.nix;
@@ -40,13 +39,6 @@
       module.name = "@imperium/base";
 
       roles.default.tags.base = {};
-    };
-
-    server = {
-      module.input = "self";
-      module.name = "@imperium/server";
-
-      roles.default.tags.server = {};
     };
 
     workstation = {
