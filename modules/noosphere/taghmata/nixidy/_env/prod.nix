@@ -27,20 +27,13 @@
     ./apps/forgejo
     ./apps/searxng
     ./apps/garage-operator
-    # The two Garage web UIs. They differ in one chart value: main sets the
-    # admin token's `existingSecret` beside `config.garage`, backup inside it.
-    # One of the two is probably not where the chart reads it; both are kept
-    # as deployed.
     (import ./apps/garage-ui {
       cluster = "main";
       s3Service = "garage-s3-api";
-      extraSecrets = ["garage-main-ui-admin-token"];
-      adminTokenBesideGarage = true;
     })
     (import ./apps/garage-ui {
       cluster = "backup";
       s3Service = "garage-backup-s3-api";
-      adminTokenBesideGarage = false;
     })
     ./apps/local-path-provisioner
     ./apps/vikunja

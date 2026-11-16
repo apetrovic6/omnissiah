@@ -1,15 +1,6 @@
 {self, ...}: {
   flake.nixosModules.reliquary = {pkgs, ...}: {
     clan.core.vars.generators = self.lib.mkSopsGenerators pkgs {
-      garage-main-ui-admin-token = {
-        namespace = "garage-operator";
-        prompts.admin-token = {
-          description = "Garage Main admin token (same token used by garage-main cluster)";
-          var = "secret";
-        };
-        data.admin-token = "$secret";
-      };
-
       garage-main-ui-jwt-token-secret = {
         namespace = "garage-operator";
         # Written to a file first so the PEM keeps its line breaks.
