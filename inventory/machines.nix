@@ -45,25 +45,25 @@ in {
     };
 
     terra = {
-      tags = ["base" "k8s" "k8s-base"];
+      tags = ["base"];
       deploy.targetHost = "root@${hosts.terra}";
       deploy.buildHost = "localhost";
     };
 
     luna = {
-      tags = ["base" "k8s" "k8s-base" "k8s-server"];
+      tags = ["base"];
       deploy.targetHost = "root@${hosts.luna}";
       deploy.buildHost = "localhost";
     };
 
     sol = {
-      tags = ["base" "k8s" "k8s-base" "k8s-server"];
+      tags = ["base"];
       deploy.targetHost = "root@${hosts.sol}";
       deploy.buildHost = "localhost";
     };
 
     mars = {
-      tags = ["base" "k8s" "k8s-master"];
+      tags = ["base"];
       deploy.targetHost = "root@${hosts.mars}";
       deploy.buildHost = "localhost";
     };

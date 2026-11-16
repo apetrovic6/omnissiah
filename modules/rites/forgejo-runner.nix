@@ -289,9 +289,13 @@ in {
         # Lowers what kubelet offers the scheduler. Pods already on the node
         # stay where they are; changing this restarts rke2, so roll it out one
         # etcd member at a time.
-        services.rke2.extraFlags = mkIf config.services.rke2.enable [
+        #
+        # mkAfter pins the flag to the end of the command line. Without it the
+        # position follows module import order, and moving an import would
+        # change the unit and restart rke2 for nothing.
+        services.rke2.extraFlags = mkIf config.services.rke2.enable (lib.mkAfter [
           "--kubelet-arg=system-reserved=memory=${toString r.memory}Gi"
-        ];
+        ]);
       }))
 
       (mkIf cfg.enable {
