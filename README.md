@@ -39,7 +39,7 @@ with `_` are skipped and must be imported explicitly.
 | `lexicanum` | Search: SearXNG |
 | `scriptorium` | Code hosting: Forgejo |
 | `vox` | Messaging: Matrix, ntfy |
-| `taghmata` | The Kubernetes cluster: RKE2 node modules, cluster secrets, nixidy apps, OpenTofu config |
+| `taghmata` | The Kubernetes cluster: RKE2 node modules (`rke2/`), secret generators (`reliquary/`), nixidy apps (`nixidy/`), OpenTofu config (`_tofunix/`) |
 
 ### Machines
 
@@ -54,6 +54,20 @@ with `_` are skipped and must be imported explicitly.
 | `terra`, `luna`, `sol` | `taghmata` control-plane nodes; terra bootstraps the cluster |
 | `mars` | `taghmata` control-plane node that takes no workloads |
 | `servitor` | Banana Pi BPI-M5, arm64 `taghmata` worker |
+
+### Modules
+
+Each noosphere domain is one NixOS module, `nixosModules.<domain>`, holding
+option-gated wrappers: importing it declares `services.imperium.*` options and
+enables nothing. Three exports are different:
+
+| Module | What it is |
+|---|---|
+| `noosphere` | Only the `noosphere.*` options (domain, SSO, age key) |
+| `taghmata` | The RKE2 server/agent wrappers, the node token and the registry cache |
+| `reliquary` | Generators for secrets that only the cluster consumes. Imported by the `taghmata` servers, so `clan vars generate terra` creates them |
+| `reliquary-kaneo`, `-memos`, `-ntfy`, `-ncps` | Generators for secrets shared between the cluster and a host. Each is imported by the module that consumes it on the host side |
+| `vox-matrix` | The Matrix homeserver. Not option-gated: importing it runs Synapse |
 
 ### Option namespaces
 

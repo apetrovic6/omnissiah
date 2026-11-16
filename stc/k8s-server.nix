@@ -8,6 +8,8 @@
   roles.default.perInstance.nixosModule = {self, ...}: {
     imports = [
       self.nixosModules.noosphere
+      self.nixosModules.taghmata
+      self.nixosModules.reliquary
     ];
 
     services.imperium.taghmata.rke2.server = {

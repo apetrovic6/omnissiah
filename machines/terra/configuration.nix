@@ -9,6 +9,8 @@
     self.nixosModules.smb
     self.nixosModules.impermanence
     self.nixosModules.noosphere
+    self.nixosModules.taghmata
+    self.nixosModules.reliquary
     self.nixosModules.forgejo-runner
     self.nixosModules.sccache
 

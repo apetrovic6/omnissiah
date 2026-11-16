@@ -14,6 +14,8 @@
   }: {
     imports = [
       self.nixosModules.noosphere
+      self.nixosModules.taghmata
+      self.nixosModules.reliquary
     ];
 
     nixpkgs.overlays = [self.overlays.rke2];

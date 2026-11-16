@@ -1,5 +1,5 @@
 {...}: {
-  flake.nixosModules.noosphere = {
+  flake.nixosModules.taghmata = {
     config,
     lib,
     pkgs,

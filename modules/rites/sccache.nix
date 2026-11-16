@@ -7,8 +7,8 @@
 # and generated products (rust-app-template) deliberately do not depend on this
 # Garage: their devenv.nix knows nothing about sccache.
 #
-# Same inverted flow as rke2/kube-secrets/{kaneo,memos}, but it lives here
-# rather than under taghmata/rke2/kube-secrets because the machines that need
+# Same inverted flow as reliquary/{kaneo,memos}, but it lives here
+# rather than under taghmata/reliquary because the machines that need
 # the credentials do not all import the noosphere module: luna and sol are
 # k8s-base (no noosphere import) and the workstations are not servers at all.
 # Every machine that enables this module gets the generator, so the clan var is

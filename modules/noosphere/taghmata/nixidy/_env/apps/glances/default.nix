@@ -14,7 +14,7 @@
   yaml = pkgs.formats.yaml {};
 
   # Produced by the clan vars generator in
-  # modules/noosphere/taghmata/rke2/kube-secrets/glance/default.nix.
+  # modules/noosphere/taghmata/reliquary/glance/default.nix.
   # Absent until `clan vars generate` has been run, so every consumer below is
   # guarded by pathExists: without the secret the deployment renders exactly as
   # it did before (unauthenticated GitHub calls) rather than failing to eval.

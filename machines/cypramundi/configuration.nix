@@ -82,7 +82,7 @@ in {
   imports = [
     self.nixosModules.postgresql
     self.nixosModules.pharos
-    self.nixosModules.vox
+    self.nixosModules.vox-matrix
   ];
 
   disko.devices.disk.main.imageSize = "3500M"; # adjust as needed

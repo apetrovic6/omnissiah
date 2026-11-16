@@ -1,5 +1,5 @@
 {...}: {
-  flake.nixosModules.vox = {
+  flake.nixosModules.vox-matrix = {
     lib,
     config,
     pkgs,
