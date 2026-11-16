@@ -299,9 +299,4 @@ in {
       };
     };
   };
-
-  garage.keys.keycloak = {
-    cluster = "backup";
-    secret.namespace = "keycloak";
-  };
 }
