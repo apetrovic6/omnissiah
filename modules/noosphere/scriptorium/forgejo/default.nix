@@ -7,7 +7,7 @@
   }: let
     serviceName = "forgejo";
 
-    imperiumBase = import ../../../rites/imperium-service.nix {
+    imperiumBase = self.lib.mkImperiumService {
       inherit lib pkgs;
       name = serviceName;
     };

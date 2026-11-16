@@ -5,29 +5,18 @@
 # Same shape as tofunix-harbor-woodpecker-secret: a sops-encrypted YAML file that the tofunix
 # sops provider decrypts, so the var file itself is not a clan secret.
 {
-  config,
+  self,
   lib,
   ...
 }: let
-  ageKey = config.noosphere.agePublicKey;
   products = import ../../_products.nix;
 in {
   flake.nixosModules.reliquary = {pkgs, ...}: {
-    clan.core.vars.generators = lib.mapAttrs' (name: _: let
-      secretsFile = "tofunix-harbor-robot-${name}";
-    in
-      lib.nameValuePair secretsFile {
-        share = true;
-
-        files.${secretsFile}.secret = false;
-
-        runtimeInputs = [pkgs.coreutils pkgs.gnugrep pkgs.sops pkgs.openssl];
-
-        script = ''
-          set -euo pipefail
-
-          # Harbor refuses a robot secret without an upper-case letter, a lower-case letter and
-          # a digit, so draw until one has all three.
+    clan.core.vars.generators = self.lib.mkSopsGenerators pkgs (lib.mapAttrs' (name: _:
+      lib.nameValuePair "tofunix-harbor-robot-${name}" {
+        # Harbor refuses a robot secret without an upper-case letter, a lower-case letter and
+        # a digit, so draw until one has all three.
+        setup = ''
           while :; do
             password="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32)"
             if printf '%s' "$password" | grep -q '[A-Z]' \
@@ -36,15 +25,10 @@ in {
               break
             fi
           done
-
-          sops encrypt \
-            --age "${ageKey}" \
-            --input-type yaml --output-type yaml \
-            /dev/stdin > "$out/${secretsFile}" <<EOF
-          robot_secret: "$password"
-          EOF
         '';
+        data.robot_secret = "$password";
+        runtimeInputs = [pkgs.openssl pkgs.gnugrep];
       })
-    products;
+    products);
   };
 }

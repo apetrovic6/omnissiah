@@ -1,9 +1,24 @@
-{lib, ...}: let
+{
+  lib,
+  config,
+  ...
+}: let
   cartographa = import ../cartographa/_cartographa.nix;
 in {
   flake.lib = {
     # The network chart and the vars store, see modules/cartographa.
     inherit (cartographa) lan hosts vips vars;
+
+    # Generators for sops-encrypted cluster and OpenTofu secrets, see
+    # ./_sops-generators.nix.
+    mkSopsGenerators = import ./_sops-generators.nix {
+      inherit lib;
+      ageKey = config.noosphere.agePublicKey;
+    };
+
+    # The options shared by every `services.imperium.<name>` wrapper, see
+    # ./_imperium-service.nix.
+    mkImperiumService = import ./_imperium-service.nix;
 
     mkDomain = subdomain: "${subdomain}.{$LAB_DOMAIN}";
 

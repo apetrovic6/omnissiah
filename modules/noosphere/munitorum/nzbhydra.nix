@@ -8,7 +8,7 @@
     serviceName = "nzbhydra2";
     inherit (self.lib) mkRevProxyVHost mkDomain;
 
-    imperiumBase = import ../../rites/imperium-service.nix {
+    imperiumBase = self.lib.mkImperiumService {
       inherit lib pkgs;
       name = serviceName;
     };

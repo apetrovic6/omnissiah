@@ -69,6 +69,17 @@ enables nothing. Three exports are different:
 | `reliquary-kaneo`, `-memos`, `-ntfy`, `-ncps` | Generators for secrets shared between the cluster and a host. Each is imported by the module that consumes it on the host side |
 | `vox-matrix` | The Matrix homeserver. Not option-gated: importing it runs Synapse |
 
+### Litanies
+
+Helpers under `self.lib` (`modules/litanies`):
+
+| Helper | Use |
+|---|---|
+| `mkSopsGenerators pkgs { <name> = {...}; }` | Clan vars generators that produce one sops-encrypted document: a `SopsSecret` for the cluster when `namespace` is set, a plain document for OpenTofu otherwise. Values come from `random`, `prompts` or a `setup` script. Documented in `_sops-generators.nix` |
+| `mkImperiumService { inherit lib pkgs; name = "..."; }` | The options every `services.imperium.<name>` wrapper shares |
+| `mkDomain`, `mkRevProxyVHost` | A Caddy virtual host on the lab domain |
+| `hosts`, `lan`, `vips`, `vars` | The network chart and vars paths (below) |
+
 ### Option namespaces
 
 - `services.imperium.<name>`: this repo's own service wrappers.

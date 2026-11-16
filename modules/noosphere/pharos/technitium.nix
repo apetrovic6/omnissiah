@@ -7,7 +7,7 @@
   }: let
     serviceName = "technitium-dns-server";
 
-    imperiumBase = import ../../rites/imperium-service.nix {
+    imperiumBase = self.lib.mkImperiumService {
       inherit lib pkgs;
       name = serviceName;
     };
