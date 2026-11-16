@@ -63,24 +63,18 @@
       roles.default.tags.gaming = {};
     };
 
-    # The RKE2 cluster, see stc/taghmata.nix. A machine in both roles is a
-    # control-plane node that also takes workloads; mars is control plane only.
+    # The RKE2 cluster, see stc/taghmata.nix. Roles follow the machine tags in
+    # inventory/machines.nix: a machine tagged both is a control-plane node
+    # that also takes workloads, `fabricator` alone is control plane only.
     taghmata = {
       module.input = "self";
       module.name = "@imperium/taghmata";
 
-      roles.fabricator.machines = {
-        terra.settings.founder = true;
-        luna = {};
-        sol = {};
-        mars = {};
-      };
+      roles.fabricator.tags.fabricator = {};
+      roles.skitarii.tags.skitarii = {};
 
-      roles.skitarii.machines = {
-        terra = {};
-        luna = {};
-        sol = {};
-      };
+      # The node that initialised the cluster; the others register with it.
+      roles.fabricator.machines.terra.settings.founder = true;
     };
 
     dev = {

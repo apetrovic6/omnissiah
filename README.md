@@ -57,8 +57,11 @@ with `_` are skipped and must be imported explicitly.
 
 ### The taghmata cluster roles
 
-`stc/taghmata.nix` is one clan service with two roles, assigned in `clan.nix`.
-A machine may hold either or both:
+`stc/taghmata.nix` is one clan service with two roles, assigned by the machine
+tags of the same name in `inventory/machines.nix`. Every node also carries the
+`taghmata` tag, so `clan machines update --tags taghmata` rolls the cluster and
+`--tags fabricator` only the control plane. A machine may hold either role or
+both:
 
 | Roles held | What the machine runs |
 |---|---|

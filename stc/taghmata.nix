@@ -13,8 +13,9 @@
 #   fabricator              RKE2 server, tainted so nothing else lands on it
 #   skitarii                RKE2 agent
 #
-# Turning a control-plane/worker machine into a plain worker is therefore
-# removing it from `roles.fabricator` in clan.nix. That is only the target
+# Roles are assigned by the machine tags of the same name in
+# inventory/machines.nix. Turning a control-plane/worker machine into a plain
+# worker is therefore removing its `fabricator` tag. That is only the target
 # state: on the machine itself the node still has to be drained, its etcd
 # member removed and its server state cleared before it rejoins as an agent.
 {lib, ...}: let
