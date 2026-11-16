@@ -18,7 +18,7 @@
 #
 # Access control: everything below the ACL level of `deny-all`, with accounts minted
 # by the shared `ntfy-access` clan var
-# (modules/noosphere/taghmata/reliquary/ntfy/default.nix). The var's env file
+# (modules/taghmata/reliquary/ntfy/default.nix). The var's env file
 # is loaded via EnvironmentFile, which systemd parses as root before the service
 # drops to its dynamic user, so the credentials stay in the sops secret store and
 # never enter the nix store or a manifest.

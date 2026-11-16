@@ -16,6 +16,7 @@ what they do.
 | `modules/rites/` | Reusable NixOS modules, each exported as `nixosModules.<name>` |
 | `modules/litanies/` | `flake.lib` helper functions |
 | `modules/noosphere/` | Self-hosted services, grouped by domain (below) |
+| `modules/taghmata/` | The Kubernetes cluster: RKE2 node modules (`rke2/`), secret generators (`reliquary/`), nixidy apps (`nixidy/`), OpenTofu config (`_tofunix/`). Its rendered manifests are the one thing left under `modules/noosphere/taghmata/`, where ArgoCD reads them |
 | `modules/manufactorum/` | What the flake builds for itself: checks, packages, the dev shell and formatter |
 | `modules/cartographa/` | The chart of the estate: host and network addresses (`_chart.nix`), flake-wide values such as the domain and SSO provider, paths into the vars store, and shared clan vars |
 | `overlays/` | Nixpkgs overlays, exported as `overlays.<name>` |
@@ -39,7 +40,6 @@ with `_` are skipped and must be imported explicitly.
 | `lexicanum` | Search: SearXNG |
 | `scriptorium` | Code hosting: Forgejo |
 | `vox` | Messaging: Matrix, ntfy |
-| `taghmata` | The Kubernetes cluster: RKE2 node modules (`rke2/`), secret generators (`reliquary/`), nixidy apps (`nixidy/`), OpenTofu config (`_tofunix/`) |
 
 ### Machines
 
@@ -121,7 +121,7 @@ built by CI without being listed anywhere.
 ## Cluster applications
 
 The applications on taghmata are nixidy modules under
-`modules/noosphere/taghmata/nixidy/_env/apps`, listed in `_env/prod.nix`.
+`modules/taghmata/nixidy/_env/apps`, listed in `_env/prod.nix`.
 They are grouped like the noosphere domains, with three groups that exist
 only in the cluster: `enginarium` (what the cluster runs on), `datavault`
 (storage) and `augur` (observability), plus `cogitator` (everyday tools) and

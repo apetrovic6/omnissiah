@@ -13,7 +13,7 @@
 #
 # Attachment storage: the `memos` bucket on the garage-main cluster (k8s),
 # same inverted flow as kaneo.nix — the key pair is minted by the shared
-# `memos-s3-key` clan var (modules/noosphere/taghmata/reliquary/memos)
+# `memos-s3-key` clan var (modules/taghmata/reliquary/memos)
 # and imported into Garage there, so both sides come from one source.
 # Memos 0.30 no longer configures S3 through the environment: it loads
 # validated protojson InstanceSetting files from the hardcoded /etc/secrets

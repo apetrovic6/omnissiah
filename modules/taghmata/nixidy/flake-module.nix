@@ -163,7 +163,7 @@ in {
 
           outputPath = mkOption {
             type = types.str;
-            default = "modules/noosphere/taghmata/nixidy/_generated";
+            default = "modules/taghmata/nixidy/_generated";
             description = ''
               Output directory for generated CRD modules.
             '';
@@ -331,7 +331,7 @@ in {
               nixidy.applicationImports =
                 autoDiscoverCrds
                 ++ [
-                  (import ./_modules/sops-secrets.nix {vars = import ../../../cartographa/_vars.nix;})
+                  (import ./_modules/sops-secrets.nix {vars = import ../../cartographa/_vars.nix;})
                   ingress.module
                 ];
             })
@@ -370,8 +370,8 @@ in {
             # The network chart and the vars store (modules/cartographa),
             # as module arguments of every app.
             extraSpecialArgs = {
-              cartographa = import ../../../cartographa/_chart.nix;
-              vars = import ../../../cartographa/_vars.nix;
+              cartographa = import ../../cartographa/_chart.nix;
+              vars = import ../../cartographa/_vars.nix;
               inherit (ingress) ingressAnnotations;
             };
             envs = lib.mapAttrs mkEnv enabledEnvs;

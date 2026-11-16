@@ -1,5 +1,5 @@
 {ref, ...}: let
-  inherit (import ../../../../cartographa/_cartographa.nix) noosphere vars;
+  inherit (import ../../../cartographa/_cartographa.nix) noosphere vars;
   secretsFile = "${(vars.shared "tofunix-forgejo-secret" "tofunix-forgejo-secret")}";
   inherit (noosphere) domain;
 in {
