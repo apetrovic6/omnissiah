@@ -5,7 +5,7 @@
 # oneshot loads the tarball into Podman before the container starts.
 #
 # Database: cerberus's existing Postgres (services.imperium.postgresql, set up
-# in stc/server.nix), same pattern as kaneo.nix / nopresh.nix: the
+# in database.nix), same pattern as kaneo.nix / nopresh.nix: the
 # davical-secrets generator below produces the password (handed to Postgres via
 # passwordDependency, so the two can never drift) and the container env file.
 # The container uses --network=host because pg_hba.conf only allows
@@ -43,7 +43,7 @@ in {
   # module that may import self.nixosModules.virtualisation — importing it a
   # second time fails with "option already declared").
 
-  # Database — merges into services.imperium.postgresql from stc/server.nix.
+  # Database — merges into services.imperium.postgresql from database.nix.
   # Also enrols `davical` in the nightly pg_dump (backup.databases defaults to
   # every managed database).
   services.imperium.postgresql.users.davical = {

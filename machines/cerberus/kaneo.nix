@@ -1,6 +1,6 @@
 # Kaneo — self-hosted project/task tracker. Upstream ships a compose.yml with a
 # bundled postgres:16-alpine and an optional MinIO; neither is needed here.
-# Cerberus already runs Postgres (stc/server.nix) and the k8s cluster already
+# Cerberus already runs Postgres (database.nix) and the k8s cluster already
 # runs Garage, so the whole compose file collapses to this one container.
 #
 # Reachable at https://kaneo.<lab-domain> via Caddy on the LAN/VPN only —
@@ -86,7 +86,7 @@ in {
     # Host networking so the container reaches Postgres on 127.0.0.1:5432 — the
     # podman bridge (10.88.0.0/16) is not in pg_hba.conf, which only allows
     # 127.0.0.1/32 and 192.168.1.0/24. Port 5173 is not in the firewall
-    # allow-list (stc/server.nix), so this stays local to the host.
+    # allow-list (database.nix), so this stays local to the host.
     extraOptions = ["--network=host"];
     environment = {
       KANEO_CLIENT_URL = clientUrl;

@@ -20,7 +20,7 @@ in {
     };
 
     cerberus = {
-      tags = ["base" "server"];
+      tags = ["base"];
       deploy.targetHost = "root@${hosts.cerberus}";
       deploy.buildHost = "localhost";
     };
