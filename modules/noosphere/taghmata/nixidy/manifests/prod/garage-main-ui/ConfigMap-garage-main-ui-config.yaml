@@ -58,15 +58,12 @@ data:
       - https://ui.main.garage.noosphere.uk
       enabled: true
       max_age: 3600
-    existingSecret:
-      key: admin-token
-      name: garage-main-admin-token
     garage:
       admin_endpoint: http://garage-main-admin:3903
       endpoint: http://garage-s3-api:3900
       existingSecret:
         key: admin-token
-        name: ""
+        name: garage-main-admin-token
       region: main
     logging:
       format: json

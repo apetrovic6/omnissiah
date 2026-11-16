@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 6ea66fb88f418e8c1db7ec4968e39c1bbbbe208dcab67055c674c7ec17e25020
+        checksum/config: a8130c1c50c555608c8790b1b3590a9e9757219f97f3376c6103774ffeba85b6
       labels:
         app.kubernetes.io/instance: garage-main-ui
         app.kubernetes.io/name: garage-ui
@@ -39,7 +39,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: admin-token
-                  name: garage-main-ui-admin-token
+                  name: garage-main-admin-token
             - name: GARAGE_UI_AUTH_OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
