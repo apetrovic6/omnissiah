@@ -60,40 +60,12 @@ in {
       };
     };
 
-    resources.ingresses.glance-ip-root = {
-      metadata = {
-        inherit namespace;
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-        rules = [
-          {
-            host = "glance.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "glance";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
-
-        tls = [
-          {
-            secretName = "glance-tls";
-            hosts = ["glance.${domain}"];
-          }
-        ];
-      };
+    ingresses.glance-ip-root = {
+      inherit namespace;
+      host = "glance.${domain}";
+      service = "glance";
+      port = 80;
+      tlsSecret = "glance-tls";
     };
 
     resources.deployments.glance = {

@@ -118,6 +118,22 @@ nix fmt
 `checks` contains every NixOS machine for the system, so new machines are
 built by CI without being listed anywhere.
 
+## Cluster applications
+
+The applications on taghmata are nixidy modules under
+`modules/noosphere/taghmata/nixidy/_env/apps`, listed in `_env/prod.nix`.
+Besides nixidy's own options, an application can use:
+
+| Option | For |
+|---|---|
+| `sopsSecrets = ["name"]` | Shipping a cluster secret generated in `taghmata/reliquary` |
+| `ingresses.<name>` | A single-host Traefik ingress with a certificate and Glance dashboard entry. `ingressAnnotations` builds the same annotations for charts that render their own Ingress |
+| `garage.keys.<name>` (beside `applications`, not inside it) | An S3 key and its buckets on `garage-main` or `garage-backup`, with the credentials reflected into the application's namespace |
+| `templates.cnpg-database-cluster`, `templates.garageObjectStore`, `templates.rust-service` | A PostgreSQL cluster, its backup object store, a rust-app-template service |
+
+`nixidy build .#prod` renders the manifests; what ArgoCD applies is the
+rendered copy committed under `nixidy/manifests/prod`.
+
 ## Addresses and secrets paths
 
 No module writes an IP address or a `../../vars/...` path itself. Both come

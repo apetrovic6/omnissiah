@@ -3,6 +3,7 @@
   lib,
   config,
   vars,
+  ingressAnnotations,
   ...
 }: let
   namespace = "ncps";
@@ -24,10 +25,13 @@ in {
     inherit namespace;
     createNamespace = true;
 
+    sopsSecrets = [
+      signingKeySecret
+      uploadAuth
+    ];
+
     yamls = [
-      (builtins.readFile (vars.shared signingKeySecret signingKeySecret))
       # The htpasswd line for /upload; see reliquary/ncps.
-      (builtins.readFile (vars.shared uploadAuth uploadAuth))
     ];
 
     # Only the Forgejo runners may reach /upload, where ncps takes PUTs. The
@@ -231,15 +235,16 @@ in {
         ingress = {
           enabled = true;
           className = "traefik";
-          annotations = {
-            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-            "glance/name" = "Ncps";
-            "glance/icon" = "di:nixos";
-            "glance/url" = "https://ncps.${domain}";
-            "glance/description" = "Nix Binary Cache";
-            "glance/id" = "ncps";
-            "glance/parent" = "ncps";
-            "category" = "storage";
+          annotations = ingressAnnotations {
+            glance = {
+              name = "Ncps";
+              icon = "di:nixos";
+              url = "https://ncps.${domain}";
+              description = "Nix Binary Cache";
+              id = "ncps";
+              parent = "ncps";
+              category = "storage";
+            };
           };
 
           hosts = [
@@ -335,6 +340,27 @@ in {
           }
         ];
       };
+    };
+  };
+
+  # Named `ncps-backup` for the same reason as `forgejo-backup` below:
+  # garage-main already owns an `ncps` bucket/key pair (the binary cache's
+  # own NAR storage) in this namespace. This one only holds CNPG backups and
+  # WAL for pg-ncps-rev1.
+  garage.keys.ncps-backup = {
+    cluster = "backup";
+    secret.namespace = "ncps";
+  };
+
+  # The key names are left at the operator's defaults (access-key-id /
+  # secret-access-key) on purpose: those are exactly the two keys the
+  # ncps chart reads when config.storage.s3.existingSecret is set.
+  garage.keys.ncps = {
+    cluster = "main";
+    secret = {
+      namespace = "ncps";
+      accessKeyIdKey = null;
+      secretAccessKeyKey = null;
     };
   };
 }

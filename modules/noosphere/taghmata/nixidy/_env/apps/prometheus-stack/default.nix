@@ -498,48 +498,19 @@ in {
       ++ lib.optionals ntfyReady [(builtins.readFile ntfySecretYaml)]
       ++ lib.optionals heartbeatReady [(builtins.readFile heartbeatSecretYaml)];
 
-    resources.ingresses.grafana-ip-root = {
-      metadata = {
-        namespace = "observability";
-
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "websecure";
-          "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-          "glance/name" = "Grafana";
-          "glance/icon" = "di:grafana";
-          "glance/url" = "https://grafana.${domain}";
-          "glance/description" = "Dashboards";
-          "glance/id" = "grafana";
-          "glance/parent" = "grafana";
-          "category" = "monitoring";
-        };
-      };
-
-      spec = {
-        ingressClassName = "traefik";
-
-        tls = [
-          {
-            secretName = "grafana-tls";
-            hosts = ["grafana.${domain}"];
-          }
-        ];
-
-        rules = [
-          {
-            host = "grafana.${domain}";
-            http.paths = [
-              {
-                path = "/";
-                pathType = "Prefix";
-                backend.service = {
-                  name = "grafana";
-                  port.number = 80;
-                };
-              }
-            ];
-          }
-        ];
+    ingresses.grafana-ip-root = {
+      namespace = "observability";
+      host = "grafana.${domain}";
+      service = "grafana";
+      port = 80;
+      tlsSecret = "grafana-tls";
+      glance = {
+        name = "Grafana";
+        icon = "di:grafana";
+        description = "Dashboards";
+        id = "grafana";
+        parent = "grafana";
+        category = "monitoring";
       };
     };
   };

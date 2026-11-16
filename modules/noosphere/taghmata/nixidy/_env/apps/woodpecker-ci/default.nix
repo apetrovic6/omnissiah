@@ -2,6 +2,7 @@
   config,
   charts,
   vars,
+  ingressAnnotations,
   ...
 }: let
   name = "woodpecker";
@@ -19,9 +20,9 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    yamls = [
-      (builtins.readFile (vars.shared "woodpecker-default-agent-secret" "woodpecker-default-agent-secret"))
-      (builtins.readFile (vars.shared "woodpecker-forgejo-oauth-secret" "woodpecker-forgejo-oauth-secret"))
+    sopsSecrets = [
+      "woodpecker-default-agent-secret"
+      "woodpecker-forgejo-oauth-secret"
     ];
 
     templates.garageObjectStore."${objectStoreName}" = {
@@ -73,15 +74,16 @@ in {
 
           ingress = {
             enabled = true;
-            annotations = {
-              "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-              "glance/name" = "Woodpecker CI";
-              "glance/icon" = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/woodpecker-ci.svg";
-              "glance/url" = "https://${url}";
-              "glance/description" = "CI/CD";
-              "glance/id" = name;
-              "glance/parent" = name;
-              "category" = "gitops";
+            annotations = ingressAnnotations {
+              glance = {
+                name = "Woodpecker CI";
+                icon = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/woodpecker-ci.svg";
+                url = "https://${url}";
+                description = "CI/CD";
+                id = name;
+                parent = name;
+                category = "gitops";
+              };
             };
             tls = [
               {
@@ -237,5 +239,10 @@ in {
         monitoring.enablePodMonitor = true;
       };
     };
+  };
+
+  garage.keys.woodpecker = {
+    cluster = "backup";
+    secret.namespace = "woodpecker";
   };
 }

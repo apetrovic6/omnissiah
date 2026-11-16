@@ -22,16 +22,18 @@ in {
 
     resources.deployments.harbor-core.metadata.annotations."glance/hide" = "true";
 
-    yamls = [
-      (builtins.readFile (vars.shared "harbor-admin-password-secret" "harbor-admin-password-secret"))
-      (builtins.readFile (vars.shared "harbor-secret-secret-key" "harbor-secret-secret-key"))
-      (builtins.readFile (vars.shared "harbor-job-service-secret" "harbor-job-service-secret"))
-      (builtins.readFile (vars.shared "harbor-registry-http-secret" "harbor-registry-http-secret"))
-      (builtins.readFile (vars.shared "harbor-registry-credentials-secret" "harbor-registry-credentials-secret"))
-      (builtins.readFile (vars.shared "harbor-redis-password-secret" "harbor-redis-password-secret"))
-      (builtins.readFile (vars.shared "pg-harbor-postgres-secret" "pg-harbor-postgres-secret"))
-      (builtins.readFile (vars.shared "harbor-core-secret" "harbor-core-secret"))
+    sopsSecrets = [
+      "harbor-admin-password-secret"
+      "harbor-secret-secret-key"
+      "harbor-job-service-secret"
+      "harbor-registry-http-secret"
+      "harbor-registry-credentials-secret"
+      "harbor-redis-password-secret"
+      "pg-harbor-postgres-secret"
+      "harbor-core-secret"
+    ];
 
+    yamls = [
       ''
         apiVersion: networking.k8s.io/v1
         kind: Ingress
@@ -414,6 +416,28 @@ in {
           }
         ];
       };
+    };
+  };
+
+  # Named `harbor-backup` for the same reason as `forgejo-backup`: garage-main
+  # already owns a `harbor` bucket/key pair (registry blobs) in this namespace.
+  garage.keys.harbor-backup = {
+    cluster = "backup";
+    secret.namespace = "harbor";
+  };
+
+  # Harbor's registry chart reads its S3 credentials from a plain
+  # `existingSecret`, so the key names here must be exactly what the
+  # chart looks for -- not the operator's default access-key-id /
+  # secret-access-key -- and the secret has to be reflected into the
+  # `harbor` namespace, since GarageKeys all live in garage-operator.
+  garage.keys.harbor = {
+    cluster = "main";
+    secret = {
+      name = "harbor-main-s3-secret-key";
+      namespace = "harbor";
+      accessKeyIdKey = "REGISTRY_STORAGE_S3_ACCESSKEY";
+      secretAccessKeyKey = "REGISTRY_STORAGE_S3_SECRETKEY";
     };
   };
 }

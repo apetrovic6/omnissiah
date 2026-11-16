@@ -307,6 +307,9 @@ in {
             # Noosphere options for nixidy apps
             ./_modules/noosphere-options.nix
 
+            # `garage.keys`: S3 keys and buckets, declared by the application that uses them
+            ./_modules/garage-keys.nix
+
             # Pass global values into nixidy module graph
             ({lib, ...}: {
               noosphere.domain = lib.mkDefault global.domain;
@@ -324,11 +327,20 @@ in {
               };
 
               # Auto-import discovered CRDs
-              nixidy.applicationImports = autoDiscoverCrds;
+              # ...and the options this repo adds to every application.
+              nixidy.applicationImports =
+                autoDiscoverCrds
+                ++ [
+                  (import ./_modules/sops-secrets.nix {vars = import ../../../cartographa/_vars.nix;})
+                  ingress.module
+                ];
             })
           ]
           ++ envModules;
       };
+
+      # `ingresses.<name>` for applications and the `ingressAnnotations` argument.
+      ingress = import ./_modules/ingress.nix {inherit lib;};
 
       # Build charts attrset
       charts =
@@ -360,6 +372,7 @@ in {
             extraSpecialArgs = {
               cartographa = import ../../../cartographa/_chart.nix;
               vars = import ../../../cartographa/_vars.nix;
+              inherit (ingress) ingressAnnotations;
             };
             envs = lib.mapAttrs mkEnv enabledEnvs;
           };

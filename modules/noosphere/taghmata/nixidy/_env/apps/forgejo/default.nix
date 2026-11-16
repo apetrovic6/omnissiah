@@ -3,6 +3,7 @@
   charts,
   cartographa,
   vars,
+  ingressAnnotations,
   ...
 }: let
   name = "forgejo";
@@ -23,9 +24,9 @@ in {
     inherit namespace;
     createNamespace = true;
 
-    yamls = [
-      (builtins.readFile (vars.shared forgejo-admin-secret forgejo-admin-secret))
-      (builtins.readFile (vars.shared forgejo-keycloak-oauth-secret forgejo-keycloak-oauth-secret))
+    sopsSecrets = [
+      forgejo-admin-secret
+      forgejo-keycloak-oauth-secret
     ];
 
     templates.garageObjectStore."${objectStoreName}" = {
@@ -73,16 +74,17 @@ in {
         ingress = {
           enabled = true;
           className = "traefik";
-          annotations = {
-            "cert-manager.io/cluster-issuer" = "letsencrypt-cloudflare";
-            "traefik.ingress.kubernetes.io/router.entrypoints" = "web,websecure";
-            "glance/name" = "Forgejo";
-            "glance/icon" = "di:forgejo";
-            "glance/url" = "https://${url}";
-            "glance/description" = "Git Forge";
-            "glance/id" = name;
-            "glance/parent" = name;
-            "category" = "gitops";
+          annotations = ingressAnnotations {
+            entrypoints = "web,websecure";
+            glance = {
+              name = "Forgejo";
+              icon = "di:forgejo";
+              url = "https://${url}";
+              description = "Git Forge";
+              id = name;
+              parent = name;
+              category = "gitops";
+            };
           };
           hosts = [
             {
@@ -320,5 +322,19 @@ in {
         ];
       };
     };
+  };
+
+  # Named `forgejo-backup` rather than `forgejo`: the garage-main cluster
+  # already owns a `forgejo` bucket/key pair (Gitea attachments + LFS) in
+  # this same namespace, and its secret is `forgejo-s3-secret-key`.
+  garage.keys.forgejo-backup = {
+    cluster = "backup";
+    secret.namespace = "forgejo";
+  };
+
+  garage.keys.forgejo = {
+    cluster = "main";
+    buckets = ["forgejo" "forgejo-lfs"];
+    secret.namespace = "forgejo";
   };
 }

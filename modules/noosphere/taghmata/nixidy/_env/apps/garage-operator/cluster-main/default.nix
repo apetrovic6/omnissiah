@@ -95,303 +95,6 @@
       };
     };
 
-    resources.garageKeys.opentofu = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        bucketPermissions = [
-          {
-            bucketRef.name = "opentofu";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
-      };
-    };
-
-    resources.garageBuckets.opentofu = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        # keyPermissions = [
-        #   {
-        #     keyRef = "opentofu";
-        #     read = true;
-        #     write = true;
-        #     owner = true;
-        #   }
-        # ];
-      };
-    };
-
-    resources.garageBuckets.ncps = {
-      metadata = {inherit namespace;};
-      spec.clusterRef.name = "garage-main";
-    };
-
-    resources.garageKeys.ncps = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        bucketPermissions = [
-          {
-            bucketRef.name = "ncps";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
-        # The key names are left at the operator's defaults (access-key-id /
-        # secret-access-key) on purpose: those are exactly the two keys the
-        # ncps chart reads when config.storage.s3.existingSecret is set.
-        secretTemplate = {
-          name = "ncps-s3-secret-key";
-          annotations = {
-            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
-            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "ncps";
-            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
-            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "ncps";
-          };
-        };
-      };
-    };
-
-    resources.garageKeys.forgejo = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        bucketPermissions = [
-          {
-            bucketRef.name = "forgejo";
-            read = true;
-            write = true;
-            owner = true;
-          }
-
-          {
-            bucketRef.name = "forgejo-lfs";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
-        secretTemplate = {
-          name = "forgejo-s3-secret-key";
-          accessKeyIdKey = "MINIO_ACCESS_KEY_ID";
-          secretAccessKeyKey = "MINIO_SECRET_ACCESS_KEY";
-          annotations = {
-            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
-            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "forgejo";
-            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
-            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "forgejo";
-          };
-        };
-      };
-    };
-
-    resources.garageBuckets.forgejo = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        # keyPermissions = [
-        #   {
-        #     keyRef = "forgejo";
-        #     read = true;
-        #     write = true;
-        #     owner = true;
-        #   }
-        # ];
-      };
-    };
-
-    resources.garageBuckets.forgejo-lfs = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        # keyPermissions = [
-        #   {
-        #     keyRef = "forgejo";
-        #     read = true;
-        #     write = true;
-        #     owner = true;
-        #   }
-        # ];
-      };
-    };
-
-    resources.garageKeys.harbor = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-
-        bucketPermissions = [
-          {
-            bucketRef.name = "harbor";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
-
-        # Harbor's registry chart reads its S3 credentials from a plain
-        # `existingSecret`, so the key names here must be exactly what the
-        # chart looks for -- not the operator's default access-key-id /
-        # secret-access-key -- and the secret has to be reflected into the
-        # `harbor` namespace, since GarageKeys all live in garage-operator.
-        secretTemplate = {
-          name = "harbor-main-s3-secret-key";
-          accessKeyIdKey = "REGISTRY_STORAGE_S3_ACCESSKEY";
-          secretAccessKeyKey = "REGISTRY_STORAGE_S3_SECRETKEY";
-          annotations = {
-            "reflector.v1.k8s.emberstack.com/reflection-allowed" = "true";
-            "reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces" = "harbor";
-            "reflector.v1.k8s.emberstack.com/reflection-auto-enabled" = "true";
-            "reflector.v1.k8s.emberstack.com/reflection-auto-namespaces" = "harbor";
-          };
-        };
-      };
-    };
-
-    resources.garageBuckets.harbor = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        # keyPermissions = [
-        #   {
-        #     keyRef = "harbor";
-        #     read = true;
-        #     write = true;
-        #     owner = true;
-        #   }
-        # ];
-      };
-    };
-
-    # Kaneo (runs on cerberus, outside the cluster) uploads bucket. The key pair
-    # is generated by the `kaneo-s3-key` clan var and IMPORTED here, so cerberus
-    # and Garage are fed from one source and nothing is copied by hand.
-    # See modules/noosphere/taghmata/reliquary/kaneo/default.nix.
-    resources.garageKeys.kaneo = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        # Reads access-key-id / secret-access-key (the operator's defaults) from
-        # the Secret the SopsSecret materialises.
-        importKey.secretRef = {
-          name = "kaneo-s3-import";
-          namespace = "garage-operator";
-        };
-        # owner is what authorises PutBucketCors, which Kaneo needs because
-        # uploads are presigned PUTs made by the browser.
-        bucketPermissions = [
-          {
-            bucketRef.name = "kaneo";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
-      };
-    };
-
-    resources.garageBuckets.kaneo = {
-      metadata = {inherit namespace;};
-      spec.clusterRef.name = "garage-main";
-    };
-
-    # Memos (runs on cerberus, outside the cluster) attachment bucket. Same
-    # inverted flow as kaneo: the key pair is generated by the `memos-s3-key`
-    # clan var and IMPORTED here, so cerberus and Garage are fed from one
-    # source and nothing is copied by hand.
-    # See modules/noosphere/taghmata/reliquary/memos/default.nix.
-    resources.garageKeys.memos = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        # Reads access-key-id / secret-access-key (the operator's defaults) from
-        # the Secret the SopsSecret materialises.
-        importKey.secretRef = {
-          name = "memos-s3-import";
-          namespace = "garage-operator";
-        };
-        # owner is what authorises PutBucketCors, needed because attachment
-        # downloads are presigned GETs fetched by the browser cross-origin.
-        bucketPermissions = [
-          {
-            bucketRef.name = "memos";
-            read = true;
-            write = true;
-            owner = true;
-          }
-        ];
-      };
-    };
-
-    resources.garageBuckets.memos = {
-      metadata = {inherit namespace;};
-      spec.clusterRef.name = "garage-main";
-    };
-
-    # sccache: the shared compile cache for cargo builds that run OUTSIDE the
-    # Nix sandbox (the user's workstations and the Forgejo runners' host steps).
-    # Nix builds stay with ncps. Same inverted flow as kaneo/memos: the key
-    # pair is generated by the `sccache-garage-key` clan var and IMPORTED here,
-    # so the machines and Garage are fed from one source.
-    # See modules/rites/sccache.nix.
-    resources.garageKeys.sccache = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        # Reads access-key-id / secret-access-key (the operator's defaults) from
-        # the Secret the SopsSecret materialises.
-        importKey.secretRef = {
-          name = "sccache-s3-import";
-          namespace = "garage-operator";
-        };
-        bucketPermissions = [
-          {
-            bucketRef.name = "sccache";
-            read = true;
-            write = true;
-            # No owner, unlike kaneo/memos: the owner bit is what authorises
-            # bucket-admin calls (PutBucketCors for their browser-facing
-            # presigned traffic). sccache only ever GETs and PUTs objects.
-            # Spelled out because the operator defaults it into the list, and
-            # ArgoCD compares the list whole: left out, the key stays OutOfSync.
-            owner = false;
-          }
-        ];
-      };
-    };
-
-    resources.garageBuckets.sccache = {
-      metadata = {inherit namespace;};
-      spec = {
-        clusterRef.name = "garage-main";
-        # 250 GiB. maxSize is an int-or-string quantity: the API server stores
-        # a bare number as the string "268435456000", so a number here keeps
-        # ArgoCD OutOfSync forever. A quantity string round-trips unchanged.
-        quotas.maxSize = "250Gi";
-        lifecycle.rules = [
-          {
-            # sccache never deletes anything from S3 -- it only writes objects
-            # it later reads back -- so without expiry this bucket only grows.
-            # 7 days (the owner's call, 2026-11-15) caps it at about a week
-            # of churn. Expiry counts from upload, not last read, so even a
-            # hot entry is recompiled and re-uploaded once a week.
-            id = "expire-after-7-days";
-            status = "Enabled";
-            expirationDays = 7;
-            # Large objects go up as multipart uploads; a build killed mid-
-            # upload leaves parts behind that Expiration does not cover and
-            # that still count against the quota.
-            abortIncompleteMultipartUploadDays = 7;
-          }
-        ];
-      };
-    };
-
     # /metrics on the admin port (3903) is the only place Garage exposes its
     # cluster health, partition quorum, resync state and per-node disk numbers.
     # Scraping it is what makes the Garage alerts in the prometheus-grafana app
@@ -482,6 +185,73 @@
           }
         ];
       };
+    };
+  };
+
+  # Buckets for consumers outside the cluster. Their key pair is generated by a
+  # clan var and IMPORTED here (the operator reads access-key-id and
+  # secret-access-key from the Secret the SopsSecret materialises), so the
+  # machine and Garage are fed from one source and nothing is copied by hand.
+
+  # Kaneo's uploads, on cerberus. See taghmata/reliquary/kaneo/default.nix.
+  # The key owns the bucket, which is what authorises PutBucketCors: uploads
+  # are presigned PUTs made by the browser.
+  garage.keys.kaneo = {
+    cluster = "main";
+    importSecret = "kaneo-s3-import";
+  };
+
+  # Memos' attachments, on cerberus. See taghmata/reliquary/memos/default.nix.
+  # Owner for the same reason as kaneo: attachment downloads are presigned
+  # GETs fetched by the browser cross-origin.
+  garage.keys.memos = {
+    cluster = "main";
+    importSecret = "memos-s3-import";
+  };
+
+  # The OpenTofu state bucket (taghmata/_tofunix). No Secret is requested: its
+  # credentials are entered as a clan var (reliquary/tofunix/s3-secrets.nix).
+  garage.keys.opentofu = {
+    cluster = "main";
+  };
+
+  # sccache: the shared compile cache for cargo builds that run OUTSIDE the
+  # Nix sandbox (the user's workstations and the Forgejo runners' host steps).
+  # Nix builds stay with ncps. See modules/rites/sccache.nix.
+  garage.keys.sccache = {
+    cluster = "main";
+    importSecret = "sccache-s3-import";
+
+    # No owner, unlike kaneo/memos: the owner bit is what authorises
+    # bucket-admin calls (PutBucketCors for their browser-facing presigned
+    # traffic). sccache only ever GETs and PUTs objects. It is still written
+    # into the GarageKey as `owner: false`, because the operator defaults it
+    # into the list and ArgoCD compares the list whole: left out, the key
+    # stays OutOfSync.
+    owner = false;
+
+    bucketSpec.sccache = {
+      # 250 GiB. maxSize is an int-or-string quantity: the API server stores
+      # a bare number as the string "268435456000", so a number here keeps
+      # ArgoCD OutOfSync forever. A quantity string round-trips unchanged.
+      quotas.maxSize = "250Gi";
+
+      lifecycle.rules = [
+        {
+          # sccache never deletes anything from S3 -- it only writes objects
+          # it later reads back -- so without expiry this bucket only grows.
+          # 7 days (the owner's call, 2026-11-15) caps it at about a week
+          # of churn. Expiry counts from upload, not last read, so even a
+          # hot entry is recompiled and re-uploaded once a week.
+          id = "expire-after-7-days";
+          status = "Enabled";
+          expirationDays = 7;
+          # Large objects go up as multipart uploads; a build killed mid-
+          # upload leaves parts behind that Expiration does not cover and
+          # that still count against the quota.
+          abortIncompleteMultipartUploadDays = 7;
+        }
+      ];
     };
   };
 }
