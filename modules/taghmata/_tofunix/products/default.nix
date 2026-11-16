@@ -12,7 +12,7 @@
 # builtins only, and a fixed top-level shape: `pkgs`/`lib` arrive through `_module.args`, so
 # computing this module's attribute names from them is an infinite recursion.
 {ref, ...}: let
-  inherit (import ../../../../cartographa/_cartographa.nix) vars;
+  inherit (import ../../../cartographa/_cartographa.nix) vars;
   products = import ../../_products.nix;
   owner = "manjo";
   # `ref` covers resources, data, vars and locals but not providers, so the alias is spelled out.

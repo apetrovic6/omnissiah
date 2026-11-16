@@ -3,5 +3,5 @@
 # This module provides the noosphere options (domain, SSO) to nixidy
 # application definitions via config.noosphere.*
 {
-  imports = [../../../../cartographa/_noosphere-options.nix];
+  imports = [../../../cartographa/_noosphere-options.nix];
 }
