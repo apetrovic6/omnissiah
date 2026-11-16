@@ -21,7 +21,6 @@
       self.inputs.magos.nixosModules.pi
       self.inputs.magos.nixosModules.omp
       self.inputs.magos.nixosModules.claude-accounts
-      # self.nixosModules.flatpak
       self.nixosModules.bluetooth
       self.nixosModules.virtualisation
       self.inputs.nix-index-database.nixosModules.default
