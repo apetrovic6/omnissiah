@@ -13,7 +13,7 @@
 #
 # Attachment storage: the `memos` bucket on the garage-main cluster (k8s),
 # same inverted flow as kaneo.nix — the key pair is minted by the shared
-# `memos-s3-key` clan var (modules/noosphere/taghmata/rke2/kube-secrets/memos)
+# `memos-s3-key` clan var (modules/noosphere/taghmata/reliquary/memos)
 # and imported into Garage there, so both sides come from one source.
 # Memos 0.30 no longer configures S3 through the environment: it loads
 # validated protojson InstanceSetting files from the hardcoded /etc/secrets
@@ -45,7 +45,7 @@
   # hairpin through this machine's Caddy. Hardcoded like kaneo.nix: the
   # ingress lives on the noosphere.uk zone, NOT the Caddy LAB_DOMAIN
   # (baseDomain), and the value is baked into the generated JSON by
-  # kube-secrets/memos/default.nix — keep the two in sync.
+  # reliquary/memos/default.nix — keep the two in sync.
   s3Endpoint = "https://s3.main.garage.noosphere.uk";
   s3Bucket = "memos";
   s3Region = "main";
@@ -71,6 +71,8 @@
     ];
   });
 in {
+  imports = [self.nixosModules.reliquary-memos];
+
   # Database — merges into services.imperium.postgresql from stc/server.nix.
   # Also enrols `memos` in the nightly pg_dump (backup.databases defaults to
   # every managed database).

@@ -14,6 +14,7 @@
   }: {
     imports = [
       self.nixosModules.noosphere
+      self.nixosModules.taghmata
     ];
 
     nixpkgs.overlays = [

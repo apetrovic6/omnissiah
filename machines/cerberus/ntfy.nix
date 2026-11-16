@@ -18,13 +18,22 @@
 #
 # Access control: everything below the ACL level of `deny-all`, with accounts minted
 # by the shared `ntfy-access` clan var
-# (modules/noosphere/taghmata/rke2/kube-secrets/ntfy/default.nix). The var's env file
+# (modules/noosphere/taghmata/reliquary/ntfy/default.nix). The var's env file
 # is loaded via EnvironmentFile, which systemd parses as root before the service
 # drops to its dynamic user, so the credentials stay in the sops secret store and
 # never enter the nix store or a manifest.
-{config, ...}: let
+{
+  self,
+  config,
+  ...
+}: let
   access = config.clan.core.vars.generators."ntfy-access";
 in {
+  imports = [
+    self.nixosModules.vox
+    self.nixosModules.reliquary-ntfy
+  ];
+
   services.imperium.ntfy-sh = {
     enable = true;
 

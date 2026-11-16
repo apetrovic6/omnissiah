@@ -32,7 +32,7 @@
   inherit (lib) mkOption mkEnableOption types mkDefault;
   inherit (flake-parts-lib) mkPerSystemOption;
 
-  # Read global noosphere options (defined in kube-secrets/config/default.nix)
+  # Read global noosphere options (defined in modules/cartographa/noosphere.nix)
   global = config.noosphere;
 
   # Path to the _generated directory (relative to this file)

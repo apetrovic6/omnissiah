@@ -61,8 +61,8 @@
   # before the signature is even checked.
   ncpsUploadUrl = "https://ncps.noosphere.uk/upload";
   # Basic auth on /upload. The generator lives with the Traefik side in
-  # noosphere's rke2/kube-secrets/ncps, which every runner host imports. Only
-  # the push hook gets the netrc, not nix as a whole.
+  # taghmata/reliquary/ncps (nixosModules.reliquary-ncps), which this module
+  # imports. Only the push hook gets the netrc, not nix as a whole.
   ncpsUploadAuth = "ncps-upload-auth";
   ciKeyGenerator = "nix-ci-signing-key";
   # `<name>-<n>`: bump the suffix to rotate while the old key is still trusted.
@@ -87,6 +87,9 @@ in {
     # The nixpkgs module's StateDirectory for our instance (also its HOME).
     stateDir = "/var/lib/forgejo-runner/${hostName}";
   in {
+    # The ncps signing key and upload credentials the post-build hook uses.
+    imports = [self.nixosModules.reliquary-ncps];
+
     options.services.imperium.forgejoRunner = {
       enable = mkEnableOption "a Forgejo Actions runner registered with every forge in `forges`";
 

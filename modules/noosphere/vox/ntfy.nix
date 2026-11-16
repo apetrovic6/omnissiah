@@ -1,5 +1,5 @@
 {self, ...}: {
-  flake.nixosModules.noosphere = {
+  flake.nixosModules.vox = {
     config,
     lib,
     pkgs,

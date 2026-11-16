@@ -25,7 +25,6 @@ in {
     ./ntfy.nix
     ./pilot.nix
     # self.inputs.impermanence.nixosModules.impermanence
-    # self.nixosModules.noosphere
     # self.inputs.magos.nixosModules.default
   ];
   boot.kernelModules = ["i915"];

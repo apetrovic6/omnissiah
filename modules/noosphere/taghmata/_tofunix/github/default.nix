@@ -1,5 +1,5 @@
 # GitHub, for mirror repositories under github.com/apetrovic6. The token comes from the
-# `tofunix-github-secret` clan var (taghmata/tofunix-github-secret.nix); generate it before the
+# `tofunix-github-secret` clan var (taghmata/reliquary/tofunix/github-secret.nix); generate it before the
 # first apply: `clan vars generate <any machine> --generator tofunix-github-secret`.
 {...}: let
   inherit (import ../../../../cartographa/_cartographa.nix) vars;

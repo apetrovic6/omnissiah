@@ -2,7 +2,7 @@
 #
 # The cluster's Alertmanager pages through ntfy, and ntfy runs here. So when
 # cerberus is down, CerberusTargetDown fires in the cluster but has nowhere to go,
-# and the Alertmanager heartbeat (kube-secrets/alertmanager) stays green because
+# and the Alertmanager heartbeat (reliquary/alertmanager) stays green because
 # the cluster itself is fine. This closes that gap from the other side: cerberus
 # hits a healthchecks.io check of its own, and healthchecks.io emails when the
 # pings stop. Nothing on the way depends on ntfy or the cluster.
