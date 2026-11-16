@@ -163,6 +163,12 @@ in {
   applications.prometheus-crds = {
     inherit namespace;
 
+    # The operator's CRDs are too large for client-side apply: ArgoCD would
+    # store each whole object in its last-applied-configuration annotation,
+    # and the API server rejects annotations over 262144 bytes ("Too long").
+    # Server-side apply keeps no such annotation.
+    syncPolicy.syncOptions.serverSideApply = true;
+
     helm.releases.prometheus-operator-crds = {
       chart = charts.prometheus-community.prometheus-operator-crds;
     };
