@@ -3,6 +3,9 @@
 # land in the ncps binary cache (taghmata nixidy apps/scriptorium/ncps) before the machines
 # pull them at their own next deploy.
 #
+# A second job re-renders the cluster manifests against the new lock and puts
+# the result in a pull request; it never pushes them to master itself.
+#
 # Jobs run on the NixOS host runners (`nix:host`, modules/rites/forgejo-runner.nix)
 # so they build against the host's /nix/store. Those runners' nix-daemon already
 # signs every build with the `nix-ci-signing-key` clan var and PUTs it to
@@ -46,6 +49,8 @@ permissions:
   # block states what this workflow actually needs rather than depending on a
   # default.
   contents: write
+  # The manifests job opens a pull request by pushing to refs/for/master.
+  pull-requests: write
 
 jobs:
   update:
@@ -207,6 +212,38 @@ jobs:
 
           echo "machines=$machines" >> "$GITHUB_OUTPUT"
           echo "building: $machines"
+
+  # A new flake.lock moves chart versions, and then the manifests committed for
+  # ArgoCD are no longer what the sources render. Nothing here deploys: this job
+  # re-renders them and opens a pull request (or updates the one still open), so
+  # a chart upgrade reaches the cluster only when someone has read its diff and
+  # merged it. See rituals/render-manifests-pr.sh.
+  #
+  # It does not gate the builds below and is not gated by them.
+  manifests:
+    name: Render manifests into a pull request
+    needs: update
+    runs-on: nix
+    timeout-minutes: 60
+    env:
+      CI_PUSH_TOKEN: ${{ secrets.CI_PUSH_TOKEN }}
+    steps:
+      # master as it is now, with the lock the update job just pushed.
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Render and open the pull request
+        run: |
+          set -euo pipefail
+
+          # Same identity and credential as the flake.lock commit above.
+          git config user.name "Forgejo CI"
+          git config user.email "ci@noosphere.uk"
+          git config credential.helper \
+            '!f() { echo "username=x-access-token"; echo "password=${CI_PUSH_TOKEN:-$FORGEJO_TOKEN}"; }; f'
+
+          ./rituals/render-manifests-pr.sh
 
   build:
     name: Build ${{ matrix.machine }}
