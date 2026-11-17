@@ -1,3 +1,3 @@
 {...}: {
-  imports = [./auspex ./sabnzbd-tui];
+  imports = [./auspex ./omnissiah ./sabnzbd-tui];
 }
