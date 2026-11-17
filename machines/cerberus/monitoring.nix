@@ -18,7 +18,7 @@
   #
   # These are the static node IPs from inventory/machines.nix (and each node's own
   # machines/<node>/configuration.nix). Nothing here is a range or a /24: phalanx
-  # (192.168.1.75), the VPS and every other LAN device must be refused, and they
+  # (192.168.1.46), the VPS and every other LAN device must be refused, and they
   # are — the nixos-fw chain ends in `nixos-fw-log-refuse`, so a port that has no
   # matching rule here is closed.
   # attrname = node name, value = that node's IP, so the iptables comment can

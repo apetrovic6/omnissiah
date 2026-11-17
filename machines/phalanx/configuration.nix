@@ -55,7 +55,7 @@ in {
     useDHCP = false;
     ipv4.addresses = [
       {
-        address = "192.168.1.46";
+        address = self.lib.hosts.phalanx;
         prefixLength = 24;
       }
     ];

@@ -18,7 +18,7 @@ rec {
 
   hosts = {
     # Machines of this clan, at the address they are deployed to.
-    phalanx = "192.168.1.75";
+    phalanx = "192.168.1.46";
     enginseer = "192.168.1.146";
     genetor = "192.168.1.109";
     cerberus = "192.168.1.105";
