@@ -24,6 +24,11 @@
 #   nixidyEnvs.<system>.<env>    the environments, where the nixidy CLI looks
 #                                (`nixidy switch .#prod`)
 #   nixidyCrds.<system>.<name>   the generated option modules for CRDs
+#   nixidyChecks.<system>.<env>  fails when the committed manifests are not what
+#                                the environment renders. Not in `checks`: it goes
+#                                red on every chart bump until someone renders.
+#   apps.<system>.render-<env>   `nixidy switch` for the environment, from the
+#                                repository root
 #   apps.<system>.gen-crd        writes those into crds.outputPath
 #   packages.<system>.nixidy     the nixidy CLI
 {
@@ -196,10 +201,12 @@ in {
   });
 
   config = {
-    # perSystem.nixidyEnvs and .nixidyCrds become nixidyEnvs.<system> and
-    # nixidyCrds.<system> on the flake.
+    # perSystem.nixidyEnvs, .nixidyCrds and .nixidyChecks become
+    # nixidyEnvs.<system>, nixidyCrds.<system> and nixidyChecks.<system> on the
+    # flake.
     transposition.nixidyEnvs.adHoc = true;
     transposition.nixidyCrds.adHoc = true;
+    transposition.nixidyChecks.adHoc = true;
 
     perSystem = {
       config,
@@ -271,6 +278,50 @@ in {
           ++ lib.attrValues (removeAttrs env.apps env.disabledApps);
       };
 
+      enabledEnvs = lib.filterAttrs (_: env: env.enable) top.envs;
+
+      # Fails when the manifests committed in the repository are not what the
+      # environment renders: after an input update that moved a chart, or a
+      # source change nobody rendered.
+      mkDriftCheck = envName: env:
+        pkgs.runCommand "nixidy-manifests-${envName}" {
+          rendered = config.nixidyEnvs.${envName}.environmentPackage;
+          committed = "${self}/${env.rootPath}";
+        } ''
+          if diff -r "$rendered" "$committed" > diff.txt; then
+            touch "$out"
+            exit 0
+          fi
+
+          # nix shows the end of a failed build's log, so the summary goes last.
+          strip() { sed -e "s#$rendered/##g" -e "s#$committed/##g" -e "s#$rendered#(rendered)#g" -e "s#$committed#(committed)#g"; }
+          diff -rq "$rendered" "$committed" | strip > files.txt || true
+
+          echo "Files that differ:"
+          head -60 files.txt
+          echo
+          echo "By application:"
+          awk '
+            $1 == "Files" { split($2, p, "/"); print p[1] }
+            $1 == "Only"  { d = $3; sub(/:$/, "", d); split(d, p, "/"); print (p[1] ~ /^\(/ ? $4 : p[1]) }
+          ' files.txt | sort | uniq -c
+          echo
+          echo "$(wc -l < files.txt) file(s) in ${env.rootPath} are not what ${envName} renders."
+          echo "Render them with: nix run .#render-${envName}"
+          exit 1
+        '';
+
+      # Renders an environment into the repository, from anywhere inside it.
+      mkRenderApp = envName: _: {
+        type = "app";
+        program =
+          (pkgs.writeShellScript "render-${envName}" ''
+            set -euo pipefail
+            cd "$(${lib.getExe pkgs.git} rev-parse --show-toplevel)"
+            exec ${lib.getExe' nixidy.packages.${system}.default "nixidy"} switch ".#${envName}" "$@"
+          '').outPath;
+      };
+
       charts =
         nixhelm.chartsDerivations.${system}
         // lib.mapAttrs' (name: path: let
@@ -293,8 +344,12 @@ in {
           nixidyEnvs = nixidy.lib.mkEnvs {
             inherit pkgs charts;
             inherit (top) extraSpecialArgs;
-            envs = lib.mapAttrs mkEnv (lib.filterAttrs (_: env: env.enable) top.envs);
+            envs = lib.mapAttrs mkEnv enabledEnvs;
           };
+
+          nixidyChecks = lib.mapAttrs mkDriftCheck enabledEnvs;
+
+          apps = lib.mapAttrs' (envName: env: lib.nameValuePair "render-${envName}" (mkRenderApp envName env)) enabledEnvs;
 
           packages.nixidy = nixidy.packages.${system}.default;
         }

@@ -158,9 +158,12 @@ Besides nixidy's own options, an application can use:
 | `garage.keys.<name>` (beside `applications`, not inside it) | An S3 key and its buckets on `garage-main` or `garage-backup`, with the credentials reflected into the application's namespace |
 | `templates.cnpg-database-cluster`, `templates.garageObjectStore`, `templates.rust-service` | A PostgreSQL cluster, its backup object store, a rust-app-template service |
 
-`nixidy switch .#prod` renders the manifests into
+`nix run .#render-prod` renders the manifests into
 `modules/noosphere/taghmata/nixidy/manifests/prod`; what ArgoCD applies is that
-committed copy. `nix run .#gen-crd` regenerates the CRD option modules.
+committed copy. `nix build .#nixidyChecks.x86_64-linux.prod` fails, listing the
+files, when that copy is not what the sources render: after a flake update
+that moved a chart, or a change nobody rendered. `nix run .#gen-crd`
+regenerates the CRD option modules.
 
 ## Addresses and secrets paths
 
