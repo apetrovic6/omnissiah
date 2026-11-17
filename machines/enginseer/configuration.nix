@@ -15,6 +15,7 @@ in {
     # package-only port); the two must never be imported together. To go back,
     # revert the commit that swapped them, or boot the previous generation.
     self.inputs.magos.nixosModules.nixarchy
+    ./strata.nix
   ];
 
   magos.nixarchy = {

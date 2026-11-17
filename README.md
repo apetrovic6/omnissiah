@@ -118,6 +118,78 @@ nix fmt
 `checks` contains every NixOS machine for the system, so new machines are
 built by CI without being listed anywhere.
 
+### Local inference (Strata)
+
+`nixosModules.strata` (`modules/rites/strata/default.nix`) exposes
+`services.imperium.strata`. It builds the pinned CUDA engine and Python API
+server once per CUDA target and runs a `strata.service` user unit, restricted
+to the configured account. Importing the module alone enables nothing.
+
+| Host | Model | GPU | CUDA target | Context | Idle unload |
+|---|---|---|---|---|---|
+| `phalanx` | Flash-Next IQ3_XXS | 1 | 8.6 | 262144 | 3600 seconds |
+| `enginseer` | Flash-Next Coder IQ1_M | 0 | 8.9 | 32768 | 900 seconds |
+
+Host choices live in `machines/<host>/strata.nix`. Phalanx retains its existing
+model ID, paths and measured tuning. Enginseer's Coder configuration is a
+starting point, not a measured performance or memory-fit guarantee.
+
+```nix
+imports = [self.nixosModules.strata];
+nixpkgs.config.cudaCapabilities = ["8.9"];
+services.imperium.strata = {
+  enable = true;
+  user = "apetrovic";
+  family = "coder"; # defaults to IQ1_M; qwen defaults to IQ3_XXS
+  gpu = 0;
+  maxContext = 32768;
+  idleUnload = 900;
+};
+```
+
+Other knobs include `quant`, `modelName`, `port`, `dataDir`, `pack`, `native`,
+`ple`, `mtp`, `expertProfile`, `kvResident`, `kvType`, `prefill`, `specTokens`,
+`lazy`, `minFreeVramMiB` and `extraArgs`. Coder selects its own expert profile;
+the full-model profile must not be reused for its pruned expert layout.
+
+**Prepare model data before deploying to a new host.** Nix does not download
+weights or prepare packs. Use a writable checkout of the Strata version pinned
+in `flake.nix`, following its source-install instructions. For enginseer,
+run its setup as `apetrovic` with:
+
+```sh
+./setup.sh --setup --family coder --model IQ1_M \
+  --data-dir /home/apetrovic/models/strata-data \
+  --context 32768 --vision no --no-start
+```
+
+The expected data layout is `packs/coder-iq1_m/` (including `tokenizer/`),
+`models/coder-IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-0000{1,2}-of-00002.gguf`,
+and `mtp/rt/` beneath that data directory. Setup may reuse files elsewhere;
+override the module's paths if its prepared files are not in this layout.
+Upstream setup pins model revisions independently of the engine release;
+its Coder weights may predate the latest model-card benchmark.
+
+After preparation, deploy with `clan machines update <host>`. The user service
+uses Nix-built binaries, not setup's generated launch script. Its lazy API is
+at `http://127.0.0.1:8000/v1`; no firewall port is opened. Configure clients
+with the advertised ID: `qwen3.8-flash-next-iq3_xxs` on phalanx or
+`qwen3.8-flash-next-coder-iq1_m` on enginseer.
+
+As the configured user:
+
+```sh
+systemctl --user status strata
+journalctl --user -u strata
+curl http://127.0.0.1:8000/v1/models
+```
+
+The generated config is linked into `~/.local/state/strata`, where the server
+also writes settings and logs. The existing workstation persistence retains
+`models`, `.config/strata` and `.local/state/strata` for `apetrovic`; other users
+or custom paths need their own persistence configuration. To update the
+engine, change the Strata input and its matching llama.cpp pin together.
+
 ## Cluster applications
 
 The applications on taghmata are under `modules/taghmata/nixidy/apps`. Each is

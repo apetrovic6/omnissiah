@@ -6,9 +6,7 @@
 #   server -- serve/server.py run straight out of the source in the store,
 #             with a Python whose packages come from nixpkgs instead of a venv.
 #
-# The model data (GGUFs, the pack, the MTP draft head) stays imperative in
-# ~/models/strata-data: it is ~80 GB, derived from the GGUFs by setup.py once,
-# and is not something a derivation should hold.
+# Model data (GGUFs, prepared packs and MTP heads) stays outside the Nix store.
 {
   lib,
   cudaPackages_13_0,
@@ -74,10 +72,8 @@
     # setup.py's flags for a local CUDA build (build_engine), minus the paths
     # it discovers itself. STRATA_PORTABLE is the one difference: setup.py
     # compiles ggml-cpu with -march=native, which the Nix compiler wrapper
-    # strips anyway; PORTABLE is upstream's own AVX2 baseline for the release
-    # engine. The 5950X is Zen 3 -- AVX2/FMA/F16C/BMI2, no AVX-512 -- so the
-    # baseline IS this CPU, and Strata's AVX-512 kernels are picked at run
-    # time regardless.
+    # strips anyway; PORTABLE uses the AVX2 baseline and selects newer CPU
+    # kernels at run time on both workstations.
     cmakeFlags = [
       (lib.cmakeBool "STRATA_ENABLE_CUDA" true)
       (lib.cmakeBool "STRATA_BUILD_TESTS" false)
@@ -85,7 +81,7 @@
       (lib.cmakeBool "STRATA_MMQ_KQUANTS" true)
       (lib.cmakeBool "STRATA_PORTABLE" true)
       (lib.cmakeBool "GGML_CCACHE" false)
-      # nixpkgs.config.cudaCapabilities (["8.6"] in configuration.nix).
+      # Each host supplies nixpkgs.config.cudaCapabilities.
       (lib.cmakeFeature "CMAKE_CUDA_ARCHITECTURES" cudaPackages.flags.cmakeCudaArchitecturesString)
       (lib.cmakeFeature "STRATA_GGML_DIR" "${checkedLlama}")
     ];

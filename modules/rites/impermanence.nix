@@ -60,7 +60,7 @@
             # lost on reboot and setup.sh re-prompts for it.
             ".config/strata"
             # The Nix-built Strata's engine log and server state
-            # (machines/phalanx/strata.nix).
+            # (modules/rites/strata).
             ".local/state/strata"
             ".config/Bitwarden"
             # ".config/noctalia"

@@ -170,7 +170,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Strata, the local inference engine on phalanx (machines/phalanx/strata.nix).
+    # Strata, shared local inference (modules/rites/strata).
     # `flake = false`: its flake only carries a devShell, no package.
     # Pinned to a release tag, not main -- main moves through rc branches daily.
     # To update: bump the tag here, then `nix flake update strata`.
@@ -180,7 +180,7 @@
     };
 
     # The llama.cpp tree Strata's engine builds ggml from. MUST be the commit in
-    # Strata's setup.py (LLAMA_CPP_COMMIT); machines/phalanx/strata-package.nix
+    # Strata's setup.py (LLAMA_CPP_COMMIT); modules/rites/strata/_package.nix
     # refuses to evaluate when the two disagree, so a Strata bump that moves it
     # fails loudly instead of building against the wrong ggml.
     strata-llama-cpp = {
