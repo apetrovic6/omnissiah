@@ -410,6 +410,10 @@ with lib; let
           description = "ASN is the AS number to use for the local end of the session.";
           type = types.withMaximum 4294967295 (types.withMinimum 0 types.int);
         };
+        "evpn" = mkOption {
+          description = "EVPN specific configuration for the router.";
+          type = types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersEvpn");
+        };
         "id" = mkOption {
           description = "ID is the BGP router ID";
           type = types.nullOr types.str;
@@ -441,11 +445,101 @@ with lib; let
       };
 
       config = {
+        "evpn" = mkOverride 1002 null;
         "id" = mkOverride 1002 null;
         "imports" = mkOverride 1002 null;
         "neighbors" = mkOverride 1002 null;
         "prefixes" = mkOverride 1002 null;
         "vrf" = mkOverride 1002 null;
+      };
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersEvpn" = {
+      options = {
+        "advertiseSVI" = mkOption {
+          description = "AdvertiseSVI enables advertising the SVI IP/MAC as a type-2 route.";
+          type = types.nullOr types.bool;
+        };
+        "advertiseVNIs" = mkOption {
+          description = "AdvertiseVNIs controls how VNIs are advertised to EVPN neighbors.\n- \"Disabled\": No VNI advertisements\n- \"All\": Avertise all VNIs\nNote: Can only be provided for router instances with EVPN neighbors.";
+          type = types.nullOr types.str;
+        };
+        "l2vnis" = mkOption {
+          description = "L2VNIs contains configuration for Layer 2 VNIs.\nNote: Can only be provided for router instances with EVPN neighbors.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersEvpnL2vnis")
+            )
+          );
+        };
+        "l3vni" = mkOption {
+          description = "L3VNI contains configuration for the Layer 3 VNI.\nNote: Can only be provided for router instances with no neighbors.\nThis is a temporary limitation until proper EVPN prefix filtering is implemented.";
+          type = (
+            types.nullOr (submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersEvpnL3vni")
+          );
+        };
+      };
+
+      config = {
+        "advertiseSVI" = mkOverride 1002 null;
+        "advertiseVNIs" = mkOverride 1002 null;
+        "l2vnis" = mkOverride 1002 null;
+        "l3vni" = mkOverride 1002 null;
+      };
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersEvpnL2vnis" = {
+      options = {
+        "exportRTs" = mkOption {
+          description = "ExportRTs is the list of route targets to export.\nFormat: A.B.C.D:MN|EF:OPQR|GHJK:MN (e.g., \"65000:100\", \"192.0.2.1:100\")";
+          type = types.nullOr (types.listOf (types.withMaxLength 21 types.str));
+        };
+        "importRTs" = mkOption {
+          description = "ImportRTs is the list of route targets to import.\nFormat: A.B.C.D:MN|EF:OPQR|GHJK:MN|*:MN|*:OPQR (e.g., \"65000:100\", \"192.0.2.1:100\", \"*:100\")";
+          type = types.nullOr (types.listOf (types.withMaxLength 21 types.str));
+        };
+        "rd" = mkOption {
+          description = "RD is the route distinguisher for this VNI.\nFormat: A.B.C.D:MN|EF:OPQR|GHJK:MN (e.g., \"65000:100\" or \"192.0.2.1:100\")";
+          type = types.nullOr (types.withMaxLength 21 types.str);
+        };
+        "vni" = mkOption {
+          description = "VNI is the VXLAN Network Identifier (1-16777215).";
+          type = types.withMaximum 16777215 (types.withMinimum 1 types.int);
+        };
+      };
+
+      config = {
+        "exportRTs" = mkOverride 1002 null;
+        "importRTs" = mkOverride 1002 null;
+        "rd" = mkOverride 1002 null;
+      };
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersEvpnL3vni" = {
+      options = {
+        "advertisePrefixes" = mkOption {
+          description = "AdvertisePrefixes controls which prefixes to advertise as EVPN type-5 routes.\n- \"unicast\": advertise the unicast prefixes of the router.";
+          type = types.listOf (types.enum ["unicast"]);
+        };
+        "exportRTs" = mkOption {
+          description = "ExportRTs is the list of route targets to export.\nFormat: A.B.C.D:MN|EF:OPQR|GHJK:MN (e.g., \"65000:100\", \"192.0.2.1:100\")";
+          type = types.nullOr (types.listOf (types.withMaxLength 21 types.str));
+        };
+        "importRTs" = mkOption {
+          description = "ImportRTs is the list of route targets to import.\nFormat: A.B.C.D:MN|EF:OPQR|GHJK:MN|*:MN|*:OPQR (e.g., \"65000:100\", \"192.0.2.1:100\", \"*:100\")";
+          type = types.nullOr (types.listOf (types.withMaxLength 21 types.str));
+        };
+        "rd" = mkOption {
+          description = "RD is the route distinguisher for this VNI.\nFormat: A.B.C.D:MN|EF:OPQR|GHJK:MN (e.g., \"65000:100\" or \"192.0.2.1:100\")";
+          type = types.nullOr (types.withMaxLength 21 types.str);
+        };
+        "vni" = mkOption {
+          description = "VNI is the VXLAN Network Identifier (1-16777215).";
+          type = types.withMaximum 16777215 (types.withMinimum 1 types.int);
+        };
+      };
+
+      config = {
+        "exportRTs" = mkOverride 1002 null;
+        "importRTs" = mkOverride 1002 null;
+        "rd" = mkOverride 1002 null;
       };
     };
     "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersImports" = {
@@ -465,6 +559,41 @@ with lib; let
         "address" = mkOption {
           description = "Address is the IP address to establish the session with.";
           type = types.nullOr types.str;
+        };
+        "addressFamilies" = mkOption {
+          description = "AddressFamilies specifies which address families to activate this neighbor for.\nSupported values: \"unicast\" (IPv4/IPv6 unicast based on neighbor IP), \"evpn\" (L2VPN EVPN).";
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "unicast"
+                  "evpn"
+                ]
+              )
+            )
+          );
+        };
+        "allowAsIn" = mkOption {
+          description = "AllowAsIn controls whether routes with the local AS number in the AS path\nare accepted from this neighbor for the enabled address families.\nThis is useful in hub-and-spoke or route-leaking topologies where the\nsame AS number may appear multiple times in the path.\nPossible values:\n- \"\" (empty, default): routes with the local AS in the path are rejected.\n  Does not reject other AllowAsIn values targeting the same neighbor.\n- \"none\": routes with the local AS in the path are rejected.\n  Rejects other AllowAsIn values targeting the same neighbor.\n- \"origin\": routes are accepted only if the local AS appears as the origin (last AS in the path).\n- \"1\"-\"10\": routes are accepted with up to this many occurrences of the local AS in the path.\nWhen multiple configurations target the same neighbor, any combination of\nvalues resolves to the least restrictive, except \"none\" which rejects\nall other values.";
+          type = (
+            types.nullOr (
+              types.enum [
+                ""
+                "none"
+                "origin"
+                "1"
+                "2"
+                "3"
+                "4"
+                "5"
+                "6"
+                "7"
+                "8"
+                "9"
+                "10"
+              ]
+            )
+          );
         };
         "asn" = mkOption {
           description = "ASN is the AS number to use for the local end of the session.\nASN and DynamicASN are mutually exclusive and one of them must be specified.";
@@ -542,7 +671,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "toAdvertise" = mkOption {
-          description = "ToAdvertise represents the list of prefixes to advertise to the given neighbor\nand the associated properties.";
+          description = "ToAdvertise represents the list of prefixes to advertise to the given neighbor\nand the associated properties. Only applies to IPv4 and IPv6 unicast address families.";
           type = (
             types.nullOr (
               submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertise"
@@ -550,7 +679,7 @@ with lib; let
           );
         };
         "toReceive" = mkOption {
-          description = "ToReceive represents the list of prefixes to receive from the given neighbor.";
+          description = "ToReceive represents the list of prefixes to receive from the given neighbor.\nOnly applies to IPv4 and IPv6 unicast address families.";
           type = (
             types.nullOr (
               submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToReceive"
@@ -561,6 +690,8 @@ with lib; let
 
       config = {
         "address" = mkOverride 1002 null;
+        "addressFamilies" = mkOverride 1002 null;
+        "allowAsIn" = mkOverride 1002 null;
         "asn" = mkOverride 1002 null;
         "bfdProfile" = mkOverride 1002 null;
         "connectTime" = mkOverride 1002 null;
@@ -608,6 +739,24 @@ with lib; let
             )
           );
         };
+        "nextHop" = mkOption {
+          description = "NextHop sets the BGP next-hop address to advertise with prefixes\nsent to this neighbor.";
+          type = (
+            types.nullOr (
+              submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseNextHop"
+            )
+          );
+        };
+        "withAsPathPrepend" = mkOption {
+          description = "PrefixesWithAsPathPrepend defines a list of prefixes that will have their\nBGP AS-Path prepended upon advertisement. Any prefix defined in this list\nmust also be present in the general list of prefixes allowed to be advertised.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseWithAsPathPrepend"
+              )
+            )
+          );
+        };
         "withCommunity" = mkOption {
           description = "PrefixesWithCommunity is a list of prefixes that are associated to a\nbgp community when being advertised. The prefixes associated to a given local pref\nmust be in the prefixes allowed to be advertised.";
           type = (
@@ -632,6 +781,8 @@ with lib; let
 
       config = {
         "allowed" = mkOverride 1002 null;
+        "nextHop" = mkOverride 1002 null;
+        "withAsPathPrepend" = mkOverride 1002 null;
         "withCommunity" = mkOverride 1002 null;
         "withLocalPref" = mkOverride 1002 null;
       };
@@ -659,6 +810,37 @@ with lib; let
         "mode" = mkOverride 1002 null;
         "prefixes" = mkOverride 1002 null;
       };
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseNextHop" = {
+      options = {
+        "ipv4" = mkOption {
+          description = "IPv4 is the next-hop address to advertise with IPv4 prefixes.";
+          type = types.nullOr types.str;
+        };
+        "ipv6" = mkOption {
+          description = "IPv6 is the next-hop address to advertise with IPv6 prefixes.";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "ipv4" = mkOverride 1002 null;
+        "ipv6" = mkOverride 1002 null;
+      };
+    };
+    "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseWithAsPathPrepend" = {
+      options = {
+        "asPathPrepend" = mkOption {
+          description = "AsPathPrepend is the number of times to prepend the local ASN to the AS path for the prefixes.";
+          type = types.withMaximum 10 (types.withMinimum 1 types.int);
+        };
+        "prefixes" = mkOption {
+          description = "Prefixes is the list of prefixes associated with the AS path prepending.";
+          type = types.listOf types.str;
+        };
+      };
+
+      config = {};
     };
     "frrk8s.metallb.io.v1beta1.FRRConfigurationSpecBgpRoutersNeighborsToAdvertiseWithCommunity" = {
       options = {
@@ -1047,6 +1229,10 @@ with lib; let
           description = "The aggregation-length advertisement option lets you “roll up” the /128s into a larger prefix. Defaults to 128. Works for IPv6 addresses.";
           type = types.nullOr types.int;
         };
+        "asPathPrepend" = mkOption {
+          description = "Specifies the number of times to prepend the ASN to the AS-path on outgoing BGP updates,\nartificially lengthening the path for traffic engineering.\nSupported only in frr-k8s mode.";
+          type = types.nullOr (types.withMaximum 10 (types.withMinimum 1 types.int));
+        };
         "communities" = mkOption {
           description = "The BGP communities to be associated with the announcement. Each item can be a standard community of the\nform 1234:1234, a large community of the form large:1234:1234:1234 or the name of an alias defined in the\nCommunity CRD.";
           type = types.nullOr (types.listOf types.str);
@@ -1088,6 +1274,7 @@ with lib; let
       config = {
         "aggregationLength" = mkOverride 1002 null;
         "aggregationLengthV6" = mkOverride 1002 null;
+        "asPathPrepend" = mkOverride 1002 null;
         "communities" = mkOverride 1002 null;
         "ipAddressPoolSelectors" = mkOverride 1002 null;
         "ipAddressPools" = mkOverride 1002 null;
@@ -1641,8 +1828,16 @@ with lib; let
             types.nullOr (types.listOf (submoduleOf "metallb.io.v1beta1.L2AdvertisementSpecNodeSelectors"))
           );
         };
+        "preferredNodeSelectors" = mkOption {
+          description = "PreferredNodeSelectors allows specifying soft node preferences for L2\nleader election. Nodes matching these selectors receive a higher score\nand are preferred as the announcing node. If no preferred node is\navailable, any eligible node (per NodeSelectors) can announce.\nModeled after Kubernetes PreferredSchedulingTerm.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "metallb.io.v1beta1.L2AdvertisementSpecPreferredNodeSelectors")
+            )
+          );
+        };
         "serviceSelectors" = mkOption {
-          description = "ServiceSelectors limits the set of services that will be advertised via this advertisement.\nIf empty, all services from the selected pools are advertised.";
+          description = "ServiceSelectors limits the set of services that will be advertised via this advertisement.\nIf empty, all services from the selected pools are advertised.\nServices matching the selectors cannot use the allow-shared-ip annotation.";
           type = (
             types.nullOr (types.listOf (submoduleOf "metallb.io.v1beta1.L2AdvertisementSpecServiceSelectors"))
           );
@@ -1654,6 +1849,7 @@ with lib; let
         "ipAddressPoolSelectors" = mkOverride 1002 null;
         "ipAddressPools" = mkOverride 1002 null;
         "nodeSelectors" = mkOverride 1002 null;
+        "preferredNodeSelectors" = mkOverride 1002 null;
         "serviceSelectors" = mkOverride 1002 null;
       };
     };
@@ -1722,6 +1918,63 @@ with lib; let
       };
     };
     "metallb.io.v1beta1.L2AdvertisementSpecNodeSelectorsMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "metallb.io.v1beta1.L2AdvertisementSpecPreferredNodeSelectors" = {
+      options = {
+        "preference" = mkOption {
+          description = "Preference selects the nodes that receive this weight. An empty\nselector matches every node. Preferences only apply to nodes\nalready eligible under the advertisement's NodeSelectors.";
+          type = submoduleOf "metallb.io.v1beta1.L2AdvertisementSpecPreferredNodeSelectorsPreference";
+        };
+        "weight" = mkOption {
+          description = "Weight associated with matching the corresponding preference,\nin the range 1-100. Higher weights rank the node higher in the\nL2 leader election. Weights from selectors that both match a\nnode sum together.";
+          type = types.withMaximum 100 (types.withMinimum 1 types.int);
+        };
+      };
+
+      config = {};
+    };
+    "metallb.io.v1beta1.L2AdvertisementSpecPreferredNodeSelectorsPreference" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "metallb.io.v1beta1.L2AdvertisementSpecPreferredNodeSelectorsPreferenceMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "metallb.io.v1beta1.L2AdvertisementSpecPreferredNodeSelectorsPreferenceMatchExpressions" = {
       options = {
         "key" = mkOption {
           description = "key is the label key that the selector applies to.";
@@ -1960,7 +2213,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "disableMP" = mkOption {
-          description = "To set if we want to disable MP BGP that will separate IPv4 and IPv6 route exchanges into distinct BGP sessions.\nDeprecated: DisableMP is deprecated in favor of dualStackAddressFamily.";
+          description = "To set if we want to disable MP BGP that will separate IPv4 and IPv6 route exchanges into distinct BGP sessions.\n\nDeprecated: DisableMP is deprecated in favor of dualStackAddressFamily.";
           type = types.nullOr types.bool;
         };
         "dualStackAddressFamily" = mkOption {

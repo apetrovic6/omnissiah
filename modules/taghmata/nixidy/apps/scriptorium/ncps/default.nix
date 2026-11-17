@@ -403,7 +403,7 @@
   in {
     # Replaces nixhelm's kalbasit entry, so the application gets the fixed chart.
     nixidy.charts."kalbasit/ncps" = ncps-chart;
-    # The CRD options are still generated from nixhelm's v0.9.4 chart.
-    nixidy.crds.definitions.ncps.chart = self.inputs.nixhelm.chartsDerivations.${system}.kalbasit.ncps;
+    # CRD options from the same chart the application deploys.
+    nixidy.crds.definitions.ncps.chart = ncps-chart;
   };
 }
