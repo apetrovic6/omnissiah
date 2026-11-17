@@ -325,6 +325,7 @@
       xwayland
 
       herdr
+      herdr-desktop
       (self.inputs.magos.packages.${system}.opencode)
       (self.inputs.magos.packages.${system}.nautili)
       # Not re-exported by magos (it only wraps the CLI), so straight from
