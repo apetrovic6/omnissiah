@@ -30,7 +30,7 @@
 
   # Models live in the user's home so they can be fetched and swapped without
   # sudo, persisted by the "models" entry in users.apetrovic.directories
-  # (modules/rites/impermanence.nix) -- /home/apetrovic/models is bind-mounted
+  # (users/apetrovic/persistence.nix) -- /home/apetrovic/models is bind-mounted
   # from /persist/home/apetrovic/models and survives the boot rollback.
   #
   # The service cannot read that path directly, for two independent reasons:

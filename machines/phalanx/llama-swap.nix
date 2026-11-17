@@ -42,7 +42,7 @@
 
   # Models live in the user's home so they can be fetched without sudo,
   # persisted via the "models" entry in users.apetrovic.directories
-  # (modules/rites/impermanence.nix). The service cannot read that path
+  # (users/apetrovic/persistence.nix). The service cannot read that path
   # directly -- ProtectHome=true blanks /home inside the namespace, and
   # /home/apetrovic is 0700, which a DynamicUser service cannot traverse.
   # BindReadOnlyPaths below mounts it somewhere visible; systemd does that as

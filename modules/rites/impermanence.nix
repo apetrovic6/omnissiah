@@ -1,27 +1,103 @@
+# Impermanence: the root filesystem is thrown away on every boot, and only
+# what is listed here survives, bind-mounted from a persistent volume.
+#
+# Two parts, both under services.imperium.impermanence:
+#
+#   - what persists: `directories` and `files` for the system, and
+#     `users.<name>.{directories,files}` relative to a user's home. Any module
+#     may add to these, so a service can declare its own state next to itself.
+#   - how the root is reset: `rollback` restores a blank btrfs snapshot over the
+#     root subvolume in the initrd, after the encrypted device is unlocked.
+#
+# The defaults are the layout the workstations' disko files create: a LUKS
+# device named cryptroot holding the subvolumes `root`, `root-blank` and
+# `persist`, the last mounted at /persist.
 {self, ...}: {
   flake.nixosModules.impermanence = {
     config,
     lib,
-    pkgs,
     ...
   }: let
     inherit (lib) mkIf mkOption mkEnableOption types;
     cfg = config.services.imperium.impermanence;
+    rb = cfg.rollback;
+
+    # A path, or the attribute set the upstream module accepts for one
+    # (directory/file plus mode, user, group, parentDirectory).
+    entries = types.listOf (types.either types.str types.attrs);
   in {
     imports = [
       self.inputs.impermanence.nixosModules.impermanence
     ];
 
     options.services.imperium.impermanence = {
-      enable = mkEnableOption "Enable Impermanence";
+      enable = mkEnableOption "an ephemeral root with explicit persistence";
+
+      persistPath = mkOption {
+        type = types.str;
+        default = "/persist";
+        description = "Mount point of the persistent volume.";
+      };
+
+      directories = mkOption {
+        type = entries;
+        description = "System directories to keep. Definitions add to the defaults.";
+      };
+
+      files = mkOption {
+        type = entries;
+        description = "System files to keep. Definitions add to the defaults.";
+      };
+
+      users = mkOption {
+        default = {};
+        description = "What to keep in each user's home, as paths relative to it.";
+        type = types.attrsOf (types.submodule {
+          options = {
+            directories = mkOption {
+              type = entries;
+              default = [];
+            };
+            files = mkOption {
+              type = entries;
+              default = [];
+            };
+          };
+        });
+      };
+
+      rollback = {
+        enable = mkEnableOption "resetting the root subvolume on every boot" // {default = true;};
+
+        device = mkOption {
+          type = types.str;
+          default = "/dev/mapper/cryptroot";
+          description = "The btrfs filesystem that holds the subvolumes.";
+        };
+
+        subvolume = mkOption {
+          type = types.str;
+          default = "root";
+          description = "The root subvolume, deleted and recreated on every boot.";
+        };
+
+        blankSnapshot = mkOption {
+          type = types.str;
+          default = "root-blank";
+          description = "The empty snapshot the root subvolume is recreated from.";
+        };
+
+        after = mkOption {
+          type = types.listOf types.str;
+          default = ["systemd-cryptsetup@cryptroot.service"];
+          description = "Initrd units that make `device` available, such as the LUKS unlock.";
+        };
+      };
     };
 
     config = mkIf cfg.enable {
-      boot.tmp.cleanOnBoot = lib.mkDefault true;
-
-      environment.persistence."/persist" = {
-        enable = true; # NB: Defaults to true, not needed
-        hideMounts = true;
+      # What every machine with an ephemeral root needs to keep.
+      services.imperium.impermanence = {
         directories = [
           "/etc"
           "/var/spool"
@@ -34,157 +110,64 @@
           "/etc/NetworkManager/system-connections"
         ];
         files = [
-          #          "/etc/machine-id"
           {
             file = "/var/keys/secret_file";
             parentDirectory = {mode = "u=rwx,g=,o=";};
           }
         ];
-
-        users.apetrovic = {
-          directories = [
-            "Downloads"
-            "Music"
-            "Pictures"
-            "Documents"
-            "Videos"
-            "programming"
-            "Games"
-            "models"
-            ".android"
-            ".config/attic"
-            ".config/herdr"
-            ".config/pangolin"
-            ".config/secretspec"
-            # Strata keeps data_dir here; without this the model path is
-            # lost on reboot and setup.sh re-prompts for it.
-            ".config/strata"
-            # The Nix-built Strata's engine log and server state
-            # (modules/rites/strata).
-            ".local/state/strata"
-            ".config/Bitwarden"
-            # ".config/noctalia"
-            ".config/sabnzbd-tui"
-            ".config/Element"
-            ".config/heroic"
-            ".config/remmina"
-            ".config/rog"
-            ".config/Signal"
-            ".config/Vencord"
-            ".config/vesktop"
-            ".config/BraveSoftware"
-            ".config/teams-for-linux"
-            ".config/obsidian"
-            ".claude"
-            # omp's agent.db (logins, usage), sessions and history. Its config
-            # files are regenerated by the magos wrapper on every launch.
-            ".omp"
-            # pi's auth.json and sessions. Its settings, models and mcp files
-            # are relinked by the magos wrapper on every launch.
-            ".pi"
-            ".local/share"
-            # Omarchy's state: theme choice, toggles, and the done/ markers.
-            # Without it the first-run marker is wiped every boot, so the
-            # "Learn Keybindings" and "Update System" toasts return each login.
-            ".local/state/omarchy"
-            # claude-as's account homes (logins) on machines without nixarchy;
-            # with it they live under .local/state/omarchy above.
-            ".local/state/claude-accounts"
-            # Full nixarchy (enginseer): runtime-installed themes and plugins,
-            # the Install-menu app selection, and the enabled-once markers that
-            # stop default plugins being re-enabled after you turn them off.
-            ".config/omarchy"
-            ".config/nixarchy"
-            ".local/state/nixarchy"
-            ".librewolf"
-            ".var/app"
-            ".mozilla"
-            ".kube"
-            "rdp"
-            ".config/sops/age"
-            "clan"
-            {
-              directory = ".gnupg";
-              mode = "0700";
-            }
-            {
-              directory = ".ssh";
-              mode = "0700";
-            }
-            # AWS SSO tokens and assumed-role credential caches. ~/.aws/config
-            # itself is a symlink into /run, rebuilt every boot (awscli.nix).
-            {
-              directory = ".aws/sso";
-              mode = "0700";
-            }
-            {
-              directory = ".aws/cli";
-              mode = "0700";
-            }
-            {
-              directory = ".local/share/keyrings";
-              mode = "0700";
-            }
-            ".local/share/direnv"
-          ];
-          files = [
-            # ".claude.json"
-            # ".screenrc"
-            # ".bash_history"
-            # ".gitconfig"
-            ".ideavimrc"
-          ];
-        };
       };
 
-      boot.initrd.systemd = {
-        # enable = lib.mkDefault true; # this enabled systemd support in stage1 - required for the below setup
-        services.rollback = {
-          description = "Rollback BTRFS root subvolume to a pristine state";
-          wantedBy = ["initrd.target"];
+      boot.tmp.cleanOnBoot = lib.mkDefault true;
 
-          # LUKS/TPM process. If you have named your device mapper something other
-          # than 'enc', then @enc will have a different name. Adjust accordingly.
-          after = ["systemd-cryptsetup@cryptroot.service"];
+      environment.persistence.${cfg.persistPath} = {
+        enable = true;
+        hideMounts = true;
+        inherit (cfg) directories files users;
+      };
 
-          # Before mounting the system root (/sysroot) during the early boot process
-          before = ["sysroot.mount"];
+      boot.initrd.systemd.services.rollback = mkIf rb.enable {
+        description = "Rollback BTRFS root subvolume to a pristine state";
+        wantedBy = ["initrd.target"];
 
-          unitConfig.DefaultDependencies = "no";
-          serviceConfig.Type = "oneshot";
-          script = ''
-            mkdir -p /mnt
+        # After the device is unlocked, and before the system root (/sysroot) is
+        # mounted during early boot.
+        inherit (rb) after;
+        before = ["sysroot.mount"];
 
-            # We first mount the BTRFS root to /mnt
-            # so we can manipulate btrfs subvolumes.
-            mount -o subvol=/ /dev/mapper/cryptroot /mnt
+        unitConfig.DefaultDependencies = "no";
+        serviceConfig.Type = "oneshot";
+        script = ''
+          mkdir -p /mnt
 
-            # While we're tempted to just delete /root and create
-            # a new snapshot from /root-blank, /root is already
-            # populated at this point with a number of subvolumes,
-            # which makes `btrfs subvolume delete` fail.
-            # So, we remove them first.
-            #
-            # /root contains subvolumes:
-            # - /root/var/lib/portables
-            # - /root/var/lib/machines
+          # We first mount the BTRFS root to /mnt
+          # so we can manipulate btrfs subvolumes.
+          mount -o subvol=/ ${rb.device} /mnt
 
-            btrfs subvolume list -o /mnt/root |
-              cut -f9 -d' ' |
-              while read subvolume; do
-                echo "deleting /$subvolume subvolume..."
-                btrfs subvolume delete "/mnt/$subvolume"
-              done &&
-              echo "deleting /root subvolume..." &&
-              btrfs subvolume delete /mnt/root
-            echo "restoring blank /root subvolume..."
-            btrfs subvolume snapshot /mnt/root-blank /mnt/root
+          # While we're tempted to just delete /root and create
+          # a new snapshot from /root-blank, /root is already
+          # populated at this point with a number of subvolumes,
+          # which makes `btrfs subvolume delete` fail.
+          # So, we remove them first.
+          #
+          # /root contains subvolumes:
+          # - /root/var/lib/portables
+          # - /root/var/lib/machines
 
-            # Once we're done rolling back to a blank snapshot,
-            # we can unmount /mnt and continue on the boot process.
-            umount /mnt
-          '';
-        };
+          btrfs subvolume list -o /mnt/${rb.subvolume} |
+            cut -f9 -d' ' |
+            while read subvolume; do
+              echo "deleting /$subvolume subvolume..."
+              btrfs subvolume delete "/mnt/$subvolume"
+            done &&
+            echo "deleting /${rb.subvolume} subvolume..." &&
+            btrfs subvolume delete /mnt/${rb.subvolume}
+          echo "restoring blank /${rb.subvolume} subvolume..."
+          btrfs subvolume snapshot /mnt/${rb.blankSnapshot} /mnt/${rb.subvolume}
+
+          # Once we're done rolling back to a blank snapshot,
+          # we can unmount /mnt and continue on the boot process.
+          umount /mnt
+        '';
       };
     };
   };

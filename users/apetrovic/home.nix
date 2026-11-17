@@ -5,6 +5,7 @@
 }: {
   imports = [
     self.inputs.home-manager.nixosModules.default
+    ./persistence.nix
   ];
 
   home-manager.extraSpecialArgs = {inherit self;};

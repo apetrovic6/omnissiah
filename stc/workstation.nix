@@ -64,7 +64,7 @@
     # Per-session Claude subscription: `claude-as <id>` (or the launcher
     # entries / herdr prefix+alt+c picker). Signing in stays a runtime step:
     # `claude-as add <Name>`. On nixarchy this is the agents widget's registry;
-    # elsewhere ~/.local/state/claude-accounts (persisted in impermanence.nix).
+    # elsewhere ~/.local/state/claude-accounts (persisted in users/apetrovic/persistence.nix).
     # Keep in step with machines/genetor/configuration.nix.
     magos.claudeAccounts = {
       enable = true;

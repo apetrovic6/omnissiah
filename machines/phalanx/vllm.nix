@@ -61,7 +61,7 @@ in {
   # `/` is a btrfs subvolume rolled back to root-blank on every boot
   # (modules/rites/impermanence.nix) and /var/lib is not in the persisted set,
   # so without this the weights would be re-fetched after every single reboot.
-  environment.persistence."/persist".directories = [stateDir];
+  services.imperium.impermanence.directories = [stateDir];
 
   systemd.tmpfiles.rules = [
     "d ${stateDir} 0750 root root -"

@@ -24,7 +24,7 @@
 # every boot and switch, so it needs no impermanence entry. ~/.aws/config is
 # read-only as a result: `aws configure …` cannot write to it. The SSO token
 # and assumed-role caches (~/.aws/sso, ~/.aws/cli) are persisted in
-# impermanence.nix.
+# users/apetrovic/persistence.nix.
 {...}: {
   flake.nixosModules.awscli = {
     config,

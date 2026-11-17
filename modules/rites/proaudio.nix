@@ -344,7 +344,7 @@
         # ~/.local/share is already persisted wholesale by the impermanence
         # module, which is why the NAM model directory lives under it and needs
         # no entry of its own.
-        environment.persistence."/persist".users.${cfg.user}.directories =
+        services.imperium.impermanence.users.${cfg.user}.directories =
           mkIf config.services.imperium.impermanence.enable
           ([".lv2" ".vst3" ".clap" ".lxvst" ".ladspa" ".dssi"]
             ++ optionals yb.enable [
