@@ -84,10 +84,6 @@
         shareName = "UE_VAULT";
         mountPoint = "/mnt/nas/ue_vault";
       };
-
-      shares.docker = {
-        mountPoint = "/mnt/nas/ue_vault";
-      };
     };
   };
 }
