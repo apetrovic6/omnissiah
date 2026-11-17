@@ -18,6 +18,10 @@
 # Usage:  ./rituals/render-manifests-pr.sh [--no-push]
 #   --no-push   make the commits and print the description, push nothing
 #
+# With NTFY_URL (the topic's address) and NTFY_TOKEN (a token allowed to
+# publish there) set, a notification with the summary and a link to the pull
+# request follows the push.
+#
 # Expects a clean checkout of the target branch with git identity configured.
 set -euo pipefail
 
@@ -116,6 +120,15 @@ description=$(
     echo "$charts" | sed 's/^/- /'
   fi
 )
+# The same, as a short plain-text notice.
+app_count=$(grep -c '^- `' "$summary" || true)
+notice=$(
+  sed -e 's/^- //' -e 's/[`*]//g' "$summary"
+  if [ -n "$charts" ]; then
+    echo
+    echo "$charts"
+  fi
+)
 rm -f "$summary"
 
 echo
@@ -131,8 +144,34 @@ fi
 
 # force-push: every run starts from the current tip of the target branch, so
 # an open pull request from an earlier run is replaced, not appended to.
+push_log=$(mktemp)
 git push origin "HEAD:refs/for/$TARGET" \
   -o "topic=$TOPIC" \
   -o "title=chore(taghmata): render manifests" \
   -o "description=$description" \
-  -o force-push=true
+  -o force-push=true 2>&1 | tee "$push_log"
+
+# Forgejo answers the push with the pull request's address.
+pr_url=$(grep -oE 'https?://[^[:space:]]+/pulls/[0-9]+' "$push_log" | head -1 || true)
+rm -f "$push_log"
+echo "pull request: ${pr_url:-(address not found in the push output)}"
+
+# Tell a human there is something to review. Optional: without NTFY_URL and
+# NTFY_TOKEN the pull request is simply there to be found.
+if [ -n "${NTFY_URL:-}" ] && [ -n "${NTFY_TOKEN:-}" ]; then
+  notify_args=(
+    --silent --show-error --fail --max-time 20
+    -H "Authorization: Bearer $NTFY_TOKEN"
+    -H "Title: Manifests to review: $app_count application(s)"
+    -H "Tags: package"
+  )
+  [ -n "$pr_url" ] && notify_args+=(-H "Click: $pr_url")
+  if curl "${notify_args[@]}" --data-binary "$notice" "$NTFY_URL" >/dev/null; then
+    echo "notification sent"
+  else
+    # The pull request exists either way; a failed notification is not a failed run.
+    echo "::warning::could not send the ntfy notification"
+  fi
+else
+  echo "NTFY_URL or NTFY_TOKEN not set; no notification"
+fi

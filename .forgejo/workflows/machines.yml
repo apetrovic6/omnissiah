@@ -227,6 +227,12 @@ jobs:
     timeout-minutes: 60
     env:
       CI_PUSH_TOKEN: ${{ secrets.CI_PUSH_TOKEN }}
+      # Where to announce the pull request. The token is the repository's
+      # NTFY_TOKEN Actions secret, set by OpenTofu from the ntfy-access clan var
+      # (modules/taghmata/_tofunix/projects/omnissiah); it may only publish to
+      # this one topic. Without the secret the job still opens the pull request.
+      NTFY_URL: https://ntfy.ugalabugala.org/homelab-alerts
+      NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
     steps:
       # master as it is now, with the lock the update job just pushed.
       - uses: actions/checkout@v4
