@@ -100,7 +100,7 @@
   ];
 in {
   # Metric names and label names every alert in
-  # modules/taghmata/nixidy/_env/apps/augur/prometheus-stack/cerberus-alerts.nix
+  # modules/taghmata/nixidy/apps/augur/prometheus-stack/cerberus-alerts.nix
   # is written against come from a live scrape of this same binary version with
   # these same flags.
   services.prometheus.exporters.node = {

@@ -1,0 +1,210 @@
+{self, ...}: {
+  nixidy.envs.prod.apps.vikunja = {
+    charts,
+    config,
+    ingressAnnotations,
+    ...
+  }: let
+    namespace = "vikunja";
+    domain = config.noosphere.domain;
+    db-cluster-name = "pg-vikunja";
+    objectStoreName = "vikunja-object-store";
+  in {
+    imports = [
+      ../../../_modules/templates/garage-object-store.nix
+      ../../../_modules/templates/database-template.nix
+    ];
+
+    applications.vikunja = {
+      inherit namespace;
+      createNamespace = true;
+
+      templates.garageObjectStore."${objectStoreName}" = {
+        inherit namespace;
+        # Migrated off the failing NFS-backed `garage` cluster onto the
+        # operator-managed `garage-backup` cluster (its vikunja bucket/key are
+        # provisioned and the creds are reflected as vikunja-s3-secret-key).
+        awsDefaultRegion = "backup";
+        destinationPath = "s3://vikunja/backups";
+        endpointUrl = "http://garage-backup.garage-operator.svc.cluster.local:3900";
+        S3Credentials = {
+          accessKeyId = {
+            name = "vikunja-s3-secret-key";
+            key = "MINIO_ACCESS_KEY_ID";
+          };
+          secretAccessKey = {
+            name = "vikunja-s3-secret-key";
+            key = "MINIO_SECRET_ACCESS_KEY";
+          };
+        };
+      };
+
+      templates.cnpg-database-cluster.vikunja = {
+        inherit namespace;
+        overrideObjectStore = objectStoreName;
+        cluster = {
+          spec = {
+            plugins = [
+              {
+                isWALArchiver = true;
+                parameters.barmanObjectName = objectStoreName;
+              }
+            ];
+
+            # bootstrap.recovery.source = "origin";
+
+            # externalClusters = [
+            #   {
+            #     plugin = {
+            #       parameters = {
+            #         barmanObjectName = objectStoreName;
+            #         serverName = "pg-yarr-restored";
+            #       };
+            #     };
+            #   }
+            # ];
+          };
+        };
+
+        databases = [];
+
+        backups = {
+          scheduledBackups = [
+            {
+              metadata.namespace = namespace;
+              spec = {
+                schedule = "0 2 0 * * *"; # Backup at 2AM every night
+                backupOwnerReference = "self";
+                immediate = true;
+              };
+            }
+          ];
+
+          onDemandBackups = [
+            {
+              spec = {};
+            }
+          ];
+        };
+      };
+
+      helm.releases.vikunja = {
+        chart = charts.go-vikunja.vikunja;
+
+        values.vikunja = {
+          ingress = {
+            main = {
+              enabled = true;
+              annotations = ingressAnnotations {
+                entrypoints = "websecure";
+                glance = {
+                  name = "Vikunja";
+                  icon = "di:vikunja";
+                  url = "https://vikunja.${domain}";
+                  description = "Project Planning";
+                  id = "vikunja";
+                  parent = "vikunja";
+                  category = "productivity";
+                };
+              };
+
+              hosts = [
+                {
+                  host = "vikunja.${domain}";
+                  paths = [{path = "/";}];
+                }
+              ];
+
+              tls = [
+                {
+                  secretName = "vikunja-tls";
+                  hosts = ["vikunja.${domain}"];
+                }
+              ];
+            };
+          };
+
+          persistence.database.enabled = false;
+
+          configMaps = {
+            config = {
+              enabled = true;
+              data = {
+                "config.yml" = ''
+                  service:
+                    publicurl: "https://vikunja.${domain}"
+                  auth:
+                    openid:
+                      providers:
+                        pocketid:
+                          usernamefallback: true
+                          emailfallback: true
+                '';
+              };
+            };
+          };
+
+          env = {
+            VIKUNJA_DATABASE_TYPE = "postgres";
+
+            VIKUNJA_DATABASE_HOST = {
+              valueFrom.secretKeyRef = {
+                name = "${db-cluster-name}-app";
+                key = "host";
+              };
+            };
+            VIKUNJA_DATABASE_USER = {
+              valueFrom.secretKeyRef = {
+                name = "${db-cluster-name}-app";
+                key = "user";
+              };
+            };
+            VIKUNJA_DATABASE_PASSWORD = {
+              valueFrom.secretKeyRef = {
+                name = "${db-cluster-name}-app";
+                key = "password";
+              };
+            };
+
+            VIKUNJA_DATABASE_DATABASE = "app";
+
+            VIKUNJA_AUTH_OPENID_ENABLED.value = true;
+            VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_AUTHURL.value = "https://id.${domain}";
+            VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_CLIENTID = {
+              valueFrom.secretKeyRef = {
+                name = "vikunja-oidc";
+                key = "client-id";
+              };
+            };
+
+            VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_CLIENTSECRET = {
+              valueFrom.secretKeyRef = {
+                name = "vikunja-oidc";
+                key = "client-secret";
+              };
+            };
+            VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_NAME.value = "PocketID";
+            VIKUNJA_AUTH_OPENID_PROVIDERS_POCKETID_SCOPE.value = "openid profile email";
+          };
+        };
+      };
+    };
+
+    garage.keys.vikunja = {
+      cluster = "backup";
+      secret.namespace = "vikunja";
+    };
+  };
+
+  perSystem = {pkgs, ...}: {
+    nixidy.charts."go-vikunja/vikunja" = pkgs.runCommand "vikunja-chart" {} ''
+      cp -r ${self.inputs.go-vikunja} $out
+      chmod -R u+w $out
+      mkdir -p $out/charts
+      tar -xzf ${pkgs.fetchurl {
+        url = "https://bjw-s-labs.github.io/helm-charts/library/common-1.5.1.tgz";
+        hash = "sha256-9kUXJmThPvJijV6YhhJQi2s428qkJd6WaWcstz1uNCY=";
+      }} -C $out/charts
+    '';
+  };
+}

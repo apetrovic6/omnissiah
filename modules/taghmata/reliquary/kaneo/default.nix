@@ -4,7 +4,7 @@
 # mints a key -> Secret -> reflector -> app namespace) does not reach it. This
 # inverts it: the key pair is generated here and *imported* into Garage via
 # `GarageKey.spec.importKey.secretRef` (see
-# nixidy/_env/apps/datavault/garage-operator/cluster-main/default.nix), so both sides are
+# nixidy/apps/datavault/garage-operator/_cluster-main/default.nix), so both sides are
 # fed from one clan var and nothing has to be copied by hand.
 #
 # Two outputs:

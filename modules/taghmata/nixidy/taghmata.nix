@@ -50,8 +50,18 @@ in {
       inherit (ingress) ingressAnnotations;
     };
 
+    # The applications are under ./apps, each declaring itself with
+    # `nixidy.envs.prod.apps.<name>`.
     envs.prod = {
-      modules = [./_env/prod.nix];
+      modules = [
+        {
+          nixidy.defaults.syncPolicy.autoSync = {
+            enable = true;
+            prune = true;
+            selfHeal = false;
+          };
+        }
+      ];
       # The sources are in modules/taghmata, the rendered manifests are not:
       # see modules/noosphere/taghmata/README.md.
       rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod";
