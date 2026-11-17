@@ -1162,8 +1162,12 @@ with lib; let
     "hub.traefik.io.v1alpha1.APIAuthSpecJwtClientConfigTls" = {
       options = {
         "ca" = mkOption {
-          description = "CA sets the CA bundle used to verify the server certificate.";
+          description = "CA sets the CA bundle used to verify the server certificate.\nMutually exclusive with CASecretName.";
           type = types.nullOr types.str;
+        };
+        "caSecretName" = mkOption {
+          description = "CASecretName is the name of the Kubernetes Secret containing the CA bundle used to verify the server certificate.\nThe secret must contain a key named 'tls.ca'.\nMutually exclusive with CA.";
+          type = types.nullOr (types.withMaxLength 253 types.str);
         };
         "insecureSkipVerify" = mkOption {
           description = "InsecureSkipVerify skips the server certificate validation.\nFor testing purposes only, do not use in production.";
@@ -1173,6 +1177,7 @@ with lib; let
 
       config = {
         "ca" = mkOverride 1002 null;
+        "caSecretName" = mkOverride 1002 null;
         "insecureSkipVerify" = mkOverride 1002 null;
       };
     };
@@ -2308,8 +2313,12 @@ with lib; let
     "hub.traefik.io.v1alpha1.APIPortalAuthSpecOidcClientConfigTls" = {
       options = {
         "ca" = mkOption {
-          description = "CA sets the CA bundle used to verify the server certificate.";
+          description = "CA sets the CA bundle used to verify the server certificate.\nMutually exclusive with CASecretName.";
           type = types.nullOr types.str;
+        };
+        "caSecretName" = mkOption {
+          description = "CASecretName is the name of the Kubernetes Secret containing the CA bundle used to verify the server certificate.\nThe secret must contain a key named 'tls.ca'.\nMutually exclusive with CA.";
+          type = types.nullOr (types.withMaxLength 253 types.str);
         };
         "insecureSkipVerify" = mkOption {
           description = "InsecureSkipVerify skips the server certificate validation.\nFor testing purposes only, do not use in production.";
@@ -2319,6 +2328,7 @@ with lib; let
 
       config = {
         "ca" = mkOverride 1002 null;
+        "caSecretName" = mkOverride 1002 null;
         "insecureSkipVerify" = mkOverride 1002 null;
       };
     };
@@ -4975,7 +4985,7 @@ with lib; let
     "traefik.io.v1alpha1.IngressRouteSpec" = {
       options = {
         "entryPoints" = mkOption {
-          description = "EntryPoints defines the list of entry point names to bind to.\nEntry points have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/install-configuration/entrypoints/\nDefault: all.";
+          description = "EntryPoints defines the list of entry point names to bind to.\nEntry points have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/install-configuration/entrypoints/\nDefault: all.";
           type = types.nullOr (types.listOf types.str);
         };
         "ingressClassName" = mkOption {
@@ -4983,7 +4993,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "parentRefs" = mkOption {
-          description = "ParentRefs defines references to parent IngressRoute resources for multi-layer routing.\nWhen set, this IngressRoute's routers will be children of the referenced parent IngressRoute's routers.\nMore info: https://doc.traefik.io/traefik/v3.7/routing/routers/#parentrefs";
+          description = "ParentRefs defines references to parent IngressRoute resources for multi-layer routing.\nWhen set, this IngressRoute's routers will be children of the referenced parent IngressRoute's routers.\nMore info: https://doc.traefik.io/traefik/v3.8/routing/routers/#parentrefs";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "traefik.io.v1alpha1.IngressRouteSpecParentRefs" "name" []
@@ -4996,7 +5006,7 @@ with lib; let
           type = types.listOf (submoduleOf "traefik.io.v1alpha1.IngressRouteSpecRoutes");
         };
         "tls" = mkOption {
-          description = "TLS defines the TLS configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/routing/router/#tls";
+          description = "TLS defines the TLS configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/routing/router/#tls";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.IngressRouteSpecTls");
         };
       };
@@ -5031,11 +5041,11 @@ with lib; let
           type = types.nullOr (types.enum ["Rule"]);
         };
         "match" = mkOption {
-          description = "Match defines the router's rule.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/routing/rules-and-priority/";
+          description = "Match defines the router's rule.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/routing/rules-and-priority/";
           type = types.str;
         };
         "middlewares" = mkOption {
-          description = "Middlewares defines the list of references to Middleware resources.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/kubernetes/crd/http/middleware/";
+          description = "Middlewares defines the list of references to Middleware resources.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/kubernetes/crd/http/middleware/";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "traefik.io.v1alpha1.IngressRouteSpecRoutesMiddlewares" "name"
@@ -5045,12 +5055,16 @@ with lib; let
           apply = attrsToList;
         };
         "observability" = mkOption {
-          description = "Observability defines the observability configuration for a router.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/routing/observability/";
+          description = "Observability defines the observability configuration for a router.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/routing/observability/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.IngressRouteSpecRoutesObservability");
         };
         "priority" = mkOption {
-          description = "Priority defines the router's priority.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/routing/rules-and-priority/#priority";
+          description = "Priority defines the router's priority.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/routing/rules-and-priority/#priority";
           type = types.nullOr (types.withMaximum 9223372036854775000 types.int);
+        };
+        "respondingTimeouts" = mkOption {
+          description = "RespondingTimeouts defines the timeouts for responding to client requests.";
+          type = types.nullOr (submoduleOf "traefik.io.v1alpha1.IngressRouteSpecRoutesRespondingTimeouts");
         };
         "services" = mkOption {
           description = "Services defines the list of Service.\nIt can contain any combination of TraefikService and/or reference to a Kubernetes Service.";
@@ -5062,7 +5076,7 @@ with lib; let
           apply = attrsToList;
         };
         "syntax" = mkOption {
-          description = "Syntax defines the router's rule syntax.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/routing/rules-and-priority/#rulesyntax\n\nDeprecated: Please do not use this field and rewrite the router rules to use the v3 syntax.";
+          description = "Syntax defines the router's rule syntax.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/routing/rules-and-priority/#rulesyntax\n\nDeprecated: Please do not use this field and rewrite the router rules to use the v3 syntax.";
           type = types.nullOr types.str;
         };
       };
@@ -5072,6 +5086,7 @@ with lib; let
         "middlewares" = mkOverride 1002 null;
         "observability" = mkOverride 1002 null;
         "priority" = mkOverride 1002 null;
+        "respondingTimeouts" = mkOverride 1002 null;
         "services" = mkOverride 1002 null;
         "syntax" = mkOverride 1002 null;
       };
@@ -5124,6 +5139,23 @@ with lib; let
         "metrics" = mkOverride 1002 null;
         "traceVerbosity" = mkOverride 1002 null;
         "tracing" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.IngressRouteSpecRoutesRespondingTimeouts" = {
+      options = {
+        "readTimeout" = mkOption {
+          description = "ReadTimeout defines the maximum duration for reading the request body, from when the router receives the request.\nIf zero, no timeout applies, and the entrypoint read timeout is lifted for the router.";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "writeTimeout" = mkOption {
+          description = "WriteTimeout defines the maximum duration before timing out writes of the response, including the wait for the backend,\nfrom when the router receives the request.\nIf zero, no timeout applies, and the entrypoint write timeout is lifted for the router.";
+          type = types.nullOr (types.either types.int types.str);
+        };
+      };
+
+      config = {
+        "readTimeout" = mkOverride 1002 null;
+        "writeTimeout" = mkOverride 1002 null;
       };
     };
     "traefik.io.v1alpha1.IngressRouteSpecRoutesServices" = {
@@ -5199,7 +5231,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "sticky" = mkOption {
-          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.IngressRouteSpecRoutesServicesSticky");
         };
         "strategy" = mkOption {
@@ -5422,15 +5454,15 @@ with lib; let
     "traefik.io.v1alpha1.IngressRouteSpecTls" = {
       options = {
         "certResolver" = mkOption {
-          description = "CertResolver defines the name of the certificate resolver to use.\nCert resolvers have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/install-configuration/tls/certificate-resolvers/acme/";
+          description = "CertResolver defines the name of the certificate resolver to use.\nCert resolvers have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/install-configuration/tls/certificate-resolvers/acme/";
           type = types.nullOr types.str;
         };
         "domains" = mkOption {
-          description = "Domains defines the list of domains that will be used to issue certificates.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-certificates/#domains";
+          description = "Domains defines the list of domains that will be used to issue certificates.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-certificates/#domains";
           type = types.nullOr (types.listOf (submoduleOf "traefik.io.v1alpha1.IngressRouteSpecTlsDomains"));
         };
         "options" = mkOption {
-          description = "Options defines the reference to a TLSOption, that specifies the parameters of the TLS connection.\nIf not defined, the `default` TLSOption is used.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-options/";
+          description = "Options defines the reference to a TLSOption, that specifies the parameters of the TLS connection.\nIf not defined, the `default` TLSOption is used.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-options/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.IngressRouteSpecTlsOptions");
         };
         "secretName" = mkOption {
@@ -5471,11 +5503,11 @@ with lib; let
     "traefik.io.v1alpha1.IngressRouteSpecTlsOptions" = {
       options = {
         "name" = mkOption {
-          description = "Name defines the name of the referenced TLSOption.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/kubernetes/crd/http/tlsoption/";
+          description = "Name defines the name of the referenced TLSOption.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/kubernetes/crd/http/tlsoption/";
           type = types.str;
         };
         "namespace" = mkOption {
-          description = "Namespace defines the namespace of the referenced TLSOption.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/kubernetes/crd/http/tlsoption/";
+          description = "Namespace defines the namespace of the referenced TLSOption.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/kubernetes/crd/http/tlsoption/";
           type = types.nullOr types.str;
         };
       };
@@ -5487,11 +5519,11 @@ with lib; let
     "traefik.io.v1alpha1.IngressRouteSpecTlsStore" = {
       options = {
         "name" = mkOption {
-          description = "Name defines the name of the referenced TLSStore.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/kubernetes/crd/http/tlsstore/";
+          description = "Name defines the name of the referenced TLSStore.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/kubernetes/crd/http/tlsstore/";
           type = types.str;
         };
         "namespace" = mkOption {
-          description = "Namespace defines the namespace of the referenced TLSStore.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/kubernetes/crd/http/tlsstore/";
+          description = "Namespace defines the namespace of the referenced TLSStore.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/kubernetes/crd/http/tlsstore/";
           type = types.nullOr types.str;
         };
       };
@@ -5528,7 +5560,7 @@ with lib; let
     "traefik.io.v1alpha1.IngressRouteTCPSpec" = {
       options = {
         "entryPoints" = mkOption {
-          description = "EntryPoints defines the list of entry point names to bind to.\nEntry points have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/install-configuration/entrypoints/\nDefault: all.";
+          description = "EntryPoints defines the list of entry point names to bind to.\nEntry points have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/install-configuration/entrypoints/\nDefault: all.";
           type = types.nullOr (types.listOf types.str);
         };
         "ingressClassName" = mkOption {
@@ -5540,7 +5572,7 @@ with lib; let
           type = types.listOf (submoduleOf "traefik.io.v1alpha1.IngressRouteTCPSpecRoutes");
         };
         "tls" = mkOption {
-          description = "TLS defines the TLS configuration on a layer 4 / TCP Route.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/routing/router/#tls";
+          description = "TLS defines the TLS configuration on a layer 4 / TCP Route.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/routing/router/#tls";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.IngressRouteTCPSpecTls");
         };
       };
@@ -5554,7 +5586,7 @@ with lib; let
     "traefik.io.v1alpha1.IngressRouteTCPSpecRoutes" = {
       options = {
         "match" = mkOption {
-          description = "Match defines the router's rule.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/routing/rules-and-priority/";
+          description = "Match defines the router's rule.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/routing/rules-and-priority/";
           type = types.str;
         };
         "middlewares" = mkOption {
@@ -5568,7 +5600,7 @@ with lib; let
           apply = attrsToList;
         };
         "priority" = mkOption {
-          description = "Priority defines the router's priority.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/routing/rules-and-priority/#priority";
+          description = "Priority defines the router's priority.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/routing/rules-and-priority/#priority";
           type = types.nullOr (types.withMaximum 9223372036854775000 types.int);
         };
         "services" = mkOption {
@@ -5582,7 +5614,7 @@ with lib; let
           apply = attrsToList;
         };
         "syntax" = mkOption {
-          description = "Syntax defines the router's rule syntax.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/routing/rules-and-priority/#rulesyntax\n\nDeprecated: Please do not use this field and rewrite the router rules to use the v3 syntax.";
+          description = "Syntax defines the router's rule syntax.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/routing/rules-and-priority/#rulesyntax\n\nDeprecated: Please do not use this field and rewrite the router rules to use the v3 syntax.";
           type = (
             types.nullOr (
               types.enum [
@@ -5640,7 +5672,7 @@ with lib; let
           type = types.either types.int types.str;
         };
         "proxyProtocol" = mkOption {
-          description = "ProxyProtocol defines the PROXY protocol configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/service/#proxy-protocol\n\nDeprecated: ProxyProtocol will not be supported in future APIVersions, please use ServersTransport to configure ProxyProtocol instead.";
+          description = "ProxyProtocol defines the PROXY protocol configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/service/#proxy-protocol\n\nDeprecated: ProxyProtocol will not be supported in future APIVersions, please use ServersTransport to configure ProxyProtocol instead.";
           type = (
             types.nullOr (submoduleOf "traefik.io.v1alpha1.IngressRouteTCPSpecRoutesServicesProxyProtocol")
           );
@@ -5689,17 +5721,17 @@ with lib; let
     "traefik.io.v1alpha1.IngressRouteTCPSpecTls" = {
       options = {
         "certResolver" = mkOption {
-          description = "CertResolver defines the name of the certificate resolver to use.\nCert resolvers have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/install-configuration/tls/certificate-resolvers/acme/";
+          description = "CertResolver defines the name of the certificate resolver to use.\nCert resolvers have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/install-configuration/tls/certificate-resolvers/acme/";
           type = types.nullOr types.str;
         };
         "domains" = mkOption {
-          description = "Domains defines the list of domains that will be used to issue certificates.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/tls/#domains";
+          description = "Domains defines the list of domains that will be used to issue certificates.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/tls/#domains";
           type = (
             types.nullOr (types.listOf (submoduleOf "traefik.io.v1alpha1.IngressRouteTCPSpecTlsDomains"))
           );
         };
         "options" = mkOption {
-          description = "Options defines the reference to a TLSOption, that specifies the parameters of the TLS connection.\nIf not defined, the `default` TLSOption is used.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/tls/#tls-options";
+          description = "Options defines the reference to a TLSOption, that specifies the parameters of the TLS connection.\nIf not defined, the `default` TLSOption is used.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/tls/#tls-options";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.IngressRouteTCPSpecTlsOptions");
         };
         "passthrough" = mkOption {
@@ -5802,7 +5834,7 @@ with lib; let
     "traefik.io.v1alpha1.IngressRouteUDPSpec" = {
       options = {
         "entryPoints" = mkOption {
-          description = "EntryPoints defines the list of entry point names to bind to.\nEntry points have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/install-configuration/entrypoints/\nDefault: all.";
+          description = "EntryPoints defines the list of entry point names to bind to.\nEntry points have to be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/install-configuration/entrypoints/\nDefault: all.";
           type = types.nullOr (types.listOf types.str);
         };
         "ingressClassName" = mkOption {
@@ -5901,19 +5933,19 @@ with lib; let
     "traefik.io.v1alpha1.MiddlewareSpec" = {
       options = {
         "addPrefix" = mkOption {
-          description = "AddPrefix holds the add prefix middleware configuration.\nThis middleware updates the path of a request before forwarding it.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/addprefix/";
+          description = "AddPrefix holds the add prefix middleware configuration.\nThis middleware updates the path of a request before forwarding it.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/addprefix/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecAddPrefix");
         };
         "basicAuth" = mkOption {
-          description = "BasicAuth holds the basic auth middleware configuration.\nThis middleware restricts access to your services to known users.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/basicauth/";
+          description = "BasicAuth holds the basic auth middleware configuration.\nThis middleware restricts access to your services to known users.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/basicauth/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecBasicAuth");
         };
         "buffering" = mkOption {
-          description = "Buffering holds the buffering middleware configuration.\nThis middleware retries or limits the size of requests that can be forwarded to backends.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/buffering/#maxrequestbodybytes";
+          description = "Buffering holds the buffering middleware configuration.\nThis middleware retries or limits the size of requests that can be forwarded to backends.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/buffering/#maxrequestbodybytes";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecBuffering");
         };
         "chain" = mkOption {
-          description = "Chain holds the configuration of the chain middleware.\nThis middleware enables to define reusable combinations of other pieces of middleware.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/chain/";
+          description = "Chain holds the configuration of the chain middleware.\nThis middleware enables to define reusable combinations of other pieces of middleware.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/chain/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecChain");
         };
         "circuitBreaker" = mkOption {
@@ -5921,7 +5953,7 @@ with lib; let
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecCircuitBreaker");
         };
         "compress" = mkOption {
-          description = "Compress holds the compress middleware configuration.\nThis middleware compresses responses before sending them to the client, using gzip, brotli, or zstd compression.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/compress/";
+          description = "Compress holds the compress middleware configuration.\nThis middleware compresses responses before sending them to the client, using gzip, brotli, or zstd compression.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/compress/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecCompress");
         };
         "contentType" = mkOption {
@@ -5929,7 +5961,7 @@ with lib; let
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecContentType");
         };
         "digestAuth" = mkOption {
-          description = "DigestAuth holds the digest auth middleware configuration.\nThis middleware restricts access to your services to known users.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/digestauth/";
+          description = "DigestAuth holds the digest auth middleware configuration.\nThis middleware restricts access to your services to known users.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/digestauth/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecDigestAuth");
         };
         "encodedCharacters" = mkOption {
@@ -5937,11 +5969,11 @@ with lib; let
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecEncodedCharacters");
         };
         "errors" = mkOption {
-          description = "ErrorPage holds the custom error middleware configuration.\nThis middleware returns a custom page in lieu of the default, according to configured ranges of HTTP Status codes.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/errorpages/";
+          description = "ErrorPage holds the custom error middleware configuration.\nThis middleware returns a custom page in lieu of the default, according to configured ranges of HTTP Status codes.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/errorpages/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecErrors");
         };
         "forwardAuth" = mkOption {
-          description = "ForwardAuth holds the forward auth middleware configuration.\nThis middleware delegates the request authentication to a Service.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/forwardauth/";
+          description = "ForwardAuth holds the forward auth middleware configuration.\nThis middleware delegates the request authentication to a Service.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/forwardauth/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecForwardAuth");
         };
         "grpcWeb" = mkOption {
@@ -5949,15 +5981,15 @@ with lib; let
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecGrpcWeb");
         };
         "headers" = mkOption {
-          description = "Headers holds the headers middleware configuration.\nThis middleware manages the requests and responses headers.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/headers/#customrequestheaders";
+          description = "Headers holds the headers middleware configuration.\nThis middleware manages the requests and responses headers.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/headers/#customrequestheaders";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecHeaders");
         };
         "inFlightReq" = mkOption {
-          description = "InFlightReq holds the in-flight request middleware configuration.\nThis middleware limits the number of requests being processed and served concurrently.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/inflightreq/";
+          description = "InFlightReq holds the in-flight request middleware configuration.\nThis middleware limits the number of requests being processed and served concurrently.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/inflightreq/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecInFlightReq");
         };
         "ipAllowList" = mkOption {
-          description = "IPAllowList holds the IP allowlist middleware configuration.\nThis middleware limits allowed requests based on the client IP.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/ipallowlist/";
+          description = "IPAllowList holds the IP allowlist middleware configuration.\nThis middleware limits allowed requests based on the client IP.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/ipallowlist/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecIpAllowList");
         };
         "ipWhiteList" = mkOption {
@@ -5965,44 +5997,48 @@ with lib; let
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecIpWhiteList");
         };
         "passTLSClientCert" = mkOption {
-          description = "PassTLSClientCert holds the pass TLS client cert middleware configuration.\nThis middleware adds the selected data from the passed client TLS certificate to a header.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/passtlsclientcert/";
+          description = "PassTLSClientCert holds the pass TLS client cert middleware configuration.\nThis middleware adds the selected data from the passed client TLS certificate to a header.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/passtlsclientcert/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecPassTLSClientCert");
         };
         "plugin" = mkOption {
-          description = "Plugin defines the middleware plugin configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/overview/#community-middlewares";
+          description = "Plugin defines the middleware plugin configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/overview/#community-middlewares";
           type = types.nullOr types.attrs;
         };
         "rateLimit" = mkOption {
-          description = "RateLimit holds the rate limit configuration.\nThis middleware ensures that services will receive a fair amount of requests, and allows one to define what fair is.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/ratelimit/";
+          description = "RateLimit holds the rate limit configuration.\nThis middleware ensures that services will receive a fair amount of requests, and allows one to define what fair is.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/ratelimit/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecRateLimit");
         };
         "redirectRegex" = mkOption {
-          description = "RedirectRegex holds the redirect regex middleware configuration.\nThis middleware redirects a request using regex matching and replacement.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/redirectregex/#regex";
+          description = "RedirectRegex holds the redirect regex middleware configuration.\nThis middleware redirects a request using regex matching and replacement.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/redirectregex/#regex";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecRedirectRegex");
         };
         "redirectScheme" = mkOption {
-          description = "RedirectScheme holds the redirect scheme middleware configuration.\nThis middleware redirects requests from a scheme/port to another.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/redirectscheme/";
+          description = "RedirectScheme holds the redirect scheme middleware configuration.\nThis middleware redirects requests from a scheme/port to another.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/redirectscheme/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecRedirectScheme");
         };
         "replacePath" = mkOption {
-          description = "ReplacePath holds the replace path middleware configuration.\nThis middleware replaces the path of the request URL and store the original path in an X-Replaced-Path header.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/replacepath/";
+          description = "ReplacePath holds the replace path middleware configuration.\nThis middleware replaces the path of the request URL and store the original path in an X-Replaced-Path header.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/replacepath/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecReplacePath");
         };
         "replacePathRegex" = mkOption {
-          description = "ReplacePathRegex holds the replace path regex middleware configuration.\nThis middleware replaces the path of a URL using regex matching and replacement.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/replacepathregex/";
+          description = "ReplacePathRegex holds the replace path regex middleware configuration.\nThis middleware replaces the path of a URL using regex matching and replacement.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/replacepathregex/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecReplacePathRegex");
         };
         "retry" = mkOption {
-          description = "Retry holds the retry middleware configuration.\nThis middleware reissues requests a given number of times to a backend server if that server does not reply.\nAs soon as the server answers, the middleware stops retrying, regardless of the response status.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/retry/";
+          description = "Retry holds the retry middleware configuration.\nThis middleware reissues requests a given number of times to a backend server if that server does not reply.\nAs soon as the server answers, the middleware stops retrying, regardless of the response status.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/retry/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecRetry");
         };
         "stripPrefix" = mkOption {
-          description = "StripPrefix holds the strip prefix middleware configuration.\nThis middleware removes the specified prefixes from the URL path.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/stripprefix/";
+          description = "StripPrefix holds the strip prefix middleware configuration.\nThis middleware removes the specified prefixes from the URL path.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/stripprefix/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecStripPrefix");
         };
         "stripPrefixRegex" = mkOption {
-          description = "StripPrefixRegex holds the strip prefix regex middleware configuration.\nThis middleware removes the matching prefixes from the URL path.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/stripprefixregex/";
+          description = "StripPrefixRegex holds the strip prefix regex middleware configuration.\nThis middleware removes the matching prefixes from the URL path.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/stripprefixregex/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecStripPrefixRegex");
+        };
+        "tap" = mkOption {
+          description = "Tap holds the tap middleware configuration.\nThis middleware sends a copy of the requests and responses going through it to Kubernetes Services.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/tap/";
+          type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTap");
         };
       };
 
@@ -6033,6 +6069,7 @@ with lib; let
         "retry" = mkOverride 1002 null;
         "stripPrefix" = mkOverride 1002 null;
         "stripPrefixRegex" = mkOverride 1002 null;
+        "tap" = mkOverride 1002 null;
       };
     };
     "traefik.io.v1alpha1.MiddlewareSpecAddPrefix" = {
@@ -6050,7 +6087,7 @@ with lib; let
     "traefik.io.v1alpha1.MiddlewareSpecBasicAuth" = {
       options = {
         "headerField" = mkOption {
-          description = "HeaderField defines a header field to store the authenticated user.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/basicauth/#headerfield";
+          description = "HeaderField defines a header field to store the authenticated user.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/basicauth/#headerfield";
           type = types.nullOr types.str;
         };
         "realm" = mkOption {
@@ -6076,6 +6113,14 @@ with lib; let
     };
     "traefik.io.v1alpha1.MiddlewareSpecBuffering" = {
       options = {
+        "disableRequestBuffer" = mkOption {
+          description = "DisableRequestBuffer disables request body buffering, so the request body is streamed directly to the backend.\nWhen true, MaxRequestBodyBytes is not enforced.\nDefault: false.";
+          type = types.nullOr types.bool;
+        };
+        "disableResponseBuffer" = mkOption {
+          description = "DisableResponseBuffer disables response body buffering, so the response is streamed directly to the client.\nThis is required to forward streaming responses such as Server-Sent Events, gRPC streaming, or long-poll watch endpoints.\nWhen true, MaxResponseBodyBytes is not enforced.\nDefault: false.";
+          type = types.nullOr types.bool;
+        };
         "maxRequestBodyBytes" = mkOption {
           description = "MaxRequestBodyBytes defines the maximum allowed body size for the request (in bytes).\nIf the request exceeds the allowed size, it is not forwarded to the service, and the client gets a 413 (Request Entity Too Large) response.\nDefault: 0 (no maximum).";
           type = types.nullOr types.int;
@@ -6093,12 +6138,14 @@ with lib; let
           type = types.nullOr types.int;
         };
         "retryExpression" = mkOption {
-          description = "RetryExpression defines the retry conditions.\nIt is a logical combination of functions with operators AND (&&) and OR (||).\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/buffering/#retryexpression";
+          description = "RetryExpression defines the retry conditions.\nIt is a logical combination of functions with operators AND (&&) and OR (||).\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/buffering/#retryexpression";
           type = types.nullOr types.str;
         };
       };
 
       config = {
+        "disableRequestBuffer" = mkOverride 1002 null;
+        "disableResponseBuffer" = mkOverride 1002 null;
         "maxRequestBodyBytes" = mkOverride 1002 null;
         "maxResponseBodyBytes" = mkOverride 1002 null;
         "memRequestBodyBytes" = mkOverride 1002 null;
@@ -6218,7 +6265,7 @@ with lib; let
     "traefik.io.v1alpha1.MiddlewareSpecDigestAuth" = {
       options = {
         "headerField" = mkOption {
-          description = "HeaderField defines a header field to store the authenticated user.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/digestauth/#headerfield";
+          description = "HeaderField defines a header field to store the authenticated user.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/digestauth/#headerfield";
           type = types.nullOr types.str;
         };
         "realm" = mkOption {
@@ -6295,7 +6342,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "service" = mkOption {
-          description = "Service defines the reference to a Kubernetes Service that will serve the error page.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/errorpages/#service";
+          description = "Service defines the reference to a Kubernetes Service that will serve the error page.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/errorpages/#service";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecErrorsService");
         };
         "status" = mkOption {
@@ -6389,7 +6436,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "sticky" = mkOption {
-          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecErrorsServiceSticky");
         };
         "strategy" = mkOption {
@@ -6626,7 +6673,7 @@ with lib; let
           type = types.nullOr (types.listOf types.str);
         };
         "authResponseHeadersRegex" = mkOption {
-          description = "AuthResponseHeadersRegex defines the regex to match headers to copy from the authentication server response and set on forwarded request, after stripping all headers that match the regex.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/forwardauth/#authresponseheadersregex";
+          description = "AuthResponseHeadersRegex defines the regex to match headers to copy from the authentication server response and set on forwarded request, after stripping all headers that match the regex.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/forwardauth/#authresponseheadersregex";
           type = types.nullOr types.str;
         };
         "authSigninURL" = mkOption {
@@ -6638,7 +6685,7 @@ with lib; let
           type = types.nullOr types.bool;
         };
         "headerField" = mkOption {
-          description = "HeaderField defines a header field to store the authenticated user.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/forwardauth/#headerfield";
+          description = "HeaderField defines a header field to store the authenticated user.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/forwardauth/#headerfield";
           type = types.nullOr types.str;
         };
         "maxBodySize" = mkOption {
@@ -6902,7 +6949,7 @@ with lib; let
           type = types.nullOr (types.withMinimum 0 types.int);
         };
         "sourceCriterion" = mkOption {
-          description = "SourceCriterion defines what criterion is used to group requests as originating from a common source.\nIf several strategies are defined at the same time, an error will be raised.\nIf none are set, the default is to use the requestHost.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/inflightreq/#sourcecriterion";
+          description = "SourceCriterion defines what criterion is used to group requests as originating from a common source.\nIf several strategies are defined at the same time, an error will be raised.\nIf none are set, the default is to use the requestHost.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/inflightreq/#sourcecriterion";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecInFlightReqSourceCriterion");
         };
       };
@@ -6915,7 +6962,7 @@ with lib; let
     "traefik.io.v1alpha1.MiddlewareSpecInFlightReqSourceCriterion" = {
       options = {
         "ipStrategy" = mkOption {
-          description = "IPStrategy holds the IP strategy configuration used by Traefik to determine the client IP.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/ipallowlist/#ipstrategy";
+          description = "IPStrategy holds the IP strategy configuration used by Traefik to determine the client IP.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/ipallowlist/#ipstrategy";
           type = (
             types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecInFlightReqSourceCriterionIpStrategy")
           );
@@ -6961,7 +7008,7 @@ with lib; let
     "traefik.io.v1alpha1.MiddlewareSpecIpAllowList" = {
       options = {
         "ipStrategy" = mkOption {
-          description = "IPStrategy holds the IP strategy configuration used by Traefik to determine the client IP.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/ipallowlist/#ipstrategy";
+          description = "IPStrategy holds the IP strategy configuration used by Traefik to determine the client IP.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/ipallowlist/#ipstrategy";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecIpAllowListIpStrategy");
         };
         "rejectStatusCode" = mkOption {
@@ -7005,7 +7052,7 @@ with lib; let
     "traefik.io.v1alpha1.MiddlewareSpecIpWhiteList" = {
       options = {
         "ipStrategy" = mkOption {
-          description = "IPStrategy holds the IP strategy configuration used by Traefik to determine the client IP.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/ipallowlist/#ipstrategy";
+          description = "IPStrategy holds the IP strategy configuration used by Traefik to determine the client IP.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/ipallowlist/#ipstrategy";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecIpWhiteListIpStrategy");
         };
         "sourceRange" = mkOption {
@@ -7300,7 +7347,7 @@ with lib; let
     "traefik.io.v1alpha1.MiddlewareSpecRateLimitSourceCriterion" = {
       options = {
         "ipStrategy" = mkOption {
-          description = "IPStrategy holds the IP strategy configuration used by Traefik to determine the client IP.\nMore info: https://doc.traefik.io/traefik/v3.7/middlewares/http/ipallowlist/#ipstrategy";
+          description = "IPStrategy holds the IP strategy configuration used by Traefik to determine the client IP.\nMore info: https://doc.traefik.io/traefik/v3.8/middlewares/http/ipallowlist/#ipstrategy";
           type = (
             types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecRateLimitSourceCriterionIpStrategy")
           );
@@ -7487,6 +7534,692 @@ with lib; let
         "regex" = mkOverride 1002 null;
       };
     };
+    "traefik.io.v1alpha1.MiddlewareSpecTap" = {
+      options = {
+        "request" = mkOption {
+          description = "Request defines where and how the request records are sent.\nWhen omitted, requests are not recorded.";
+          type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapRequest");
+        };
+        "response" = mkOption {
+          description = "Response defines where and how the response records are sent.\nWhen omitted, responses are not recorded.";
+          type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapResponse");
+        };
+      };
+
+      config = {
+        "request" = mkOverride 1002 null;
+        "response" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapRequest" = {
+      options = {
+        "maxRecordBodySize" = mkOption {
+          description = "MaxRecordBodySize defines the maximum number of body bytes in a record.\nA larger body is cut in the record, which is flagged as truncated.\nThe recorded body is held in memory, so it bounds the memory used for the body.\nIt has no default, and must be set when recordBody is set.\nA negative value means no limit.";
+          type = types.nullOr (types.withMinimum (-1) types.int);
+        };
+        "path" = mkOption {
+          description = "Path defines the path of the requests sending the records to the service.\nDefault is `/`.";
+          type = types.nullOr types.str;
+        };
+        "recordBody" = mkOption {
+          description = "RecordBody defines whether the body is part of the records.\nDefault is `false`.";
+          type = types.nullOr types.bool;
+        };
+        "rejectOnRecordError" = mkOption {
+          description = "RejectOnRecordError defines whether the record is sent before the data it describes is handed over:\nthe request record before the request reaches the backend,\nand the response record before the response reaches the client.\nWhen the record cannot be sent, the request is rejected with an Internal Server Error.\nDefault is `false`.";
+          type = types.nullOr types.bool;
+        };
+        "service" = mkOption {
+          description = "Service defines the reference to a Kubernetes Service the records are sent to.";
+          type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapRequestService");
+        };
+        "timeout" = mkOption {
+          description = "Timeout defines the maximum duration allowed to send a record.\nThe value of timeout should be provided in seconds or as a valid duration format,\nsee https://pkg.go.dev/time#ParseDuration.\nDefault is `10s`.";
+          type = types.nullOr (types.either types.int types.str);
+        };
+      };
+
+      config = {
+        "maxRecordBodySize" = mkOverride 1002 null;
+        "path" = mkOverride 1002 null;
+        "recordBody" = mkOverride 1002 null;
+        "rejectOnRecordError" = mkOverride 1002 null;
+        "service" = mkOverride 1002 null;
+        "timeout" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapRequestService" = {
+      options = {
+        "healthCheck" = mkOption {
+          description = "Healthcheck defines health checks for ExternalName services.";
+          type = (
+            types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceHealthCheck")
+          );
+        };
+        "kind" = mkOption {
+          description = "Kind defines the kind of the Service.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
+        };
+        "middlewares" = mkOption {
+          description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceMiddlewares"
+              "name"
+              []
+            )
+          );
+          apply = attrsToList;
+        };
+        "name" = mkOption {
+          description = "Name defines the name of the referenced Kubernetes Service or TraefikService.\nThe differentiation between the two is specified in the Kind field.";
+          type = types.str;
+        };
+        "namespace" = mkOption {
+          description = "Namespace defines the namespace of the referenced Kubernetes Service or TraefikService.";
+          type = types.nullOr types.str;
+        };
+        "nativeLB" = mkOption {
+          description = "NativeLB controls, when creating the load-balancer,\nwhether the LB's children are directly the pods IPs or if the only child is the Kubernetes Service clusterIP.\nThe Kubernetes Service itself does load-balance to the pods.\nBy default, NativeLB is false.";
+          type = types.nullOr types.bool;
+        };
+        "nodePortLB" = mkOption {
+          description = "NodePortLB controls, when creating the load-balancer,\nwhether the LB's children are directly the nodes internal IPs using the nodePort when the service type is NodePort.\nIt allows services to be reachable when Traefik runs externally from the Kubernetes cluster but within the same network of the nodes.\nBy default, NodePortLB is false.";
+          type = types.nullOr types.bool;
+        };
+        "passHostHeader" = mkOption {
+          description = "PassHostHeader defines whether the client Host header is forwarded to the upstream Kubernetes Service.\nBy default, passHostHeader is true.";
+          type = types.nullOr types.bool;
+        };
+        "passiveHealthCheck" = mkOption {
+          description = "PassiveHealthCheck defines passive health checks for ExternalName services.";
+          type = (
+            types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapRequestServicePassiveHealthCheck")
+          );
+        };
+        "port" = mkOption {
+          description = "Port defines the port of a Kubernetes Service.\nThis can be a reference to a named port.";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "responseForwarding" = mkOption {
+          description = "ResponseForwarding defines how Traefik forwards the response from the upstream Kubernetes Service to the client.";
+          type = (
+            types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceResponseForwarding")
+          );
+        };
+        "scheme" = mkOption {
+          description = "Scheme defines the scheme to use for the request to the upstream Kubernetes Service.\nIt defaults to https when Kubernetes Service port is 443, http otherwise.";
+          type = types.nullOr types.str;
+        };
+        "serversTransport" = mkOption {
+          description = "ServersTransport defines the name of ServersTransport resource to use.\nIt allows to configure the transport between Traefik and your servers.\nCan only be used on a Kubernetes Service.";
+          type = types.nullOr types.str;
+        };
+        "sticky" = mkOption {
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceSticky");
+        };
+        "strategy" = mkOption {
+          description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
+        };
+        "weight" = mkOption {
+          description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
+          type = types.nullOr (types.withMinimum 0 types.int);
+        };
+      };
+
+      config = {
+        "healthCheck" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "middlewares" = mkOverride 1002 null;
+        "namespace" = mkOverride 1002 null;
+        "nativeLB" = mkOverride 1002 null;
+        "nodePortLB" = mkOverride 1002 null;
+        "passHostHeader" = mkOverride 1002 null;
+        "passiveHealthCheck" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "responseForwarding" = mkOverride 1002 null;
+        "scheme" = mkOverride 1002 null;
+        "serversTransport" = mkOverride 1002 null;
+        "sticky" = mkOverride 1002 null;
+        "strategy" = mkOverride 1002 null;
+        "weight" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceHealthCheck" = {
+      options = {
+        "followRedirects" = mkOption {
+          description = "FollowRedirects defines whether redirects should be followed during the health check calls.\nDefault: true";
+          type = types.nullOr types.bool;
+        };
+        "headers" = mkOption {
+          description = "Headers defines custom headers to be sent to the health check endpoint.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "hostname" = mkOption {
+          description = "Hostname defines the value of hostname in the Host header of the health check request.";
+          type = types.nullOr types.str;
+        };
+        "interval" = mkOption {
+          description = "Interval defines the frequency of the health check calls for healthy targets.\nDefault: 30s";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "method" = mkOption {
+          description = "Method defines the healthcheck method.";
+          type = types.nullOr types.str;
+        };
+        "mode" = mkOption {
+          description = "Mode defines the health check mode.\nIf defined to grpc, will use the gRPC health check protocol to probe the server.\nDefault: http";
+          type = types.nullOr types.str;
+        };
+        "path" = mkOption {
+          description = "Path defines the server URL path for the health check endpoint.";
+          type = types.nullOr types.str;
+        };
+        "port" = mkOption {
+          description = "Port defines the server URL port for the health check endpoint.";
+          type = types.nullOr types.int;
+        };
+        "scheme" = mkOption {
+          description = "Scheme replaces the server URL scheme for the health check endpoint.";
+          type = types.nullOr types.str;
+        };
+        "status" = mkOption {
+          description = "Status defines the expected HTTP status code of the response to the health check request.";
+          type = types.nullOr types.int;
+        };
+        "timeout" = mkOption {
+          description = "Timeout defines the maximum duration Traefik will wait for a health check request before considering the server unhealthy.\nDefault: 5s";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "unhealthyInterval" = mkOption {
+          description = "UnhealthyInterval defines the frequency of the health check calls for unhealthy targets.\nWhen UnhealthyInterval is not defined, it defaults to the Interval value.\nDefault: 30s";
+          type = types.nullOr (types.either types.int types.str);
+        };
+      };
+
+      config = {
+        "followRedirects" = mkOverride 1002 null;
+        "headers" = mkOverride 1002 null;
+        "hostname" = mkOverride 1002 null;
+        "interval" = mkOverride 1002 null;
+        "method" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
+        "path" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "scheme" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+        "timeout" = mkOverride 1002 null;
+        "unhealthyInterval" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceMiddlewares" = {
+      options = {
+        "name" = mkOption {
+          description = "Name defines the name of the referenced Middleware resource.";
+          type = types.str;
+        };
+        "namespace" = mkOption {
+          description = "Namespace defines the namespace of the referenced Middleware resource.";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "namespace" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapRequestServicePassiveHealthCheck" = {
+      options = {
+        "failureWindow" = mkOption {
+          description = "FailureWindow defines the time window during which the failed attempts must occur for the server to be marked as unhealthy. It also defines for how long the server will be considered unhealthy.";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "maxFailedAttempts" = mkOption {
+          description = "MaxFailedAttempts is the number of consecutive failed attempts allowed within the failure window before marking the server as unhealthy.";
+          type = types.nullOr types.int;
+        };
+      };
+
+      config = {
+        "failureWindow" = mkOverride 1002 null;
+        "maxFailedAttempts" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceResponseForwarding" = {
+      options = {
+        "flushInterval" = mkOption {
+          description = "FlushInterval defines the interval, in milliseconds, in between flushes to the client while copying the response body.\nA negative value means to flush immediately after each write to the client.\nThis configuration is ignored when ReverseProxy recognizes a response as a streaming response;\nfor such responses, writes are flushed to the client immediately.\nDefault: 100ms";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "flushInterval" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceSticky" = {
+      options = {
+        "cookie" = mkOption {
+          description = "Cookie defines the sticky cookie configuration.";
+          type = (
+            types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceStickyCookie")
+          );
+        };
+      };
+
+      config = {
+        "cookie" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapRequestServiceStickyCookie" = {
+      options = {
+        "domain" = mkOption {
+          description = "Domain defines the host to which the cookie will be sent.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#domaindomain-value";
+          type = types.nullOr types.str;
+        };
+        "httpOnly" = mkOption {
+          description = "HTTPOnly defines whether the cookie can be accessed by client-side APIs, such as JavaScript.";
+          type = types.nullOr types.bool;
+        };
+        "maxAge" = mkOption {
+          description = "MaxAge defines the number of seconds until the cookie expires.\nWhen set to a negative number, the cookie expires immediately.\nWhen set to zero, the cookie never expires.";
+          type = types.nullOr types.int;
+        };
+        "name" = mkOption {
+          description = "Name defines the Cookie name.";
+          type = types.nullOr types.str;
+        };
+        "path" = mkOption {
+          description = "Path defines the path that must exist in the requested URL for the browser to send the Cookie header.\nWhen not provided the cookie will be sent on every request to the domain.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#pathpath-value";
+          type = types.nullOr types.str;
+        };
+        "sameSite" = mkOption {
+          description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
+        };
+        "secure" = mkOption {
+          description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
+          type = types.nullOr types.bool;
+        };
+      };
+
+      config = {
+        "domain" = mkOverride 1002 null;
+        "httpOnly" = mkOverride 1002 null;
+        "maxAge" = mkOverride 1002 null;
+        "name" = mkOverride 1002 null;
+        "path" = mkOverride 1002 null;
+        "sameSite" = mkOverride 1002 null;
+        "secure" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapResponse" = {
+      options = {
+        "maxRecordBodySize" = mkOption {
+          description = "MaxRecordBodySize defines the maximum number of body bytes in a record.\nA larger body is cut in the record, which is flagged as truncated.\nThe recorded body is held in memory, so it bounds the memory used for the body.\nIt has no default, and must be set when recordBody is set.\nA negative value means no limit.";
+          type = types.nullOr (types.withMinimum (-1) types.int);
+        };
+        "path" = mkOption {
+          description = "Path defines the path of the requests sending the records to the service.\nDefault is `/`.";
+          type = types.nullOr types.str;
+        };
+        "recordBody" = mkOption {
+          description = "RecordBody defines whether the body is part of the records.\nDefault is `false`.";
+          type = types.nullOr types.bool;
+        };
+        "rejectOnRecordError" = mkOption {
+          description = "RejectOnRecordError defines whether the record is sent before the data it describes is handed over:\nthe request record before the request reaches the backend,\nand the response record before the response reaches the client.\nWhen the record cannot be sent, the request is rejected with an Internal Server Error.\nDefault is `false`.";
+          type = types.nullOr types.bool;
+        };
+        "requestHeaders" = mkOption {
+          description = "RequestHeaders defines the request headers described in the records, along with the request line.\nIt allows a response record to be understood, and correlated, without the matching request record.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "service" = mkOption {
+          description = "Service defines the reference to a Kubernetes Service the records are sent to.";
+          type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapResponseService");
+        };
+        "timeout" = mkOption {
+          description = "Timeout defines the maximum duration allowed to send a record.\nThe value of timeout should be provided in seconds or as a valid duration format,\nsee https://pkg.go.dev/time#ParseDuration.\nDefault is `10s`.";
+          type = types.nullOr (types.either types.int types.str);
+        };
+      };
+
+      config = {
+        "maxRecordBodySize" = mkOverride 1002 null;
+        "path" = mkOverride 1002 null;
+        "recordBody" = mkOverride 1002 null;
+        "rejectOnRecordError" = mkOverride 1002 null;
+        "requestHeaders" = mkOverride 1002 null;
+        "service" = mkOverride 1002 null;
+        "timeout" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapResponseService" = {
+      options = {
+        "healthCheck" = mkOption {
+          description = "Healthcheck defines health checks for ExternalName services.";
+          type = (
+            types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceHealthCheck")
+          );
+        };
+        "kind" = mkOption {
+          description = "Kind defines the kind of the Service.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Service"
+                "TraefikService"
+              ]
+            )
+          );
+        };
+        "middlewares" = mkOption {
+          description = "Middlewares defines the list of references to Middleware resources to apply to the service.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceMiddlewares"
+              "name"
+              []
+            )
+          );
+          apply = attrsToList;
+        };
+        "name" = mkOption {
+          description = "Name defines the name of the referenced Kubernetes Service or TraefikService.\nThe differentiation between the two is specified in the Kind field.";
+          type = types.str;
+        };
+        "namespace" = mkOption {
+          description = "Namespace defines the namespace of the referenced Kubernetes Service or TraefikService.";
+          type = types.nullOr types.str;
+        };
+        "nativeLB" = mkOption {
+          description = "NativeLB controls, when creating the load-balancer,\nwhether the LB's children are directly the pods IPs or if the only child is the Kubernetes Service clusterIP.\nThe Kubernetes Service itself does load-balance to the pods.\nBy default, NativeLB is false.";
+          type = types.nullOr types.bool;
+        };
+        "nodePortLB" = mkOption {
+          description = "NodePortLB controls, when creating the load-balancer,\nwhether the LB's children are directly the nodes internal IPs using the nodePort when the service type is NodePort.\nIt allows services to be reachable when Traefik runs externally from the Kubernetes cluster but within the same network of the nodes.\nBy default, NodePortLB is false.";
+          type = types.nullOr types.bool;
+        };
+        "passHostHeader" = mkOption {
+          description = "PassHostHeader defines whether the client Host header is forwarded to the upstream Kubernetes Service.\nBy default, passHostHeader is true.";
+          type = types.nullOr types.bool;
+        };
+        "passiveHealthCheck" = mkOption {
+          description = "PassiveHealthCheck defines passive health checks for ExternalName services.";
+          type = (
+            types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapResponseServicePassiveHealthCheck")
+          );
+        };
+        "port" = mkOption {
+          description = "Port defines the port of a Kubernetes Service.\nThis can be a reference to a named port.";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "responseForwarding" = mkOption {
+          description = "ResponseForwarding defines how Traefik forwards the response from the upstream Kubernetes Service to the client.";
+          type = (
+            types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceResponseForwarding")
+          );
+        };
+        "scheme" = mkOption {
+          description = "Scheme defines the scheme to use for the request to the upstream Kubernetes Service.\nIt defaults to https when Kubernetes Service port is 443, http otherwise.";
+          type = types.nullOr types.str;
+        };
+        "serversTransport" = mkOption {
+          description = "ServersTransport defines the name of ServersTransport resource to use.\nIt allows to configure the transport between Traefik and your servers.\nCan only be used on a Kubernetes Service.";
+          type = types.nullOr types.str;
+        };
+        "sticky" = mkOption {
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceSticky");
+        };
+        "strategy" = mkOption {
+          description = "Strategy defines the load balancing strategy between the servers.\nSupported values are: wrr (Weighed round-robin), p2c (Power of two choices), hrw (Highest Random Weight), and leasttime (Least-Time).\nRoundRobin value is deprecated and supported for backward compatibility.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "wrr"
+                "p2c"
+                "hrw"
+                "leasttime"
+                "RoundRobin"
+              ]
+            )
+          );
+        };
+        "weight" = mkOption {
+          description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
+          type = types.nullOr (types.withMinimum 0 types.int);
+        };
+      };
+
+      config = {
+        "healthCheck" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "middlewares" = mkOverride 1002 null;
+        "namespace" = mkOverride 1002 null;
+        "nativeLB" = mkOverride 1002 null;
+        "nodePortLB" = mkOverride 1002 null;
+        "passHostHeader" = mkOverride 1002 null;
+        "passiveHealthCheck" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "responseForwarding" = mkOverride 1002 null;
+        "scheme" = mkOverride 1002 null;
+        "serversTransport" = mkOverride 1002 null;
+        "sticky" = mkOverride 1002 null;
+        "strategy" = mkOverride 1002 null;
+        "weight" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceHealthCheck" = {
+      options = {
+        "followRedirects" = mkOption {
+          description = "FollowRedirects defines whether redirects should be followed during the health check calls.\nDefault: true";
+          type = types.nullOr types.bool;
+        };
+        "headers" = mkOption {
+          description = "Headers defines custom headers to be sent to the health check endpoint.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "hostname" = mkOption {
+          description = "Hostname defines the value of hostname in the Host header of the health check request.";
+          type = types.nullOr types.str;
+        };
+        "interval" = mkOption {
+          description = "Interval defines the frequency of the health check calls for healthy targets.\nDefault: 30s";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "method" = mkOption {
+          description = "Method defines the healthcheck method.";
+          type = types.nullOr types.str;
+        };
+        "mode" = mkOption {
+          description = "Mode defines the health check mode.\nIf defined to grpc, will use the gRPC health check protocol to probe the server.\nDefault: http";
+          type = types.nullOr types.str;
+        };
+        "path" = mkOption {
+          description = "Path defines the server URL path for the health check endpoint.";
+          type = types.nullOr types.str;
+        };
+        "port" = mkOption {
+          description = "Port defines the server URL port for the health check endpoint.";
+          type = types.nullOr types.int;
+        };
+        "scheme" = mkOption {
+          description = "Scheme replaces the server URL scheme for the health check endpoint.";
+          type = types.nullOr types.str;
+        };
+        "status" = mkOption {
+          description = "Status defines the expected HTTP status code of the response to the health check request.";
+          type = types.nullOr types.int;
+        };
+        "timeout" = mkOption {
+          description = "Timeout defines the maximum duration Traefik will wait for a health check request before considering the server unhealthy.\nDefault: 5s";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "unhealthyInterval" = mkOption {
+          description = "UnhealthyInterval defines the frequency of the health check calls for unhealthy targets.\nWhen UnhealthyInterval is not defined, it defaults to the Interval value.\nDefault: 30s";
+          type = types.nullOr (types.either types.int types.str);
+        };
+      };
+
+      config = {
+        "followRedirects" = mkOverride 1002 null;
+        "headers" = mkOverride 1002 null;
+        "hostname" = mkOverride 1002 null;
+        "interval" = mkOverride 1002 null;
+        "method" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
+        "path" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "scheme" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+        "timeout" = mkOverride 1002 null;
+        "unhealthyInterval" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceMiddlewares" = {
+      options = {
+        "name" = mkOption {
+          description = "Name defines the name of the referenced Middleware resource.";
+          type = types.str;
+        };
+        "namespace" = mkOption {
+          description = "Namespace defines the namespace of the referenced Middleware resource.";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "namespace" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapResponseServicePassiveHealthCheck" = {
+      options = {
+        "failureWindow" = mkOption {
+          description = "FailureWindow defines the time window during which the failed attempts must occur for the server to be marked as unhealthy. It also defines for how long the server will be considered unhealthy.";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "maxFailedAttempts" = mkOption {
+          description = "MaxFailedAttempts is the number of consecutive failed attempts allowed within the failure window before marking the server as unhealthy.";
+          type = types.nullOr types.int;
+        };
+      };
+
+      config = {
+        "failureWindow" = mkOverride 1002 null;
+        "maxFailedAttempts" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceResponseForwarding" = {
+      options = {
+        "flushInterval" = mkOption {
+          description = "FlushInterval defines the interval, in milliseconds, in between flushes to the client while copying the response body.\nA negative value means to flush immediately after each write to the client.\nThis configuration is ignored when ReverseProxy recognizes a response as a streaming response;\nfor such responses, writes are flushed to the client immediately.\nDefault: 100ms";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "flushInterval" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceSticky" = {
+      options = {
+        "cookie" = mkOption {
+          description = "Cookie defines the sticky cookie configuration.";
+          type = (
+            types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceStickyCookie")
+          );
+        };
+      };
+
+      config = {
+        "cookie" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.MiddlewareSpecTapResponseServiceStickyCookie" = {
+      options = {
+        "domain" = mkOption {
+          description = "Domain defines the host to which the cookie will be sent.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#domaindomain-value";
+          type = types.nullOr types.str;
+        };
+        "httpOnly" = mkOption {
+          description = "HTTPOnly defines whether the cookie can be accessed by client-side APIs, such as JavaScript.";
+          type = types.nullOr types.bool;
+        };
+        "maxAge" = mkOption {
+          description = "MaxAge defines the number of seconds until the cookie expires.\nWhen set to a negative number, the cookie expires immediately.\nWhen set to zero, the cookie never expires.";
+          type = types.nullOr types.int;
+        };
+        "name" = mkOption {
+          description = "Name defines the Cookie name.";
+          type = types.nullOr types.str;
+        };
+        "path" = mkOption {
+          description = "Path defines the path that must exist in the requested URL for the browser to send the Cookie header.\nWhen not provided the cookie will be sent on every request to the domain.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#pathpath-value";
+          type = types.nullOr types.str;
+        };
+        "sameSite" = mkOption {
+          description = "SameSite defines the same site policy.\nMore info: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite";
+          type = (
+            types.nullOr (
+              types.enum [
+                "none"
+                "lax"
+                "strict"
+                "None"
+                "Lax"
+                "Strict"
+              ]
+            )
+          );
+        };
+        "secure" = mkOption {
+          description = "Secure defines whether the cookie can only be transmitted over an encrypted connection (i.e. HTTPS).";
+          type = types.nullOr types.bool;
+        };
+      };
+
+      config = {
+        "domain" = mkOverride 1002 null;
+        "httpOnly" = mkOverride 1002 null;
+        "maxAge" = mkOverride 1002 null;
+        "name" = mkOverride 1002 null;
+        "path" = mkOverride 1002 null;
+        "sameSite" = mkOverride 1002 null;
+        "secure" = mkOverride 1002 null;
+      };
+    };
     "traefik.io.v1alpha1.MiddlewareTCP" = {
       options = {
         "apiVersion" = mkOption {
@@ -7519,11 +8252,11 @@ with lib; let
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareTCPSpecInFlightConn");
         };
         "ipAllowList" = mkOption {
-          description = "IPAllowList defines the IPAllowList middleware configuration.\nThis middleware accepts/refuses connections based on the client IP.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/middlewares/ipallowlist/";
+          description = "IPAllowList defines the IPAllowList middleware configuration.\nThis middleware accepts/refuses connections based on the client IP.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/middlewares/ipallowlist/";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareTCPSpecIpAllowList");
         };
         "ipWhiteList" = mkOption {
-          description = "IPWhiteList defines the IPWhiteList middleware configuration.\nThis middleware accepts/refuses connections based on the client IP.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/middlewares/ipwhitelist/\n\nDeprecated: please use IPAllowList instead.";
+          description = "IPWhiteList defines the IPWhiteList middleware configuration.\nThis middleware accepts/refuses connections based on the client IP.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/middlewares/ipwhitelist/\n\nDeprecated: please use IPAllowList instead.";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.MiddlewareTCPSpecIpWhiteList");
         };
       };
@@ -7629,8 +8362,14 @@ with lib; let
           description = "MinVersion defines the minimum TLS version to use when contacting backend servers.";
           type = types.nullOr types.str;
         };
+        "peerCertSANs" = mkOption {
+          description = "PeerCertSANs defines the peer cert Subject Alternative Names used to match against SAN during the peer certificate verification.";
+          type = (
+            types.nullOr (types.listOf (submoduleOf "traefik.io.v1alpha1.ServersTransportSpecPeerCertSANs"))
+          );
+        };
         "peerCertURI" = mkOption {
-          description = "PeerCertURI defines the peer cert URI used to match against SAN URI during the peer certificate verification.";
+          description = "PeerCertURI defines the peer cert URI used to match against SAN URI during the peer certificate verification.\n\nDeprecated: PeerCertURI is deprecated, please use the PeerCertSANs option instead.";
           type = types.nullOr types.str;
         };
         "rootCAs" = mkOption {
@@ -7662,6 +8401,7 @@ with lib; let
         "maxIdleConnsPerHost" = mkOverride 1002 null;
         "maxVersion" = mkOverride 1002 null;
         "minVersion" = mkOverride 1002 null;
+        "peerCertSANs" = mkOverride 1002 null;
         "peerCertURI" = mkOverride 1002 null;
         "rootCAs" = mkOverride 1002 null;
         "rootCAsSecrets" = mkOverride 1002 null;
@@ -7687,8 +8427,16 @@ with lib; let
           description = "ReadIdleTimeout is the timeout after which a health check using ping frame will be carried out if no frame is received on the HTTP/2 connection.";
           type = types.nullOr (types.either types.int types.str);
         };
+        "readTimeout" = mkOption {
+          description = "ReadTimeout is the timeout for reading a response from the proxied server. The timeout between two successive read operations. The connection is closed if nothing is transmitted within this time.";
+          type = types.nullOr (types.either types.int types.str);
+        };
         "responseHeaderTimeout" = mkOption {
           description = "ResponseHeaderTimeout is the amount of time to wait for a server's response headers after fully writing the request (including its body, if any).";
+          type = types.nullOr (types.either types.int types.str);
+        };
+        "writeTimeout" = mkOption {
+          description = "WriteTimeout is the timeout for transmitting a request to the proxied server. The timeout between two successive write operations. The connection is closed if nothing is transmitted within this time.";
           type = types.nullOr (types.either types.int types.str);
         };
       };
@@ -7698,7 +8446,26 @@ with lib; let
         "idleConnTimeout" = mkOverride 1002 null;
         "pingTimeout" = mkOverride 1002 null;
         "readIdleTimeout" = mkOverride 1002 null;
+        "readTimeout" = mkOverride 1002 null;
         "responseHeaderTimeout" = mkOverride 1002 null;
+        "writeTimeout" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.ServersTransportSpecPeerCertSANs" = {
+      options = {
+        "type" = mkOption {
+          description = "SANType is the type of the Subject Alternative Name.";
+          type = types.nullOr types.str;
+        };
+        "value" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "type" = mkOverride 1002 null;
+        "value" = mkOverride 1002 null;
       };
     };
     "traefik.io.v1alpha1.ServersTransportSpecRootCAs" = {
@@ -7814,8 +8581,16 @@ with lib; let
           description = "InsecureSkipVerify disables TLS certificate verification.";
           type = types.nullOr types.bool;
         };
+        "peerCertSANs" = mkOption {
+          description = "PeerCertSANs defines the peer cert Subject Alternative Names used to match against SAN during the peer certificate verification.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "traefik.io.v1alpha1.ServersTransportTCPSpecTlsPeerCertSANs")
+            )
+          );
+        };
         "peerCertURI" = mkOption {
-          description = "MaxIdleConnsPerHost controls the maximum idle (keep-alive) to keep per-host.\nPeerCertURI defines the peer cert URI used to match against SAN URI during the peer certificate verification.";
+          description = "PeerCertURI defines the peer cert URI used to match against SAN URI during the peer certificate verification.\n\nDeprecated: PeerCertURI is deprecated, please use the PeerCertSANs option instead.";
           type = types.nullOr types.str;
         };
         "rootCAs" = mkOption {
@@ -7841,11 +8616,29 @@ with lib; let
       config = {
         "certificatesSecrets" = mkOverride 1002 null;
         "insecureSkipVerify" = mkOverride 1002 null;
+        "peerCertSANs" = mkOverride 1002 null;
         "peerCertURI" = mkOverride 1002 null;
         "rootCAs" = mkOverride 1002 null;
         "rootCAsSecrets" = mkOverride 1002 null;
         "serverName" = mkOverride 1002 null;
         "spiffe" = mkOverride 1002 null;
+      };
+    };
+    "traefik.io.v1alpha1.ServersTransportTCPSpecTlsPeerCertSANs" = {
+      options = {
+        "type" = mkOption {
+          description = "SANType is the type of the Subject Alternative Name.";
+          type = types.nullOr types.str;
+        };
+        "value" = mkOption {
+          description = "";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "type" = mkOverride 1002 null;
+        "value" = mkOverride 1002 null;
       };
     };
     "traefik.io.v1alpha1.ServersTransportTCPSpecTlsRootCAs" = {
@@ -7910,11 +8703,11 @@ with lib; let
     "traefik.io.v1alpha1.TLSOptionSpec" = {
       options = {
         "alpnProtocols" = mkOption {
-          description = "ALPNProtocols defines the list of supported application level protocols for the TLS handshake, in order of preference.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#alpn-protocols";
+          description = "ALPNProtocols defines the list of supported application level protocols for the TLS handshake, in order of preference.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#alpn-protocols";
           type = types.nullOr (types.listOf types.str);
         };
         "cipherSuites" = mkOption {
-          description = "CipherSuites defines the list of supported cipher suites for TLS versions up to TLS 1.2.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#cipher-suites";
+          description = "CipherSuites defines the list of supported cipher suites for TLS versions up to TLS 1.2.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#cipher-suites";
           type = types.nullOr (types.listOf types.str);
         };
         "clientAuth" = mkOption {
@@ -7922,7 +8715,7 @@ with lib; let
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.TLSOptionSpecClientAuth");
         };
         "curvePreferences" = mkOption {
-          description = "CurvePreferences defines the preferred elliptic curves.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#curve-preferences";
+          description = "CurvePreferences defines the preferred elliptic curves.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#curve-preferences";
           type = types.nullOr (types.listOf types.str);
         };
         "disableSessionTickets" = mkOption {
@@ -8254,7 +9047,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "sticky" = mkOption {
-          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.TraefikServiceSpecFailoverFallbackSticky");
         };
         "strategy" = mkOption {
@@ -8550,7 +9343,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "sticky" = mkOption {
-          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.TraefikServiceSpecFailoverServiceSticky");
         };
         "strategy" = mkOption {
@@ -8872,7 +9665,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "sticky" = mkOption {
-          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
           type = (
             types.nullOr (submoduleOf "traefik.io.v1alpha1.TraefikServiceSpecHighestRandomWeightServicesSticky")
           );
@@ -9187,7 +9980,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "sticky" = mkOption {
-          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.TraefikServiceSpecMirroringSticky");
         };
         "strategy" = mkOption {
@@ -9203,6 +9996,10 @@ with lib; let
               ]
             )
           );
+        };
+        "streamBody" = mkOption {
+          description = "StreamBody defines whether the request body is streamed to the mirrors while the main service reads it,\ninstead of being buffered in memory before reaching the main service.\nA mirror reading the body too slowly is aborted, so that it never slows the main request down.\nIt has no effect when MirrorBody is false, and cannot be used with MaxBodySize.\nDefault value is false.";
+          type = types.nullOr types.bool;
         };
         "weight" = mkOption {
           description = "Weight defines the weight and should only be specified when Name references a TraefikService object\n(and to be precise, one that embeds a Weighted Round Robin).";
@@ -9228,6 +10025,7 @@ with lib; let
         "serversTransport" = mkOverride 1002 null;
         "sticky" = mkOverride 1002 null;
         "strategy" = mkOverride 1002 null;
+        "streamBody" = mkOverride 1002 null;
         "weight" = mkOverride 1002 null;
       };
     };
@@ -9398,7 +10196,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "sticky" = mkOption {
-          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.TraefikServiceSpecMirroringMirrorsSticky");
         };
         "strategy" = mkOption {
@@ -9726,7 +10524,7 @@ with lib; let
           apply = attrsToList;
         };
         "sticky" = mkOption {
-          description = "Sticky defines whether sticky sessions are enabled.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/kubernetes/crd/http/traefikservice/#stickiness-and-load-balancing";
+          description = "Sticky defines whether sticky sessions are enabled.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/kubernetes/crd/http/traefikservice/#stickiness-and-load-balancing";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.TraefikServiceSpecWeightedSticky");
         };
       };
@@ -9816,7 +10614,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "sticky" = mkOption {
-          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
+          description = "Sticky defines the sticky sessions configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/service/#sticky-sessions";
           type = types.nullOr (submoduleOf "traefik.io.v1alpha1.TraefikServiceSpecWeightedServicesSticky");
         };
         "strategy" = mkOption {
@@ -10301,7 +11099,7 @@ in {
           default = {};
         };
         "traefik.io"."v1alpha1"."Middleware" = mkOption {
-          description = "Middleware is the CRD implementation of a Traefik Middleware.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/overview/";
+          description = "Middleware is the CRD implementation of a Traefik Middleware.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/overview/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.Middleware" "middlewares" "Middleware" "traefik.io"
@@ -10311,7 +11109,7 @@ in {
           default = {};
         };
         "traefik.io"."v1alpha1"."MiddlewareTCP" = mkOption {
-          description = "MiddlewareTCP is the CRD implementation of a Traefik TCP middleware.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/middlewares/overview/";
+          description = "MiddlewareTCP is the CRD implementation of a Traefik TCP middleware.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/middlewares/overview/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.MiddlewareTCP" "middlewaretcps" "MiddlewareTCP"
@@ -10322,7 +11120,7 @@ in {
           default = {};
         };
         "traefik.io"."v1alpha1"."ServersTransport" = mkOption {
-          description = "ServersTransport is the CRD implementation of a ServersTransport.\nIf no serversTransport is specified, the default@internal will be used.\nThe default@internal serversTransport is created from the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/serverstransport/";
+          description = "ServersTransport is the CRD implementation of a ServersTransport.\nIf no serversTransport is specified, the default@internal will be used.\nThe default@internal serversTransport is created from the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/serverstransport/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.ServersTransport" "serverstransports" "ServersTransport"
@@ -10333,7 +11131,7 @@ in {
           default = {};
         };
         "traefik.io"."v1alpha1"."ServersTransportTCP" = mkOption {
-          description = "ServersTransportTCP is the CRD implementation of a TCPServersTransport.\nIf no tcpServersTransport is specified, a default one named default@internal will be used.\nThe default@internal tcpServersTransport can be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/serverstransport/";
+          description = "ServersTransportTCP is the CRD implementation of a TCPServersTransport.\nIf no tcpServersTransport is specified, a default one named default@internal will be used.\nThe default@internal tcpServersTransport can be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/serverstransport/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.ServersTransportTCP" "serverstransporttcps"
@@ -10345,7 +11143,7 @@ in {
           default = {};
         };
         "traefik.io"."v1alpha1"."TLSOption" = mkOption {
-          description = "TLSOption is the CRD implementation of a Traefik TLS Option, allowing to configure some parameters of the TLS connection.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#tls-options";
+          description = "TLSOption is the CRD implementation of a Traefik TLS Option, allowing to configure some parameters of the TLS connection.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#tls-options";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.TLSOption" "tlsoptions" "TLSOption" "traefik.io"
@@ -10355,7 +11153,7 @@ in {
           default = {};
         };
         "traefik.io"."v1alpha1"."TLSStore" = mkOption {
-          description = "TLSStore is the CRD implementation of a Traefik TLS Store.\nFor the time being, only the TLSStore named default is supported.\nThis means that you cannot have two stores that are named default in different Kubernetes namespaces.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#certificates-stores";
+          description = "TLSStore is the CRD implementation of a Traefik TLS Store.\nFor the time being, only the TLSStore named default is supported.\nThis means that you cannot have two stores that are named default in different Kubernetes namespaces.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#certificates-stores";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.TLSStore" "tlsstores" "TLSStore" "traefik.io" "v1alpha1"
@@ -10364,7 +11162,7 @@ in {
           default = {};
         };
         "traefik.io"."v1alpha1"."TraefikService" = mkOption {
-          description = "TraefikService is the CRD implementation of a Traefik Service.\nTraefikService object allows to:\n- Apply weight to Services on load-balancing\n- Mirror traffic on services\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/kubernetes/crd/http/traefikservice/";
+          description = "TraefikService is the CRD implementation of a Traefik Service.\nTraefikService object allows to:\n- Apply weight to Services on load-balancing\n- Mirror traffic on services\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/kubernetes/crd/http/traefikservice/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.TraefikService" "traefikservices" "TraefikService"
@@ -10560,7 +11358,7 @@ in {
           default = {};
         };
         "middlewares" = mkOption {
-          description = "Middleware is the CRD implementation of a Traefik Middleware.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/middlewares/overview/";
+          description = "Middleware is the CRD implementation of a Traefik Middleware.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/middlewares/overview/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.Middleware" "middlewares" "Middleware" "traefik.io"
@@ -10570,7 +11368,7 @@ in {
           default = {};
         };
         "middlewareTCPs" = mkOption {
-          description = "MiddlewareTCP is the CRD implementation of a Traefik TCP middleware.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/middlewares/overview/";
+          description = "MiddlewareTCP is the CRD implementation of a Traefik TCP middleware.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/middlewares/overview/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.MiddlewareTCP" "middlewaretcps" "MiddlewareTCP"
@@ -10581,7 +11379,7 @@ in {
           default = {};
         };
         "serversTransports" = mkOption {
-          description = "ServersTransport is the CRD implementation of a ServersTransport.\nIf no serversTransport is specified, the default@internal will be used.\nThe default@internal serversTransport is created from the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/load-balancing/serverstransport/";
+          description = "ServersTransport is the CRD implementation of a ServersTransport.\nIf no serversTransport is specified, the default@internal will be used.\nThe default@internal serversTransport is created from the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/load-balancing/serverstransport/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.ServersTransport" "serverstransports" "ServersTransport"
@@ -10592,7 +11390,7 @@ in {
           default = {};
         };
         "serversTransportTCPs" = mkOption {
-          description = "ServersTransportTCP is the CRD implementation of a TCPServersTransport.\nIf no tcpServersTransport is specified, a default one named default@internal will be used.\nThe default@internal tcpServersTransport can be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/tcp/serverstransport/";
+          description = "ServersTransportTCP is the CRD implementation of a TCPServersTransport.\nIf no tcpServersTransport is specified, a default one named default@internal will be used.\nThe default@internal tcpServersTransport can be configured in the static configuration.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/tcp/serverstransport/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.ServersTransportTCP" "serverstransporttcps"
@@ -10604,7 +11402,7 @@ in {
           default = {};
         };
         "tlsOptions" = mkOption {
-          description = "TLSOption is the CRD implementation of a Traefik TLS Option, allowing to configure some parameters of the TLS connection.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#tls-options";
+          description = "TLSOption is the CRD implementation of a Traefik TLS Option, allowing to configure some parameters of the TLS connection.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#tls-options";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.TLSOption" "tlsoptions" "TLSOption" "traefik.io"
@@ -10614,7 +11412,7 @@ in {
           default = {};
         };
         "tlsStores" = mkOption {
-          description = "TLSStore is the CRD implementation of a Traefik TLS Store.\nFor the time being, only the TLSStore named default is supported.\nThis means that you cannot have two stores that are named default in different Kubernetes namespaces.\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#certificates-stores";
+          description = "TLSStore is the CRD implementation of a Traefik TLS Store.\nFor the time being, only the TLSStore named default is supported.\nThis means that you cannot have two stores that are named default in different Kubernetes namespaces.\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/http/tls/tls-certificates/#certificates-stores#certificates-stores";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.TLSStore" "tlsstores" "TLSStore" "traefik.io" "v1alpha1"
@@ -10623,7 +11421,7 @@ in {
           default = {};
         };
         "traefikServices" = mkOption {
-          description = "TraefikService is the CRD implementation of a Traefik Service.\nTraefikService object allows to:\n- Apply weight to Services on load-balancing\n- Mirror traffic on services\nMore info: https://doc.traefik.io/traefik/v3.7/reference/routing-configuration/kubernetes/crd/http/traefikservice/";
+          description = "TraefikService is the CRD implementation of a Traefik Service.\nTraefikService object allows to:\n- Apply weight to Services on load-balancing\n- Mirror traffic on services\nMore info: https://doc.traefik.io/traefik/v3.8/reference/routing-configuration/kubernetes/crd/http/traefikservice/";
           type = (
             types.attrsOf (
               submoduleForDefinition "traefik.io.v1alpha1.TraefikService" "traefikservices" "TraefikService"

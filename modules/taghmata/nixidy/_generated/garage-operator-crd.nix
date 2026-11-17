@@ -5589,7 +5589,7 @@ with lib; let
           type = types.listOf (submoduleOf "garage.rajsingh.info.v1beta1.GarageReferenceGrantSpecFrom");
         };
         "to" = mkOption {
-          description = "To lists the target resource kinds (and optionally specific names) that\nmay be referenced. If omitted, all GarageCluster and GarageBucket resources\nin this namespace are accessible. This preserves the original grant\nbehavior; newer target kinds such as GarageKey require an explicit entry.";
+          description = "To lists the target resource kinds (and optionally specific names) that\nmay be referenced. If omitted, all GarageCluster and GarageBucket resources\nin this namespace are accessible. This preserves the original grant\nbehavior; newer target kinds such as GarageKey require an explicit entry.\nAn omitted To list grants GarageCluster access with the default\nbucketScope (Referenced); add an explicit GarageCluster entry with\nbucketScope: Cluster to keep cluster-wide bucket reach.";
           type = (
             types.nullOr (
               coerceAttrsOfSubmodulesToListByKey "garage.rajsingh.info.v1beta1.GarageReferenceGrantSpecTo" "name"
@@ -5680,6 +5680,17 @@ with lib; let
     };
     "garage.rajsingh.info.v1beta1.GarageReferenceGrantSpecTo" = {
       options = {
+        "bucketScope" = mkOption {
+          description = "BucketScope limits which buckets of this GarageCluster resources from\nanother namespace may reach through the grant.\n  - Referenced (default): only buckets backed by a GarageBucket the\n    source could reference by bucketRef: in its own namespace, or in\n    another namespace through a GarageBucket grant. GarageKey allBuckets,\n    and bucketId/globalAlias that do not resolve to such a GarageBucket,\n    are denied. A GarageBucket may not adopt an untracked bucket through\n    spec.bucketId.\n  - Cluster: every bucket in the cluster, including buckets created\n    outside Kubernetes (the behavior before v0.10).\nSame-namespace references are not affected.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Referenced"
+                "Cluster"
+              ]
+            )
+          );
+        };
         "kind" = mkOption {
           description = "Kind is the target resource kind.";
           type = (
@@ -5697,6 +5708,7 @@ with lib; let
       };
 
       config = {
+        "bucketScope" = mkOverride 1002 null;
         "name" = mkOverride 1002 null;
       };
     };
@@ -9533,7 +9545,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "service" = mkOption {
-          description = "Service configures the Kubernetes Service for the cluster.";
+          description = "Service configures operator-managed Kubernetes Services for the cluster\n(API, gateway, headless, and public-endpoint RPC), including optional IP family fields.";
           type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecNetworkService");
         };
       };
@@ -9582,6 +9594,31 @@ with lib; let
           description = "ExternalTrafficPolicy for LoadBalancer/NodePort.";
           type = types.nullOr types.str;
         };
+        "ipFamilies" = mkOption {
+          description = "IPFamilies for every operator-managed Service, primary family first.\nUnset keeps the Kubernetes default (on create) or the last applied live\nvalue (on update). The primary family is immutable on an existing\nService (enforced by the Kubernetes API server); a rejected update\nsurfaces as a reconcile error.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                types.enum [
+                  "IPv4"
+                  "IPv6"
+                ]
+              )
+            )
+          );
+        };
+        "ipFamilyPolicy" = mkOption {
+          description = "IPFamilyPolicy for every operator-managed Service. Unset keeps the\nKubernetes default (on create) or the last applied live value (on\nupdate); set SingleStack to return to single-stack. Headless Services\n(ClusterIP=None) still accept these fields for dual-stack EndpointSlices.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "SingleStack"
+                "PreferDualStack"
+                "RequireDualStack"
+              ]
+            )
+          );
+        };
         "labels" = mkOption {
           description = "Labels to add to the service. Operator-managed labels take precedence on conflict.";
           type = types.nullOr (types.attrsOf types.str);
@@ -9611,6 +9648,8 @@ with lib; let
       config = {
         "annotations" = mkOverride 1002 null;
         "externalTrafficPolicy" = mkOverride 1002 null;
+        "ipFamilies" = mkOverride 1002 null;
+        "ipFamilyPolicy" = mkOverride 1002 null;
         "labels" = mkOverride 1002 null;
         "loadBalancerIP" = mkOverride 1002 null;
         "loadBalancerSourceRanges" = mkOverride 1002 null;
