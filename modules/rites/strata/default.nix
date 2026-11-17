@@ -57,6 +57,8 @@
       gpus_asked = true;
     });
   in {
+    imports = [self.nixosModules.impermanence];
+
     options.services.imperium.strata = {
       enable = mkEnableOption "the Strata CUDA inference user service";
       user = mkOption {
@@ -169,6 +171,19 @@
     };
 
     config = mkIf cfg.enable {
+      # What must survive a reboot on a machine with an ephemeral root
+      # (rites/impermanence.nix): upstream's setup keeps its data_dir setting in
+      # .config/strata and re-prompts for it when that is gone, and the engine
+      # log, settings and the linked config are in .local/state/strata.
+      #
+      # The model data is not listed. It is tens of gigabytes under dataDir,
+      # which by default sits in the user's own ~/models; whoever owns that
+      # directory keeps it.
+      services.imperium.impermanence.users.${cfg.user}.directories = [
+        ".config/strata"
+        ".local/state/strata"
+      ];
+
       assertions = [
         {
           assertion = (cfg.family == "coder") == (cfg.quant == "IQ1_M");

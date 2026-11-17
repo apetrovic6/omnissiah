@@ -1,6 +1,9 @@
 # What survives a reboot in apetrovic's home on machines with an ephemeral
 # root (modules/rites/impermanence.nix). Paths are relative to the home
 # directory. Nothing here applies on a machine without that module.
+#
+# Only what is personal. State that belongs to a module is declared by that
+# module: Strata's and the AWS CLI's, for example.
 {
   lib,
   options,
@@ -22,12 +25,6 @@
         ".config/herdr"
         ".config/pangolin"
         ".config/secretspec"
-        # Strata keeps data_dir here; without this the model path is
-        # lost on reboot and setup.sh re-prompts for it.
-        ".config/strata"
-        # The Nix-built Strata's engine log and server state
-        # (modules/rites/strata).
-        ".local/state/strata"
         ".config/Bitwarden"
         # ".config/noctalia"
         ".config/sabnzbd-tui"
@@ -75,16 +72,6 @@
         }
         {
           directory = ".ssh";
-          mode = "0700";
-        }
-        # AWS SSO tokens and assumed-role credential caches. ~/.aws/config
-        # itself is a symlink into /run, rebuilt every boot (awscli.nix).
-        {
-          directory = ".aws/sso";
-          mode = "0700";
-        }
-        {
-          directory = ".aws/cli";
           mode = "0700";
         }
         {

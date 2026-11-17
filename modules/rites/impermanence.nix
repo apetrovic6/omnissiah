@@ -5,7 +5,9 @@
 #
 #   - what persists: `directories` and `files` for the system, and
 #     `users.<name>.{directories,files}` relative to a user's home. Any module
-#     may add to these, so a service can declare its own state next to itself.
+#     may import this one and add to these, so a service declares its own
+#     state next to itself (rites/strata, rites/awscli, rites/proaudio). The
+#     entries do nothing on a machine where impermanence is not enabled.
 #   - how the root is reset: `rollback` restores a blank btrfs snapshot over the
 #     root subvolume in the initrd, after the encrypted device is unlocked.
 #
@@ -26,6 +28,11 @@
     # (directory/file plus mode, user, group, parentDirectory).
     entries = types.listOf (types.either types.str types.attrs);
   in {
+    # A module with a key is loaded once however often it is imported, so any
+    # module that keeps state can import this one and declare its paths.
+    # Without the key a second import would declare every option twice.
+    key = "omnissiah#nixosModules.impermanence";
+
     imports = [
       self.inputs.impermanence.nixosModules.impermanence
     ];

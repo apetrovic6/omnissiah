@@ -84,7 +84,7 @@ enables nothing. Three exports are different:
 |---|---|
 | `noosphere` | Only the `noosphere.*` options (domain, SSO, age key) |
 | `taghmata` | The RKE2 server/agent wrappers, the node token and the registry cache |
-| `impermanence` | An ephemeral root: `services.imperium.impermanence` takes the system and per-user paths that survive a reboot, from any module, and resets the root from a blank btrfs snapshot in the initrd. apetrovic's own list is `users/apetrovic/persistence.nix` |
+| `impermanence` | An ephemeral root: `services.imperium.impermanence` takes the system and per-user paths that survive a reboot and resets the root from a blank btrfs snapshot in the initrd. It can be imported from several modules at once, so a module that keeps state imports it and declares its own paths (`strata`, `awscli`, `proaudio`). apetrovic's personal list is `users/apetrovic/persistence.nix` |
 | `workstation-host` | What phalanx and enginseer share as hosts: encrypted btrfs root, secure boot, impermanence, NVIDIA settings, NAS shares. The desktop and tooling come from the `workstation` role |
 | `taghmata-node` | What the bare-metal cluster machines share as hosts: static address, CI runner. `machines/{terra,luna,sol}` set only what differs; their disk layout is `taghmata/_node-disko.nix` |
 | `reliquary` | Generators for secrets that only the cluster consumes. Imported by the `taghmata` servers, so `clan vars generate terra` creates them |
@@ -186,10 +186,11 @@ curl http://127.0.0.1:8000/v1/models
 ```
 
 The generated config is linked into `~/.local/state/strata`, where the server
-also writes settings and logs. The existing workstation persistence
-(`users/apetrovic/persistence.nix`) retains
-`models`, `.config/strata` and `.local/state/strata` for `apetrovic`; other users
-or custom paths need their own persistence configuration. To update the
+also writes settings and logs. On a machine with an ephemeral root the module
+persists `.config/strata` and `.local/state/strata` for the configured user.
+The model data is not the module's to keep: `models` is persisted for
+`apetrovic` by `users/apetrovic/persistence.nix`, and another user or a custom
+`dataDir` needs its own entry. To update the
 engine, change the Strata input and its matching llama.cpp pin together.
 
 ## Cluster applications

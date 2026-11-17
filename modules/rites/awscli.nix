@@ -23,9 +23,9 @@
 # enters the Nix store, and the stitched file lives on /run (tmpfs), rebuilt on
 # every boot and switch, so it needs no impermanence entry. ~/.aws/config is
 # read-only as a result: `aws configure …` cannot write to it. The SSO token
-# and assumed-role caches (~/.aws/sso, ~/.aws/cli) are persisted in
-# users/apetrovic/persistence.nix.
-{...}: {
+# and assumed-role caches (~/.aws/sso, ~/.aws/cli) are persisted by this module
+# on machines with an ephemeral root (rites/impermanence.nix).
+{self, ...}: {
   flake.nixosModules.awscli = {
     config,
     lib,
@@ -156,6 +156,8 @@
       '';
     };
   in {
+    imports = [self.nixosModules.impermanence];
+
     options.services.imperium.awscli = {
       enable = mkEnableOption "the AWS CLI with profiles from clan vars";
 
@@ -180,6 +182,19 @@
     };
 
     config = mkIf cfg.enable {
+      # The SSO token and assumed-role credential caches. ~/.aws/config itself
+      # is a symlink into /run, rebuilt every boot, and needs no entry.
+      services.imperium.impermanence.users.${cfg.user}.directories = [
+        {
+          directory = ".aws/sso";
+          mode = "0700";
+        }
+        {
+          directory = ".aws/cli";
+          mode = "0700";
+        }
+      ];
+
       assertions =
         lib.mapAttrsToList (name: _: {
           assertion = builtins.match "[a-z0-9][a-z0-9-]*" name != null;
