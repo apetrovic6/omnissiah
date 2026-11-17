@@ -60,7 +60,7 @@
   ];
 
   # CRD imports are now auto-discovered by the flake-module
-  # nixidy.target is configured in ../charts.nix via noosphere.nixidy.envs.prod
+  # nixidy.target is set in ../taghmata.nix (nixidy.envs.prod)
 
   nixidy.defaults.syncPolicy.autoSync = {
     enable = true;
