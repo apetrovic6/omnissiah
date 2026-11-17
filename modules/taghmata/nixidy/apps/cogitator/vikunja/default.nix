@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.vikunja = {
     charts,
     config,
@@ -194,5 +194,17 @@
       cluster = "backup";
       secret.namespace = "vikunja";
     };
+  };
+
+  perSystem = {pkgs, ...}: {
+    nixidy.charts."go-vikunja/vikunja" = pkgs.runCommand "vikunja-chart" {} ''
+      cp -r ${self.inputs.go-vikunja} $out
+      chmod -R u+w $out
+      mkdir -p $out/charts
+      tar -xzf ${pkgs.fetchurl {
+        url = "https://bjw-s-labs.github.io/helm-charts/library/common-1.5.1.tgz";
+        hash = "sha256-9kUXJmThPvJijV6YhhJQi2s428qkJd6WaWcstz1uNCY=";
+      }} -C $out/charts
+    '';
   };
 }

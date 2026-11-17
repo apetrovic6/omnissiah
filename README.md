@@ -120,8 +120,31 @@ built by CI without being listed anywhere.
 
 ## Cluster applications
 
-The applications on taghmata are nixidy modules under
-`modules/taghmata/nixidy/_env/apps`, listed in `_env/prod.nix`.
+The applications on taghmata are under `modules/taghmata/nixidy/apps`. Each is
+a flake-parts module that declares itself, so adding a file adds an
+application:
+
+```nix
+{self, ...}: {
+  nixidy.envs.prod.apps.example = {charts, config, ...}: {
+    applications.example = { ... };       # an ordinary nixidy module
+  };
+
+  # Only if the application needs them: a chart nixhelm does not have, and
+  # typed options for the chart's custom resources.
+  perSystem = {pkgs, ...}: {
+    nixidy.charts."vendor/example" = ./chart;
+    nixidy.crds.definitions.example.chart = ./chart;
+  };
+}
+```
+
+`default.nix` is the entry of an application's directory; files it imports
+are prefixed with `_` so they are not loaded as flake-parts modules.
+`nixidy.envs.prod.disabledApps = ["example"]` leaves one out. The flake-parts
+support itself is `nixidy/flake-module.nix`, and what is specific to this
+cluster is `nixidy/taghmata.nix`.
+
 They are grouped like the noosphere domains, with three groups that exist
 only in the cluster: `enginarium` (what the cluster runs on), `datavault`
 (storage) and `augur` (observability), plus `cogitator` (everyday tools) and
@@ -135,8 +158,9 @@ Besides nixidy's own options, an application can use:
 | `garage.keys.<name>` (beside `applications`, not inside it) | An S3 key and its buckets on `garage-main` or `garage-backup`, with the credentials reflected into the application's namespace |
 | `templates.cnpg-database-cluster`, `templates.garageObjectStore`, `templates.rust-service` | A PostgreSQL cluster, its backup object store, a rust-app-template service |
 
-`nixidy build .#prod` renders the manifests; what ArgoCD applies is the
-rendered copy committed under `nixidy/manifests/prod`.
+`nixidy switch .#prod` renders the manifests into
+`modules/noosphere/taghmata/nixidy/manifests/prod`; what ArgoCD applies is that
+committed copy. `nix run .#gen-crd` regenerates the CRD option modules.
 
 ## Addresses and secrets paths
 

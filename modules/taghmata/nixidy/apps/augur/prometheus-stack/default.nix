@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.prometheus-stack = {
     config,
     charts,
@@ -19,7 +19,7 @@
     # from the public side it would be the VPS. ugalabugala.org answers 192.168.1.105
     # from 192.168.1.105 (cerberus, Caddy -> ntfy) and 152.53.34.16 from a public
     # resolver, so the cluster side pins the zone in CoreDNS (see applications.coredns-
-    # config in _env/prod.nix) instead of leaning on the nodes' resolv.conf.
+    # config in apps/enginarium/rke2-config) instead of leaning on the nodes' resolv.conf.
     labDomain = lib.removeSuffix "\n" (builtins.readFile (vars.shared "caddy-env" "domain"));
     ntfyUrl = "https://ntfy.${labDomain}/";
     ntfyTopic = "homelab-alerts";
@@ -520,6 +520,13 @@
           category = "monitoring";
         };
       };
+    };
+  };
+
+  perSystem = {system, ...}: {
+    nixidy.crds.definitions = {
+      kube-prometheus-stack.chart = self.inputs.nixhelm.chartsDerivations.${system}.prometheus-community.kube-prometheus-stack;
+      prometheus.chart = self.inputs.nixhelm.chartsDerivations.${system}.prometheus-community.prometheus;
     };
   };
 }

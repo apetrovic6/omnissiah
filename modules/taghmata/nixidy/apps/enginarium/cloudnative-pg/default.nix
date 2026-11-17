@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.cloudnative-pg = {
     charts,
     pkgs,
@@ -59,6 +59,16 @@
           };
         };
       };
+    };
+  };
+
+  perSystem = {system, ...}: {
+    nixidy.crds.definitions = {
+      cloudnativepg = {
+        chart = self.inputs.nixhelm.chartsDerivations.${system}.cloudnative-pg.cloudnative-pg;
+        outputName = "cloudnativepg-crd.nix";
+      };
+      barman-cloud.chart = self.inputs.nixhelm.chartsDerivations.${system}.cloudnative-pg.plugin-barman-cloud;
     };
   };
 }

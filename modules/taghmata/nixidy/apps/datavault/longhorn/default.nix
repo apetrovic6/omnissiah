@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.longhorn = {
     charts,
     config,
@@ -158,6 +158,13 @@
           fsType = "ext4";
         };
       };
+    };
+  };
+
+  perSystem = {system, ...}: {
+    nixidy.crds.definitions.longhorn = {
+      chart = self.inputs.nixhelm.chartsDerivations.${system}.longhorn.longhorn;
+      namePrefix = "longhorn";
     };
   };
 }

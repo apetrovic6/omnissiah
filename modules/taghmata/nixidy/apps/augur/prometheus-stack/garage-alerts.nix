@@ -8,7 +8,7 @@
     # what every expression below groups on.
     sel = "garage_cluster=~\"garage-main|garage-backup\"";
 
-    # Census series (apps/datavault/garage-operator/block-census.nix) restricted to data
+    # Census series (apps/datavault/garage-operator/_block-census.nix) restricted to data
     # directories whose PV is still Bound. The scans glob the NAS and the node
     # disks, so a directory left behind by a deleted volume would otherwise drag
     # the minimum down and page forever. `* on (persistentvolume) group_left ()

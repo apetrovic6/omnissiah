@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.garage-operator = {
     charts,
     config,
@@ -68,7 +68,7 @@
           };
 
           # Deliberately left off. The chart's bundled rule set covers the same ground as
-          # resources.prometheusRules.garage in _env/apps/augur/prometheus-stack/garage-alerts.nix
+          # resources.prometheusRules.garage in apps/augur/prometheus-stack/garage-alerts.nix
           # -- and three of its names (GarageClusterUnhealthy, GarageClusterUnavailable,
           # GarageBlockResyncErrors) are identical to rules written here, with different
           # expressions. Enabling both would emit two different alerts with the same name
@@ -98,5 +98,12 @@
         ];
       };
     };
+  };
+
+  perSystem = {pkgs, ...}: {
+    nixidy.charts."rajsinghtech/garage-operator" = "${self.inputs.garage-operator}/charts/garage-operator";
+    nixidy.crds.definitions.garage-operator.chart = pkgs.runCommand "garage-operator-chart" {} ''
+      cp -r ${self.inputs.garage-operator}/charts/garage-operator $out
+    '';
   };
 }

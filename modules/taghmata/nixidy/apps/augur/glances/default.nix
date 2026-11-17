@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.glances = {
     config,
     lib,
@@ -158,5 +158,9 @@
         };
       };
     };
+  };
+
+  perSystem = {...}: {
+    nixidy.charts."lukasdietrich/glance-k8s" = "${self.inputs.glance-k8s}/charts/glance-k8s";
   };
 }

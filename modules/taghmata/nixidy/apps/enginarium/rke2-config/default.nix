@@ -1,7 +1,7 @@
 # Configuration of the charts RKE2 itself installs (Calico, CoreDNS, Multus,
 # Traefik), as HelmChartConfig objects that RKE2's helm controller merges into
 # its own releases.
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.rke2-config = {
     config,
     cartographa,
@@ -201,5 +201,10 @@
         ''
       ];
     };
+  };
+
+  perSystem = {system, ...}: {
+    # Traefik is installed by RKE2; only its CRD options are needed here.
+    nixidy.crds.definitions.traefik.chart = self.inputs.nixhelm.chartsDerivations.${system}.traefik.traefik;
   };
 }

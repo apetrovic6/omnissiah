@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.ncps = {
     charts,
     lib,
@@ -364,5 +364,46 @@
         secretAccessKeyKey = null;
       };
     };
+  };
+
+  perSystem = {
+    pkgs,
+    system,
+    ...
+  }: let
+    # nixhelm pins the ncps chart at v0.9.4, which predates the fix for
+    # opaque upstream NAR URLs (kalbasit/ncps#1331, first in v0.10.0-rc10).
+    # Cachix upstreams serve `nar/<uuid>.nar.zst` paths that v0.9.4 rejects
+    # with HTTP 500 "invalid nar hash", which nix treats as a hard error
+    # and refuses to fall through to the next substituter. Pull the fixed
+    # chart directly until nixhelm catches up (or v0.10.0 goes stable).
+    ncps-chart = pkgs.stdenv.mkDerivation {
+      name = "helm-chart-ghcr.io-kalbasit-helm-ncps-v0.10.0-rc18";
+      nativeBuildInputs = [pkgs.cacert];
+
+      phases = ["installPhase"];
+      installPhase = ''
+        export HELM_CACHE_HOME="$TMP/.nix-helm-build-cache"
+        out_dir="$TMP/temp-chart-output"
+        mkdir -p "$out_dir"
+
+        ${pkgs.kubernetes-helm}/bin/helm pull \
+          --version v0.10.0-rc18 \
+          oci://ghcr.io/kalbasit/helm/ncps \
+          -d "$out_dir" \
+          --untar
+
+        mv "$out_dir/ncps" "$out"
+      '';
+
+      outputHashMode = "recursive";
+      outputHashAlgo = "sha256";
+      outputHash = "sha256-UrRli9J8vorLAahyvctzxue06nHEklZYUH5p8/cqFo0=";
+    };
+  in {
+    # Replaces nixhelm's kalbasit entry, so the application gets the fixed chart.
+    nixidy.charts."kalbasit/ncps" = ncps-chart;
+    # The CRD options are still generated from nixhelm's v0.9.4 chart.
+    nixidy.crds.definitions.ncps.chart = self.inputs.nixhelm.chartsDerivations.${system}.kalbasit.ncps;
   };
 }

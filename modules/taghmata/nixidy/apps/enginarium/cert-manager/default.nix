@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.cert-manager = {
     config,
     charts,
@@ -152,5 +152,9 @@
         };
       };
     };
+  };
+
+  perSystem = {system, ...}: {
+    nixidy.crds.definitions.cert-manager.chart = self.inputs.nixhelm.chartsDerivations.${system}.jetstack.cert-manager;
   };
 }

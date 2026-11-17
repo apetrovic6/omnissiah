@@ -9,7 +9,7 @@
 #   https://ntfy.{$LAB_DOMAIN} (ugalabugala.org) -> Caddy on this host -> :102.
 #   Technitium on this host is primary for the zone, so a pod in the cluster asks
 #   CoreDNS, CoreDNS forwards to its resolv.conf (192.168.1.105, see
-#   nixidy/_env/prod.nix `coredns-config`), and gets 192.168.1.105. A public
+#   nixidy/apps/enginarium/rke2-config `coredns-config`), and gets 192.168.1.105. A public
 #   resolver answers 152.53.34.16 (the VPS in front of Pangolin) for the same name.
 #   Both are "correct"; only the LAN answer reaches ntfy, which is why the cluster
 #   side pins the zone to 192.168.1.105 in CoreDNS rather than trusting the node's

@@ -13,7 +13,7 @@
 # Every machine that enables this module gets the generator, so the clan var is
 # deployed to all of them. The key pair is minted by the var and IMPORTED into
 # Garage via `GarageKey.spec.importKey.secretRef` (see
-# nixidy/_env/apps/datavault/garage-operator/cluster-main/default.nix), so the machines
+# nixidy/apps/datavault/garage-operator/_cluster-main/default.nix), so the machines
 # and Garage are fed from one source and nothing is copied by hand.
 #
 # Two outputs:

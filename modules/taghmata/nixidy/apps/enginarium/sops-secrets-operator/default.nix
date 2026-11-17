@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.sops-secrets-operator = {charts, ...}: {
     applications.sops-secrets = {
       output.path = "./sops-secrets-operator";
@@ -26,5 +26,9 @@
         };
       };
     };
+  };
+
+  perSystem = {system, ...}: {
+    nixidy.crds.definitions.sops-secrets-operator.chart = self.inputs.nixhelm.chartsDerivations.${system}.isindir.sops-secrets-operator;
   };
 }

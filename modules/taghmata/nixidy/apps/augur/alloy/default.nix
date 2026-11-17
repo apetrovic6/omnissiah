@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.alloy = {
     config,
     charts,
@@ -105,5 +105,9 @@
         };
       };
     };
+  };
+
+  perSystem = {system, ...}: {
+    nixidy.crds.definitions.alloy-operator.chart = self.inputs.nixhelm.chartsDerivations.${system}.grafana.alloy-operator;
   };
 }

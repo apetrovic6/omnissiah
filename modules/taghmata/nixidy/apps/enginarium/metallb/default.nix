@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.metallb = {
     charts,
     cartographa,
@@ -62,5 +62,9 @@
         };
       };
     };
+  };
+
+  perSystem = {system, ...}: {
+    nixidy.crds.definitions.metallb.chart = self.inputs.nixhelm.chartsDerivations.${system}.metallb.metallb;
   };
 }

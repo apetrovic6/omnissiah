@@ -1,4 +1,4 @@
-{...}: {
+{self, ...}: {
   nixidy.envs.prod.apps.woodpecker-ci = {
     config,
     charts,
@@ -246,5 +246,9 @@
       cluster = "backup";
       secret.namespace = "woodpecker";
     };
+  };
+
+  perSystem = {...}: {
+    nixidy.charts."woodpecker-ci/woodpecker" = "${self.inputs.woodpecker-ci}/charts/woodpecker";
   };
 }
