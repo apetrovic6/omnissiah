@@ -1,6 +1,5 @@
-# What the nixidy flake module (./flake-module.nix) is fed: the charts that
-# CRD types are generated from, the charts that are not in nixhelm, and the
-# environments.
+# Charts for the taghmata applications: the ones CRD options are generated
+# from, and the ones nixhelm does not have or pins unusably.
 {self, ...}: {
   perSystem = {
     pkgs,
@@ -52,10 +51,7 @@
       outputHash = "sha256-UrRli9J8vorLAahyvctzxue06nHEklZYUH5p8/cqFo0=";
     };
   in {
-    noosphere.nixidy = {
-      repository = "https://github.com/apetrovic6/omnissiah.git";
-      branch = "master";
-
+    nixidy = {
       crds.definitions = {
         cert-manager.chart = nixhelmCharts.jetstack.cert-manager;
         metallb.chart = nixhelmCharts.metallb.metallb;
@@ -83,8 +79,8 @@
         '';
       };
 
-      # Extra charts beyond nixhelm
-      extraCharts = with self.inputs; {
+      # Charts beyond nixhelm
+      charts = with self.inputs; {
         "kubernetes-csi/csi-driver-nfs" = csi-driver-nfs-chart;
         # Overrides the nixhelm v0.9.4 pin — see ncps-chart above.
         "kalbasit/ncps" = ncps-chart;
@@ -101,13 +97,6 @@
             hash = "sha256-9kUXJmThPvJijV6YhhJQi2s428qkJd6WaWcstz1uNCY=";
           }} -C $out/charts
         '';
-      };
-
-      # Environments
-      envs.prod = {
-        enable = true;
-        module = ./_env/prod.nix;
-        rootPath = "modules/noosphere/taghmata/nixidy/manifests/prod";
       };
     };
   };
