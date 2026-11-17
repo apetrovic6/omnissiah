@@ -165,6 +165,11 @@ files, when that copy is not what the sources render: after a flake update
 that moved a chart, or a change nobody rendered. `nix run .#gen-crd`
 regenerates the CRD option modules.
 
+After each scheduled input update, the Machines workflow re-renders and opens
+a pull request titled "render manifests", one commit per application
+(`rituals/render-manifests-pr.sh`). Merging it is the deploy. The script also
+runs by hand; `--no-push` only makes the commits.
+
 ## Addresses and secrets paths
 
 No module writes an IP address or a `../../vars/...` path itself. Both come
