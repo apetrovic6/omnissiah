@@ -16,6 +16,17 @@
     objectStoreName = "ncps-object-store";
     signingKeySecret = "ncps-signing-key";
     uploadAuth = "ncps-upload-auth";
+
+    # CNPG's generated connection string, for every ncps container; see the
+    # overrides near the end. mkForce because the chart already defines
+    # CACHE_DATABASE_URL (pointing at its own secret's `database-url` key);
+    # without it the two definitions conflict rather than the override winning.
+    databaseURL = lib.mkForce {
+      valueFrom.secretKeyRef = {
+        name = "${db-cluster-name}-app";
+        key = "uri";
+      };
+    };
   in {
     imports = [
       ../../../_modules/templates/database-template.nix
@@ -273,19 +284,12 @@
       # The chart only ever reads the connection string from CACHE_DATABASE_URL,
       # so pointing that env at CNPG's generated secret is enough — no chart
       # `existingSecret` is involved. `migration.mode` defaults to
-      # "initContainer", so the init container needs the same value; if fsck or
-      # the migrate-*-job hooks are ever enabled, they need it too.
-      resources.statefulSets.ncps.spec.template.spec = let
-        # mkForce because the chart already defines CACHE_DATABASE_URL (pointing
-        # at its own secret's `database-url` key); without it the two definitions
-        # conflict rather than the override winning.
-        databaseURL = lib.mkForce {
-          valueFrom.secretKeyRef = {
-            name = "${db-cluster-name}-app";
-            key = "uri";
-          };
-        };
-      in {
+      # "initContainer", so the init container needs the same value. Every other
+      # pod the chart renders needs it too: the fsck CronJob went without it and
+      # failed every night on `password authentication failed for user "app"`,
+      # because the chart's own `ncps` secret holds stale credentials. Any
+      # migrate-*-job hook enabled later needs the same override.
+      resources.statefulSets.ncps.spec.template.spec = {
         containers.ncps.env.CACHE_DATABASE_URL = databaseURL;
         # The migration init container reads DATABASE_URL on v0.9.4; upstream has
         # since renamed it to CACHE_DATABASE_URL to match the
@@ -296,6 +300,8 @@
           CACHE_DATABASE_URL = databaseURL;
         };
       };
+
+      resources.cronJobs.ncps-fsck.spec.jobTemplate.spec.template.spec.containers.fsck.env.CACHE_DATABASE_URL = databaseURL;
 
       templates.cnpg-database-cluster.${db-cluster-instance} = {
         inherit namespace;
