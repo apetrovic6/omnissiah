@@ -1,12 +1,12 @@
 # Forgejo repositories and their push mirrors.
 #
-#   scriptorium.repos.zellij = {
-#     description = "Zellij wrapper flake";
-#     mirrors.github.remote_address = "https://github.com/apetrovic6/zellij";
+#   scriptorium.repos.sabnzbd-tui = {
+#     description = "TUI for SABnzbd";
+#     mirrors.github.remote_address = "https://github.com/apetrovic6/sabnzbd-tui";
 #   };
 #
-# declares `forgejo_repository.zellij` and
-# `forgejo_repository_push_mirror.zellij-github`. Every repository gets the same
+# declares `forgejo_repository.sabnzbd-tui` and
+# `forgejo_repository_push_mirror.sabnzbd-tui-github`. Every repository gets the same
 # settings: public, with pull requests, actions and issues.
 {
   config,
