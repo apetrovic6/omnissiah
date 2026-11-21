@@ -249,7 +249,7 @@
             harborCoreSecret = "harbor-core-secret";
           in {
             # OIDC config. The secret is rendered and owned by OpenTofu
-            # (modules/taghmata/_tofunix/pocket-id/default.nix) so the
+            # (modules/taghmata/_tofunix/pharos/clients.nix) so the
             # Pocket ID client secret is never copied by hand.
             extraEnvVars = [
               {

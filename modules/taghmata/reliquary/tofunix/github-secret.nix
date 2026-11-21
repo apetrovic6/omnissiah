@@ -1,5 +1,5 @@
 # The GitHub token tofunix uses to create mirror repositories under github.com/apetrovic6 and
-# to push to them (_tofunix/projects: forgejo push mirrors over HTTPS). A fine-grained token
+# to push to them (_tofunix/scriptorium: forgejo push mirrors over HTTPS). A fine-grained token
 # for the user's own repositories, with Administration: read/write (create repos) and
 # Contents: read/write (push). Prompted once; stored sops-encrypted like the other tofunix
 # secrets.
