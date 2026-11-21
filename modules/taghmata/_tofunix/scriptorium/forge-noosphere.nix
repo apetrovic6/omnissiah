@@ -21,7 +21,7 @@
     sabnzbd-tui = {
       description = "TUI for SABnzbd";
       mirrors.github.remote_address = "https://github.com/apetrovic6/sabnzbd-tui";
-      mirrors.codeberg.remote_address = "https://codeberg.org/apetrovic/sabnzbd-tui";
+      mirrorTo = ["codeberg"];
     };
 
     # A TUI that scans the Clan fleet (reachability, drift, deploys). A

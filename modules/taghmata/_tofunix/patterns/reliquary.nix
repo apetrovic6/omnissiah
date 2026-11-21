@@ -40,7 +40,10 @@ in {
     # Interpolating the path copies that one file to the store (cartographa/_vars.nix).
     data.sops_file =
       lib.mapAttrs (_: relic: {
-        source_file = "${vars.shared relic.generator relic.file}";
+        source_file =
+          if builtins.pathExists (vars.shared relic.generator relic.file)
+          then "${vars.shared relic.generator relic.file}"
+          else throw "tofunix: the clan var `${relic.generator}` does not exist yet; run `clan vars generate <a taghmata machine> --generator ${relic.generator}` and commit vars/";
         input_type = "yaml";
       })
       config.reliquary;

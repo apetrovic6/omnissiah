@@ -263,7 +263,7 @@ the state in the `opentofu` Garage bucket.
 | Option | Declares |
 |---|---|
 | `reliquary.<name>.generator` | A clan var decrypted by the sops provider; `relic "<name>" "<key>"` is one of its values |
-| `scriptorium.repos.<name>` | A Forgejo repository, with `mirrors.<where>` for push mirrors |
+| `scriptorium.repos.<name>` | A Forgejo repository; `mirrorTo = ["codeberg"]` pushes it to a `scriptorium.remotes` host with that account's token, `mirrors.<where>` is a mirror written out by hand |
 | `scriptorium.robots.<name>` | A Harbor robot that pushes and pulls |
 | `pharos.clients.<name>` | A Pocket ID client, and with `secret.namespace` the Kubernetes Secret carrying its credentials |
 

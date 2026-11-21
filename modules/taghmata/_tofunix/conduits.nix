@@ -12,8 +12,25 @@ in {
     forgejo_secrets.generator = "tofunix-forgejo-secret";
     forgejo_nix_secrets.generator = "tofunix-forgejo-nix-secret";
     github_secrets.generator = "tofunix-github-secret";
+    codeberg_secrets.generator = "tofunix-codeberg-secret";
     secrets.generator = "tofunix-harbor-secrets";
     pocket_api_key.generator = "tofunix-pocketid-secret";
+  };
+
+  # Where the cluster forge mirrors to, with one account token per host
+  # (./patterns/repos.nix: `mirrorTo`).
+  scriptorium.remotes = {
+    github = {
+      url = "https://github.com/apetrovic6";
+      username = "apetrovic6";
+      token = relic "github_secrets" "github_token";
+    };
+    # No provider below: the Codeberg repositories are created by hand.
+    codeberg = {
+      url = "https://codeberg.org/apetrovic";
+      username = "apetrovic";
+      token = relic "codeberg_secrets" "codeberg_token";
+    };
   };
 
   provider = {
