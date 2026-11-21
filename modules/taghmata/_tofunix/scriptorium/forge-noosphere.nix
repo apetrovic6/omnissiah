@@ -18,12 +18,6 @@
       defaultBranch = "main";
     };
 
-    zellij = {
-      description = "Zellij wrapper flake";
-      mirrors.github.remote_address = "https://github.com/apetrovic6/zellij";
-      mirrors.codeberg.remote_address = "https://codeberg.org/apetrovic/zellij";
-    };
-
     sabnzbd-tui = {
       description = "TUI for SABnzbd";
       mirrors.github.remote_address = "https://github.com/apetrovic6/sabnzbd-tui";
