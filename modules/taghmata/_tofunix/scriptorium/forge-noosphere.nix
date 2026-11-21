@@ -27,13 +27,7 @@
     sabnzbd-tui = {
       description = "TUI for SABnzbd";
       mirrors.github.remote_address = "https://github.com/apetrovic6/sabnzbd-tui";
-      # FIXME: copied from zellij and never corrected. This mirrors the zellij
-      # repository to Codeberg a second time and sabnzbd-tui not at all. Kept
-      # as it is applied; fixing it replaces a real resource.
-      mirrors.codeberg = {
-        repository = "zellij";
-        remote_address = "https://codeberg.org/apetrovic/zellij";
-      };
+      mirrors.codeberg.remote_address = "https://codeberg.org/apetrovic/sabnzbd-tui";
     };
 
     # A TUI that scans the Clan fleet (reachability, drift, deploys). A
