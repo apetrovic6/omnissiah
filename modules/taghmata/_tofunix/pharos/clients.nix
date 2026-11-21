@@ -37,10 +37,8 @@ in {
     # The cluster forge.
     forgejo = {
       name = "forgejo";
-      # FIXME: the forge answers on forge.${domain}; nothing serves forgejo.
-      # Kept as it is applied, so the launch link in Pocket ID is dead.
-      url = "https://forgejo.${domain}";
-      callbacks = ["https://forge.${domain}/user/oauth2/Pocket%20ID/callback"];
+      url = "https://forge.${domain}";
+      callbacks = ["/user/oauth2/Pocket%20ID/callback"];
       secret = {
         namespace = "forgejo";
         idKey = "key";
