@@ -2,7 +2,7 @@
 #
 # Plain data, read by:
 #   - reliquary/tofunix/product-robot-secrets.nix: one generated Harbor robot secret per product
-#   - _tofunix/products: the Forgejo repo on forge.ugalabugala.org, the Harbor project, the
+#   - _tofunix/fabricata.nix: the Forgejo repo on forge.ugalabugala.org, the Harbor project, the
 #     project-scoped robot, the repo's HARBOR_USERNAME/HARBOR_PASSWORD action secrets, and, for
 #     a product with `auth`, a public Pocket ID client
 #

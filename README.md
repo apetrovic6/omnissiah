@@ -245,6 +245,33 @@ a pull request titled "render manifests", one commit per application
 (`rituals/render-manifests-pr.sh`). Merging it is the deploy. The script also
 runs by hand; `--no-push` only makes the commits.
 
+## OpenTofu
+
+`modules/taghmata/_tofunix` describes what exists outside NixOS and the
+cluster: repositories and mirrors on both forges, Harbor projects and robots,
+Pocket ID groups and OIDC clients. `nix run .#tofunix -- plan` runs it against
+the state in the `opentofu` Garage bucket.
+
+| Path | Holds |
+|---|---|
+| `conduits.nix` | Every provider and the credential it logs in with |
+| `patterns/` | Options that stamp out resources repeated per item (below) |
+| `scriptorium/` | Code hosting: `forge-noosphere.nix`, `forge-cerberus.nix`, `harbor.nix` |
+| `pharos/` | Identity: Pocket ID groups and users, and `clients.nix` |
+| `fabricata.nix` | Per-product wiring, generated from `../_products.nix` |
+
+| Option | Declares |
+|---|---|
+| `reliquary.<name>.generator` | A clan var decrypted by the sops provider; `relic "<name>" "<key>"` is one of its values |
+| `scriptorium.repos.<name>` | A Forgejo repository, with `mirrors.<where>` for push mirrors |
+| `scriptorium.robots.<name>` | A Harbor robot that pushes and pulls |
+| `pharos.clients.<name>` | A Pocket ID client, and with `secret.namespace` the Kubernetes Secret carrying its credentials |
+
+Anything else is written as a plain `resource.<type>.<name>`. The state knows
+resources by type and name, not by file, so declarations can move freely.
+`nix build .#tofunix.tfjson` builds the generated configuration: the same store
+path before and after a refactor means the plan cannot have changed.
+
 ## Addresses and secrets paths
 
 No module writes an IP address or a `../../vars/...` path itself. Both come
@@ -254,6 +281,7 @@ from `modules/cartographa`:
 |---|---|---|
 | NixOS and Home Manager modules | `self.lib.hosts.cerberus`, `self.lib.lan.gateway`, `self.lib.vips.traefik` | `self.lib.vars.shared "<generator>" "<file>"` |
 | nixidy apps | the `cartographa` module argument | the `vars` module argument |
-| OpenTofu config, clan inventory | `import .../cartographa/_cartographa.nix` | the same import's `vars` |
+| OpenTofu config | the `noosphere` module argument | the `reliquary` option, over the `vars` module argument |
+| clan inventory | `import .../cartographa/_cartographa.nix` | the same import's `vars` |
 
 A new host or device gets one line in `modules/cartographa/_chart.nix`.
