@@ -123,7 +123,7 @@ in {
 
       # First match wins, bare address last as the default.
       server = [
-        "/ugalabugala.org/${self.lib.hosts.cerberus}"
+        "/${self.lib.lab.domain}/${self.lib.hosts.cerberus}"
         "/noosphere.uk/${self.lib.hosts.cerberus}"
         "/keksic.xyz/${self.lib.hosts.cerberus}"
         "9.9.9.9"

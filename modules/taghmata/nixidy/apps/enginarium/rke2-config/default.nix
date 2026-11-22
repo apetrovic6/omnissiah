@@ -120,7 +120,7 @@
               # lookups to the public answer, and the alert webhook would go to the VPS
               # instead of to ntfy. Pinned, the zone does not depend on that.
               - zones:
-                - zone: ugalabugala.org
+                - zone: ${cartographa.lab.domain}
                 port: 53
                 plugins:
                 - name: errors

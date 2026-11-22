@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (noosphere) domain;
+  inherit (import ../../cartographa/_cartographa.nix) lab;
 in {
   reliquary = {
     forgejo_secrets.generator = "tofunix-forgejo-secret";
@@ -31,7 +32,7 @@ in {
     # rust-app-template products live. Resources select it with
     # `provider = "forgejo.cerberus"`.
     forgejo.cerberus = {
-      base_uri = "https://forge.ugalabugala.org";
+      base_uri = "https://forge.${lab.domain}";
       api_token = relic "forgejo_nix_secrets" "forgejo_token";
     };
 

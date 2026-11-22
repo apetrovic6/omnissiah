@@ -10,7 +10,9 @@
 # `manjo`, rust-app-template included, and the template must never push its own images.
 #
 # Adding a product: add it here, `clan vars generate` (its robot secret), then tofunix apply.
-{
+let
+  inherit (import ../cartographa/_cartographa.nix) noosphere lab;
+in {
   pilot = {
     description = "M1 pilot: a rust-app-template product deployed to taghmata and cerberus";
     # Pull without credentials: RKE2 nodes already reach harbor.noosphere.uk anonymously, and
@@ -20,6 +22,6 @@
     # A public OIDC client in Pocket ID, client_id = the product name (no secret anywhere):
     # the service checks access tokens (aud = client_id), the clients log in with PKCE.
     # Both deployments: the cluster (noosphere.uk) and cerberus (ugalabugala.org).
-    auth.webHosts = ["pilot.noosphere.uk" "pilot.ugalabugala.org"];
+    auth.webHosts = ["pilot.${noosphere.domain}" "pilot.${lab.domain}"];
   };
 }

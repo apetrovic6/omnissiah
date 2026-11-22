@@ -17,6 +17,7 @@
   ...
 }: let
   inherit (config.scriptorium) owner;
+  inherit (import ../../cartographa/_cartographa.nix) lab;
   sops = name: "robot_${name}";
   robot = name: "${name}-ci";
 
@@ -42,7 +43,7 @@ in {
   });
 
   scriptorium.robots = each robot (name: _: {
-    description = "CI push for ${name} (forge.ugalabugala.org/${owner}/${name})";
+    description = "CI push for ${name} (forge.${lab.domain}/${owner}/${name})";
     secret = relic (sops name) "robot_secret";
     project = "${ref.harbor_project.${name}.name}";
   });

@@ -4,7 +4,7 @@
   pkgs,
   ...
 }: let
-  domain = "ugalabugala.org";
+  domain = self.lib.lab.domain;
 in {
   imports = [
     self.nixosModules.pharos

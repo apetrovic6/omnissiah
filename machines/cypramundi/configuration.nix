@@ -77,7 +77,7 @@
     '';
   });
 
-  domain = "ugalabugala.org";
+  domain = self.lib.lab.domain;
 in {
   imports = [
     self.nixosModules.postgresql
@@ -172,7 +172,7 @@ in {
     http = {
       routers = {
         matrix = {
-          rule = "Host(`matrix.ugalabugala.org`)";
+          rule = "Host(`${self.lib.lab.matrix.host}`)";
           entryPoints = ["websecure"];
           service = "matrix-synapse";
           tls.certResolver = "letsencrypt";
@@ -180,7 +180,7 @@ in {
         };
         # .well-known on the base domain — route to synapse (serve_server_wellknown = true in matrix.nix)
         matrix-well-known = {
-          rule = "Host(`ugalabugala.org`) && PathPrefix(`/.well-known/matrix`)";
+          rule = "Host(`${domain}`) && PathPrefix(`/.well-known/matrix`)";
           entryPoints = ["websecure"];
           service = "matrix-synapse";
           tls.certResolver = "letsencrypt";

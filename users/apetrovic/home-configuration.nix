@@ -186,7 +186,7 @@ in {
       # failed when off-network.
       kaneo = {
         type = "http";
-        url = "https://kaneo.ugalabugala.org/api/mcp";
+        url = "https://kaneo.${self.lib.lab.domain}/api/mcp";
       };
     };
   };
@@ -222,7 +222,7 @@ in {
         identitiesOnly = true;
       };
 
-      "forge.ugalabugala.org" = {
+      "forge.${self.lib.lab.domain}" = {
         hostname = self.lib.hosts.cerberus;
         port = 2222;
         # The wildcard *.ugalabugala.org record resolves to cerberus for every

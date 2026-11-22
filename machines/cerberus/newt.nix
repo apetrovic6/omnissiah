@@ -44,7 +44,7 @@
 
   services.newt = {
     enable = true;
-    settings.endpoint = "https://ugalabugala.org";
+    settings.endpoint = "https://${self.lib.lab.domain}";
     settings.port = "51820";
     environmentFile = config.clan.core.vars.generators.newt.files."newt.env".path;
 
@@ -71,7 +71,7 @@
           name = "Ugala Bugala";
           mode = "host";
           destination = self.lib.hosts.cerberus;
-          alias = "*.ugalabugala.org";
+          alias = "*.${self.lib.lab.domain}";
           site = siteCerberus;
           disable-icmp = true;
           tcp-ports = "443,80,53,2222,22,32400";
@@ -88,7 +88,7 @@
           name = "plex";
           mode = "host";
           destination = self.lib.hosts.cerberus;
-          alias = "plex.ugalabugala.org";
+          alias = "plex.${self.lib.lab.domain}";
           site = siteCerberus;
           disable-icmp = true;
           tcp-ports = "443,80,53,2222,22,32400";

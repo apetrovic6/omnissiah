@@ -2,6 +2,7 @@
 # public clients of the products are declared by ../fabricata.nix.
 {noosphere, ...}: let
   inherit (noosphere) domain;
+  inherit (import ../../../cartographa/_cartographa.nix) lab;
 in {
   pharos.clients = {
     # The Hermes dashboard on ryza (modules/rites/hermes.nix), outside the
@@ -61,7 +62,7 @@ in {
     # The cerberus forge, which takes its credentials from a clan var.
     forgejo_nix = {
       name = "Forgejo";
-      url = "https://forge.ugalabugala.org";
+      url = "https://forge.${lab.domain}";
       callbacks = ["/user/oauth2/Pocket%20ID/callback"];
     };
 
@@ -87,13 +88,13 @@ in {
 
     pangolin = {
       name = "pangolin";
-      url = "https://ugalabugala.org";
+      url = "https://${lab.domain}";
       callbacks = ["/auth/idp/1/oidc/callback"];
     };
 
     audiobookshelf = {
       name = "Audiobookshelf";
-      url = "https://audiobookshelf.ugalabugala.org";
+      url = "https://audiobookshelf.${lab.domain}";
       callbacks = ["/auth/openid/callback" "/auth/openid/mobile-redirect"];
       groups = ["users"];
     };

@@ -7,7 +7,7 @@
 in {
   flake.lib = {
     # The network chart and the vars store, see modules/cartographa.
-    inherit (cartographa) lan hosts vips vars;
+    inherit (cartographa) lan hosts vips vars lab;
 
     # Generators for sops-encrypted cluster and OpenTofu secrets, see
     # ./_sops-generators.nix.

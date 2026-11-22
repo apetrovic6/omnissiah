@@ -13,7 +13,7 @@
 # for cerberus's Postgres, for the query log.
 {flake}: let
   pkgs = flake.inputs.nixpkgs.legacyPackages.x86_64-linux;
-  inherit (flake.lib) hosts vips;
+  inherit (flake.lib) hosts vips lab;
   ip = {
     blocky = "192.168.1.11";
     blocky2 = "192.168.1.12";
@@ -110,7 +110,7 @@ in
           settings = {
             no-resolv = true;
             address = [
-              "/ugalabugala.org/152.53.34.16"
+              "/${lab.domain}/152.53.34.16"
               "/noosphere.uk/152.53.34.16"
               "/keksic.xyz/152.53.34.16"
               "/example.org/93.184.216.34"
@@ -119,7 +119,7 @@ in
               "/newly.net/10.8.8.8"
             ];
             # A public AAAA for a mapped name: must NOT leak.
-            host-record = ["ha.ugalabugala.org,2001:db8::1"];
+            host-record = ["ha.${lab.domain},2001:db8::1"];
           };
         };
       };
@@ -188,12 +188,12 @@ in
           blocky.succeed("curl -fsS http://127.0.0.1:4000/metrics | grep blocky_ > /dev/null")
 
       with subtest("mapped ugalabugala vhost goes to cerberus"):
-          assert q("ha.ugalabugala.org") == "${hosts.cerberus}", q("ha.ugalabugala.org")
-          assert q("forge.ugalabugala.org") == "${hosts.cerberus}"
+          assert q("ha.${lab.domain}") == "${hosts.cerberus}", q("ha.${lab.domain}")
+          assert q("forge.${lab.domain}") == "${hosts.cerberus}"
 
       with subtest("ugalabugala apex and unmapped names are NOT mapped"):
-          assert q("ugalabugala.org") == "152.53.34.16", q("ugalabugala.org")
-          assert q("matrix.ugalabugala.org") == "152.53.34.16"
+          assert q("${lab.domain}") == "152.53.34.16", q("${lab.domain}")
+          assert q("matrix.${lab.domain}") == "152.53.34.16"
 
       with subtest("noosphere.uk apex and subdomains go to the traefik VIP"):
           assert q("noosphere.uk") == "${vips.traefik}"
@@ -207,14 +207,14 @@ in
           assert q("cerberus.omnissiah.internal") == "${hosts.cerberus}"
 
       with subtest("filterUnmappedTypes: the public AAAA of a mapped name does not leak"):
-          assert q("ha.ugalabugala.org", "AAAA", server="${ip.upstream}", p=53) == "2001:db8::1"
-          aaaa = q("ha.ugalabugala.org", "AAAA")
-          print("AAAA ha.ugalabugala.org via blocky:", repr(aaaa))
+          assert q("ha.${lab.domain}", "AAAA", server="${ip.upstream}", p=53) == "2001:db8::1"
+          aaaa = q("ha.${lab.domain}", "AAAA")
+          print("AAAA ha.${lab.domain} via blocky:", repr(aaaa))
           assert aaaa == "", aaaa
 
       with subtest("sub-subdomain of a mapped vhost"):
-          sub = q("x.ha.ugalabugala.org")
-          print("x.ha.ugalabugala.org via blocky:", repr(sub), status("x.ha.ugalabugala.org"))
+          sub = q("x.ha.${lab.domain}")
+          print("x.ha.${lab.domain} via blocky:", repr(sub), status("x.ha.${lab.domain}"))
           # PIN: a mapping covers subdomains, so this goes to cerberus too.
           assert sub == "${hosts.cerberus}", sub
 
@@ -257,7 +257,7 @@ in
 
       with subtest("upstream DNS down: mapped names answer, blocked names stay blocked"):
           upstream.succeed("systemctl stop dnsmasq.service")
-          assert q("ha.ugalabugala.org") == "${hosts.cerberus}"
+          assert q("ha.${lab.domain}") == "${hosts.cerberus}"
           assert q("x.noosphere.uk") == "${vips.traefik}"
           assert status("x.listed.net") == "NXDOMAIN"
           assert status("sub.blocked.net") == "NXDOMAIN"
@@ -268,12 +268,12 @@ in
           blocky2.wait_for_unit("blocky.service")
           blocky2.wait_for_open_port(53)
           print(blocky2.succeed("ss -lunpt | grep ':53 '"))
-          assert q("ha.ugalabugala.org", server="${ip.blocky2}", p=53) == "${hosts.cerberus}"
-          stub = blocky2.wait_until_succeeds("dig +short +time=3 @127.0.0.53 ha.ugalabugala.org", timeout=60).strip()
+          assert q("ha.${lab.domain}", server="${ip.blocky2}", p=53) == "${hosts.cerberus}"
+          stub = blocky2.wait_until_succeeds("dig +short +time=3 @127.0.0.53 ha.${lab.domain}", timeout=60).strip()
           print("via resolved stub:", repr(stub))
           assert stub == "${hosts.cerberus}", stub
           # Blocky itself still answers on loopback.
-          assert blocky2.succeed("dig +short @127.0.0.1 ha.ugalabugala.org").strip() == "${hosts.cerberus}"
+          assert blocky2.succeed("dig +short @127.0.0.1 ha.${lab.domain}").strip() == "${hosts.cerberus}"
 
       with subtest("metrics proxy: /metrics through it, nothing else reaches Blocky; closed to other sources"):
           blocky.wait_for_unit("blocky-metrics-proxy.service")

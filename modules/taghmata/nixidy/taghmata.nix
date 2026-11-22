@@ -45,7 +45,7 @@ in {
     # The network chart and the vars store (modules/cartographa), and the
     # ingress annotation helper, as arguments of every module.
     extraSpecialArgs = {
-      cartographa = import ../../cartographa/_chart.nix;
+      cartographa = import ../../cartographa/_cartographa.nix;
       inherit vars;
       inherit (ingress) ingressAnnotations;
     };

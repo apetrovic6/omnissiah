@@ -14,6 +14,7 @@
   ...
 }: let
   inherit (lib) mkOption types;
+  inherit (import ../../../cartographa/_cartographa.nix) lab;
   cfg = config.scriptorium;
   # `ref` does not cover providers, so the alias is spelled out.
   onForge = forge: lib.optionalAttrs (forge == "cerberus") {provider = "forgejo.cerberus";};
@@ -32,7 +33,7 @@ in {
           forge = mkOption {
             type = types.enum ["noosphere" "cerberus"];
             default = "noosphere";
-            description = "forge.noosphere.uk (the cluster) or forge.ugalabugala.org (cerberus).";
+            description = "forge.noosphere.uk (the cluster) or forge.${lab.domain} (cerberus).";
           };
           description = mkOption {type = types.str;};
           defaultBranch = mkOption {

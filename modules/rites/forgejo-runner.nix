@@ -30,7 +30,7 @@
   #            local DNS already answers with a LAN address
   forges = {
     ugalabugala = {
-      url = "https://forge.ugalabugala.org";
+      url = "https://forge.${self.lib.lab.domain}";
       host = "cerberus";
       localUrl = "http://localhost:9000";
       # Public DNS sends this name to the VPS, so without the pin a job's
