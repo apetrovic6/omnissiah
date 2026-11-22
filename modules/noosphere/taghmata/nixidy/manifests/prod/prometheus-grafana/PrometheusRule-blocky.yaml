@@ -1,0 +1,86 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: blocky
+  namespace: observability
+spec:
+  groups:
+    - name: blocky.availability
+      rules:
+        - alert: BlockyInstanceDown
+          annotations:
+            description: 'The scrape of {{ $labels.host }}:4001 has failed for over 5 minutes. Clients fail over to the other resolvers, so DNS still works but redundancy is gone. Check, in order: the host is up; `systemctl status blocky blocky-metrics-proxy` on it; its firewall admits the k8s node the Prometheus pod runs on (modules/rites/blocky.nix, metricsProxy.sources). If only this alert fires and `dig @{{ $labels.host }}` works, it is the proxy or the firewall, not DNS.'
+            summary: Blocky on {{ $labels.host }} is not answering its metrics scrape
+          expr: up{job=~"cerberus-blocky|ryza-blocky|servitor-blocky"} == 0
+          for: 5m
+          labels:
+            notify: phone
+            severity: warning
+        - alert: BlockyAllInstancesDown
+          annotations:
+            description: 'None of cerberus, ryza, servitor has been scraped successfully for 2 minutes. Either all three resolvers are down (the LAN has no DNS: check `dig @192.168.1.105 example.org` from a LAN machine) or the scrape path is broken for all of them (the cluster node the Prometheus pod runs on, the ScrapeConfigs blocky jobs in observability, the targets page). Clients that fail over still resolve through whichever instance is up.'
+            summary: No Blocky resolver is answering its metrics scrape
+          expr: (sum(up{job=~"cerberus-blocky|ryza-blocky|servitor-blocky"} == 1) or vector(0)) == 0
+          for: 2m
+          labels:
+            severity: critical
+    - name: blocky.health
+      rules:
+        - alert: BlockyBlockingDisabled
+          annotations:
+            description: 'blocky_blocking_enabled has been 0 for 30 minutes: ads and newly registered domains are being answered normally on {{ $labels.host }}. Someone called /api/blocking/disable, which has a duration and re-enables by itself, so a long disable means it was given none or was re-sent. Re-enable on the host: `curl -X GET http://127.0.0.1:4000/api/blocking/enable` (the API listens on localhost only), or restart blocky.service.'
+            summary: Blocking is disabled on Blocky {{ $labels.host }}
+          expr: blocky_blocking_enabled{job=~"cerberus-blocky|ryza-blocky|servitor-blocky"} == 0
+          for: 30m
+          labels:
+            notify: phone
+            severity: warning
+        - alert: BlockyDenylistAdsTooSmall
+          annotations:
+            description: The ads denylist group has {{ $value }} entries on {{ $labels.host }} (alert below 300000; 30 minutes, since servitor loads its lists for a while after every restart). Its lists failed to download or parse and no cached copy was used, so those names are being answered normally. Check `journalctl -u blocky` on {{ $labels.host }} for download errors, `blocky_failed_downloads_total` in the Blocky dashboard.
+            summary: Blocky {{ $labels.host }} has a suspiciously small ads denylist
+          expr: sum by (instance, host) (blocky_denylist_cache_entries{job=~"cerberus-blocky|ryza-blocky|servitor-blocky",group="ads"}) < 300000
+          for: 30m
+          labels:
+            notify: phone
+            severity: warning
+        - alert: BlockyDenylistAdsMissing
+          annotations:
+            description: 'Blocky on {{ $labels.host }} is up but exports no blocky_denylist_cache_entries for the ads group: the group is not configured or its lists never loaded. Check `journalctl -u blocky` on the host and the denylists in modules/rites/blocky.nix.'
+            summary: Blocky {{ $labels.host }} reports no ads denylist
+          expr: up{job=~"cerberus-blocky|ryza-blocky|servitor-blocky"} == 1 unless on (instance) blocky_denylist_cache_entries{group="ads"}
+          for: 30m
+          labels:
+            notify: phone
+            severity: warning
+        - alert: BlockyDenylistNrdTooSmall
+          annotations:
+            description: The nrd denylist group has {{ $value }} entries on {{ $labels.host }} (alert below 2000000; 30 minutes, since servitor loads its lists for a while after every restart). Its lists failed to download or parse and no cached copy was used, so those names are being answered normally. Check `journalctl -u blocky` on {{ $labels.host }} for download errors, `blocky_failed_downloads_total` in the Blocky dashboard, and `blocky-nrd.service` (the list is converted into /var/lib/blocky-nrd).
+            summary: Blocky {{ $labels.host }} has a suspiciously small nrd denylist
+          expr: sum by (instance, host) (blocky_denylist_cache_entries{job=~"cerberus-blocky|ryza-blocky|servitor-blocky",group="nrd"}) < 2000000
+          for: 30m
+          labels:
+            notify: phone
+            severity: warning
+        - alert: BlockyDenylistNrdMissing
+          annotations:
+            description: 'Blocky on {{ $labels.host }} is up but exports no blocky_denylist_cache_entries for the nrd group: the group is not configured or its lists never loaded. Check `journalctl -u blocky` on the host and the denylists in modules/rites/blocky.nix.'
+            summary: Blocky {{ $labels.host }} reports no nrd denylist
+          expr: up{job=~"cerberus-blocky|ryza-blocky|servitor-blocky"} == 1 unless on (instance) blocky_denylist_cache_entries{group="nrd"}
+          for: 30m
+          labels:
+            notify: phone
+            severity: warning
+    - name: blocky.units
+      rules:
+        - alert: BlockyHelperUnitFailed
+          annotations:
+            description: 'blocky-nrd.service failing means the newly-registered-domains list is stale (the previous file is kept); blocky-querylog-watchdog.service failing is deliberate when Postgres refused Blocky''s login (a wrong password or missing role, SQLSTATE 28/3D): the query log is on the journal fallback and a restart will not fix it. Read `journalctl -u {{ $labels.name }}` on the host, fix the cause, then `systemctl reset-failed {{ $labels.name }}`. (cerberus is covered by CerberusSystemdUnitFailed.)'
+            summary: '{{ $labels.name }} is failed on {{ $labels.instance }}'
+          expr: node_systemd_unit_state{job=~"ryza-node|servitor-node",name=~"blocky-(querylog-watchdog|nrd)[.]service",state="failed"} == 1
+          for: 5m
+          labels:
+            notify: phone
+            severity: warning
