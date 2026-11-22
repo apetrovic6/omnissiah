@@ -71,154 +71,53 @@
   # Same age as the shared nix.gc (`--delete-older-than 10d`, stc/base.nix),
   # which `storeCache` replaces.
   pruneAge = "10d";
-in {
-  flake.nixosModules.forgejo-runner = {
+
+  # Where secrets reach a runner that runs inside a microVM: qemu hands them
+  # to the guest as systemd credentials (forgejo-runner-microvm.nix), which
+  # PID 1 exposes to root under this directory.
+  guestCredentialDir = "/run/credentials/@system";
+
+  # Everything a runner needs to RUN, as opposed to its identity (the clan
+  # vars, registration), which always lives on the clan machine. Called with
+  # the config of whichever system runs the jobs: the machine itself
+  # (`isolation = "host"`) or its CI microVM (`isolation = "microvm"`). The
+  # same function on both sides is what keeps the toolset identical, which
+  # the label warning at the top of this file depends on.
+  #
+  #   name     instance name: forgejo-runner-<name>.service, its state dir
+  #   machine  the clan machine whose identity this is, for the forge URLs
+  #   cfg      that machine's services.imperium.forgejoRunner
+  #   sccache  null, or that machine's services.imperium.sccache
+  #   paths    where the secrets are, on the system that runs the jobs
+  #   inVm     the system is a dedicated CI VM, so there is nothing to share
+  #            CPU and memory with: no slice, no kubelet reservation
+  runtimeConfig = {
     config,
     lib,
     pkgs,
-    ...
+    name,
+    machine,
+    cfg,
+    sccache,
+    paths,
+    inVm,
   }: let
-    inherit (lib) mkIf mkMerge mkOption mkEnableOption types genAttrs listToAttrs nameValuePair;
-    cfg = config.services.imperium.forgejoRunner;
-    scfg = config.services.imperium.sccache;
-    hostName = config.networking.hostName;
-    gens = config.clan.core.vars.generators;
-    fcfg = config.services.forgejo;
+    inherit (lib) mkIf mkMerge genAttrs;
     # The nixpkgs module's StateDirectory for our instance (also its HOME).
-    stateDir = "/var/lib/forgejo-runner/${hostName}";
-  in {
-    # The ncps signing key and upload credentials the post-build hook uses.
-    imports = [self.nixosModules.reliquary-ncps];
-
-    options.services.imperium.forgejoRunner = {
-      enable = mkEnableOption "a Forgejo Actions runner registered with every forge in `forges`";
-
-      forges = mkOption {
-        type = types.listOf (types.enum (builtins.attrNames forges));
-        default = builtins.attrNames forges;
-        description = "Forgejo instances this runner registers with.";
-      };
-
-      # Jobs `runs-on: nix` run directly on the host (no container), so they
-      # can use the host's Nix store as a build cache.
-      labels = mkOption {
-        type = types.listOf types.str;
-        default = ["nix:host"];
-      };
-
-      # One slot is shared by every forge. While it is taken the daemon stops
-      # polling the forges the job did NOT come from, so they show the runner
-      # offline until the job ends (checked 2026-11-14: not a hang). A second
-      # slot hides that, at the price of two jobs sharing `resources`.
-      capacity = mkOption {
-        type = types.ints.positive;
-        default = 1;
-        description = "Jobs this runner runs at once, across all forges.";
-      };
-
-      extraHostPackages = mkOption {
-        type = types.listOf types.package;
-        default = [  ];
-        description = "Added to the shared toolset. Read the label warning at the top of this file first.";
-      };
-
-      # For machines that have another job, above all the RKE2 nodes, which
-      # are all etcd members. Runner jobs and Nix builds share one cgroup
-      # slice under these caps. Memory is the hard limit (it cannot be
-      # throttled, only OOM-killed); CPU also yields to everything else under
-      # contention, through a low weight.
-      resources = mkOption {
-        type = types.nullOr (types.submodule {
-          options = {
-            cpus = mkOption {
-              type = types.ints.positive;
-              description = "Most CPU cores CI may use, runner jobs and Nix builds combined.";
-            };
-            memory = mkOption {
-              type = types.ints.positive;
-              description = ''
-                Most GiB of memory CI may use. Where RKE2 runs, the same amount
-                is reserved away from kubelet, so pods are never scheduled into
-                memory CI might take.
-              '';
-            };
-          };
-        });
-        default = null;
-      };
-
-      # Keeps the local store warm for CI. The shared daily
-      # `nix-collect-garbage --delete-older-than` deletes every unrooted path,
-      # so every crane dependency build and devenv shell would be gone each
-      # morning. With this set, old system generations are still pruned on
-      # that schedule, but store garbage is only collected when free disk
-      # space drops below `minFree`, and then up to `maxFree`. Only for
-      # machines with plenty of disk.
-      storeCache = mkOption {
-        type = types.nullOr (types.submodule {
-          options = {
-            minFree = mkOption {
-              type = types.ints.positive;
-              description = "GiB of free disk below which Nix starts collecting garbage.";
-            };
-            maxFree = mkOption {
-              type = types.ints.positive;
-              description = "GiB of free disk at which collection stops.";
-            };
-          };
-        });
-        default = null;
-      };
-    };
-
-    config = mkMerge [
-      (mkIf (cfg.enable && cfg.storeCache != null) (let
-        gib = n: n * 1024 * 1024 * 1024;
-      in {
-        nix.settings = {
-          min-free = lib.mkForce (gib cfg.storeCache.minFree);
-          max-free = lib.mkForce (gib cfg.storeCache.maxFree);
-        };
-        nix.gc.automatic = lib.mkForce false;
-        # What nix.gc did besides collecting: dropping old generations. Their
-        # paths become garbage, which the min-free collection gets to later.
-        systemd.services.nix-prune-generations = {
-          description = "Delete system generations older than ${pruneAge}";
-          startAt = "daily";
-          serviceConfig.Type = "oneshot";
-          script = ''
-            ${config.nix.package}/bin/nix-env --profile /nix/var/nix/profiles/system \
-              --delete-generations ${pruneAge}
-          '';
-        };
-      }))
-
-      (mkIf cfg.enable {
+    stateDir = "/var/lib/forgejo-runner/${name}";
+  in
+    mkMerge [
+      {
         networking.hosts = mkMerge (map (forge: let
           f = forges.${forge};
         in
-          mkIf (f.lanAddress != null && f.host != hostName) {
+          mkIf (f.lanAddress != null && f.host != machine) {
             ${f.lanAddress} = [(lib.removePrefix "https://" f.url)];
           })
         cfg.forges);
-      })
+      }
 
-      (mkIf cfg.enable {
-        # CI signing key, shared by every runner. ncps
-        # (taghmata nixidy apps/scriptorium/ncps) accepts a PUT only when the narinfo
-        # carries this key's signature, so it doubles as the upload credential.
-        # Separate from ncps' own serving key: a leaked runner can push into
-        # the cache, but cannot forge ncps' signature on upstream paths.
-        clan.core.vars.generators.${ciKeyGenerator} = {
-          share = true;
-          files."key".secret = true;
-          files."key.pub".secret = false;
-          runtimeInputs = [pkgs.nix];
-          script = ''
-            nix-store --generate-binary-cache-key ${ciKeyName} "$out/key" "$out/key.pub"
-          '';
-        };
-
+      {
         # The daemon signs everything it builds here with the CI key, and the
         # hook pushes it to ncps. Only daemon builds count: a cargo build run
         # directly by a job step never goes through the daemon.
@@ -237,7 +136,7 @@ in {
         # the copy the key and it signs those paths too; the same 10 GB cerberus
         # closure then finishes uploading in 32 s, toplevel included.
         nix.settings = {
-          secret-key-files = [gens.${ciKeyGenerator}.files."key".path];
+          secret-key-files = [paths.ciKey];
           post-build-hook = pkgs.writeShellScript "push-to-ncps" ''
             # Synchronous: the daemon waits for this before its next build,
             # hence the timeouts. A failed push must never fail the build, and
@@ -251,76 +150,64 @@ in {
             ${pkgs.coreutils}/bin/timeout 1800 \
               ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
               copy --option connect-timeout 5 \
-              --option netrc-file ${gens.${ncpsUploadAuth}.files.netrc.path} \
-              --to '${ncpsUploadUrl}?compression=zstd&parallel-compression=true&secret-key=${gens.${ciKeyGenerator}.files."key".path}' $OUT_PATHS \
+              --option netrc-file ${paths.ncpsNetrc} \
+              --to '${ncpsUploadUrl}?compression=zstd&parallel-compression=true&secret-key=${paths.ciKey}' $OUT_PATHS \
               || echo "push-to-ncps: upload failed (exit $?), continuing" >&2
           '';
         };
-      })
+      }
 
-      (mkIf (cfg.enable && cfg.resources != null) (let
+      (mkIf (cfg.resources != null) (let
         r = cfg.resources;
-      in {
-        systemd.slices.forgejo-ci.sliceConfig = {
-          CPUQuota = "${toString (r.cpus * 100)}%";
-          CPUWeight = 20;
-          IOWeight = 20;
-          # Throttle (reclaim) half a GiB before the hard cap starts OOM-killing.
-          MemoryHigh = "${toString (r.memory * 1024 - 512)}M";
-          MemoryMax = "${toString r.memory}G";
-        };
-        # The daemon has to be in the slice too: Nix builds run in its cgroup,
-        # not the runner's. Deploy-time store copies go through it as well,
-        # which is harmless, since they need little memory.
-        systemd.services."forgejo-runner-${hostName}".serviceConfig.Slice = "forgejo-ci.slice";
-        systemd.services.nix-daemon.serviceConfig.Slice = "forgejo-ci.slice";
-        nix = {
-          settings = {
-            max-jobs = 1;
-            cores = r.cpus;
-          };
-          daemonCPUSchedPolicy = "batch";
-          daemonIOSchedClass = "idle";
-        };
-        # cargo run directly by jobs (outside Nix) otherwise starts one rustc
-        # per core of the whole machine, and they share the memory cap.
-        services.forgejo-runner.instances.${hostName}.settings.runner.envs.CARGO_BUILD_JOBS = toString r.cpus;
+      in
+        mkMerge [
+          {
+            nix = {
+              settings = {
+                max-jobs = 1;
+                cores = r.cpus;
+              };
+              daemonCPUSchedPolicy = "batch";
+              daemonIOSchedClass = "idle";
+            };
+            # cargo run directly by jobs (outside Nix) otherwise starts one rustc
+            # per core of the whole machine, and they share the memory cap.
+            services.forgejo-runner.instances.${name}.settings.runner.envs.CARGO_BUILD_JOBS = toString r.cpus;
+          }
 
-        # Lowers what kubelet offers the scheduler. Pods already on the node
-        # stay where they are; changing this restarts rke2, so roll it out one
-        # etcd member at a time.
-        #
-        # mkAfter pins the flag to the end of the command line. Without it the
-        # position follows module import order, and moving an import would
-        # change the unit and restart rke2 for nothing.
-        services.rke2.extraFlags = mkIf config.services.rke2.enable (lib.mkAfter [
-          "--kubelet-arg=system-reserved=memory=${toString r.memory}Gi"
-        ]);
-      }))
+          # In a VM, the VM's own size is the cap (forgejo-runner-microvm.nix).
+          (mkIf (!inVm) {
+            systemd.slices.forgejo-ci.sliceConfig = {
+              CPUQuota = "${toString (r.cpus * 100)}%";
+              CPUWeight = 20;
+              IOWeight = 20;
+              # Throttle (reclaim) half a GiB before the hard cap starts OOM-killing.
+              MemoryHigh = "${toString (r.memory * 1024 - 512)}M";
+              MemoryMax = "${toString r.memory}G";
+            };
+            # The daemon has to be in the slice too: Nix builds run in its cgroup,
+            # not the runner's. Deploy-time store copies go through it as well,
+            # which is harmless, since they need little memory.
+            systemd.services."forgejo-runner-${name}".serviceConfig.Slice = "forgejo-ci.slice";
+            systemd.services.nix-daemon.serviceConfig.Slice = "forgejo-ci.slice";
 
-      (mkIf cfg.enable {
-        clan.core.vars.generators = listToAttrs (map (forge:
-          nameValuePair (generatorName forge) {
-            files."secret".secret = true;
-            # Not secret: it is the public half of the secret and goes into the
-            # runner config as a plain setting.
-            files."uuid".secret = false;
-            runtimeInputs = [pkgs.coreutils pkgs.openssl];
-            # printf, not echo/heredoc: Forgejo reads --secret-file verbatim
-            # and a trailing newline fails its 40-character check.
-            script = ''
-              set -eu
-              secret="$(openssl rand -hex 20)"
-              printf '%s' "$secret" > "$out/secret"
-              h="$(printf '%s' "''${secret:0:16}" | od -An -tx1 | tr -d ' \n')"
-              printf '%s-%s-%s-%s-%s' "''${h:0:8}" "''${h:8:4}" "''${h:12:4}" "''${h:16:4}" "''${h:20:12}" > "$out/uuid"
-            '';
+            # Lowers what kubelet offers the scheduler. Pods already on the node
+            # stay where they are; changing this restarts rke2, so roll it out one
+            # etcd member at a time.
+            #
+            # mkAfter pins the flag to the end of the command line. Without it the
+            # position follows module import order, and moving an import would
+            # change the unit and restart rke2 for nothing.
+            services.rke2.extraFlags = mkIf (config.services.rke2.enable or false) (lib.mkAfter [
+              "--kubelet-arg=system-reserved=memory=${toString r.memory}Gi"
+            ]);
           })
-        cfg.forges);
+        ]))
 
+      {
         services.forgejo-runner = {
           package = pkgs.forgejo-runner;
-          instances.${hostName} = {
+          instances.${name} = {
             enable = true;
             # The instance's own `labels` option was renamed to
             # `settings.runner.labels` upstream. Nothing else changes: the
@@ -346,14 +233,14 @@ in {
             # `file:$CREDENTIALS_DIRECTORY/...` URLs. A bare path in
             # settings.token_url is rejected at startup ("unsupported secret URL").
             settings.server.connections = genAttrs cfg.forges (forge: {
-              uuid = gens.${generatorName forge}.files."uuid".value;
+              uuid = paths.forgeUuid forge;
               url =
-                if forges.${forge}.host == hostName
+                if forges.${forge}.host == machine
                 then forges.${forge}.localUrl
                 else forges.${forge}.url;
             });
             secrets.server.connections = genAttrs cfg.forges (forge: {
-              token_url = gens.${generatorName forge}.files."secret".path;
+              token_url = paths.forgeSecret forge;
             });
             # PATH available to host-executed jobs: node (for actions/checkout),
             # devenv (the build), nix (devenv shells out to it), the usual
@@ -397,13 +284,13 @@ in {
           };
         };
         # As the service's own (dynamic) user, so the directory is theirs.
-        systemd.services."forgejo-runner-${hostName}".serviceConfig.ExecStartPre = [
+        systemd.services."forgejo-runner-${name}".serviceConfig.ExecStartPre = [
           "${pkgs.coreutils}/bin/mkdir -p ${stateDir}/tmp"
         ];
         # `e`: clean an existing directory without creating or owning it.
         # Whatever a job left behind goes after a day.
         systemd.tmpfiles.rules = ["e ${stateDir}/tmp - - - 1d"];
-      })
+      }
 
       # sccache: the shared compilation cache in the `sccache` bucket on
       # garage-main, for the host steps that run cargo outside the Nix sandbox
@@ -418,8 +305,8 @@ in {
       # Unit-level Environment= reaches the steps because act merges the
       # daemon's own environment into every job (act/runner/run_context.go,
       # the os.Environ() loop, "don't override").
-      (mkIf (cfg.enable && (config.services.imperium.sccache.enable or false)) {
-        services.forgejo-runner.instances.${hostName} = {
+      (mkIf (sccache != null) {
+        services.forgejo-runner.instances.${name} = {
           # The wrapper, not bare sccache (modules/rites/sccache.nix): it
           # unsets CARGO_INSTALL_ROOT -- the job's `devenv shell` sets it to
           # <act work dir>/.devenv/state/cargo-install, a per-job path that
@@ -427,12 +314,12 @@ in {
           # jobs from sharing even registry deps -- and the ambient AWS_*
           # variables that reqsign's env provider would otherwise prefer
           # over the unit's AWS_SHARED_CREDENTIALS_FILE.
-          hostPackages = [scfg.wrapper];
+          hostPackages = [sccache.wrapper];
           settings.runner.envs = {
-            RUSTC_WRAPPER = "${scfg.wrapper}/bin/sccache";
-            SCCACHE_BUCKET = scfg.bucket;
-            SCCACHE_ENDPOINT = scfg.endpoint;
-            SCCACHE_REGION = scfg.region;
+            RUSTC_WRAPPER = "${sccache.wrapper}/bin/sccache";
+            SCCACHE_BUCKET = sccache.bucket;
+            SCCACHE_ENDPOINT = sccache.endpoint;
+            SCCACHE_REGION = sccache.region;
             # A job that cannot reach Garage (a runner away from the LAN, an
             # outage) must still compile -- uncached, not red.
             SCCACHE_IGNORE_SERVER_IO_ERROR = "1";
@@ -448,15 +335,15 @@ in {
             CARGO_HOME = "/var/lib/forgejo-runner-cargo";
           };
         };
-        systemd.services."forgejo-runner-${hostName}" = {
+        systemd.services."forgejo-runner-${name}" = {
           # The wrapper only DEFAULTS AWS_SHARED_CREDENTIALS_FILE when unset
           # (`:-`) and never touches it otherwise, so this unit-level value
           # -- unreadable /run/secrets path swapped for the LoadCredential
           # mount -- is what the job's sccache server ends up using.
-          environment.AWS_SHARED_CREDENTIALS_FILE = "/run/credentials/forgejo-runner-${hostName}.service/sccache-credentials";
+          environment.AWS_SHARED_CREDENTIALS_FILE = "/run/credentials/forgejo-runner-${name}.service/sccache-credentials";
           serviceConfig = {
             LoadCredential = [
-              "sccache-credentials:${gens.sccache-garage-key.files.credentials.path}"
+              "sccache-credentials:${paths.sccacheCredentials}"
             ];
             StateDirectory = ["forgejo-runner-cargo"];
             # Same reason the nixpkgs module lists the state dir here: under
@@ -466,6 +353,254 @@ in {
           };
         };
       })
+    ];
+in {
+  flake.nixosModules.forgejo-runner = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
+    inherit (lib) mkIf mkMerge mkOption mkEnableOption types listToAttrs nameValuePair;
+    cfg = config.services.imperium.forgejoRunner;
+    scfg = config.services.imperium.sccache;
+    sccacheOn = config.services.imperium.sccache.enable or false;
+    hostName = config.networking.hostName;
+    gens = config.clan.core.vars.generators;
+    fcfg = config.services.forgejo;
+
+    # Credential ids for the microVM, and the clan var each one comes from.
+    # forgejo-runner-microvm.nix stages these for qemu; the guest reads them
+    # back under guestCredentialDir.
+    credentialSources =
+      listToAttrs (map (forge:
+        nameValuePair (generatorName forge) gens.${generatorName forge}.files."secret".path)
+      cfg.forges)
+      // {
+        ci-signing-key = gens.${ciKeyGenerator}.files."key".path;
+        ncps-netrc = gens.${ncpsUploadAuth}.files.netrc.path;
+      }
+      // lib.optionalAttrs sccacheOn {
+        sccache-credentials = gens.sccache-garage-key.files.credentials.path;
+      };
+
+    sccacheFor =
+      if sccacheOn
+      then {inherit (scfg) wrapper bucket endpoint region;}
+      else null;
+  in {
+    # The ncps signing key and upload credentials the post-build hook uses.
+    imports = [self.nixosModules.reliquary-ncps];
+
+    options.services.imperium.forgejoRunner = {
+      enable = mkEnableOption "a Forgejo Actions runner registered with every forge in `forges`";
+
+      forges = mkOption {
+        type = types.listOf (types.enum (builtins.attrNames forges));
+        default = builtins.attrNames forges;
+        description = "Forgejo instances this runner registers with.";
+      };
+
+      # Jobs `runs-on: nix` run directly on the host (no container), so they
+      # can use the host's Nix store as a build cache.
+      labels = mkOption {
+        type = types.listOf types.str;
+        default = ["nix:host"];
+      };
+
+      # One slot is shared by every forge. While it is taken the daemon stops
+      # polling the forges the job did NOT come from, so they show the runner
+      # offline until the job ends (checked 2026-11-14: not a hang). A second
+      # slot hides that, at the price of two jobs sharing `resources`.
+      capacity = mkOption {
+        type = types.ints.positive;
+        default = 1;
+        description = "Jobs this runner runs at once, across all forges.";
+      };
+
+      extraHostPackages = mkOption {
+        type = types.listOf types.package;
+        default = [];
+        description = "Added to the shared toolset. Read the label warning at the top of this file first.";
+      };
+
+      # Where the jobs run. `host`: on this machine, next to everything else
+      # it runs. `microvm`: in a dedicated VM on it, sized by `resources`, with
+      # its own kernel, so a job cannot see the host's files, processes or
+      # secrets beyond the runner's own. Needs
+      # self.nixosModules.forgejo-runner-microvm imported, and /dev/kvm.
+      isolation = mkOption {
+        type = types.enum ["host" "microvm"];
+        default = "host";
+      };
+
+      # For machines that have another job, above all the RKE2 nodes, which
+      # are all etcd members. Runner jobs and Nix builds share one cgroup
+      # slice under these caps. Memory is the hard limit (it cannot be
+      # throttled, only OOM-killed); CPU also yields to everything else under
+      # contention, through a low weight. With `isolation = "microvm"` it is
+      # the VM's size instead.
+      resources = mkOption {
+        type = types.nullOr (types.submodule {
+          options = {
+            cpus = mkOption {
+              type = types.ints.positive;
+              description = "Most CPU cores CI may use, runner jobs and Nix builds combined.";
+            };
+            memory = mkOption {
+              type = types.ints.positive;
+              description = ''
+                Most GiB of memory CI may use. Where RKE2 runs, the same amount
+                is reserved away from kubelet, so pods are never scheduled into
+                memory CI might take.
+              '';
+            };
+          };
+        });
+        default = null;
+      };
+
+      # Keeps the local store warm for CI. The shared daily
+      # `nix-collect-garbage --delete-older-than` deletes every unrooted path,
+      # so every crane dependency build and devenv shell would be gone each
+      # morning. With this set, old system generations are still pruned on
+      # that schedule, but store garbage is only collected when free disk
+      # space drops below `minFree`, and then up to `maxFree`. Only for
+      # machines with plenty of disk. Host isolation only.
+      storeCache = mkOption {
+        type = types.nullOr (types.submodule {
+          options = {
+            minFree = mkOption {
+              type = types.ints.positive;
+              description = "GiB of free disk below which Nix starts collecting garbage.";
+            };
+            maxFree = mkOption {
+              type = types.ints.positive;
+              description = "GiB of free disk at which collection stops.";
+            };
+          };
+        });
+        default = null;
+      };
+
+      # Read by forgejo-runner-microvm.nix.
+      guestModule = mkOption {
+        type = types.deferredModule;
+        internal = true;
+        readOnly = true;
+        description = "The runner's runtime, as a NixOS module for the CI microVM.";
+      };
+      credentialSources = mkOption {
+        type = types.attrsOf types.str;
+        internal = true;
+        readOnly = true;
+        description = "Credential id -> host path of every secret the microVM runner needs.";
+      };
+    };
+
+    config = mkMerge [
+      {
+        services.imperium.forgejoRunner = {
+          inherit credentialSources;
+          guestModule = {
+            config,
+            lib,
+            pkgs,
+            ...
+          }: {
+            config = runtimeConfig {
+              inherit config lib pkgs cfg;
+              name = hostName;
+              machine = hostName;
+              sccache = sccacheFor;
+              inVm = true;
+              paths = {
+                forgeSecret = forge: "${guestCredentialDir}/${generatorName forge}";
+                forgeUuid = forge: gens.${generatorName forge}.files."uuid".value;
+                ciKey = "${guestCredentialDir}/ci-signing-key";
+                ncpsNetrc = "${guestCredentialDir}/ncps-netrc";
+                sccacheCredentials = "${guestCredentialDir}/sccache-credentials";
+              };
+            };
+          };
+        };
+      }
+
+      (mkIf (cfg.enable && cfg.isolation == "host" && cfg.storeCache != null) (let
+        gib = n: n * 1024 * 1024 * 1024;
+      in {
+        nix.settings = {
+          min-free = lib.mkForce (gib cfg.storeCache.minFree);
+          max-free = lib.mkForce (gib cfg.storeCache.maxFree);
+        };
+        nix.gc.automatic = lib.mkForce false;
+        # What nix.gc did besides collecting: dropping old generations. Their
+        # paths become garbage, which the min-free collection gets to later.
+        systemd.services.nix-prune-generations = {
+          description = "Delete system generations older than ${pruneAge}";
+          startAt = "daily";
+          serviceConfig.Type = "oneshot";
+          script = ''
+            ${config.nix.package}/bin/nix-env --profile /nix/var/nix/profiles/system \
+              --delete-generations ${pruneAge}
+          '';
+        };
+      }))
+
+      # The runner's identity: on the clan machine whatever the isolation,
+      # since the clan vars and `forgejo-runner-register` live here.
+      (mkIf cfg.enable {
+        # CI signing key, shared by every runner. ncps
+        # (taghmata nixidy apps/scriptorium/ncps) accepts a PUT only when the narinfo
+        # carries this key's signature, so it doubles as the upload credential.
+        # Separate from ncps' own serving key: a leaked runner can push into
+        # the cache, but cannot forge ncps' signature on upstream paths.
+        clan.core.vars.generators.${ciKeyGenerator} = {
+          share = true;
+          files."key".secret = true;
+          files."key.pub".secret = false;
+          runtimeInputs = [pkgs.nix];
+          script = ''
+            nix-store --generate-binary-cache-key ${ciKeyName} "$out/key" "$out/key.pub"
+          '';
+        };
+      })
+
+      (mkIf cfg.enable {
+        clan.core.vars.generators = listToAttrs (map (forge:
+          nameValuePair (generatorName forge) {
+            files."secret".secret = true;
+            # Not secret: it is the public half of the secret and goes into the
+            # runner config as a plain setting.
+            files."uuid".secret = false;
+            runtimeInputs = [pkgs.coreutils pkgs.openssl];
+            # printf, not echo/heredoc: Forgejo reads --secret-file verbatim
+            # and a trailing newline fails its 40-character check.
+            script = ''
+              set -eu
+              secret="$(openssl rand -hex 20)"
+              printf '%s' "$secret" > "$out/secret"
+              h="$(printf '%s' "''${secret:0:16}" | od -An -tx1 | tr -d ' \n')"
+              printf '%s-%s-%s-%s-%s' "''${h:0:8}" "''${h:8:4}" "''${h:12:4}" "''${h:16:4}" "''${h:20:12}" > "$out/uuid"
+            '';
+          })
+        cfg.forges);
+      })
+
+      (mkIf (cfg.enable && cfg.isolation == "host") (runtimeConfig {
+        inherit config lib pkgs cfg;
+        name = hostName;
+        machine = hostName;
+        sccache = sccacheFor;
+        inVm = false;
+        paths = {
+          forgeSecret = forge: gens.${generatorName forge}.files."secret".path;
+          forgeUuid = forge: gens.${generatorName forge}.files."uuid".value;
+          ciKey = gens.${ciKeyGenerator}.files."key".path;
+          ncpsNetrc = gens.${ncpsUploadAuth}.files.netrc.path;
+          sccacheCredentials = gens.sccache-garage-key.files.credentials.path;
+        };
+      }))
 
       # `forgejo` as an admin, with the service's own environment -- what the
       # `forges.*.forgejo` command reaches over ssh. Running the binary bare
