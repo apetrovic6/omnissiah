@@ -83,7 +83,11 @@ in {
     self.nixosModules.postgresql
     self.nixosModules.pharos
     self.nixosModules.vox-matrix
+    self.nixosModules.vox-matrix-bots
   ];
+
+  # Hermes on ryza (machines/ryza/hermes.nix).
+  services.imperium.matrixBots.bots = ["hermes"];
 
   disko.devices.disk.main.imageSize = "3500M"; # adjust as needed
   disko.imageBuilder.imageFormat = "qcow2"; # or "raw" (default)

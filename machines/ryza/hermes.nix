@@ -8,7 +8,7 @@
 #   secrets = ["OPENROUTER_API_KEY"];
 #   clan vars generate ryza --generator hermes-openrouter-api-key --regenerate
 {self, ...}: let
-  inherit (import ../../modules/cartographa/_cartographa.nix) noosphere;
+  inherit (import ../../modules/cartographa/_cartographa.nix) noosphere lab;
 in {
   imports = [self.nixosModules.hermes];
 
@@ -21,6 +21,13 @@ in {
       # The cluster nodes: Traefik's traffic arrives from whichever one its
       # pod runs on.
       allowedSources = with self.lib.hosts; [terra luna sol mars];
+    };
+    # @hermes on the lab homeserver, registered on cypramundi
+    # (services.imperium.matrixBots there). DM it from Element.
+    matrix = {
+      enable = true;
+      inherit (lab.matrix) homeserver serverName;
+      allowedUsers = ["@kumamte:${lab.matrix.serverName}"];
     };
   };
 }

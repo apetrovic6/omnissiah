@@ -1,6 +1,7 @@
 # Hermes Agent (Nous Research): an always-on agent. The gateway runs its
-# cron jobs and any messaging platform whose token is in the env file;
-# with none set (the default here) it is reached from its CLI/TUI over SSH.
+# cron jobs and the messaging platforms: Matrix (`matrix`, a bot account the
+# homeserver registers itself), or any other whose token is in `secrets`.
+# The CLI/TUI over SSH and the web dashboard work alongside.
 # Packaged in llm-agents (numtide/llm-agents.nix, reached through magos),
 # with Claude Code and Codex beside it as tools.
 #
@@ -41,6 +42,10 @@
     llm = self.inputs.magos.inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
     user = "hermes";
     home = "/var/lib/hermes";
+    mx = cfg.matrix;
+    # Shared with the homeserver, which registers the account
+    # (modules/noosphere/vox/matrix-bots.nix).
+    mxGenerator = "matrix-bot-${mx.localpart}";
 
     # Generator for a Hermes-only secret: OPENROUTER_API_KEY ->
     # hermes-openrouter-api-key, one prompt each, so changing one never means
@@ -53,7 +58,13 @@
       // lib.genAttrs cfg.secrets (key: {
         generator = generatorFor key;
         file = "value";
-      });
+      })
+      // lib.optionalAttrs mx.enable {
+        MATRIX_PASSWORD = {
+          generator = mxGenerator;
+          file = "password";
+        };
+      };
     keyPath = k: config.clan.core.vars.generators.${k.generator}.files.${k.file}.path;
 
     # `hermes` with its API keys exported from the secret files, for the
@@ -192,6 +203,37 @@
         };
       };
 
+      # Chat with the agent from any Matrix app. The bot account is registered
+      # by the homeserver itself (`services.imperium.matrixBots.bots` there),
+      # with a generated password both machines share, so nothing is typed in.
+      matrix = {
+        enable = mkEnableOption "the Matrix gateway";
+        homeserver = mkOption {
+          type = types.str;
+          example = "https://matrix.example.org";
+        };
+        serverName = mkOption {
+          type = types.str;
+          example = "example.org";
+          description = "The homeserver's server_name, the part after the colon in user IDs.";
+        };
+        localpart = mkOption {
+          type = types.str;
+          default = user;
+          description = "The bot's local part; must be in the homeserver's matrixBots.bots.";
+        };
+        allowedUsers = mkOption {
+          type = types.listOf types.str;
+          example = ["@me:example.org"];
+          description = "Matrix IDs that may talk to the agent. Everyone else is ignored.";
+        };
+        deviceId = mkOption {
+          type = types.str;
+          default = "HERMES";
+          description = "A fixed device, so encrypted rooms keep trusting the same keys across restarts.";
+        };
+      };
+
       secrets = mkOption {
         type = types.listOf types.str;
         default = [];
@@ -243,6 +285,11 @@
             script = ''cp "$prompts/value" "$out/value"'';
           })
         cfg.secrets))
+        (lib.optionalAttrs mx.enable {
+          ${mxGenerator} = lib.recursiveUpdate (import ../noosphere/vox/_matrix-bot-var.nix {inherit pkgs;}) {
+            files.password.owner = user;
+          };
+        })
       ];
 
       systemd.services.hermes-gateway = {
@@ -251,7 +298,22 @@
         after = ["network-online.target" "user@${toString cfg.uid}.service"];
         wants = ["network-online.target" "user@${toString cfg.uid}.service"];
         path = tools;
-        environment = sessionEnv;
+        environment =
+          sessionEnv
+          // lib.optionalAttrs mx.enable {
+            # MATRIX_PASSWORD comes from the wrapper; the platform starts
+            # once it is set.
+            MATRIX_HOMESERVER = mx.homeserver;
+            MATRIX_USER_ID = "@${mx.localpart}:${mx.serverName}";
+            MATRIX_ALLOWED_USERS = lib.concatStringsSep "," mx.allowedUsers;
+            # Element encrypts DMs by default; plain rooms still work.
+            MATRIX_E2EE_MODE = "optional";
+            MATRIX_DEVICE_ID = mx.deviceId;
+            # Written once, when Hermes first sets up cross-signing; it is
+            # what restores the bot's encryption identity if its key store is
+            # ever lost.
+            MATRIX_RECOVERY_KEY_OUTPUT_FILE = "${home}/.hermes/matrix-recovery-key";
+          };
         serviceConfig =
           hardening
           // {
