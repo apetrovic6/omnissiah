@@ -5,6 +5,8 @@
     pkgs,
     ...
   }: {
+    imports = [self.nixosModules.pi-api-keys];
+
     # Optional: choose where secrets go (defaults to "sops")
     clan.core.vars.settings.secretStore = "sops";
 
@@ -25,6 +27,18 @@
         owner = "apetrovic";
       };
     };
+  };
+
+  # API keys for pi (and omp) coding agents, and for Hermes on ryza (which
+  # sets the owner to its own user; modules/rites/hermes.nix). Its own module
+  # so a machine without the workstation `vars` can declare it too; the
+  # `key` lets both import it without declaring it twice.
+  flake.nixosModules.pi-api-keys = {
+    lib,
+    pkgs,
+    ...
+  }: {
+    key = "omnissiah#pi-api-keys";
 
     # API keys for pi (and omp) coding agents. Shared across all machines so
     # the key is generated once and sops-encrypted in the clan secret store.
@@ -43,13 +57,13 @@
 
       files."qwen-api-key" = {
         secret = true;
-        owner = "apetrovic";
+        owner = lib.mkDefault "apetrovic";
         mode = "0400";
       };
 
       files."deepseek-api-key" = {
         secret = true;
-        owner = "apetrovic";
+        owner = lib.mkDefault "apetrovic";
         mode = "0400";
       };
 
