@@ -380,7 +380,7 @@ in {
                 mold
                 cargo
                 rustc
-                awk
+                gawk
                 # cargo needs a linker for build scripts (proc-macro2, libc,
                 # ...). Without it every build script fails with
                 # `linker 'cc' not found`. This wrapper provides cc/gcc/ld.
