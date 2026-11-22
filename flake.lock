@@ -2348,24 +2348,21 @@
     "microvm": {
       "inputs": {
         "nixpkgs": [
-          "magos",
-          "nixarchy",
           "nixpkgs"
         ],
         "spectrum": "spectrum"
       },
       "locked": {
-        "lastModified": 1794529892,
-        "narHash": "sha256-m5iXk3ILiCuRpCgqYWNiGVFmu8YLh2FNxxaZj/Auc10=",
+        "lastModified": 1795298370,
+        "narHash": "sha256-mruPu1cqOVBxPiRwrh6r1tnX1OAzMggy+rDk6YuqhK8=",
         "owner": "microvm-nix",
         "repo": "microvm.nix",
-        "rev": "194a254693f49af939a2b53d04982bd4b276fdb3",
+        "rev": "430a46d03ef15f1b8b715fafa85f21847960b783",
         "type": "github"
       },
       "original": {
         "owner": "microvm-nix",
         "repo": "microvm.nix",
-        "rev": "194a254693f49af939a2b53d04982bd4b276fdb3",
         "type": "github"
       }
     },
@@ -2632,7 +2629,9 @@
         "hyprland": "hyprland_2",
         "mcp-nixarchy": "mcp-nixarchy",
         "mcp-servers-nix": "mcp-servers-nix",
-        "microvm": "microvm",
+        "microvm": [
+          "microvm"
+        ],
         "nix-flatpak": [
           "nix-flatpak"
         ],
@@ -4080,6 +4079,7 @@
         "lanzaboote": "lanzaboote",
         "magos": "magos",
         "mcp-nixarchy": "mcp-nixarchy_2",
+        "microvm": "microvm",
         "nix-craftapps": "nix-craftapps",
         "nix-flatpak": "nix-flatpak",
         "nix-homebrew": "nix-homebrew",

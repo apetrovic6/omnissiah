@@ -67,6 +67,7 @@
         home-manager.follows = "home-manager";
         nix-flatpak.follows = "nix-flatpak";
         sops-nix.follows = "clan-core/sops-nix";
+        microvm.follows = "microvm";
       };
     };
 
@@ -77,6 +78,14 @@
 
     nixvirt = {
       url = "https://flakehub.com/f/AshleyYakeley/NixVirt/*.tar.gz";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # MicroVMs for isolated workloads (CI runners on ryza first). nixarchy
+    # brings its own copy through magos; it follows this one below, so there
+    # is a single pin.
+    microvm = {
+      url = "github:microvm-nix/microvm.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
