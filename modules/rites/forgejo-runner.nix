@@ -118,7 +118,7 @@ in {
 
       extraHostPackages = mkOption {
         type = types.listOf types.package;
-        default = [];
+        default = [  ];
         description = "Added to the shared toolset. Read the label warning at the top of this file first.";
       };
 
@@ -380,6 +380,7 @@ in {
                 mold
                 cargo
                 rustc
+                awk
                 # cargo needs a linker for build scripts (proc-macro2, libc,
                 # ...). Without it every build script fails with
                 # `linker 'cc' not found`. This wrapper provides cc/gcc/ld.
