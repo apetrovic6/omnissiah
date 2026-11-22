@@ -17,12 +17,11 @@ in {
 
     ./vllm.nix
 
-    # ./llama-cpp.nix and ./llama-swap.nix are left on disk but NOT imported:
-    # Strata replaced the llama.cpp engine outright, and its server does its own
-    # lazy load / idle unload (--lazy, --idle-unload), which was the only part of
-    # llama-swap still earning its keep once coder-30b and qwen36-35b-q4 were
-    # dropped. Re-import llama-swap.nix if a second model ever comes back.
+    # Strata serves Qwen3.8 on :8000. llama-swap is back on :8001 for models
+    # Strata cannot run (it only knows the qwen/coder families) -- re-imported
+    # 2026-11-21 for Inkling 2 Mini. ./llama-cpp.nix stays unimported.
     ./strata.nix
+    ./llama-swap.nix
   ];
 
   nixpkgs.config.cudaCapabilities = ["8.6"];

@@ -40,6 +40,32 @@
   llamaCpp = (pkgs.llama-cpp.override {cudaSupport = true;}).overrideAttrs {doCheck = false;};
   llamaServer = lib.getExe' llamaCpp "llama-server";
 
+  # Inkling 2 (arch `inkling2`) needs ggml-org/llama.cpp#32704, still open as
+  # of 2026-11-21: without it the NVFP4 scales in unsloth's quants are not
+  # dequantized correctly and stock llama.cpp produces gibberish. Used ONLY by
+  # the inkling entry so the other models stay on the nixpkgs build. Drop this
+  # once a nixpkgs llama-cpp bump contains the PR.
+  #
+  # The nixpkgs recipe builds the chat web UI with npm from tools/ui; this
+  # tree keeps it in ui/ instead, so that step fails ("pushd: tools/ui: No such
+  # file or directory"). Every model here runs --no-webui and the tree's own
+  # LLAMA_BUILD_UI defaults OFF, so the npm step is dropped rather than repointed.
+  llamaCppInkling = llamaCpp.overrideAttrs (old: {
+    nativeBuildInputs = lib.filter (p: p != pkgs.npmHooks.npmConfigHook) old.nativeBuildInputs;
+    # This tree's ggml-cuda.cu includes nvml.h, which the nixpkgs recipe's CUDA
+    # inputs predate: "fatal error: nvml.h: No such file or directory".
+    buildInputs = old.buildInputs ++ [pkgs.cudaPackages.cuda_nvml_dev];
+    npmDeps = null;
+    preConfigure = "";
+    version = "0-unstable-pr32704";
+    src = pkgs.fetchFromGitHub {
+      owner = "ggml-org";
+      repo = "llama.cpp";
+      rev = "2a28df0f9bd55c4975b6bffb35229a6020720f13";
+      hash = "sha256-VoBt+gGvfbNWVK9su2ErnaiNVPMlq7aRNUqUQbn1dx4=";
+    };
+  });
+
   # Models live in the user's home so they can be fetched without sudo,
   # persisted via the "models" entry in users.apetrovic.directories
   # (users/apetrovic/persistence.nix). The service cannot read that path
@@ -78,6 +104,7 @@
     parallel ? 1,
     ttl ? 900,
     extraFlags ? "",
+    server ? llamaServer,
   }: {
     # Seconds idle before the model is unloaded and the VRAM released. Confirm
     # the key against upstream's config.example.yaml if a release renames it;
@@ -85,7 +112,7 @@
     inherit ttl;
 
     cmd = ''
-      ${llamaServer} --port ''${PORT}
+      ${server} --port ''${PORT}
         --model ${sandboxModelsDir}/${file}
         --ctx-size ${toString ctxSize}
         --parallel ${toString parallel}
@@ -101,7 +128,9 @@ in {
   services.llama-swap = {
     enable = true;
     listenAddress = "127.0.0.1";
-    port = 8000;
+    # 8001, not 8000: Strata (./strata.nix) owns 8000 and runs alongside this
+    # for the Qwen3.8 model. This proxy serves everything Strata cannot.
+    port = 8001;
 
     settings = {
       # Cold start here is over four minutes for the larger entries. Too low a
@@ -125,6 +154,57 @@ in {
         "qwen36-35b-q4" = mkModel {
           file = "Qwen3.6-35B-A3B-UD-IQ4_XS.gguf";
           ctxSize = 131072;
+        };
+
+        # Inkling 2 Mini: 26.2B MoE (8 of 128 experts), 3.4B active, the middle
+        # 12 of 24 layers looped three times (~5.4B effective active). 17.6GB
+        # Q4_K_XL from unsloth's Mainline_Support/ (renamed from .gguf_file);
+        # the repo-root files use unsloth's own layout and do NOT load on
+        # mainline. Multimodal via the mmproj.
+        #
+        # Sampling per unsloth: temp 1.0, no truncation. The card warns it can
+        # get stuck in long reasoning loops, and minimum reasoning effort does
+        # not fully disable thinking -- cap output tokens client-side.
+        # Card claims up to 1M context. 131072, not unsloth's 32768 example: 32K
+        # is mostly eaten by an agent harness's system prompt and tool schemas.
+        # KV IS cheap (only 8 of 48 layer passes are global, 2.2GB at 128K q8_0)
+        # but the COMPUTE buffer is not -- the global layers' scratch scales
+        # with ctx x ubatch. At the default ubatch 512 and 128K it is ~13.5GB,
+        # auto-fit cannot place a single layer, and the model silently runs
+        # CPU-only (~7 tok/s, nvidia-smi shows nothing loaded). Hence:
+        #
+        #   --ubatch-size 128  compute buffer ~3.2GB; 256 is already worse
+        #                      (fewer layers fit; 5.8 tok/s measured).
+        #   --no-op-offload    op offload stages RAM-resident experts on the
+        #                      GPU for prompt batches and wants a 6.5-10.4GB
+        #                      buffer (on CUDA0 regardless of --main-gpu). It
+        #                      OOMs at every ctx size on these cards.
+        #   --device CUDA1     card 0 drives the display, and Strata also lives
+        #                      on card 1. Both cards measured faster
+        #                      (68 / 15.1 vs 54 / 10.3 tok/s prefill / decode)
+        #                      at the cost of ~3GB of the desktop card.
+        #
+        # Measured 2026-11-21, CUDA1 only, 1417-token prompt: prefill 54 tok/s,
+        # decode 10.3 tok/s. Prefill is the weak spot -- experts live in RAM
+        # and run prompt batches on the CPU -- so a long first agent turn is
+        # slow; the prefix cache covers later ones.
+        #
+        # Keep in sync with the llama-swap provider (contextWindow) in magos
+        # modules/features/pi/default.nix and modules/features/omp/default.nix.
+        "inkling2-mini-q4" = mkModel {
+          server = lib.getExe' llamaCppInkling "llama-server";
+          file = "Inkling-2-Mini/Inkling-2-Mini-UD-Q4_K_XL.gguf";
+          ctxSize = 131072;
+          extraFlags = builtins.concatStringsSep " " [
+            "--mmproj ${sandboxModelsDir}/Inkling-2-Mini/mmproj-F16.gguf"
+            "--device CUDA1"
+            "--ubatch-size 128"
+            "--no-op-offload"
+            "--temp 1.0"
+            "--top-p 1.0"
+            "--top-k 0"
+            "--min-p 0.0"
+          ];
         };
 
         # qwen4exp: 512 experts with 10 active, 3 of every 4 layers linear
