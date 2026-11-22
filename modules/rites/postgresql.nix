@@ -72,7 +72,7 @@
 
         databases = mkOption {
           type = types.listOf types.str;
-          default = flatten (mapAttrsToList (_: u: u.databases) cfg.users);
+          default = lib.unique (flatten (mapAttrsToList (_: u: u.databases) cfg.users));
           description = "List of databases to backup. Defaults to all databases managed by imperium users.";
         };
       };
@@ -130,6 +130,29 @@
               '';
             };
 
+            readOnlyAccess = mkOption {
+              description = ''
+                Databases this role may read but not change, keyed by database name.
+                The role gets CONNECT on the database, USAGE on its `public` schema and
+                SELECT on every table in it, including tables created LATER by the
+                database's owner role: that is done with ALTER DEFAULT PRIVILEGES
+                FOR ROLE <owner>, so it keeps working when an application creates or
+                migrates its own tables after the grants ran (Blocky does exactly
+                that on first start). Nothing else is granted: no INSERT/UPDATE/
+                DELETE/TRUNCATE, no CREATE, no other database. Re-applied on every
+                postgresql-password-init run, so it also catches tables that exist
+                already. Use with `databases = []` for a role that owns nothing.
+              '';
+              default = {};
+              type = types.attrsOf (types.submodule {
+                options.owner = mkOption {
+                  type = types.str;
+                  description = "The role that creates the tables in this database (the application's role).";
+                };
+              });
+              example = {blocky.owner = "blocky";};
+            };
+
             extensions = mkOption {
               type = types.listOf types.str;
               default = [];
@@ -147,7 +170,7 @@
 
         extensions = ps: mapAttrsToList (_: f: f ps) cfg.extensions;
 
-        ensureDatabases = flatten (mapAttrsToList (_: u: u.databases) cfg.users);
+        ensureDatabases = lib.unique (flatten (mapAttrsToList (_: u: u.databases) cfg.users));
 
         ensureUsers =
           mapAttrsToList (name: u: {
@@ -224,10 +247,18 @@
                         u.extensions
                     )
                     u.databases);
+                  roCmds = mapAttrsToList (db: ro: ''
+                    echo "Granting '${userName}' read-only access to '${db}' (tables of '${ro.owner}')..."
+                    ${psql} -d postgres -c "GRANT CONNECT ON DATABASE \"${db}\" TO \"${userName}\";"
+                    ${psql} -d "${db}" -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO \"${userName}\";" \
+                      -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${userName}\";" \
+                      -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"${ro.owner}\" IN SCHEMA public GRANT SELECT ON TABLES TO \"${userName}\";"
+                  '') u.readOnlyAccess;
                 in ''
                   echo "Setting password for user '${userName}'..."
                   PASSWORD=$(cat "${passwordFile}")
                   ${psql} -c "ALTER USER \"${userName}\" WITH PASSWORD '$PASSWORD';"
+                  ${builtins.concatStringsSep "\n" roCmds}
                   ${builtins.concatStringsSep "\n" extCmds}
                 '')
                 cfg.users;
