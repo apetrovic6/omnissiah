@@ -554,7 +554,13 @@
         # database machine (cerberus) imports.
         services.imperium.postgresql.users.blocky_grafana = mkIf (ql.enable && isDatabaseMachine) {
           databases = [];
-          readOnlyAccess.blocky.owner = "blocky";
+          readOnlyAccess.blocky = {
+            owner = "blocky";
+            # Only from the LAN (cluster pods are masqueraded to node addresses in it).
+            addresses = [self.lib.lan.cidr];
+            # Blocky only AutoMigrates + inserts, it creates no temp tables.
+            revokePublicTemp = true;
+          };
           passwordDependency = "blocky-grafana";
         };
       })

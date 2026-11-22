@@ -46,6 +46,7 @@ in
           postgresql-blocky.files.password.path = pwFile "blocky";
           postgresql-blocky_grafana.files.password.path = pwFile "ro";
           postgresql-other.files.password.path = pwFile "other";
+          postgresql-aaa_broken.files.password.path = pwFile "other";
         };
 
         services.imperium.postgresql = {
@@ -62,7 +63,16 @@ in
           # As production: owns nothing, reads blocky's tables.
           users.blocky_grafana = {
             databases = [];
-            readOnlyAccess.blocky.owner = "blocky";
+            readOnlyAccess.blocky = {
+              owner = "blocky";
+              revokePublicTemp = true;
+            };
+          };
+          # Sorts BEFORE the others: its grant fails (no such database) and must
+          # neither stop the later users nor go unnoticed.
+          users.aaa_broken = {
+            databases = [];
+            readOnlyAccess.nosuchdb.owner = "x";
           };
         };
       };
@@ -126,8 +136,32 @@ in
           ro_fails("select * from secrets", database="other")
           ro_fails("select * from pg_shadow")
 
+      with subtest("the role cannot even CONNECT to another database (pg_hba pin)"):
+          for other_db in ["other", "postgres", "template1"]:
+              out = db.fail(
+                  f"PGPASSWORD=${pw.ro} psql -h 127.0.0.1 -U blocky_grafana -d {other_db} -tA -c 'select 1' 2>&1"
+              )
+              assert "pg_hba.conf rejects connection" in out, out
+          # the pin does not lock out the other roles
+          sql("other", "${pw.other}", "other", "select 1")
+          # ... and the generated lines come first, before the generic ones
+          hba = db.succeed("su postgres -c \"psql -tA -c \\\"select type, database, user_name, address, auth_method from pg_hba_file_rules order by line_number\\\"\"")
+          lines = hba.strip().splitlines()
+          pin = lines.index("host|{blocky}|{blocky_grafana}|127.0.0.1|scram-sha-256")
+          generic = lines.index("host|{all}|{all}|127.0.0.1|scram-sha-256")
+          assert pin < generic, hba
+
+      with subtest("no temp tables where REVOKE TEMP applies"):
+          ro_fails("create temp table t (x int)")
+
+      with subtest("a failing grant is loud, fails the unit, and does not stop the later users"):
+          db.succeed("systemctl is-failed postgresql-password-init.service")
+          db.succeed("journalctl -u postgresql-password-init.service | grep -q \"read-only grant for 'aaa_broken' on 'nosuchdb' FAILED\"")
+          # 'other' sorts after aaa_broken: its password was still set
+          sql("other", "${pw.other}", "other", "select 1")
+
       with subtest("re-applying the grants (every deploy) is idempotent"):
-          db.succeed("systemctl restart postgresql-password-init.service")
+          db.fail("systemctl restart postgresql-password-init.service")  # still fails: aaa_broken
           assert ro("select count(*) from log_entries").strip() == "1"
           ro_fails("delete from log_entries")
     '';
