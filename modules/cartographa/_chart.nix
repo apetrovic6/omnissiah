@@ -11,9 +11,13 @@ rec {
   lan = {
     cidr = "192.168.1.0/24";
     gateway = "192.168.1.1";
-    # Technitium on cerberus, the only resolver that knows the split-horizon
-    # names.
-    dns = hosts.cerberus;
+    # The LAN's resolvers: Blocky on each, identical configs
+    # (modules/rites/blocky.nix), the only resolvers that know the
+    # split-horizon names. On three independent machines (cerberus and ryza
+    # are VMs on different Proxmox hosts, servitor is its own board), so one
+    # going down or restarting never takes DNS away. Resolvers ask the first
+    # and move on to the next when it fails.
+    resolvers = with hosts; [cerberus ryza servitor];
   };
 
   hosts = {

@@ -210,9 +210,9 @@
               matchConfig.MACAddress = m.mac;
               address = ["${subnet}.2/24"];
               gateway = ["${subnet}.1"];
-              # Technitium on cerberus: ncps.noosphere.uk and the forges must
-              # resolve to the LAN, as on every other runner.
-              dns = [self.lib.lan.dns];
+              # The LAN's Blocky resolvers: ncps.noosphere.uk and the forges
+              # must resolve to the LAN, as on every other runner.
+              dns = self.lib.lan.resolvers;
             };
 
             nix.settings = let

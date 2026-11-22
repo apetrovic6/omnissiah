@@ -31,7 +31,7 @@
     address = self.lib.lan.gateway;
     interface = "end0";
   };
-  networking.nameservers = [self.lib.lan.dns];
+  networking.nameservers = self.lib.lan.resolvers;
 
   environment.etc."NetworkManager/conf.d/unmanaged-end0.conf".text = ''
     [keyfile]
@@ -189,10 +189,6 @@
   # everything is built on phalanx and copied over.
   zramSwap.enable = true;
 
-  # Blocky, in parallel with Technitium for now: port 5335 (53 is Technitium's
-  # on cerberus; 5353 is mDNS).
-  services.imperium.blocky = {
-    enable = true;
-    port = 5335;
-  };
+  # One of the LAN's three resolvers (cartographa lan.resolvers).
+  services.imperium.blocky.enable = true;
 }

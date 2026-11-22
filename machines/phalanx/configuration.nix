@@ -61,7 +61,7 @@ in {
   };
 
   networking = {
-    nameservers = [self.lib.lan.dns];
+    nameservers = self.lib.lan.resolvers;
     defaultGateway = {
       address = self.lib.lan.gateway;
       interface = "enp6s0";

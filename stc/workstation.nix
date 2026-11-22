@@ -85,11 +85,11 @@
 
     services.udev.packages = [pkgs.probe-rs-tools];
 
-    networking.nameservers = [self.lib.lan.dns];
+    networking.nameservers = self.lib.lan.resolvers;
     # Prevent NetworkManager from pushing DHCP-provided DNS to systemd-resolved,
-    # which would override Technitium and cause intermittent split-horizon failures.
+    # which would override the LAN resolvers and cause intermittent split-horizon failures.
     networking.networkmanager.dns = lib.mkForce "none";
-    # Remove compiled-in fallback DNS servers so only Technitium is used.
+    # Remove compiled-in fallback DNS servers so only the LAN resolvers are used.
     services.resolved.settings.Resolve.FallbackDNS = [];
 
     services.gnome.gnome-keyring.enable = true;

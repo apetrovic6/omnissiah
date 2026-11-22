@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 #
-# Ask the old resolver (Technitium) and the new ones (Blocky) the same
-# questions and report where they disagree, before any client is switched over.
+# Ask several resolvers the same questions and report where they disagree.
 #
-# The LAN resolver is moving from Technitium (cerberus, 192.168.1.105:53) to
-# three Blocky instances (cerberus .105, ryza .45, servitor .13), first running
-# in parallel on port 5335. Each candidate is compared against the reference
-# for four name sets:
+# By default: the three Blocky instances (cartographa lan.resolvers) against
+# each other, cerberus as the reference, all on port 53. They are built from
+# one config, so any difference means one is stale (deploy them as a set) or
+# broken. During the Technitium cutover it compared Technitium against Blocky
+# (`--reference` with Technitium, Blocky as the candidates); the notes about
+# Technitium below are from then. Each candidate is compared against the
+# reference for four name sets:
 #
 #   1. split-horizon  sorted A-record sets must be IDENTICAL
 #      (plus an informational set -- the apex names -- that is reported but
@@ -26,7 +28,7 @@
 #
 # Usage:  ./rituals/dns-compare.sh [--reference HOST[:PORT]] [CANDIDATE[:PORT] ...]
 #   reference   default 192.168.1.105:53
-#   candidates  default 192.168.1.105:5335 192.168.1.45:5335 192.168.1.13:5335
+#   candidates  default 192.168.1.45:53 192.168.1.13:53
 #   (port defaults to 53)
 #
 # Needs `dig`:  nix shell nixpkgs#dig -c ./rituals/dns-compare.sh
@@ -40,7 +42,7 @@
 set -euo pipefail
 
 DEFAULT_REFERENCE="192.168.1.105:53"
-DEFAULT_CANDIDATES=("192.168.1.105:5335" "192.168.1.45:5335" "192.168.1.13:5335")
+DEFAULT_CANDIDATES=("192.168.1.45:53" "192.168.1.13:53")
 
 # --- Name sets ---------------------------------------------------------------
 
@@ -54,7 +56,7 @@ SPLIT_HORIZON=(
   matrix.ugalabugala.org # public VPS answer
 )
 for _n in ha forge ntfy immich vaultwarden kaneo memos dav plex tautulli \
-  audiobookshelf nopresh pilot proxmox syn technitium; do
+  audiobookshelf nopresh pilot proxmox syn; do
   SPLIT_HORIZON+=("${_n}.ugalabugala.org")
 done
 

@@ -28,19 +28,11 @@
     interface = "ens18";
   };
 
-  # Technitium on this host is the only resolver, as on the workstations
-  # (stc/workstation.nix). The router and 9.9.9.9 both give the public answer
+  # Only the LAN's Blocky resolvers (this host is one of them), as on the
+  # workstations (stc/workstation.nix). The router and 9.9.9.9 both give the public answer
   # for the split-horizon names: ncps.noosphere.uk resolved to the VPS, which
   # served Traefik's default certificate, and CI substitution from ncps failed.
-  networking.nameservers = [self.lib.lan.dns];
+  networking.nameservers = self.lib.lan.resolvers;
 
   services.resolved.settings.Resolve.FallbackDNS = [];
-
-  # The LAN's resolver, and the authority for the split-horizon zones.
-  services.imperium.technitium-dns-server = {
-    enable = true;
-    subdomain = "technitium";
-    openFirewall = true;
-    port = 5380;
-  };
 }

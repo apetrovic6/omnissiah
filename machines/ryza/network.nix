@@ -23,9 +23,9 @@
     matchConfig.MACAddress = "bc:24:11:5a:6e:01";
     address = ["${self.lib.hosts.ryza}/24"];
     gateway = [self.lib.lan.gateway];
-    # Technitium on cerberus, the only resolver that knows the split-horizon
+    # The LAN's Blocky resolvers, the only ones that know the split-horizon
     # names (ncps.noosphere.uk must resolve to the LAN for substitution).
-    dns = [self.lib.lan.dns];
+    dns = self.lib.lan.resolvers;
     linkConfig.RequiredForOnline = "routable";
   };
 

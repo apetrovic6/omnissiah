@@ -28,7 +28,7 @@
       address = self.lib.lan.gateway;
       interface = "enp1s0";
     };
-    networking.nameservers = [self.lib.lan.dns];
+    networking.nameservers = self.lib.lan.resolvers;
 
     # Host-step cargo builds cache into the `sccache` bucket on garage-main
     # (modules/rites/sccache.nix); wired into the runner by forgejo-runner.nix.

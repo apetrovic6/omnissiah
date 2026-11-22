@@ -88,10 +88,6 @@
     settings.PasswordAuthentication = false;
   };
 
-  # Blocky, in parallel with Technitium for now: port 5335 (53 is Technitium's
-  # on cerberus; 5353 is mDNS).
-  services.imperium.blocky = {
-    enable = true;
-    port = 5335;
-  };
+  # One of the LAN's three resolvers (cartographa lan.resolvers).
+  services.imperium.blocky.enable = true;
 }

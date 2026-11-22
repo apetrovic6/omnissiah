@@ -9,10 +9,15 @@
   }: let
     domain = config.noosphere.domain;
 
+    # The LAN's Blocky resolvers; CoreDNS' forward picks among them and skips
+    # one that stops answering (its health checks), so a Blocky restart
+    # never breaks lookups from pods.
+    lanResolvers = builtins.concatStringsSep " " cartographa.lan.resolvers;
+
     # `<machine>.omnissiah.internal` for every address in cartographa, answered
     # by CoreDNS itself (below). ExternalName Services point Traefik at these
     # (_modules/ingress.nix `outside`), so routing to a machine outside the
-    # cluster never depends on Technitium. The joiner carries the indentation
+    # cluster never depends on the LAN resolvers. The joiner carries the indentation
     # the lines need inside the YAML block below; interpolated text is not
     # re-indented by Nix.
     machineHosts =
@@ -96,17 +101,17 @@
                 - name: cache
                   parameters: 30
                 - name: forward
-                  parameters: . ${cartographa.hosts.cerberus}
+                  parameters: . ${lanResolvers}
               # Split-horizon for the Caddy LAB_DOMAIN zone, the same way noosphere.uk
               # is pinned above, for one concrete reason: Alertmanager publishes to
               # https://ntfy.ugalabugala.org (machines/cerberus/ntfy.nix), and that name
               # must answer 192.168.1.105 from inside a pod. Measured on 2026-11-06:
-              #   dig @192.168.1.105 ntfy.ugalabugala.org -> 192.168.1.105   (Technitium,
-              #     zone is wildcarded, and CoreDNS' `forward . /etc/resolv.conf` lands
-              #     on the same server because rke2 gives the coredns pod the node's
-              #     resolver: its /etc/resolv.conf is `nameserver 192.168.1.105`)
+              #   dig @192.168.1.105 ntfy.ugalabugala.org -> 192.168.1.105   (then
+              #     Technitium, now Blocky; CoreDNS' `forward . /etc/resolv.conf` lands
+              #     on the same servers because rke2 gives the coredns pod the node's
+              #     resolvers)
               #   dig @1.1.1.1 ha.ugalabugala.org          -> 152.53.34.16   (the VPS)
-              # So it works today only because every node's resolver is Technitium, and
+              # So it would work only because every node's resolver is a LAN Blocky, and
               # this lab has already lost that once: cerberus ran NetworkManager and
               # networkd on one NIC at the same time and "both pushed the router's DNS
               # onto the link", while machines/cerberus/configuration.nix documents that
@@ -122,7 +127,7 @@
                 - name: cache
                   parameters: 30
                 - name: forward
-                  parameters: . ${cartographa.hosts.cerberus}
+                  parameters: . ${lanResolvers}
               # The clan's machines by name, from cartographa, answered here and
               # nowhere else: the targets of ExternalName Services. `.internal`
               # is the TLD reserved for private use, so it can never shadow a
