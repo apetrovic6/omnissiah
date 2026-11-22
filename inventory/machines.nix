@@ -38,6 +38,14 @@ in {
       deploy.buildHost = "localhost";
     };
 
+    # General-purpose VM next to mars (tofunix manufactorum.nix): CI runners
+    # and the always-on agent.
+    ryza = {
+      tags = ["base"];
+      deploy.targetHost = "root@${hosts.ryza}";
+      deploy.buildHost = "localhost";
+    };
+
     cypramundi = {
       tags = [];
       deploy.targetHost = "root@${hosts.cypramundi}";
