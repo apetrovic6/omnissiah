@@ -46,6 +46,17 @@
         description = "Mount point of the persistent volume.";
       };
 
+      keepEtc = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Keep all of /etc. Without it /etc is rebuilt from the configuration
+          on every boot, so nothing in it may be state: the machine then needs
+          a declarative machine-id (clan.core.settings.machine-id) and host
+          keys from clan vars.
+        '';
+      };
+
       directories = mkOption {
         type = entries;
         description = "System directories to keep. Definitions add to the defaults.";
@@ -105,17 +116,20 @@
     config = mkIf cfg.enable {
       # What every machine with an ephemeral root needs to keep.
       services.imperium.impermanence = {
-        directories = [
-          "/etc"
-          "/var/spool"
-          "/root"
-          "/srv"
-          "/var/lib/bluetooth"
-          "/var/lib/nixos"
-          "/var/db/sudo/lectured"
-          "/var/lib/systemd/coredump"
-          "/etc/NetworkManager/system-connections"
-        ];
+        directories =
+          lib.optionals cfg.keepEtc [
+            "/etc"
+            "/etc/NetworkManager/system-connections"
+          ]
+          ++ [
+            "/var/spool"
+            "/root"
+            "/srv"
+            "/var/lib/bluetooth"
+            "/var/lib/nixos"
+            "/var/db/sudo/lectured"
+            "/var/lib/systemd/coredump"
+          ];
         files = [
           {
             file = "/var/keys/secret_file";
@@ -123,6 +137,13 @@
           }
         ];
       };
+
+      assertions = [
+        {
+          assertion = cfg.keepEtc || config.clan.core.settings.machine-id.enable or false;
+          message = "services.imperium.impermanence.keepEtc = false needs clan.core.settings.machine-id.enable: /etc/machine-id would change on every boot.";
+        }
+      ];
 
       boot.tmp.cleanOnBoot = lib.mkDefault true;
 

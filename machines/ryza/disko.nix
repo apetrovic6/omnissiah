@@ -1,7 +1,7 @@
 # ryza's disk: btrfs subvolumes for impermanence (configuration.nix). The root
-# subvolume is reset to `root-blank` on every boot; /nix, /persist, /var/lib
-# and /var/log are kept, as on the workstations. No LUKS: an unattended VM has
-# no one to type a passphrase at boot.
+# subvolume is reset to `root-blank` on every boot; only /nix and /persist are
+# kept, and configuration.nix lists what is bind-mounted from /persist. No
+# LUKS: an unattended VM has no one to type a passphrase at boot.
 #
 # CHANGING this configuration requires wiping and reinstalling the machine.
 {
@@ -55,14 +55,6 @@
                 mountpoint = "/persist";
                 mountOptions = opts;
               };
-              "/log" = {
-                mountpoint = "/var/log";
-                mountOptions = opts;
-              };
-              "/lib" = {
-                mountpoint = "/var/lib";
-                mountOptions = opts;
-              };
             };
           };
         };
@@ -71,6 +63,4 @@
   };
 
   fileSystems."/persist".neededForBoot = true;
-  fileSystems."/var/log".neededForBoot = true;
-  fileSystems."/var/lib".neededForBoot = true;
 }

@@ -11,27 +11,65 @@
     ./hermes.nix
   ];
 
-  # An ephemeral root (disko.nix). The shared module keeps /etc and a few
-  # paths; /var/lib and /var/log are their own subvolumes, so all service
-  # state survives (Hermes, the CI microVM, Blocky, the sops key). /home, /tmp,
-  # /var/cache and anything else written by hand go away on reboot.
+  # A strict ephemeral root (disko.nix): only /nix and /persist survive a
+  # reboot, and from /persist only what is listed here (plus the shared
+  # module's few defaults, such as /var/lib/nixos and /root). Not even /etc:
+  # it is rebuilt from the configuration on every boot. A service that keeps
+  # state somewhere unlisted loses it on reboot, so a new service on ryza
+  # adds its state directory here.
   services.imperium.impermanence = {
     enable = true;
+    keepEtc = false;
     # Plain btrfs, no LUKS: wait for the partition, not for an unlock.
     rollback = {
       device = "/dev/disk/by-partlabel/ryza-root";
       after = ["dev-disk-by\\x2dpartlabel-ryza\\x2droot.device"];
     };
+    directories = [
+      "/var/log"
+      # Persistent timers, the random seed, linger.
+      "/var/lib/systemd"
+      {
+        directory = "/var/lib/hermes";
+        user = "hermes";
+        group = "hermes";
+        mode = "0700";
+      }
+      # The CI microVM's disk images (100 GiB store overlay, 40 GiB /var).
+      {
+        directory = "/var/lib/microvms";
+        user = "microvm";
+        group = "kvm";
+        mode = "0775";
+      }
+      # DynamicUser state: Blocky's list cache, the runner's cargo cache.
+      {
+        directory = "/var/lib/private";
+        mode = "0700";
+      }
+      "/var/lib/blocky-nrd"
+      # Guard state. The onion key itself comes from clan vars.
+      {
+        directory = "/var/lib/tor";
+        user = "tor";
+        group = "tor";
+        mode = "0700";
+      }
+    ];
   };
 
-  # The CI VM's disk images live here (100 GiB store overlay, 40 GiB /var).
-  # Copy-on-write fragments VM images badly on btrfs, so files created in
-  # this directory get NOCOW. It only applies to files created after the
-  # flag, which on a fresh install is all of them.
-  systemd.tmpfiles.rules = [
-    "d /var/lib/microvms 0775 microvm kvm -"
-    "h /var/lib/microvms - - - - +C"
-  ];
+  # /etc/machine-id from a clan var, as /etc is not kept.
+  clan.core.settings.machine-id.enable = true;
+
+  # The sops age key is read before the bind mounts exist, so it lives on the
+  # persistent subvolume itself; `clan machines install` uploads it there.
+  clan.core.vars.sops.secretUploadDirectory = "/persist/var/lib/sops-nix";
+
+  # Copy-on-write fragments VM images badly on btrfs, so files created in the
+  # microVM directory get NOCOW. It only applies to files created after the
+  # flag, which on a fresh install is all of them. Set on /persist, the real
+  # directory, rather than on the bind mount.
+  systemd.tmpfiles.rules = ["h /persist/var/lib/microvms - - - - +C"];
 
   # tofunix enables the agent on the VM; Proxmox reads IPs and shuts the guest
   # down cleanly through it.
