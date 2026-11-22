@@ -5,24 +5,24 @@ metadata:
     namespace: observability
 spec:
     secretTemplates:
-        - name: ENC[AES256_GCM,data:7D00cP0n82rno/10F16/i1zIuPD28HcJlacP3wM7THo+3A==,iv:+o/WL6ew3q5rp+KAjyE9GIYS+HFYqBSgx0aBO+aVdO8=,tag:XimvVzt12K0pocpy8QIZNQ==,type:str]
-          type: ENC[AES256_GCM,data:2rPk3C46,iv:Um+GglCiqJqYK/rlVfOns8H5x844/R7V8pukpBkaBZw=,tag:Yau25u91/N9oLbBBG8Jgqg==,type:str]
+        - name: ENC[AES256_GCM,data:5tNeEU6l3XctggO++7VmOlOifcGRYkkhwWkTXJcEAXfZ+A==,iv:xuWixe+pcwM5hPWBHCEANdtRfcHBHH0p8f9mt/NtL5s=,tag:tlcfhlYo/AAWRqEoqlIngQ==,type:str]
+          type: ENC[AES256_GCM,data:E8q8jzpO,iv:gz1PY/AMOAPpGpLHkqlRmz+zugNmCdXiyWPHqYdb9gY=,tag:994fF9tpTUdK9Z9MR9bgMw==,type:str]
           labels:
-            grafana_datasource: ENC[AES256_GCM,data:dg==,iv:PyBsY4acdJZ2vf1JfFntWPvDPIH00stergaVTgFmDnY=,tag:ZdXoslu2eTxinTdvrUwEPA==,type:str]
+            grafana_datasource: ENC[AES256_GCM,data:Mw==,iv:TpDdh+Zb7zn3mdMrY2j4dO5AduknbKEfRYd1AJVIyUc=,tag:z6IWhg5djLhteAHBBAfOQQ==,type:str]
           stringData:
-            blocky-querylog.yaml: ENC[AES256_GCM,data:wY/MCfeStOVxzOQQN02ScVM9jijsXZ6cl1rF75EVrh24NFeZWl9P0dg9/4GnLSMv/w6MmHmzxxF2iWtoDmb33AoXK56EQEStx7ilPwL5iQwY3P9c5tzr62s+KPGX9VB2S1qIMi8KnVh+yTUWPYkQOzUlEjOEkxR2KACjglhfZ/AlLp5gelmLPqbZaEpKTyDWFrdhqAegBjs+N8V9SyBP+0koAHKo7BltkYwtMepc7yLp5fVfzcvVB0X3moBQxNzyN4mZWcyVONw6wy65+Ax3GhzTXDZCZ83XTXYnkokOV9p61BlRrzltsYMAqMoKcbI0C+Akc5YnDCdBL/gHwnY+nruHSACA/KP1a3qhutGVmXUol/1NP+EXpQYDdeuf0Oyy2j60FD80EaWTC+Ruusy5T+Yq3hFmC8gi7f0rIcSxv8Aeu8S8myYCXc3g2WP6jzK7+qiITs5SBVPAGZ9Hwa2hYPsz5P0pfrR0yQ2DycOr7quLJ4gAz1criIDoTJJ16x75J4gQ3OepKvUI9PYcvLP3jWlNQlu14aHqfdCNNXHv/g==,iv:WB4SznEDWgqW7FuXF6nMKcKNM2hykZBBI0ofKFQKmis=,tag:L02H/lSg4Nv/+b2/nrYzGA==,type:str]
+            blocky-querylog.yaml: ENC[AES256_GCM,data:RZPBTJKzYR7pCrBa8uTLxl/AfpaX1fCKWM/iKgfUKTVkBZyUFqDhJ9S0YkdstWM2wYH65XgybqPjbHMuvi7Ag0b+FnhGuXNnz2FJuOZGTSbByswcAuz6+jtYJkKdvCsRM2os1amTgqD4ipmrumnmH4r8ZCdXHLXyvGJf1Ads/Fdpv3gcCIhqNpyBwIVqksPKvtJM6WVHGoHCBMYkPLqEabVYwBFkw3gD4cmY28sJbjW3gXGOOn50tyBlQu95Y2fIbcPIkqsEvBc20WNjSfV62vVxZcUyZyTVP5RGTbCUSKqmkH41HeG/vshDarDeg0vrMaLdttBrRuvMIQvuaR+101RqfMjaW1e1IUP5QKcZUs173tvlxyMEG5FOTCmVAbZuahVRsKmL9Y7F6C+Vsgnlt1/5AwAWWCRBp0sF+zUpxpNamW8ugTN45EAt+cIFeewcghokfRt9PH/dd7yuQT/rIcxuzEOaSBRsUPIo7UijIqOMOVPBv3Xgggu8x35wr8/LXW2PRpCeOtWcgqCo7fA8N0Nbv19dCBRjkGNFhXpIIA==,iv:/O1/LYX8EjCIYzudz/0dCrYdxrdmj2Edgb4b9aKLJMo=,tag:TELeqrFgpSpfuxI9bZy0jA==,type:str]
 sops:
     age:
         - enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBtaUhucWlVTC8vTC9GUmZa
-            K09MR2ZzYnBvc2U3ZjdQZzJFYVgxOFErT3dnCkNIaFRFZ2N6YlN1TnV3K2xIVGFU
-            Yy9IUE85aUc5VFhCeUZjUFBKT3FFUGsKLS0tIFZsNk9CNXhScS9NTjN4NlAwNjJw
-            T29mOW1ISGNzQlJwYWlGRDU0d2xiR3MKg6XYMtthfpxx0i8NG6rAL5gAokzgNqXL
-            TzYEAMKHU3d4Xi/4NwDjY+TpPKRXf919ke9BzDSYFQtIKVRUXIUPsw==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBsWmpkZWpqYVFXYTNWS3hY
+            TndVeEJJMG5uS1pqc1NyTXJrZEhlajVGN1dvClYzNVExaC9IN25jMHFqd0N1dTdy
+            MFdSSm9JcWJSMGZuclNVQnlxMXBNV00KLS0tIGl5b2hMbzVNdWVCdDV6RjkvaUta
+            ckwwUzYzZnIvVmE5bWo0NFVQR0JxV1UK3ZryyOZRCLo94JWH0kBe1LWLJB55tUUR
+            iKKvlxYPzQRencUJ8EywKteSD8cJx3lVswjDLN3WUUv8j8f2S6nJHA==
             -----END AGE ENCRYPTED FILE-----
           recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
     encrypted_suffix: Templates
-    lastmodified: "2026-11-22T17:10:23Z"
-    mac: ENC[AES256_GCM,data:fLv72bLevmDc8L7GTopyGNZG1Nxu2xDxPenXpSYfRaim7JGQiyd5U9Wj165CZzd/hbNi/Dpn7g0fnIeTdnUh9FU+/B9acwNP7duGTFAf5Pu5BI/GTKJSRegGmnwRFTHzbZeQtefbDL1jskb1RJu/1rt0Cvu4nBl6dKbwKaEgm5M=,iv:TDMqj/AvWMGLLTOAmyqtTxVZsdb79Qpm6Ad/3dxflLs=,tag:Lg5Luv3G1DR4uBZXdnbQCA==,type:str]
+    lastmodified: "2026-11-22T17:25:43Z"
+    mac: ENC[AES256_GCM,data:St4pdiL5fm6BpiVPBlnz4uA3QjLngpP6pDgscDbbQqSi3QkP3fRa7xloQEGG5WsHa5XeuKUjmtt4u18+IlsQqNLEpWfX+iXDz7aiOcMv0VGvb0hhwMfaYbW88iq3+643SnRlwnU5+iJ64DLVg2JfRyTpxNyxprMJSQKcGN+GGgw=,iv:uKYJvQZFJ1Sztm7ru2VeavRN/6giYkW/RKdWjdn8RMI=,tag:+57C5fHNvsUjEb9QIY8XCw==,type:str]
     version: 3.13.3
