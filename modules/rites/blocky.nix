@@ -1,7 +1,8 @@
-# Blocky: the LAN's DNS resolver, replacing Technitium (which was configured
-# imperatively in its web UI). Run as three identical, fully declarative
-# instances (cerberus, ryza, servitor) so that losing one host does not take
-# DNS down with it.
+# Blocky: the LAN's DNS resolver, which replaced Technitium (configured
+# imperatively in its web UI). Three identical, fully declarative instances,
+# the hosts in cartographa's `lan.resolvers`, so that losing one host does not
+# take DNS down with it. Every query is logged to one Postgres database on
+# cerberus (`queryLog`), for the Grafana query dashboard.
 #
 # Everything a client could observe (split-horizon names, blocklists, upstream)
 # is generated here, from cartographa, so the three configs are identical by
@@ -15,6 +16,7 @@
 {self, ...}: {
   flake.nixosModules.blocky = {
     config,
+    options,
     lib,
     pkgs,
     ...
@@ -55,6 +57,16 @@
     internalMappings = mapAttrs' (name: ip: nameValuePair "${name}.omnissiah.internal" ip) self.lib.hosts;
 
     nrdFile = "/var/lib/blocky-nrd/nrd.wildcard.txt";
+
+    ql = cfg.queryLog;
+    hostName = config.networking.hostName;
+    # The machine that holds the query log database creates its role.
+    isDatabaseMachine = hostName == ql.databaseMachine;
+    # systemd puts LoadCredential files here, readable by Blocky's dynamic
+    # user; the path is fixed, so the config can name it.
+    pgpassCredential = "/run/credentials/blocky.service/pgpass";
+    # Clan vars exist only on clan machines; the VM test passes its own file.
+    hasClan = options ? clan;
   in {
     options.services.imperium.blocky = {
       enable = mkOption {
@@ -64,7 +76,7 @@
       port = mkOption {
         type = types.port;
         default = 53;
-        description = "The DNS port. 5335 while Technitium still owns 53.";
+        description = "The DNS port. Only tests change it.";
       };
       metricsPort = mkOption {
         type = types.port;
@@ -82,204 +94,321 @@
         default = "https://raw.githubusercontent.com/hagezi/nrd/main/domains/nrd7.txt";
         description = "Plain domain list (one per line, `#` comments) of newly registered domains.";
       };
+
+      # Every query, from all three instances, into one Postgres database, so
+      # the Grafana query dashboard sees the whole LAN. DNS never depends on
+      # it: if the database is unreachable at startup Blocky falls back to
+      # logging to the journal (the watchdog below switches it back), and a
+      # failed write while running only drops those entries.
+      queryLog = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+        databaseMachine = mkOption {
+          type = types.str;
+          default = "cerberus";
+          description = "The clan machine whose Postgres (services.imperium.postgresql) holds the log.";
+        };
+        host = mkOption {
+          type = types.str;
+          default = self.lib.hosts.${ql.databaseMachine};
+          defaultText = "self.lib.hosts.<databaseMachine>";
+          description = "Address Blocky connects to. An IP, so the query log never needs DNS.";
+        };
+        retentionDays = mkOption {
+          type = types.ints.positive;
+          default = 14;
+          description = "Older entries are deleted. Every name every device looked up is in there.";
+        };
+        pgpassFile = mkOption {
+          type = types.path;
+          default = config.clan.core.vars.generators.blocky-querylog.files.pgpass.path;
+          defaultText = "the blocky-querylog clan var";
+          description = "A pgpass file (`*:*:*:blocky:<password>`) for the `blocky` role.";
+        };
+      };
     };
 
-    config = mkIf cfg.enable {
-      assertions = [
-        {
-          assertion = cfg.listenAddresses != ["127.0.0.1"];
-          message = "services.imperium.blocky: host '${config.networking.hostName}' is not in self.lib.hosts (modules/cartographa/_chart.nix), so there is no LAN address to listen on; set services.imperium.blocky.listenAddresses.";
-        }
-      ];
+    config = mkIf cfg.enable (lib.mkMerge [
+      {
+        assertions = [
+          {
+            assertion = cfg.listenAddresses != ["127.0.0.1"];
+            message = "services.imperium.blocky: host '${config.networking.hostName}' is not in self.lib.hosts (modules/cartographa/_chart.nix), so there is no LAN address to listen on; set services.imperium.blocky.listenAddresses.";
+          }
+          {
+            # Clients only ask the resolvers in that list, so an instance
+            # outside it would never be asked, and one missing from it would be
+            # a resolver nobody configured.
+            assertion = !(self.lib.hosts ? ${hostName}) || lib.elem self.lib.hosts.${hostName} self.lib.lan.resolvers;
+            message = "services.imperium.blocky: ${hostName} runs Blocky but is not in cartographa's lan.resolvers (modules/cartographa/_chart.nix).";
+          }
+        ];
 
-      services.blocky = {
-        enable = true;
-        settings = {
-          ports = {
-            # Explicit addresses, not the wildcard: systemd-resolved's stub
-            # holds 127.0.0.53:53 and 127.0.0.54:53 on these hosts, and
-            # Blocky's wildcard `listen udp :53` fails with "address already
-            # in use" (reproduced in the VM test; see NOTES-blocky-impl.md).
-            # The LAN address serves clients, 127.0.0.1 the host itself.
-            dns = map (a: "${a}:${toString cfg.port}") cfg.listenAddresses;
-            # The HTTP port is Blocky's whole REST API, unauthenticated (it can
-            # disable blocking, trigger list refreshes, run queries), not just
-            # /metrics. Localhost only; the NRD fetcher below uses it. Scraping
-            # the metrics from the cluster gets a separate, safe solution later
-            # (nothing opens this port to the network any more).
-            http = "127.0.0.1:${toString cfg.metricsPort}";
-          };
+        services.blocky = {
+          enable = true;
+          settings = {
+            ports = {
+              # Explicit addresses, not the wildcard: systemd-resolved's stub
+              # holds 127.0.0.53:53 and 127.0.0.54:53 on these hosts, and
+              # Blocky's wildcard `listen udp :53` fails with "address already
+              # in use" (reproduced in the VM test; see NOTES-blocky-impl.md).
+              # The LAN address serves clients, 127.0.0.1 the host itself.
+              dns = map (a: "${a}:${toString cfg.port}") cfg.listenAddresses;
+              # The HTTP port is Blocky's whole REST API, unauthenticated (it can
+              # disable blocking, trigger list refreshes, run queries), not just
+              # /metrics. Localhost only; the NRD fetcher below uses it. Scraping
+              # the metrics from the cluster gets a separate, safe solution later
+              # (nothing opens this port to the network any more).
+              http = "127.0.0.1:${toString cfg.metricsPort}";
+            };
 
-          # Quad9 over DNS-over-TLS, as Technitium had it. By IP, so the
-          # upstreams themselves need no resolution; Quad9's certificates carry
-          # the IPs as SANs (checked with openssl s_client -verify_ip).
-          upstreams.groups.default = [
-            "tcp-tls:9.9.9.9:853"
-            "tcp-tls:149.112.112.112:853"
-          ];
-
-          # Blocky also uses the bootstrap resolver for the HOSTS of the list
-          # URLs. Unset, that is /etc/resolv.conf, which after the cutover is
-          # systemd-resolved -> Blocky itself: list downloads at boot would
-          # race Blocky's own listener, and a host whose Blocky is down could
-          # not refresh. Quad9 over DoT by IP makes Blocky independent of the
-          # host resolver. Schema: docs/configuration.md "Bootstrap DNS
-          # configuration" (blocky 0.36.0): an upstream given by IP needs no
-          # `ips`.
-          bootstrapDns = [
-            {upstream = "tcp-tls:9.9.9.9:853";}
-            {upstream = "tcp-tls:149.112.112.112:853";}
-          ];
-
-          # Technitium: minimum TTL 10 s, maximum 7 days.
-          caching = {
-            minTime = "10s";
-            maxTime = "168h";
-            # Re-resolve often-used names when they expire (Blocky: queried
-            # more than 5 times in 2 h), so hot names stay answerable from
-            # cache while Quad9 is briefly unreachable. Costs some upstream
-            # traffic; minTime above keeps that modest.
-            prefetching = true;
-          };
-
-          prometheus.enable = true;
-
-          # Blocky logs every query to the journal by default. Off for now; a
-          # central query log is a later step.
-          queryLog.type = "none";
-
-          customDNS = {
-            customTTL = "5m";
-            # Do not leak the public AAAA/MX/... of a name we answer locally.
-            filterUnmappedTypes = true;
-            mapping =
-              {
-                # A mapping covers the apex and every subdomain, which replaces
-                # Technitium's `*.noosphere.uk` record.
-                "noosphere.uk" = self.lib.vips.traefik;
-                "keksic.xyz" = self.lib.hosts.keksic;
-              }
-              // labMappings
-              // internalMappings;
-          };
-
-          blocking = {
-            # In Blocky a plain list entry blocks only that exact name;
-            # `*.example.org` blocks the apex and every subdomain (verified in
-            # a VM test). Technitium blocked subdomains of plain entries, so
-            # the hagezi lists below are the `*.`-prefixed wildcard variants
-            # (not `-onlydomains`, which would weaken blocking). hagezi `pro`
-            # was dropped because `pro.plus` is a superset.
-            #
-            # StevenBlack is in hosts format, which Blocky matches EXACTLY
-            # (weaker than in Technitium); hagezi pro.plus largely covers it,
-            # the list is kept for the names it adds.
-            denylists.ads = [
-              "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
-              "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.plus.txt"
-              "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/native.apple.txt"
-              nrdFile
+            # Quad9 over DNS-over-TLS, as Technitium had it. By IP, so the
+            # upstreams themselves need no resolution; Quad9's certificates carry
+            # the IPs as SANs (checked with openssl s_client -verify_ip).
+            upstreams.groups.default = [
+              "tcp-tls:9.9.9.9:853"
+              "tcp-tls:149.112.112.112:853"
             ];
-            clientGroupsBlock.default = ["ads"];
-            blockType = "nxDomain";
-            # `fast`: start answering at once and download lists in the
-            # background, so boot never waits for or fails on a list (or on a
-            # missing NRD file at first boot).
-            #
-            # cachePath persists the downloaded lists: with `fast` Blocky seeds
-            # them from disk at startup, and serves a source from disk while its
-            # host is unreachable. Without it a restart while GitHub is
-            # unreachable leaves ad blocking off until the next refresh.
-            # nixpkgs' unit has StateDirectory=blocky under DynamicUser, so
-            # /var/lib/blocky is writable. 6h: with the cache, conditional
-            # requests make refreshing cheap, and a failed first download is
-            # retried sooner.
-            loading = {
-              strategy = "fast";
-              refreshPeriod = "6h";
-              downloads.cachePath = "/var/lib/blocky/lists";
+
+            # Blocky also uses the bootstrap resolver for the HOSTS of the list
+            # URLs. Unset, that is /etc/resolv.conf, which after the cutover is
+            # systemd-resolved -> Blocky itself: list downloads at boot would
+            # race Blocky's own listener, and a host whose Blocky is down could
+            # not refresh. Quad9 over DoT by IP makes Blocky independent of the
+            # host resolver. Schema: docs/configuration.md "Bootstrap DNS
+            # configuration" (blocky 0.36.0): an upstream given by IP needs no
+            # `ips`.
+            bootstrapDns = [
+              {upstream = "tcp-tls:9.9.9.9:853";}
+              {upstream = "tcp-tls:149.112.112.112:853";}
+            ];
+
+            # Technitium: minimum TTL 10 s, maximum 7 days.
+            caching = {
+              minTime = "10s";
+              maxTime = "168h";
+              # Re-resolve often-used names when they expire (Blocky: queried
+              # more than 5 times in 2 h), so hot names stay answerable from
+              # cache while Quad9 is briefly unreachable. Costs some upstream
+              # traffic; minTime above keeps that modest.
+              prefetching = true;
+            };
+
+            prometheus.enable = true;
+
+            # Postgres, or nothing at all: Blocky's default is every query in
+            # the journal. The password comes from PGPASSFILE (below), never the
+            # config. Plain TCP on the LAN, like the other clients of that
+            # Postgres. Blocky creates and migrates its `log_entries` table
+            # itself and deletes rows past the retention.
+            queryLog =
+              if ql.enable
+              then {
+                type = "postgresql";
+                target = "postgres://blocky@${ql.host}:5432/blocky?sslmode=disable";
+                logRetentionDays = ql.retentionDays;
+              }
+              else {type = "none";};
+
+            customDNS = {
+              customTTL = "5m";
+              # Do not leak the public AAAA/MX/... of a name we answer locally.
+              filterUnmappedTypes = true;
+              mapping =
+                {
+                  # A mapping covers the apex and every subdomain, which replaces
+                  # Technitium's `*.noosphere.uk` record.
+                  "noosphere.uk" = self.lib.vips.traefik;
+                  "keksic.xyz" = self.lib.hosts.keksic;
+                }
+                // labMappings
+                // internalMappings;
+            };
+
+            blocking = {
+              # In Blocky a plain list entry blocks only that exact name;
+              # `*.example.org` blocks the apex and every subdomain (verified in
+              # a VM test). Technitium blocked subdomains of plain entries, so
+              # the hagezi lists below are the `*.`-prefixed wildcard variants
+              # (not `-onlydomains`, which would weaken blocking). hagezi `pro`
+              # was dropped because `pro.plus` is a superset.
+              #
+              # StevenBlack is in hosts format, which Blocky matches EXACTLY
+              # (weaker than in Technitium); hagezi pro.plus largely covers it,
+              # the list is kept for the names it adds.
+              denylists.ads = [
+                "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+                "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.plus.txt"
+                "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/native.apple.txt"
+                nrdFile
+              ];
+              clientGroupsBlock.default = ["ads"];
+              blockType = "nxDomain";
+              # `fast`: start answering at once and download lists in the
+              # background, so boot never waits for or fails on a list (or on a
+              # missing NRD file at first boot).
+              #
+              # cachePath persists the downloaded lists: with `fast` Blocky seeds
+              # them from disk at startup, and serves a source from disk while its
+              # host is unreachable. Without it a restart while GitHub is
+              # unreachable leaves ad blocking off until the next refresh.
+              # nixpkgs' unit has StateDirectory=blocky under DynamicUser, so
+              # /var/lib/blocky is writable. 6h: with the cache, conditional
+              # requests make refreshing cheap, and a failed first download is
+              # retried sooner.
+              loading = {
+                strategy = "fast";
+                refreshPeriod = "6h";
+                downloads.cachePath = "/var/lib/blocky/lists";
+              };
             };
           };
         };
-      };
 
-      # NRD list: hagezi's nrd7 (domains registered in the last 7 days, all
-      # TLDs, ~3.0M entries / 48 MB). It replaced shreshtait.com's nrd-1w, which
-      # only covered .se/.sk/.nu (7.7k entries). Memory was measured locally
-      # with every list loaded (3.4M denylist entries): ~69 MiB RSS for Blocky,
-      # so size is no reason to drop it on servitor. The source is a plain
-      # domain list with no `*.` variant, so
-      # convert it. Written atomically (temp + rename) so Blocky never reads a
-      # half-written file; on failure the previous file stays and the unit
-      # fails loudly.
-      #
-      # nixpkgs runs Blocky with DynamicUser, so the file cannot be owned by
-      # it. A separate StateDirectory with mode 0755 and a world-readable file
-      # is readable by whichever transient uid Blocky gets (ProtectSystem=strict
-      # still allows reads). So this fetcher MUST stay a non-DynamicUser unit: a
-      # DynamicUser StateDirectory lives under /var/lib/private (0700), which
-      # Blocky's transient uid cannot traverse.
-      systemd.services.blocky-nrd = {
-        description = "Fetch the newly-registered-domains list for Blocky";
-        wants = ["network-online.target"];
-        after = ["network-online.target" "blocky.service"];
-        path = [pkgs.curl pkgs.gawk pkgs.coreutils];
-        serviceConfig = {
-          Type = "oneshot";
-          StateDirectory = "blocky-nrd";
-          StateDirectoryMode = "0755";
-          UMask = "0022";
-          ProtectSystem = "strict";
-          PrivateTmp = true;
-          NoNewPrivileges = true;
-        };
-        script = ''
-          set -eu
-          dir=/var/lib/blocky-nrd
-          tmp=$(mktemp "$dir/.nrd.XXXXXX")
-          trap 'rm -f "$tmp" "$tmp.raw"' EXIT
-          if ! curl -fsS --retry 3 --max-time 600 ${lib.escapeShellArg cfg.nrdUrl} -o "$tmp.raw"; then
-            echo "blocky-nrd: download of ${cfg.nrdUrl} failed; keeping the previous list" >&2
+        # NRD list: hagezi's nrd7 (domains registered in the last 7 days, all
+        # TLDs, ~3.0M entries / 48 MB). It replaced shreshtait.com's nrd-1w, which
+        # only covered .se/.sk/.nu (7.7k entries). Memory was measured locally
+        # with every list loaded (3.4M denylist entries): ~69 MiB RSS for Blocky,
+        # so size is no reason to drop it on servitor. The source is a plain
+        # domain list with no `*.` variant, so
+        # convert it. Written atomically (temp + rename) so Blocky never reads a
+        # half-written file; on failure the previous file stays and the unit
+        # fails loudly.
+        #
+        # nixpkgs runs Blocky with DynamicUser, so the file cannot be owned by
+        # it. A separate StateDirectory with mode 0755 and a world-readable file
+        # is readable by whichever transient uid Blocky gets (ProtectSystem=strict
+        # still allows reads). So this fetcher MUST stay a non-DynamicUser unit: a
+        # DynamicUser StateDirectory lives under /var/lib/private (0700), which
+        # Blocky's transient uid cannot traverse.
+        systemd.services.blocky-nrd = {
+          description = "Fetch the newly-registered-domains list for Blocky";
+          wants = ["network-online.target"];
+          after = ["network-online.target" "blocky.service"];
+          path = [pkgs.curl pkgs.gawk pkgs.coreutils];
+          serviceConfig = {
+            Type = "oneshot";
+            StateDirectory = "blocky-nrd";
+            StateDirectoryMode = "0755";
+            UMask = "0022";
+            ProtectSystem = "strict";
+            PrivateTmp = true;
+            NoNewPrivileges = true;
+          };
+          script = ''
+            set -eu
+            dir=/var/lib/blocky-nrd
+            tmp=$(mktemp "$dir/.nrd.XXXXXX")
+            trap 'rm -f "$tmp" "$tmp.raw"' EXIT
+            if ! curl -fsS --retry 3 --max-time 600 ${lib.escapeShellArg cfg.nrdUrl} -o "$tmp.raw"; then
+              echo "blocky-nrd: download of ${cfg.nrdUrl} failed; keeping the previous list" >&2
+              rm -f "$tmp.raw"
+              exit 1
+            fi
+            # Drop comments and blank lines, trim whitespace/CR, prefix `*.`.
+            awk '{ sub(/\r$/, ""); gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 != "" && $0 !~ /^#/) print "*." $0 }' "$tmp.raw" > "$tmp"
             rm -f "$tmp.raw"
-            exit 1
-          fi
-          # Drop comments and blank lines, trim whitespace/CR, prefix `*.`.
-          awk '{ sub(/\r$/, ""); gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 != "" && $0 !~ /^#/) print "*." $0 }' "$tmp.raw" > "$tmp"
-          rm -f "$tmp.raw"
-          if [ ! -s "$tmp" ]; then
-            echo "blocky-nrd: downloaded list is empty; keeping the previous list" >&2
-            exit 1
-          fi
-          chmod 0644 "$tmp"
-          mv -f "$tmp" ${nrdFile}
-          # Blocky only re-reads its sources every refreshPeriod; tell it now.
-          # Ignore failure: Blocky may be down, and it reads the file at start.
-          curl -fsS -X POST http://127.0.0.1:${toString cfg.metricsPort}/api/lists/refresh >/dev/null \
-            || echo "blocky-nrd: could not trigger a list refresh (blocky down?)" >&2
-        '';
-      };
-      systemd.timers.blocky-nrd = {
-        wantedBy = ["timers.target"];
-        timerConfig = {
-          OnBootSec = "2min";
-          OnUnitActiveSec = "1d";
-          RandomizedDelaySec = "10min";
+            if [ ! -s "$tmp" ]; then
+              echo "blocky-nrd: downloaded list is empty; keeping the previous list" >&2
+              exit 1
+            fi
+            chmod 0644 "$tmp"
+            mv -f "$tmp" ${nrdFile}
+            # Blocky only re-reads its sources every refreshPeriod; tell it now.
+            # Ignore failure: Blocky may be down, and it reads the file at start.
+            curl -fsS -X POST http://127.0.0.1:${toString cfg.metricsPort}/api/lists/refresh >/dev/null \
+              || echo "blocky-nrd: could not trigger a list refresh (blocky down?)" >&2
+          '';
         };
-      };
+        systemd.timers.blocky-nrd = {
+          wantedBy = ["timers.target"];
+          timerConfig = {
+            OnBootSec = "2min";
+            OnUnitActiveSec = "1d";
+            RandomizedDelaySec = "10min";
+          };
+        };
 
-      # DNS is open to everyone, as Technitium's was. The HTTP port is not
-      # opened at all (localhost only, see ports.http above).
-      networking.firewall = mkIf config.networking.firewall.enable {
-        allowedTCPPorts = [cfg.port];
-        allowedUDPPorts = [cfg.port];
-      };
+        # DNS is open to everyone, as Technitium's was. The HTTP port is not
+        # opened at all (localhost only, see ports.http above).
+        networking.firewall = mkIf config.networking.firewall.enable {
+          allowedTCPPorts = [cfg.port];
+          allowedUDPPorts = [cfg.port];
+        };
 
-      # Start after the network is up (nixpkgs only `wants` it), so the first
-      # list download at boot does not fail for lack of a network.
-      systemd.services.blocky = {
-        after = ["network-online.target"];
-        wants = ["network-online.target"];
-      };
-    };
+        # Start after the network is up (nixpkgs only `wants` it), so the first
+        # list download at boot does not fail for lack of a network.
+        systemd.services.blocky = {
+          after = ["network-online.target"];
+          wants = ["network-online.target"];
+        };
+      }
+
+      (mkIf ql.enable {
+        # The pgpass file as a credential: Blocky's dynamic user can read it,
+        # nothing else can, and pgx (the driver behind Blocky's Postgres
+        # writer) reads PGPASSFILE when the URL has no password.
+        systemd.services.blocky = {
+          environment.PGPASSFILE = pgpassCredential;
+          serviceConfig.LoadCredential = ["pgpass:${ql.pgpassFile}"];
+          # On the database machine, try the log only once Postgres is up.
+          after = lib.optionals isDatabaseMachine ["postgresql.service" "postgresql-password-init.service"];
+        };
+
+        # Blocky tries the database only at startup (3 attempts, 2 s apart),
+        # then logs every query to the journal for as long as it runs. That
+        # happens when this host boots while cerberus is down. Every 10 minutes:
+        # if this Blocky runs on the fallback and the database answers again,
+        # restart it. The other resolvers cover the second it takes.
+        systemd.services.blocky-querylog-watchdog = {
+          description = "Restart Blocky when its query log fell back to the journal";
+          path = [pkgs.systemd pkgs.bash pkgs.coreutils];
+          serviceConfig.Type = "oneshot";
+          script = ''
+            id=$(systemctl show -p InvocationID --value blocky.service)
+            [ -n "$id" ] || exit 0
+            if journalctl -q _SYSTEMD_INVOCATION_ID="$id" -g "using console as fallback" | grep -q .; then
+              if timeout 3 bash -c 'exec 3<>/dev/tcp/${ql.host}/5432'; then
+                echo "query log is on the journal fallback and ${ql.host}:5432 answers; restarting blocky"
+                systemctl restart blocky.service
+              fi
+            fi
+          '';
+        };
+        systemd.timers.blocky-querylog-watchdog = {
+          wantedBy = ["timers.target"];
+          timerConfig = {
+            OnBootSec = "10min";
+            OnUnitActiveSec = "10min";
+          };
+        };
+      })
+
+      # The password: generated once, shared by every Blocky host and by the
+      # database machine, where the postgresql module sets it on the role.
+      (lib.optionalAttrs hasClan {
+        clan.core.vars.generators.blocky-querylog = mkIf ql.enable {
+          share = true;
+          files.password.secret = true;
+          files.pgpass.secret = true;
+          runtimeInputs = [pkgs.openssl];
+          script = ''
+            openssl rand -hex 32 | tr -d '\n' > "$out/password"
+            printf '*:*:*:blocky:%s\n' "$(cat "$out/password")" > "$out/pgpass"
+          '';
+        };
+      })
+
+      # The role and database, on the database machine only.
+      (lib.optionalAttrs (options.services.imperium ? postgresql) {
+        services.imperium.postgresql.users.blocky = mkIf (ql.enable && isDatabaseMachine) {
+          databases = ["blocky"];
+          ensureDBOwnership = true;
+          passwordDependency = "blocky-querylog";
+        };
+      })
+    ]);
   };
 }

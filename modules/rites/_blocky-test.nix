@@ -9,7 +9,8 @@
 # IP-SAN validity was checked by hand with `openssl s_client -verify_ip`), the
 # real list downloads and their formats. x86_64 only; servitor (aarch64) relies
 # on nixpkgs' build-time `blocky validate`. The metrics-scrape firewall rules
-# no longer exist: the HTTP port is bound to localhost.
+# no longer exist: the HTTP port is bound to localhost. A `db` node stands in
+# for cerberus's Postgres, for the query log.
 {flake}: let
   pkgs = flake.inputs.nixpkgs.legacyPackages.x86_64-linux;
   inherit (flake.lib) hosts vips;
@@ -17,10 +18,13 @@
     blocky = "192.168.1.11";
     blocky2 = "192.168.1.12";
     upstream = "192.168.1.30";
+    db = "192.168.1.40";
     client = "192.168.1.20";
   };
-  # Production's port while Technitium still owns 53.
-  port = 5335;
+  # Production's port.
+  port = 53;
+  # The test database's password, as the clan var's pgpass would hold it.
+  pgpass = pkgs.writeText "pgpass" "*:*:*:blocky:testpw\n";
   # NB: test names use .net, not .test: Blocky itself answers NXDOMAIN for the
   # RFC 6761 special-use TLD `.test`, which would make every block assertion
   # pass trivially.
@@ -54,8 +58,16 @@
       port = dnsPort;
       listenAddresses = [ip.${name} "127.0.0.1"];
       nrdUrl = "http://localhost/nrd";
+      queryLog = {
+        host = ip.db;
+        pgpassFile = pgpass;
+      };
     };
+    # Triggered by the test, not by time.
+    systemd.timers.blocky-querylog-watchdog.enable = lib.mkForce false;
     services.blocky.settings = {
+      # Flush within the test's patience (30 s in production).
+      queryLog.flushInterval = "2s";
       upstreams.groups.default = lib.mkForce [ip.upstream];
       bootstrapDns = lib.mkForce [{upstream = ip.upstream;}];
       blocking.denylists.ads = lib.mkForce [
@@ -105,13 +117,34 @@ in
         };
       };
 
-      # Production shape: port 5335, firewall ON (the module must open it).
+      # The query log's database, standing in for cerberus's Postgres.
+      db = {...}: {
+        imports = [(static "db")];
+        networking.firewall.allowedTCPPorts = [5432];
+        services.postgresql = {
+          enable = true;
+          enableTCPIP = true;
+          ensureDatabases = ["blocky"];
+          ensureUsers = [
+            {
+              name = "blocky";
+              ensureDBOwnership = true;
+            }
+          ];
+          initialScript = pkgs.writeText "init.sql" "CREATE ROLE blocky LOGIN PASSWORD 'testpw';";
+          authentication = "host blocky blocky 192.168.1.0/24 scram-sha-256";
+        };
+      };
+
+      # Production shape: port 53, firewall ON (the module must open it), the
+      # query log on the db node.
       blocky = blockyNode "blocky" port;
 
       # B3: the cutover shape. systemd-resolved's stub holds 127.0.0.53:53,
       # Blocky wants :53 on every address.
       blocky2 = {lib, ...}: {
         imports = [(blockyNode "blocky2" 53)];
+        services.imperium.blocky.queryLog.enable = false;
         services.resolved.enable = true;
         networking.nameservers = [ip.blocky2];
       };
@@ -229,5 +262,50 @@ in
           assert stub == "${hosts.cerberus}", stub
           # Blocky itself still answers on loopback.
           assert blocky2.succeed("dig +short @127.0.0.1 ha.ugalabugala.org").strip() == "${hosts.cerberus}"
+
+      def logged(name):
+          return db.succeed(
+              f"sudo -u postgres psql -d blocky -tAc \"select count(*) from log_entries where question_name = '{name}'\""
+          ).strip()
+
+      def invocation():
+          return blocky.succeed("systemctl show -p InvocationID --value blocky.service").strip()
+
+      with subtest("query log: queries land in Postgres, password from PGPASSFILE"):
+          db.wait_for_unit("postgresql.service")
+          db.wait_for_open_port(5432)
+          # Blocky may have started before the database and fallen back.
+          blocky.systemctl("restart blocky.service")
+          blocky.wait_for_open_port(${toString port})
+          client.wait_until_succeeds("dig +short -p ${toString port} @${ip.blocky} probe1.example.org | grep -q 93.184.216.34", timeout=60)
+          db.wait_until_succeeds(
+              "sudo -u postgres psql -d blocky -tAc \"select count(*) from log_entries where question_name = 'probe1.example.org'\" | grep -qv '^0$'",
+              timeout=60,
+          )
+          print(db.succeed("sudo -u postgres psql -d blocky -c 'select request_ts, client_ip, question_name, reason, hostname from log_entries order by request_ts desc limit 5'"))
+          blocky.fail("journalctl -u blocky.service -b -q -g 'using console as fallback' | grep -q .")
+
+      with subtest("query log: database down at startup; DNS answers, the watchdog restores the log"):
+          db.systemctl("stop postgresql.service")
+          blocky.systemctl("restart blocky.service")
+          blocky.wait_for_open_port(${toString port})
+          assert q("probe2.example.org") == "93.184.216.34"
+          blocky.wait_until_succeeds("journalctl -u blocky.service -q -g 'using console as fallback' | grep -q .", timeout=60)
+          # Database still down: the watchdog leaves Blocky alone.
+          before = invocation()
+          blocky.succeed("systemctl start blocky-querylog-watchdog.service")
+          assert invocation() == before, "watchdog restarted blocky while the database was down"
+          db.systemctl("start postgresql.service")
+          db.wait_for_open_port(5432)
+          blocky.succeed("systemctl start blocky-querylog-watchdog.service")
+          assert invocation() != before, "watchdog did not restart blocky with the database back"
+          blocky.wait_for_open_port(${toString port})
+          client.wait_until_succeeds("dig +short -p ${toString port} @${ip.blocky} probe3.example.org | grep -q 93.184.216.34", timeout=60)
+          db.wait_until_succeeds(
+              "sudo -u postgres psql -d blocky -tAc \"select count(*) from log_entries where question_name = 'probe3.example.org'\" | grep -qv '^0$'",
+              timeout=60,
+          )
+          # The fallback went to the journal only, never to the database.
+          assert logged("probe2.example.org") == "0", logged("probe2.example.org")
     '';
   }
