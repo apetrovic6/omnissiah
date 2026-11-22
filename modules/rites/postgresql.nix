@@ -7,6 +7,28 @@
   }: let
     inherit (lib) mkOption mkPackageOption mkIf mkForce mkMerge types mapAttrsToList mapAttrs' nameValuePair flatten;
     cfg = config.services.imperium.postgresql;
+
+    # For every role with readOnlyAccess: allow it into its databases from its
+    # addresses, then reject everything else it tries.
+    readOnlyHba = lib.concatStringsSep "\n" (flatten (mapAttrsToList (
+        name: u:
+          lib.optionals (u.readOnlyAccess != {}) (
+            flatten (mapAttrsToList (
+                db: ro:
+                  map (addr: "host ${db} ${name} ${addr} scram-sha-256") ro.addresses
+              )
+              u.readOnlyAccess)
+            # The role's own databases (none for a pure reader) stay reachable.
+            ++ flatten (map (
+                db:
+                  map (addr: "host ${db} ${name} ${addr} scram-sha-256")
+                  (lib.unique (flatten (mapAttrsToList (_: ro: ro.addresses) u.readOnlyAccess)))
+              )
+              u.databases)
+            ++ ["local all ${name} reject" "host all ${name} all reject"]
+          )
+      )
+      cfg.users));
   in {
     options.services.imperium.postgresql = {
       enable = mkOption {
@@ -139,15 +161,32 @@
                 FOR ROLE <owner>, so it keeps working when an application creates or
                 migrates its own tables after the grants ran (Blocky does exactly
                 that on first start). Nothing else is granted: no INSERT/UPDATE/
-                DELETE/TRUNCATE, no CREATE, no other database. Re-applied on every
+                DELETE/TRUNCATE, no CREATE. Re-applied on every
                 postgresql-password-init run, so it also catches tables that exist
                 already. Use with `databases = []` for a role that owns nothing.
+
+                Postgres lets PUBLIC connect to every database by default, so grants
+                alone do not keep the role out of other databases (it could read their
+                catalogs). Therefore pg_hba lines are generated and put AHEAD of
+                `authentication`: the role may log in only to the databases listed
+                here (plus its own `databases`), only from each entry's `addresses`,
+                and every other host/local login by it is rejected.
               '';
               default = {};
               type = types.attrsOf (types.submodule {
                 options.owner = mkOption {
                   type = types.str;
                   description = "The role that creates the tables in this database (the application's role).";
+                };
+                options.addresses = mkOption {
+                  type = types.listOf types.str;
+                  default = ["127.0.0.1/32" "::1/128"];
+                  description = "CIDRs the role may connect from (pg_hba, scram-sha-256). Narrower than your generic rules on purpose: these lines come first.";
+                };
+                options.revokePublicTemp = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = "REVOKE TEMP ON DATABASE FROM PUBLIC, so the role cannot create temp tables. Affects every role in that database that relied on the PUBLIC default; leave off for shared databases.";
                 };
               });
               example = {blocky.owner = "blocky";};
@@ -185,7 +224,9 @@
           log_connections = true;
         };
 
-        authentication = cfg.authentication;
+        # pg_hba is first-match: the pins for read-only roles go first, ahead of
+        # whatever generic rules `authentication` has (e.g. "host all all <lan>").
+        authentication = lib.mkMerge [(lib.mkBefore readOnlyHba) cfg.authentication];
       };
 
       networking.firewall.allowedTCPPorts = mkIf cfg.openFirewall [cfg.port];
@@ -249,10 +290,21 @@
                     u.databases);
                   roCmds = mapAttrsToList (db: ro: ''
                     echo "Granting '${userName}' read-only access to '${db}' (tables of '${ro.owner}')..."
-                    ${psql} -d postgres -c "GRANT CONNECT ON DATABASE \"${db}\" TO \"${userName}\";"
-                    ${psql} -d "${db}" -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO \"${userName}\";" \
-                      -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${userName}\";" \
-                      -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"${ro.owner}\" IN SCHEMA public GRANT SELECT ON TABLES TO \"${userName}\";"
+                    # A failing grant must not stop the users after this one: log it
+                    # loudly, carry on, and fail the unit at the end (see `failed`).
+                    {
+                      ${psql} -d postgres -v ON_ERROR_STOP=1 \
+                        -c "GRANT CONNECT ON DATABASE \"${db}\" TO \"${userName}\";" \
+                        -c "${
+                      if ro.revokePublicTemp
+                      then "REVOKE TEMP ON DATABASE \\\"${db}\\\" FROM PUBLIC;"
+                      else "SELECT 1;"
+                    }" > /dev/null &&
+                      ${psql} -d "${db}" -v ON_ERROR_STOP=1 \
+                        -c "GRANT USAGE ON SCHEMA public TO \"${userName}\";" \
+                        -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${userName}\";" \
+                        -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"${ro.owner}\" IN SCHEMA public GRANT SELECT ON TABLES TO \"${userName}\";"
+                    } || { echo "ERROR: read-only grant for '${userName}' on '${db}' FAILED" >&2; failed=1; }
                   '') u.readOnlyAccess;
                 in ''
                   echo "Setting password for user '${userName}'..."
@@ -264,7 +316,9 @@
                 cfg.users;
             in ''
               set -euo pipefail
+              failed=0
               ${builtins.concatStringsSep "\n" commands}
+              exit $failed
             '';
           };
         }

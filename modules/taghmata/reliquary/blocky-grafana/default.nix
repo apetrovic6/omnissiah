@@ -44,6 +44,7 @@
 in {
   flake.nixosModules.reliquary-blocky-grafana = {
     pkgs,
+    lib,
     config,
     ...
   }: {
@@ -74,7 +75,7 @@ in {
             url: "${self.lib.hosts.cerberus}:${toString config.services.imperium.postgresql.port}",
             user: "blocky_grafana",
             editable: false,
-            jsonData: {database: "blocky", sslmode: "disable", postgresVersion: 1800, maxOpenConns: 5, maxIdleConns: 2},
+            jsonData: {database: "blocky", sslmode: "disable", postgresVersion: ${toString (lib.toInt (lib.versions.major config.services.postgresql.package.version) * 100)}, maxOpenConns: 5, maxIdleConns: 2},
             secureJsonData: {password: $pw}
           }]
         }')"
