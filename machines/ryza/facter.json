@@ -890,7 +890,6 @@
         "fpu_exception": false,
         "cpuid_level": 32,
         "write_protect": false,
-        "tlb_size": 31699,
         "clflush_size": 64,
         "cache_alignment": 64,
         "address_sizes": {
@@ -1143,7 +1142,7 @@
         "module_alias": "usb:v1D6Bp0001d0618dc09dsc00dp00ic09isc00ip00in00"
       },
       {
-        "index": 47,
+        "index": 46,
         "attached_to": 31,
         "class_list": [
           "usb",
@@ -1230,7 +1229,7 @@
         "module_alias": "usb:v1D6Bp0001d0618dc09dsc00dp00ic09isc00ip00in00"
       },
       {
-        "index": 48,
+        "index": 47,
         "attached_to": 19,
         "class_list": [
           "usb",
@@ -1317,7 +1316,7 @@
         "module_alias": "usb:v1D6Bp0001d0618dc09dsc00dp00ic09isc00ip00in00"
       },
       {
-        "index": 49,
+        "index": 48,
         "attached_to": 15,
         "class_list": [
           "usb",
@@ -1404,7 +1403,7 @@
         "module_alias": "usb:v1D6Bp0001d0618dc09dsc00dp00ic09isc00ip00in00"
       },
       {
-        "index": 50,
+        "index": 49,
         "attached_to": 30,
         "class_list": [
           "usb",
@@ -1491,8 +1490,8 @@
         "module_alias": "usb:v1D6Bp0001d0618dc09dsc00dp00ic09isc00ip00in00"
       },
       {
-        "index": 51,
-        "attached_to": 35,
+        "index": 50,
+        "attached_to": 36,
         "class_list": [
           "usb",
           "hub"
@@ -1526,9 +1525,9 @@
           "name": "6.18",
           "value": 0
         },
-        "serial": "0000:00:1a.7",
+        "serial": "0000:00:1d.7",
         "model": "Linux 6.18.64 ehci_hcd EHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1a.7/usb1/1-0:1.0",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1d.7/usb1/1-0:1.0",
         "sysfs_bus_id": "1-0:1.0",
         "resources": [
           {
@@ -1578,7 +1577,7 @@
         "module_alias": "usb:v1D6Bp0002d0618dc09dsc00dp00ic09isc00ip00in00"
       },
       {
-        "index": 52,
+        "index": 51,
         "attached_to": 28,
         "class_list": [
           "usb",
@@ -1666,7 +1665,7 @@
       },
       {
         "index": 53,
-        "attached_to": 36,
+        "attached_to": 35,
         "class_list": [
           "usb",
           "hub"
@@ -1700,9 +1699,9 @@
           "name": "6.18",
           "value": 0
         },
-        "serial": "0000:00:1d.7",
+        "serial": "0000:00:1a.7",
         "model": "Linux 6.18.64 ehci_hcd EHCI Host Controller",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1d.7/usb2/2-0:1.0",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1a.7/usb2/2-0:1.0",
         "sysfs_bus_id": "2-0:1.0",
         "resources": [
           {
@@ -1928,8 +1927,8 @@
     ],
     "mouse": [
       {
-        "index": 46,
-        "attached_to": 53,
+        "index": 52,
+        "attached_to": 50,
         "class_list": [
           "mouse",
           "usb"
@@ -1967,8 +1966,8 @@
         "compat_vendor": "Unknown",
         "compat_device": "Generic USB Mouse",
         "model": "QEMU USB Tablet",
-        "sysfs_id": "/devices/pci0000:00/0000:00:1d.7/usb2/2-1/2-1:1.0",
-        "sysfs_bus_id": "2-1:1.0",
+        "sysfs_id": "/devices/pci0000:00/0000:00:1d.7/usb1/1-1/1-1:1.0",
+        "sysfs_bus_id": "1-1:1.0",
         "unix_device_names": [
           "/dev/input/mice"
         ],
