@@ -265,9 +265,12 @@
                 "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
                 "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.plus.txt"
                 "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/native.apple.txt"
-                nrdFile
               ];
-              clientGroupsBlock.default = ["ads"];
+              # Its own group, so blocky_denylist_cache_entries is reported per
+              # group and the NRD list (~3.0M) cannot mask the ad lists (~0.4M)
+              # failing to load (see the alerts in prometheus-stack/blocky.nix).
+              denylists.nrd = [nrdFile];
+              clientGroupsBlock.default = ["ads" "nrd"];
               blockType = "nxDomain";
               # `fast`: start answering at once and download lists in the
               # background, so boot never waits for or fails on a list (or on a
@@ -452,6 +455,12 @@
             access_log off;
             client_body_temp_path /run/blocky-metrics/body;
             proxy_temp_path /run/blocky-metrics/proxy;
+            # Bound what a pod can hold open (64 connections in all): a stuck
+            # client must not starve the scrape.
+            client_header_timeout 5s;
+            client_body_timeout 5s;
+            send_timeout 10s;
+            keepalive_timeout 0;
             fastcgi_temp_path /run/blocky-metrics/fastcgi;
             uwsgi_temp_path /run/blocky-metrics/uwsgi;
             scgi_temp_path /run/blocky-metrics/scgi;
