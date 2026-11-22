@@ -91,6 +91,29 @@
         config.nix.package
       ])
       ++ cfg.extraPackages;
+    # The environment and sandbox both of its services run in.
+    sessionEnv = {
+      HOME = home;
+      USER = user;
+      LOGNAME = user;
+      # For `systemd-run --user` from the gateway.
+      XDG_RUNTIME_DIR = "/run/user/${toString cfg.uid}";
+      DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/${toString cfg.uid}/bus";
+    };
+    hardening = {
+      User = user;
+      Group = user;
+      WorkingDirectory = home;
+      Restart = "on-failure";
+      RestartSec = 10;
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ReadWritePaths = [home];
+      PrivateTmp = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+    };
   in {
     imports = [self.nixosModules.pi-api-keys];
 
@@ -140,6 +163,33 @@
           The var must be declared on this machine, readable by the hermes
           user.
         '';
+      };
+
+      dashboard = {
+        enable = mkEnableOption "the Hermes web dashboard";
+        port = mkOption {
+          type = types.port;
+          default = 9119;
+        };
+        publicUrl = mkOption {
+          type = types.str;
+          example = "https://hermes.noosphere.uk";
+          description = "Where users reach it; also the base of the OIDC callback (/auth/callback).";
+        };
+        oidc = {
+          issuer = mkOption {
+            type = types.str;
+            example = "https://id.noosphere.uk";
+          };
+          clientId = mkOption {
+            type = types.str;
+            default = "hermes";
+          };
+        };
+        allowedSources = mkOption {
+          type = types.listOf types.str;
+          description = "IPv4 addresses allowed to connect: the reverse proxy's.";
+        };
       };
 
       secrets = mkOption {
@@ -201,35 +251,53 @@
         after = ["network-online.target" "user@${toString cfg.uid}.service"];
         wants = ["network-online.target" "user@${toString cfg.uid}.service"];
         path = tools;
-        environment = {
-          HOME = home;
-          USER = user;
-          LOGNAME = user;
-          # For `systemd-run --user` from the gateway.
-          XDG_RUNTIME_DIR = "/run/user/${toString cfg.uid}";
-          DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/${toString cfg.uid}/bus";
-        };
-        serviceConfig = {
-          User = user;
-          Group = user;
-          WorkingDirectory = home;
-          ExecStart = "${hermes}/bin/hermes gateway run";
-          Restart = "on-failure";
-          RestartSec = 10;
-          # Hermes drains cron jobs before it exits.
-          TimeoutStopSec = 120;
-          KillMode = "mixed";
-          MemoryMax = "${toString cfg.memory}G";
-
-          NoNewPrivileges = true;
-          ProtectSystem = "strict";
-          ReadWritePaths = [home];
-          PrivateTmp = true;
-          ProtectKernelTunables = true;
-          ProtectKernelModules = true;
-          ProtectControlGroups = true;
-        };
+        environment = sessionEnv;
+        serviceConfig =
+          hardening
+          // {
+            ExecStart = "${hermes}/bin/hermes gateway run";
+            # Hermes drains cron jobs before it exits.
+            TimeoutStopSec = 120;
+            KillMode = "mixed";
+            MemoryMax = "${toString cfg.memory}G";
+          };
       };
+
+      # The web UI, behind Traefik in the cluster (nixidy apps/cogitator/hermes)
+      # at `dashboard.publicUrl`. Login is Hermes' own generic OIDC provider
+      # (plugins/dashboard_auth/self_hosted) against Pocket ID: a public PKCE
+      # client, admins only (tofunix pharos/clients.nix `hermes`). It switches
+      # on from the two OIDC variables alone, and without a provider the
+      # dashboard refuses a non-loopback bind, so it can never come up open.
+      systemd.services.hermes-dashboard = mkIf cfg.dashboard.enable {
+        description = "Hermes Agent dashboard";
+        wantedBy = ["multi-user.target"];
+        after = ["network-online.target" "hermes-gateway.service"];
+        wants = ["network-online.target"];
+        path = tools;
+        environment =
+          sessionEnv
+          // {
+            HERMES_DASHBOARD_PUBLIC_URL = cfg.dashboard.publicUrl;
+            HERMES_DASHBOARD_OIDC_ISSUER = cfg.dashboard.oidc.issuer;
+            HERMES_DASHBOARD_OIDC_CLIENT_ID = cfg.dashboard.oidc.clientId;
+          };
+        serviceConfig =
+          hardening
+          // {
+            ExecStart = "${hermes}/bin/hermes dashboard --host 0.0.0.0 --port ${toString cfg.dashboard.port}";
+            MemoryMax = "2G";
+          };
+      };
+
+      # Only Traefik may reach it: cluster pods leave through whichever node
+      # the Traefik pod runs on, masqueraded to that node's IP (as for
+      # cerberus's node exporter, machines/cerberus/monitoring.nix). Not
+      # openFirewall: that would open the port to the whole LAN.
+      networking.firewall.extraCommands = mkIf cfg.dashboard.enable (lib.mkAfter (lib.concatMapStrings (ip: ''
+          iptables -w -A nixos-fw -p tcp --dport ${toString cfg.dashboard.port} -s ${ip}/32 -m comment --comment hermes-dashboard -j nixos-fw-accept
+        '')
+        cfg.dashboard.allowedSources));
     };
   };
 }

@@ -7,8 +7,20 @@
 # pi-api-keys), by default. Hermes-only ones go in `secrets`, one prompt each:
 #   secrets = ["OPENROUTER_API_KEY"];
 #   clan vars generate ryza --generator hermes-openrouter-api-key --regenerate
-{self, ...}: {
+{self, ...}: let
+  inherit (import ../../modules/cartographa/_cartographa.nix) noosphere;
+in {
   imports = [self.nixosModules.hermes];
 
-  services.imperium.hermes.enable = true;
+  services.imperium.hermes = {
+    enable = true;
+    dashboard = {
+      enable = true;
+      publicUrl = "https://hermes.${noosphere.domain}";
+      oidc.issuer = "https://id.${noosphere.domain}";
+      # The cluster nodes: Traefik's traffic arrives from whichever one its
+      # pod runs on.
+      allowedSources = with self.lib.hosts; [terra luna sol mars];
+    };
+  };
 }
