@@ -11,6 +11,7 @@
     self.nixosModules.smb
     self.nixosModules.nfs
     self.nixosModules.blocky
+    self.nixosModules.reliquary-blocky-grafana
     self.nixosModules.scriptorium
     self.nixosModules.librarium
     ./network.nix
