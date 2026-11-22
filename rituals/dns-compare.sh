@@ -21,8 +21,8 @@
 #                     the reference is skipped.
 #
 # A server that does not answer at all (timeout) is "unreachable": reported
-# once per server, counted separately, and never a mismatch. NOTE the exit code
-# therefore stays 0 when every candidate is unreachable -- read the summary.
+# once per server, counted separately, and never a mismatch -- but it does keep
+# the exit code from being green (exit 3), since nothing was actually compared.
 #
 # Usage:  ./rituals/dns-compare.sh [--reference HOST[:PORT]] [CANDIDATE[:PORT] ...]
 #   reference   default 192.168.1.105:53
@@ -31,7 +31,10 @@
 #
 # Needs `dig`:  nix shell nixpkgs#dig -c ./rituals/dns-compare.sh
 #
-# Exit: 0 no mismatches in sets 1-4, 1 at least one mismatch, 2 usage error.
+# Exit: 0 everything checked and matched
+#       1 at least one mismatch in sets 1-4 (wins over 3)
+#       2 usage error
+#       3 no mismatches, but at least one server (candidate or reference) was unreachable
 # Read-only: it only sends DNS queries.
 
 set -euo pipefail
@@ -270,3 +273,4 @@ for s in "${SETS[@]}"; do
 done
 
 ((total_bad == 0)) || exit 1
+((${#UNREACH_SERVERS[@]} == 0)) || exit 3
