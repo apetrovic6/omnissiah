@@ -292,7 +292,7 @@
 
       # Only Traefik may reach it: cluster pods leave through whichever node
       # the Traefik pod runs on, masqueraded to that node's IP (as for
-      # cerberus's node exporter, machines/cerberus/monitoring.nix). Not
+      # cerberus's node exporter, modules/rites/node-exporter.nix). Not
       # openFirewall: that would open the port to the whole LAN.
       networking.firewall.extraCommands = mkIf cfg.dashboard.enable (lib.mkAfter (lib.concatMapStrings (ip: ''
           iptables -w -A nixos-fw -p tcp --dport ${toString cfg.dashboard.port} -s ${ip}/32 -m comment --comment hermes-dashboard -j nixos-fw-accept

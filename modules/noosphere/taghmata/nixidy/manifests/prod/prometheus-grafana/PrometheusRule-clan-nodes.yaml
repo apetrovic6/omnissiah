@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: clan-nodes
+  namespace: observability
+spec:
+  groups:
+    - name: clan-nodes.availability
+      rules:
+        - alert: ClanNodeTargetDown
+          annotations:
+            description: 'The scrape of 192.168.1.45:9100 has failed for over 5 minutes: the host is down, prometheus-node-exporter.service is not running, or its firewall no longer admits the node the Prometheus pod is on (modules/rites/node-exporter.nix).'
+            summary: ryza is not answering its metrics scrape
+          expr: up{job="ryza-node"} == 0
+          for: 5m
+          labels:
+            host: ryza
+            severity: critical
+        - alert: ClanNodeTargetAbsent
+          annotations:
+            description: 'No target for job=ryza-node exists in the Prometheus configuration: check the ScrapeConfig ryza-node in observability and the Targets page.'
+            summary: ryza is not being scraped at all
+          expr: absent(up{job="ryza-node"})
+          for: 5m
+          labels:
+            host: ryza
+            severity: critical
+        - alert: ClanNodeTargetDown
+          annotations:
+            description: 'The scrape of 192.168.1.13:9100 has failed for over 5 minutes: the host is down, prometheus-node-exporter.service is not running, or its firewall no longer admits the node the Prometheus pod is on (modules/rites/node-exporter.nix).'
+            summary: servitor is not answering its metrics scrape
+          expr: up{job="servitor-node"} == 0
+          for: 5m
+          labels:
+            host: servitor
+            severity: critical
+        - alert: ClanNodeTargetAbsent
+          annotations:
+            description: 'No target for job=servitor-node exists in the Prometheus configuration: check the ScrapeConfig servitor-node in observability and the Targets page.'
+            summary: servitor is not being scraped at all
+          expr: absent(up{job="servitor-node"})
+          for: 5m
+          labels:
+            host: servitor
+            severity: critical

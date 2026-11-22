@@ -2,7 +2,7 @@
   nixidy.envs.prod.apps.prometheus-cerberus-alerts = {cartographa, ...}: let
     namespace = "observability";
 
-    # Every series below comes from the ScrapeConfig in ./cerberus-scrape.nix:
+    # Every series below comes from the ScrapeConfig ./nodes.nix generates for cerberus:
     #   job="cerberus-node", instance="cerberus", host="cerberus"
     jobName = "cerberus-node";
     target = "${cartographa.hosts.cerberus}:9100";
@@ -26,8 +26,7 @@
     #     noise today and would need its own threshold),
     #   - tmpfs/ramfs (node_exporter 1.12.1 does NOT exclude tmpfs by default, so
     #     they are scraped; they are not capacity),
-    #   - NFS/SMB (excluded from the collector entirely in machines/cerberus/
-    #     monitoring.nix),
+    #   - NFS/SMB (excluded from the collector entirely in modules/rites/node-exporter.nix),
     #   - /nix/store, which on this host is not a second filesystem but a read-only
     #     bind of the same one (`findmnt /nix/store` ->
     #     `/dev/vda3[/nix/store] ext4 ro,nosuid,nodev`). node_exporter reports it as
@@ -67,7 +66,7 @@
     # Metric names and label names are from a live scrape, not memory: the pinned
     # node_exporter 1.12.1 (same build as the cluster's DaemonSet — the chart's
     # node-exporter reports version="1.12.1" in node_exporter_build_info) was run with
-    # the flags machines/cerberus/monitoring.nix sets, and /metrics was read:
+    # the flags modules/rites/node-exporter.nix sets, and /metrics was read:
     #
     #   node_filesystem_avail_bytes{device,device_error,fstype,mountpoint}
     #   node_filesystem_size_bytes{device,device_error,fstype,mountpoint}

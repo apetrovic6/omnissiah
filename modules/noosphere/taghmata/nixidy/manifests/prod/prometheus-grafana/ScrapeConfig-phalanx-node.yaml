@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: phalanx-node
+  namespace: observability
+spec:
+  jobName: phalanx-node
+  metricsPath: /metrics
+  relabelings:
+    - action: replace
+      regex: .*
+      replacement: phalanx
+      sourceLabels:
+        - __address__
+      targetLabel: instance
+  scheme: http
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
+  staticConfigs:
+    - labels:
+        host: phalanx
+      targets:
+        - 192.168.1.46:9100

@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: servitor-node
+  namespace: observability
+spec:
+  jobName: servitor-node
+  metricsPath: /metrics
+  relabelings:
+    - action: replace
+      regex: .*
+      replacement: servitor
+      sourceLabels:
+        - __address__
+      targetLabel: instance
+  scheme: http
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
+  staticConfigs:
+    - labels:
+        host: servitor
+      targets:
+        - 192.168.1.13:9100
