@@ -15,6 +15,22 @@
 # comment explaining why qwen4exp MTP aborts on stock llama.cpp; Strata ships
 # its own MTP path and enables it by default (--spec 4 in the engine config).
 #
+# v0.2.11 -> v0.2.17 (engine 0.1.57 -> 0.1.63), measured 2026-11-21, single
+# GPU, same method (35,316-token prompt from this repo's .nix files, temp 0,
+# 400 generated tokens):
+#
+#                      v0.2.11 (above)   v0.2.17
+#   decode             39.5 - 42.6       55.0 cold / 58.6 warm tok/s
+#   prefill (cold)     1340 tok/s        1129 tok/s (31 s for 35K)
+#   prefill (warm)     ~free             5 of 35,316 tokens re-processed
+#   MTP accepted       72-79%            65-70%
+#
+# Decode is the gain (~+35%), despite 0.2.17 turning the route tail skip off
+# by default (STRATA_ROUTE_TAIL_SKIP=7 re-enables it). Prefill is not directly
+# comparable -- longer prompt, different files -- so treat it as "unchanged
+# within the noise", not a regression. The two-GPU notes below were re-run on
+# 0.2.17 with a layer split; single-GPU still wins.
+#
 {self, ...}: {
   imports = [self.nixosModules.strata];
 
@@ -23,6 +39,21 @@
     user = "apetrovic";
     family = "qwen";
     quant = "IQ3_XXS";
+
+    # ROUTE TAIL SKIP: ON, measured 2026-11-21 on v0.2.17. When an expert the
+    # router ranked 7th or lower for every token in the window is not cached
+    # on the GPU, the engine skips it instead of fetching it from RAM. Upstream
+    # turned it OFF by default in 0.2.17 because it changes answer text
+    # slightly -- an approximation, not a free speedup. Same 35K benchmark,
+    # three runs each, decode tok/s cold / warm:
+    #
+    #   off (default)   55.0/58.6  51.5/61.4  52.0/52.2
+    #   7               68.5/71.0  65.8/69.3  (28.3/22.6 outlier, not repeated)
+    #
+    # About +20-25% decode, more than upstream's +8% on 2x A4000 -- plausibly
+    # because a 10GB card misses more experts, so there is more to skip.
+    # Prefill unchanged (~1060-1130 tok/s). Set "0" to compare quality.
+    engineEnv.STRATA_ROUTE_TAIL_SKIP = "7";
     gpu = 1;
     maxContext = 262144;
     idleUnload = 3600;
@@ -57,6 +88,21 @@
     # engine then refuses ("--expert-cache-remote with a layer split needs a GPU
     # that runs no stage"). Only --peer-device suppresses that split, and the two
     # flags are mutually exclusive.
+    #
+    # LAYER SPLIT, re-tested 2026-11-21 on v0.2.17 ("gpu": [0, 1],
+    # "layer_split": "auto"; not the --peer-device path above). Each card runs
+    # a contiguous range of layers with its own expert cache, handing the token
+    # over through pinned RAM, so the missing P2P does not matter here. Same 35K
+    # benchmark, tail skip 7 on both, two reps:
+    #
+    #                    prefill (cold)   decode cold / warm
+    #   single GPU 1     1120-1130        65.8-68.5 / 69.3-71.0
+    #   layer split 0+1    744-807        64.0-84.1 / 73.8-79.8
+    #
+    # Decode maybe +10% (the two reps alone span 64-84), prefill -30% even with
+    # 0.2.16's two-card CPU prefill share on by default, and card 0 -- the
+    # display card -- went to 9.2 of 10 GB, leaving the desktop and browsers
+    # almost nothing. Not worth it; stays single-GPU.
     #
     # Re-open only with new hardware (a P2P-capable pair) or a prefill-bound
     # workload that does not reuse its prompts.

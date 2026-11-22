@@ -11,7 +11,6 @@
     cfg = config.services.imperium.strata;
     strata = pkgs.callPackage ./_package.nix {
       src = self.inputs.strata;
-      llamaCpp = self.inputs.strata-llama-cpp;
     };
     home = config.users.users.${cfg.user}.home;
     stateDir = "${home}/.local/state/strata";
@@ -48,6 +47,10 @@
           (toString cfg.kvResident)
         ]
         ++ cfg.extraArgs;
+      # The server copies this into the engine's environment (serve/server.py,
+      # "engine settings the config carries"). Set via the config rather than
+      # the unit's Environment= so it is visible beside the args it tunes.
+      env = cfg.engineEnv;
       cwd = stateDir;
       tokenizer = "${cfg.pack}/tokenizer";
       model_name = cfg.modelName;
@@ -110,7 +113,7 @@
       };
       expertProfile = mkOption {
         type = types.str;
-        default = "${strata.src}/data/expert-profile${lib.optionalString (cfg.family == "coder") "-coder"}.bin";
+        default = "${strata.src}/terminal/data/expert-profile${lib.optionalString (cfg.family == "coder") "-coder"}.bin";
         description = "Expert usage profile matching the model's expert count.";
       };
       gpu = mkOption {
@@ -167,6 +170,12 @@
         type = types.listOf types.str;
         default = [];
         description = "Additional engine arguments for host-specific tuning.";
+      };
+      engineEnv = mkOption {
+        type = types.attrsOf types.str;
+        default = {};
+        example = {STRATA_ROUTE_TAIL_SKIP = "7";};
+        description = "Environment variables (STRATA_* switches) passed to the engine process.";
       };
     };
 
