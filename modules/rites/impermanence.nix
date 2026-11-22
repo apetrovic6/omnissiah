@@ -145,6 +145,12 @@
         }
       ];
 
+      # Without /etc kept, the machine-id is fixed by clan (kernel parameter
+      # and /etc/machine-id from the store). systemd still mounts it as
+      # "transient" early in boot, and its commit unit then fails trying to
+      # write the same ID into the read-only store. Nothing needs committing.
+      systemd.suppressedSystemUnits = lib.mkIf (!cfg.keepEtc) ["systemd-machine-id-commit.service"];
+
       boot.tmp.cleanOnBoot = lib.mkDefault true;
 
       environment.persistence.${cfg.persistPath} = {
