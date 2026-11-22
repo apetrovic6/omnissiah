@@ -25,7 +25,7 @@
     # The value of Caddy's `{$LAB_DOMAIN}` runtime placeholder on cerberus. It
     # appears literally in the virtual host names, so it has to be matched as a
     # string and cannot be read back from the Caddy config.
-    labDomain = "ugalabugala.org";
+    labDomain = (import ../cartographa/_cartographa.nix).lab.domain;
     labPlaceholder = "{$LAB_DOMAIN}";
 
     # Cerberus's Caddy virtual hosts, read from cerberus's configuration on

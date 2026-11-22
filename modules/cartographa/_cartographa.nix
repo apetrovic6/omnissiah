@@ -3,5 +3,6 @@
 (import ./_chart.nix)
 // {
   noosphere = import ./_noosphere-values.nix;
+  lab = import ./_lab.nix;
   vars = import ./_vars.nix;
 }

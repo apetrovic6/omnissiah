@@ -5,8 +5,9 @@
     pkgs,
     ...
   }: let
-    domain = "ugalabugala.org";
-    matrixDomain = "matrix.${domain}";
+    inherit (import ../../cartographa/_cartographa.nix) lab;
+    domain = lab.matrix.serverName;
+    matrixDomain = lab.matrix.host;
     clientConfig = {
       "m.homeserver".base = "https://${matrixDomain}";
       "m.identity_server" = {};
