@@ -47,6 +47,47 @@
       notify = "phone";
     };
 
+    # Denylist size, per Blocky denylist group (modules/rites/blocky.nix keeps
+    # the ad lists and the NRD list in separate groups, so one cannot hide the
+    # other failing). `min` is the alert threshold in entries.
+    #
+    # ads: StevenBlack + hagezi pro.plus + native.apple are about 0.4M together
+    # (about 3.4M in all, of which nrd7 is about 3.0M, per the figures in
+    # modules/rites/blocky.nix). 300k is about a quarter below that: it catches
+    # losing hagezi pro.plus, the bulk of them, or all three, but NOT losing only
+    # StevenBlack or native.apple (tens of thousands each); a failed download
+    # of those shows in blocky_failed_downloads_total instead.
+    # nrd: nrd7 is about 3.0M and moves with the week's registrations; 2.0M is a
+    # third below, far outside that movement, and a lost file reads 0.
+    denylistGroups = {
+      ads = 300000;
+      nrd = 2000000;
+    };
+    denylistRules = lib.concatLists (lib.mapAttrsToList (group: min: [
+        {
+          alert = "BlockyDenylist${lib.toUpper (builtins.substring 0 1 group)}${builtins.substring 1 (-1) group}TooSmall";
+          expr = ''sum by (instance, host) (blocky_denylist_cache_entries{${sel},group="${group}"}) < ${toString min}'';
+          "for" = "30m";
+          labels = warn;
+          annotations = {
+            summary = "Blocky {{ $labels.host }} has a suspiciously small ${group} denylist";
+            description = "The ${group} denylist group has {{ $value }} entries on {{ $labels.host }} (alert below ${toString min}; 30 minutes, since servitor loads its lists for a while after every restart). Its lists failed to download or parse and no cached copy was used, so those names are being answered normally. Check `journalctl -u blocky` on {{ $labels.host }} for download errors, `blocky_failed_downloads_total` in the Blocky dashboard${lib.optionalString (group == "nrd") ", and `blocky-nrd.service` (the list is converted into /var/lib/blocky-nrd)"}.";
+          };
+        }
+        {
+          # No series at all while the host is up: no value to quote.
+          alert = "BlockyDenylist${lib.toUpper (builtins.substring 0 1 group)}${builtins.substring 1 (-1) group}Missing";
+          expr = ''up{${sel}} == 1 unless on (instance) blocky_denylist_cache_entries{group="${group}"}'';
+          "for" = "30m";
+          labels = warn;
+          annotations = {
+            summary = "Blocky {{ $labels.host }} reports no ${group} denylist";
+            description = "Blocky on {{ $labels.host }} is up but exports no blocky_denylist_cache_entries for the ${group} group: the group is not configured or its lists never loaded. Check `journalctl -u blocky` on the host and the denylists in modules/rites/blocky.nix.";
+          };
+        }
+      ])
+      denylistGroups);
+
     # Series are per instance; the ScrapeConfig below stamps instance=<host>.
     ruleSet = name: rules: {
       inherit name;
@@ -116,7 +157,7 @@
             };
           }
         ])
-        (ruleSet "blocky.health" [
+        (ruleSet "blocky.health" ([
           {
             alert = "BlockyBlockingDisabled";
             expr = ''blocky_blocking_enabled{${sel}} == 0'';
@@ -127,28 +168,7 @@
               description = "blocky_blocking_enabled has been 0 for 30 minutes: ads and newly registered domains are being answered normally on {{ $labels.host }}. Someone called /api/blocking/disable, which has a duration and re-enables by itself, so a long disable means it was given none or was re-sent. Re-enable on the host: `curl -X GET http://127.0.0.1:4000/api/blocking/enable` (the API listens on localhost only), or restart blocky.service.";
             };
           }
-          {
-            # The full set is about 3.4M entries (StevenBlock + hagezi pro.plus
-            # + native.apple + the daily NRD list, as wildcards). 2.5M is about
-            # a quarter below it: the day-to-day movement of the NRD list is
-            # well inside that, and losing any one of the big lists is not.
-            # (A host with NO lists at all reports 0, or no series; both
-            # branches are covered.) 30 minutes, since servitor loads its
-            # lists for a while after every restart.
-            alert = "BlockyDenylistTooSmall";
-            expr = ''
-              (sum by (instance, host) (blocky_denylist_cache_entries{${sel}}) < 2500000)
-              or
-              (up{${sel}} == 1 unless on (instance) blocky_denylist_cache_entries)
-            '';
-            "for" = "30m";
-            labels = warn;
-            annotations = {
-              summary = "Blocky {{ $labels.host }} has a suspiciously small denylist";
-              description = "The denylist has {{ $value }} entries on {{ $labels.host }} (normally about 3.4M; the alert is below 2.5M or when the series is missing). One or more lists failed to download or parse and no cached copy was used, so the host is serving unblocked answers. Check `journalctl -u blocky` on {{ $labels.host }} for download errors, `blocky_failed_downloads_total` in the Blocky dashboard, and `blocky-nrd.service` (the newly-registered-domains list is converted into /var/lib/blocky-nrd).";
-            };
-          }
-        ])
+        ] ++ denylistRules))
         (ruleSet "blocky.units" [
           {
             # Per unit, so the alert says which. The node exporter's systemd

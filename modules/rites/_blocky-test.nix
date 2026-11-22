@@ -79,8 +79,9 @@
       blocking.denylists.ads = lib.mkForce [
         "http://${ip.upstream}/list.txt"
         "*.blocked.net\n"
-        "/var/lib/blocky-nrd/nrd.wildcard.txt"
       ];
+      blocking.denylists.nrd = lib.mkForce ["/var/lib/blocky-nrd/nrd.wildcard.txt"];
+      blocking.clientGroupsBlock.default = lib.mkForce ["ads" "nrd"];
       blocking.loading.downloads = {
         attempts = 1;
         timeout = "2s";
@@ -234,6 +235,11 @@ in
           assert out.split() == ["*.newly.net", "*.other.net"], out
           blocky.succeed("stat -c %a /var/lib/blocky-nrd/nrd.wildcard.txt | grep -qx 644")
           client.wait_until_succeeds("dig -p ${toString port} @${ip.blocky} x.newly.net | grep -q NXDOMAIN", timeout=30)
+          # Reported per group: the NRD names are under "nrd", not "ads".
+          blocky.wait_until_succeeds("curl -fsS http://127.0.0.1:4000/metrics | grep -x 'blocky_denylist_cache_entries{group=\"nrd\"} 2' > /dev/null", timeout=30)
+          ads = blocky.succeed("curl -fsS http://127.0.0.1:4000/metrics | grep '^blocky_denylist_cache_entries{group=\"ads\"}'")
+          print(ads)
+          assert "nrd" not in ads
           blocky.succeed("systemctl show -p ActiveEnterTimestamp blocky.service")
 
       with subtest("NRD download failure keeps the previous file and fails the unit"):
