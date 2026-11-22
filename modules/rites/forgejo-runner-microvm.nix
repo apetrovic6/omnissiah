@@ -164,6 +164,44 @@
               ];
 
               credentialFiles = lib.mapAttrs (id: _: "${credDir}/${id}") cfg.credentialSources;
+
+              # qemu takes host RAM as the guest first touches it and, without
+              # this, never gives any back: after one big build the VM held
+              # all 14 GiB on ryza for good (2026-11-22). The balloon device
+              # brings free page reporting, so pages the guest frees go back
+              # to the host; deflate-on-oom (the default) returns them if the
+              # guest runs short. `mem` stays the hard cap.
+              balloon = true;
+            };
+
+            # Free page reporting only returns FREE pages, and Linux keeps
+            # spare RAM full of page cache (store paths, cargo output), which
+            # counts as used. So when no job is running, drop the cache and
+            # compact, and the freed pages flow back to the host. Busy = any
+            # process in the runner's or nix-daemon's cgroup besides the main
+            # one: a job's steps, or a build.
+            systemd.services.ci-release-memory = {
+              description = "Return idle page cache to the host";
+              serviceConfig.Type = "oneshot";
+              script = let
+                procs = unit: "/sys/fs/cgroup/system.slice/${unit}/cgroup.procs";
+              in ''
+                busy() { [ -r "$1" ] && [ "$(wc -l < "$1")" -gt 1 ]; }
+                if busy ${procs "forgejo-runner-${config.networking.hostName}.service"} \
+                  || busy ${procs "nix-daemon.service"}; then
+                  exit 0
+                fi
+                sync
+                echo 3 > /proc/sys/vm/drop_caches
+                echo 1 > /proc/sys/vm/compact_memory
+              '';
+            };
+            systemd.timers.ci-release-memory = {
+              wantedBy = ["timers.target"];
+              timerConfig = {
+                OnBootSec = "10min";
+                OnUnitActiveSec = "5min";
+              };
             };
 
             networking.useNetworkd = true;
