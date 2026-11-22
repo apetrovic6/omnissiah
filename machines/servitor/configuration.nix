@@ -4,7 +4,10 @@
   lib,
   ...
 }: {
-  imports = [./hardware.nix];
+  imports = [
+    ./hardware.nix
+    self.nixosModules.blocky
+  ];
 
   networking.hostName = "servitor";
 
@@ -185,4 +188,11 @@
   # `nixos-rebuild` run on the board itself gets OOM-killed. Harmless when
   # everything is built on phalanx and copied over.
   zramSwap.enable = true;
+
+  # Blocky, in parallel with Technitium for now: port 5335 (53 is Technitium's
+  # on cerberus; 5353 is mDNS).
+  services.imperium.blocky = {
+    enable = true;
+    port = 5335;
+  };
 }

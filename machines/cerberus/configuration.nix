@@ -10,6 +10,7 @@
     self.nixosModules.pharos
     self.nixosModules.smb
     self.nixosModules.nfs
+    self.nixosModules.blocky
     self.nixosModules.scriptorium
     self.nixosModules.librarium
     ./network.nix
@@ -62,4 +63,11 @@
   };
 
   services.dbus.enable = true;
+
+  # Blocky, in parallel with Technitium for now: port 5335 (53 is Technitium's
+  # on cerberus; 5353 is mDNS).
+  services.imperium.blocky = {
+    enable = true;
+    port = 5335;
+  };
 }

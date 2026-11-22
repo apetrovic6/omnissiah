@@ -2,8 +2,9 @@
 # mars. The VM itself is declared in tofunix
 # (modules/taghmata/_tofunix/manufactorum.nix); this is what runs inside it.
 # Meant for CI runners for both forges and for the always-on agent.
-{...}: {
+{self, ...}: {
   imports = [
+    self.nixosModules.blocky
     ./network.nix
     ./forgejo-runner.nix
     ./hermes.nix
@@ -24,5 +25,12 @@
   services.openssh = {
     enable = true;
     settings.PasswordAuthentication = false;
+  };
+
+  # Blocky, in parallel with Technitium for now: port 5335 (53 is Technitium's
+  # on cerberus; 5353 is mDNS).
+  services.imperium.blocky = {
+    enable = true;
+    port = 5335;
   };
 }
