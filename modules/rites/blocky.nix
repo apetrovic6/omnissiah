@@ -95,6 +95,30 @@
         description = "Plain domain list (one per line, `#` comments) of newly registered domains.";
       };
 
+      # Prometheus runs in the cluster and scrapes this host through here; see
+      # the metrics proxy in `config`.
+      metricsProxy = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+        port = mkOption {
+          type = types.port;
+          default = 4001;
+        };
+        listenAddress = mkOption {
+          type = types.str;
+          default = self.lib.hosts.${config.networking.hostName};
+          defaultText = "self.lib.hosts.<hostName>";
+          description = "The LAN address the proxy binds to. Never the wildcard.";
+        };
+        sources = mkOption {
+          type = types.attrsOf types.str;
+          default = {inherit (self.lib.hosts) luna terra sol mars;};
+          description = "name -> IPv4 address allowed to reach the proxy: the cluster nodes (see modules/rites/node-exporter.nix for why those and nothing wider).";
+        };
+      };
+
       # Every query, from all three instances, into one Postgres database, so
       # the Grafana query dashboard sees the whole LAN. DNS never depends on
       # it: if the database is unreachable at startup Blocky falls back to
@@ -158,9 +182,8 @@
               dns = map (a: "${a}:${toString cfg.port}") cfg.listenAddresses;
               # The HTTP port is Blocky's whole REST API, unauthenticated (it can
               # disable blocking, trigger list refreshes, run queries), not just
-              # /metrics. Localhost only; the NRD fetcher below uses it. Scraping
-              # the metrics from the cluster gets a separate, safe solution later
-              # (nothing opens this port to the network any more).
+              # /metrics. Localhost only; the NRD fetcher below uses it. Prometheus scrapes
+              # through the metrics proxy below, which exposes only /metrics.
               http = "127.0.0.1:${toString cfg.metricsPort}";
             };
 
@@ -331,8 +354,9 @@
           };
         };
 
-        # DNS is open to everyone, as Technitium's was. The HTTP port is not
-        # opened at all (localhost only, see ports.http above).
+        # DNS is open to everyone, as Technitium's was. The HTTP API is not
+        # opened (localhost only, see ports.http above); the metrics proxy has its own
+        # rules.
         networking.firewall = mkIf config.networking.firewall.enable {
           allowedTCPPorts = [cfg.port];
           allowedUDPPorts = [cfg.port];
@@ -400,6 +424,94 @@
           };
         };
       })
+
+      # Metrics proxy. Blocky's HTTP port is its whole REST API (it can disable
+      # blocking), so it stays on 127.0.0.1; this is the one thing that is
+      # exposed: GET /metrics, and a 404 for everything else, /api above all.
+      #
+      # Prometheus runs in the cluster and its scrape arrives masqueraded to the
+      # IP of the node the pod is on, so the firewall below admits the node IPs
+      # (`sources`), the same way modules/rites/node-exporter.nix does, and the
+      # proxy is what keeps every pod from reaching /api/blocking/disable.
+      #
+      # nginx, as its own unit rather than services.nginx (cerberus has Caddy;
+      # this must not become a web server others add vhosts to): a ~20-line
+      # config is the whole behaviour, the stock `nginx` is in the binary cache for
+      # aarch64 too (an overridden, slimmer build would be compiled on servitor),
+      # and nothing here needs a second language runtime or a
+      # custom daemon to maintain. A socket-activated systemd-socket-proxyd
+      # was ruled out: it forwards bytes and cannot filter by path or method.
+      (mkIf cfg.metricsProxy.enable (let
+        mp = cfg.metricsProxy;
+        confFile = pkgs.writeText "blocky-metrics-nginx.conf" ''
+          daemon off;
+          pid /run/blocky-metrics/nginx.pid;
+          error_log stderr warn;
+          events { worker_connections 64; }
+          http {
+            access_log off;
+            client_body_temp_path /run/blocky-metrics/body;
+            proxy_temp_path /run/blocky-metrics/proxy;
+            fastcgi_temp_path /run/blocky-metrics/fastcgi;
+            uwsgi_temp_path /run/blocky-metrics/uwsgi;
+            scgi_temp_path /run/blocky-metrics/scgi;
+            server {
+              listen ${mp.listenAddress}:${toString mp.port};
+              server_tokens off;
+              # Exact match, and the upstream path is fixed, so nothing but
+              # /metrics is ever requested from Blocky, whatever the client
+              # sends (encoded or doubled slashes included). Only GET (and
+              # HEAD); any other method is refused here.
+              location = /metrics {
+                limit_except GET { deny all; }
+                proxy_pass http://127.0.0.1:${toString cfg.metricsPort}/metrics;
+              }
+              location / { return 404; }
+            }
+          }
+        '';
+      in {
+        systemd.services.blocky-metrics-proxy = {
+          description = "Blocky metrics-only proxy (GET /metrics)";
+          wantedBy = ["multi-user.target"];
+          # The LAN address must exist to be bound.
+          after = ["network-online.target" "blocky.service"];
+          wants = ["network-online.target"];
+          serviceConfig = {
+            ExecStart = "${pkgs.nginx}/bin/nginx -e stderr -c ${confFile}";
+            DynamicUser = true;
+            RuntimeDirectory = "blocky-metrics";
+            Restart = "on-failure";
+            RestartSec = "5s";
+            NoNewPrivileges = true;
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            PrivateTmp = true;
+            PrivateDevices = true;
+            ProtectKernelTunables = true;
+            ProtectControlGroups = true;
+            RestrictAddressFamilies = ["AF_INET" "AF_UNIX"];
+            CapabilityBoundingSet = "";
+          };
+        };
+
+        # One rule per source, in whichever backend the host uses (as in
+        # node-exporter.nix; an IPv4 source is a parse error for ip6tables).
+        networking.firewall = mkIf config.networking.firewall.enable (
+          if config.networking.nftables.enable
+          then {
+            extraInputRules = ''
+              ip saddr { ${lib.concatStringsSep ", " (lib.attrValues mp.sources)} } tcp dport ${toString mp.port} accept comment "blocky-metrics"
+            '';
+          }
+          else {
+            extraCommands = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: ip: ''
+                iptables -w -A nixos-fw -p tcp --dport ${toString mp.port} -s ${ip}/32 -m comment --comment blocky-metrics:${name} -j nixos-fw-accept
+              '')
+              mp.sources);
+          }
+        );
+      }))
 
       # The password: generated once, shared by every Blocky host and by the
       # database machine, where the postgresql module sets it on the role.

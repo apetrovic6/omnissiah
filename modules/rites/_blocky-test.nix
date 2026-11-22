@@ -8,8 +8,8 @@
 # Out of scope (no internet in the VM): the real DoT connection to Quad9 (the
 # IP-SAN validity was checked by hand with `openssl s_client -verify_ip`), the
 # real list downloads and their formats. x86_64 only; servitor (aarch64) relies
-# on nixpkgs' build-time `blocky validate`. The metrics-scrape firewall rules
-# no longer exist: the HTTP port is bound to localhost. A `db` node stands in
+# on nixpkgs' build-time `blocky validate`. The HTTP port is bound to
+# localhost; the metrics-only proxy in front of /metrics is tested below. A `db` node stands in
 # for cerberus's Postgres, for the query log.
 {flake}: let
   pkgs = flake.inputs.nixpkgs.legacyPackages.x86_64-linux;
@@ -57,6 +57,12 @@
       enable = true;
       port = dnsPort;
       listenAddresses = [ip.${name} "127.0.0.1"];
+      metricsProxy = {
+        listenAddress = ip.${name};
+        # blocky: the client is a scraper; blocky2 keeps the default (the k8s
+        # nodes), so the client must be shut out there.
+        sources = lib.optionalAttrs (name == "blocky") {client = ip.client;};
+      };
       nrdUrl = "http://localhost/nrd";
       queryLog = {
         host = ip.db;
@@ -262,6 +268,30 @@ in
           assert stub == "${hosts.cerberus}", stub
           # Blocky itself still answers on loopback.
           assert blocky2.succeed("dig +short @127.0.0.1 ha.ugalabugala.org").strip() == "${hosts.cerberus}"
+
+      with subtest("metrics proxy: /metrics through it, nothing else reaches Blocky; closed to other sources"):
+          blocky.wait_for_unit("blocky-metrics-proxy.service")
+          blocky.wait_for_open_port(4001, "${ip.blocky}")
+          m = client.succeed("curl -m 5 -fsS http://${ip.blocky}:4001/metrics")
+          assert "blocky_blocking_enabled 1" in m, m[:300]
+          assert "blocky_denylist_cache_entries" in m
+          for method in ["GET", "POST", "PUT", "DELETE", "PATCH"]:
+              for path in ["/api/blocking/disable", "/api/blocking/disable?duration=1h", "/api/lists/refresh", "/", "/metrics/../api/blocking/disable", "/%2e%2e/api/blocking/disable", "//api/blocking/disable"]:
+                  code = client.succeed(f"curl -m 5 -s -o /dev/null -w %{{http_code}} -X {method} --path-as-is 'http://${ip.blocky}:4001{path}'").strip()
+                  assert code in ("404", "403", "400", "405"), (method, path, code)
+          for method in ["POST", "PUT", "DELETE"]:
+              code = client.succeed(f"curl -m 5 -s -o /dev/null -w %{{http_code}} -X {method} http://${ip.blocky}:4001/metrics").strip()
+              assert code == "403", (method, code)
+          # Blocking is still on, both in Blocky and as the scraper sees it.
+          blocky.succeed("curl -fsS http://127.0.0.1:4000/api/blocking/status | grep -q '\"enabled\":true'")
+          assert "blocky_blocking_enabled 1" in client.succeed("curl -m 5 -fsS http://${ip.blocky}:4001/metrics")
+          assert status("sub.blocked.net") == "NXDOMAIN"
+          # blocky2 runs the proxy too, but the client is not an allowed source.
+          blocky2.wait_for_unit("blocky-metrics-proxy.service")
+          blocky2.succeed("curl -m 5 -fsS http://${ip.blocky2}:4001/metrics | grep blocky_ > /dev/null")
+          client.fail("curl -m 3 -fsS http://${ip.blocky2}:4001/metrics")
+          # And the real API port is closed from the LAN on both.
+          client.fail("curl -m 3 -fsS http://${ip.blocky}:4000/metrics")
 
       def logged(name):
           return db.succeed(
