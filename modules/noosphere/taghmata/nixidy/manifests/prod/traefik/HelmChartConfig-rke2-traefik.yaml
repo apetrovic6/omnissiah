@@ -19,3 +19,9 @@ spec:
     providers:
       kubernetesGateway:
         enabled: true
+      # Lets an Ingress route to a machine outside the cluster through
+      # an ExternalName Service (_modules/ingress.nix `outside`). Off by
+      # default because whoever can create Services can then point
+      # Traefik at any host it reaches; here only ArgoCD does.
+      kubernetesIngress:
+        allowExternalNameServices: true

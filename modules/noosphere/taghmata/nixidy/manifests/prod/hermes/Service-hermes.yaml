@@ -4,8 +4,10 @@ metadata:
   name: hermes
   namespace: hermes
 spec:
+  externalName: ryza.omnissiah.internal
   ports:
     - name: http
       port: 9119
       protocol: TCP
       targetPort: 9119
+  type: ExternalName

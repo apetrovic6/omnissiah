@@ -121,6 +121,24 @@
         default = {};
         description = "Further annotations.";
       };
+      # For a service on a clan machine outside the cluster (cerberus, ryza,
+      # ...): also creates `service` as an ExternalName Service pointing at
+      # <machine>.omnissiah.internal, which CoreDNS answers from cartographa
+      # (apps/enginarium/rke2-config), and Traefik routes to it
+      # (allowExternalNameServices). `port` is then the machine's port.
+      #
+      # Not an Endpoints/EndpointSlice: ArgoCD's default resource.exclusions
+      # drop those, so they are silently never applied while the app shows
+      # Synced, and Traefik answers "no available server".
+      #
+      # The machine still has to accept the port from the cluster nodes
+      # (their IPs; pod traffic leaves masqueraded), as ryza does for Hermes.
+      outside = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "ryza";
+        description = "Clan machine (cartographa name) the traffic goes to, instead of a pod.";
+      };
     };
   };
 
@@ -183,6 +201,24 @@
         };
       })
       config.ingresses;
+
+    config.resources.services = lib.mapAttrs' (_: ingress:
+      nameValuePair ingress.service {
+        metadata = {inherit (ingress) namespace;};
+        spec = {
+          type = "ExternalName";
+          externalName = "${ingress.outside}.omnissiah.internal";
+          ports = [
+            {
+              name = "http";
+              port = ingress.port;
+              targetPort = ingress.port;
+              protocol = "TCP";
+            }
+          ];
+        };
+      })
+    (filterAttrs (_: ingress: ingress.outside != null) config.ingresses);
   };
 in {
   inherit module ingressAnnotations;

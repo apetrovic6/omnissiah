@@ -69,3 +69,29 @@ spec:
         parameters: 30
       - name: forward
         parameters: . 192.168.1.105
+    # The clan's machines by name, from cartographa, answered here and
+    # nowhere else: the targets of ExternalName Services. `.internal`
+    # is the TLD reserved for private use, so it can never shadow a
+    # public name. No fallthrough: an unknown machine is NXDOMAIN.
+    - zones:
+      - zone: omnissiah.internal
+      port: 53
+      plugins:
+      - name: errors
+      - name: hosts
+        configBlock: |-
+          172.245.55.111 alfrost.omnissiah.internal
+          192.168.1.105 cerberus.omnissiah.internal
+          152.53.34.16 cypramundi.omnissiah.internal
+          192.168.1.146 enginseer.omnissiah.internal
+          192.168.1.109 genetor.omnissiah.internal
+          192.168.1.243 keksic.omnissiah.internal
+          192.168.1.232 luna.omnissiah.internal
+          192.168.1.61 manjaca.omnissiah.internal
+          192.168.1.44 mars.omnissiah.internal
+          192.168.1.46 phalanx.omnissiah.internal
+          192.168.1.10 proxmox.omnissiah.internal
+          192.168.1.45 ryza.omnissiah.internal
+          192.168.1.13 servitor.omnissiah.internal
+          192.168.1.42 sol.omnissiah.internal
+          192.168.1.138 terra.omnissiah.internal

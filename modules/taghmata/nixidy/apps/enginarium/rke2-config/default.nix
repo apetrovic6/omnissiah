@@ -8,6 +8,16 @@
     ...
   }: let
     domain = config.noosphere.domain;
+
+    # `<machine>.omnissiah.internal` for every address in cartographa, answered
+    # by CoreDNS itself (below). ExternalName Services point Traefik at these
+    # (_modules/ingress.nix `outside`), so routing to a machine outside the
+    # cluster never depends on Technitium. The joiner carries the indentation
+    # the lines need inside the YAML block below; interpolated text is not
+    # re-indented by Nix.
+    machineHosts =
+      builtins.concatStringsSep "\n          " (map (name: "${cartographa.hosts.${name}} ${name}.omnissiah.internal")
+        (builtins.attrNames cartographa.hosts));
   in {
     applications.calico-config = {
       namespace = "kube-system";
@@ -113,6 +123,18 @@
                   parameters: 30
                 - name: forward
                   parameters: . ${cartographa.hosts.cerberus}
+              # The clan's machines by name, from cartographa, answered here and
+              # nowhere else: the targets of ExternalName Services. `.internal`
+              # is the TLD reserved for private use, so it can never shadow a
+              # public name. No fallthrough: an unknown machine is NXDOMAIN.
+              - zones:
+                - zone: omnissiah.internal
+                port: 53
+                plugins:
+                - name: errors
+                - name: hosts
+                  configBlock: |-
+                    ${machineHosts}
         ''
       ];
     };
@@ -163,6 +185,12 @@
               providers:
                 kubernetesGateway:
                   enabled: true
+                # Lets an Ingress route to a machine outside the cluster through
+                # an ExternalName Service (_modules/ingress.nix `outside`). Off by
+                # default because whoever can create Services can then point
+                # Traefik at any host it reaches; here only ArgoCD does.
+                kubernetesIngress:
+                  allowExternalNameServices: true
         ''
 
         ''
