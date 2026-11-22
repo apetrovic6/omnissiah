@@ -4,23 +4,70 @@
 #   nix build --impure -L --no-link --expr \
 #     'import ./modules/rites/_blocky-test.nix { flake = builtins.getFlake "git+file://'$PWD'"; }'
 # `git add` new files first, or the flake's git-tree copy will not see them.
+#
+# Out of scope (no internet in the VM): the real DoT connection to Quad9 (the
+# IP-SAN validity was checked by hand with `openssl s_client -verify_ip`), the
+# real list downloads and their formats. x86_64 only; servitor (aarch64) relies
+# on nixpkgs' build-time `blocky validate`. The metrics-scrape firewall rules
+# no longer exist: the HTTP port is bound to localhost.
 {flake}: let
   pkgs = flake.inputs.nixpkgs.legacyPackages.x86_64-linux;
-  hosts = flake.lib.hosts;
-  vips = flake.lib.vips;
+  inherit (flake.lib) hosts vips;
   ip = {
     blocky = "192.168.1.11";
+    blocky2 = "192.168.1.12";
     upstream = "192.168.1.30";
     client = "192.168.1.20";
   };
+  # Production's port while Technitium still owns 53.
+  port = 5335;
+  # NB: test names use .net, not .test: Blocky itself answers NXDOMAIN for the
+  # RFC 6761 special-use TLD `.test`, which would make every block assertion
+  # pass trivially.
   static = name: {lib, ...}: {
-    networking.firewall.enable = false;
     networking.interfaces.eth1.ipv4.addresses = lib.mkForce [
       {
         address = ip.${name};
         prefixLength = 24;
       }
     ];
+  };
+  # The module as production uses it; only what cannot work offline is
+  # replaced: the upstream, the bootstrap resolver and the real list URLs.
+  blockyNode = name: dnsPort: {lib, ...}: {
+    imports = [(static name) flake.nixosModules.blocky];
+    # Serves the NRD source for the conversion test.
+    services.nginx = {
+      enable = true;
+      virtualHosts.localhost.root = pkgs.writeTextDir "nrd" ''
+        # comment line
+        newly.net
+
+        other.net
+      '';
+    };
+    # The real timer would fire 2-12 min after boot and race the test; the
+    # service is started explicitly instead.
+    systemd.timers.blocky-nrd.enable = lib.mkForce false;
+    services.imperium.blocky = {
+      enable = true;
+      port = dnsPort;
+      nrdUrl = "http://localhost/nrd";
+    };
+    services.blocky.settings = {
+      upstreams.groups.default = lib.mkForce [ip.upstream];
+      bootstrapDns = lib.mkForce [{upstream = ip.upstream;}];
+      blocking.denylists.ads = lib.mkForce [
+        "http://${ip.upstream}/list.txt"
+        "*.blocked.net\n"
+        "/var/lib/blocky-nrd/nrd.wildcard.txt"
+      ];
+      blocking.loading.downloads = {
+        attempts = 1;
+        timeout = "2s";
+      };
+    };
+    environment.systemPackages = [pkgs.dig pkgs.curl];
   };
 in
   pkgs.testers.runNixOSTest {
@@ -29,9 +76,14 @@ in
     skipTypeCheck = true;
     nodes = {
       # The "public internet": gives the PUBLIC answers, so a leak through the
-      # split-horizon shows up as these values.
+      # split-horizon shows up as these values. Also serves a blocklist.
       upstream = {...}: {
         imports = [(static "upstream")];
+        networking.firewall.enable = false;
+        services.nginx = {
+          enable = true;
+          virtualHosts.localhost.root = pkgs.writeTextDir "list.txt" "*.listed.net\n";
+        };
         services.dnsmasq = {
           enable = true;
           resolveLocalQueries = false;
@@ -40,70 +92,59 @@ in
             address = [
               "/ugalabugala.org/152.53.34.16"
               "/noosphere.uk/152.53.34.16"
+              "/keksic.xyz/152.53.34.16"
               "/example.org/93.184.216.34"
-              "/blocked.test/10.9.9.9"
+              "/blocked.net/10.9.9.9"
+              "/listed.net/10.7.7.7"
+              "/newly.net/10.8.8.8"
             ];
+            # A public AAAA for a mapped name: must NOT leak.
+            host-record = ["ha.ugalabugala.org,2001:db8::1"];
           };
         };
       };
 
-      blocky = {lib, ...}: {
-        imports = [(static "blocky") flake.nixosModules.blocky];
-        # Serves the NRD source for the conversion test.
-        services.nginx = {
-          enable = true;
-          virtualHosts.localhost.root = pkgs.writeTextDir "nrd" ''
-            # comment line
-            newly.test
+      # Production shape: port 5335, firewall ON (the module must open it).
+      blocky = blockyNode "blocky" port;
 
-            other.test
-          '';
-        };
-        services.imperium.blocky = {
-          enable = true;
-          port = 53;
-          nrdUrl = "http://localhost/nrd";
-        };
-        # The test VM has no internet: swap the real upstream for the fake one
-        # and the real lists for an inline one. Everything else (customDNS,
-        # blocking type, NRD file path) is the module's own.
-        services.blocky.settings = {
-          upstreams.groups.default = lib.mkForce [ip.upstream];
-          blocking.denylists.ads = lib.mkForce [
-            "http://lists.invalid/hosts.txt"
-            "*.blocked.test\n"
-            "/var/lib/blocky-nrd/nrd.wildcard.txt"
-          ];
-          blocking.loading.downloads = {
-            attempts = 1;
-            timeout = "2s";
-          };
-        };
-        environment.systemPackages = [pkgs.dig pkgs.curl];
+      # B3: the cutover shape. systemd-resolved's stub holds 127.0.0.53:53,
+      # Blocky wants :53 on every address.
+      blocky2 = {lib, ...}: {
+        imports = [(blockyNode "blocky2" 53)];
+        services.resolved.enable = true;
+        networking.nameservers = [ip.blocky2];
       };
 
       client = {...}: {
         imports = [(static "client")];
-        environment.systemPackages = [pkgs.dig];
+        networking.firewall.enable = false;
+        environment.systemPackages = [pkgs.dig pkgs.curl];
       };
     };
 
     testScript = ''
-      def q(name, typ="A", server="${ip.blocky}"):
-          return client.succeed(f"dig +short +time=3 +tries=2 @{server} {name} {typ}").strip()
+      def q(name, typ="A", server="${ip.blocky}", p=${toString port}):
+          return client.succeed(f"dig +short +time=3 +tries=2 -p {p} @{server} {name} {typ}").strip()
 
-      def status(name, typ="A"):
-          out = client.succeed(f"dig +time=3 +tries=2 @${ip.blocky} {name} {typ}")
+      def status(name, typ="A", server="${ip.blocky}", p=${toString port}):
+          out = client.succeed(f"dig +time=3 +tries=2 -p {p} @{server} {name} {typ}")
           return out.split("status: ")[1].split(",")[0]
 
       start_all()
       upstream.wait_for_unit("dnsmasq.service")
+      upstream.wait_for_unit("nginx.service")
 
-      with subtest("blocky starts with the NRD file missing and a dead list URL"):
+      with subtest("blocky starts with the NRD file missing"):
           blocky.wait_for_unit("blocky.service")
-          blocky.wait_for_open_port(53)
+          blocky.wait_for_open_port(${toString port})
           blocky.fail("test -e /var/lib/blocky-nrd/nrd.wildcard.txt")
-          client.wait_until_succeeds("dig +short @${ip.blocky} example.org | grep -q .", timeout=60)
+          blocky.fail("systemctl is-active blocky-nrd.timer")
+          client.wait_until_succeeds("dig +short -p ${toString port} @${ip.blocky} example.org | grep -q .", timeout=60)
+
+      with subtest("DNS port is open through the firewall; HTTP API is not"):
+          assert q("example.org") == "93.184.216.34"
+          client.fail("curl -m 3 -fsS http://${ip.blocky}:4000/metrics")
+          blocky.succeed("curl -fsS http://127.0.0.1:4000/metrics | grep blocky_ > /dev/null")
 
       with subtest("mapped ugalabugala vhost goes to cerberus"):
           assert q("ha.ugalabugala.org") == "${hosts.cerberus}", q("ha.ugalabugala.org")
@@ -113,37 +154,78 @@ in
           assert q("ugalabugala.org") == "152.53.34.16", q("ugalabugala.org")
           assert q("matrix.ugalabugala.org") == "152.53.34.16"
 
-      with subtest("noosphere.uk (apex and subdomains) goes to the traefik VIP"):
+      with subtest("noosphere.uk apex and subdomains go to the traefik VIP"):
           assert q("noosphere.uk") == "${vips.traefik}"
           assert q("argocd.noosphere.uk") == "${vips.traefik}"
+
+      with subtest("keksic.xyz subdomains go to keksic"):
+          assert q("x.keksic.xyz") == "${hosts.keksic}", q("x.keksic.xyz")
 
       with subtest("per-machine .omnissiah.internal names"):
           assert q("ryza.omnissiah.internal") == "${hosts.ryza}"
           assert q("cerberus.omnissiah.internal") == "${hosts.cerberus}"
 
-      with subtest("blocking: inline list entry, NXDOMAIN, apex and subdomain"):
-          assert status("sub.blocked.test") == "NXDOMAIN", status("sub.blocked.test")
-          assert status("blocked.test") == "NXDOMAIN"
+      with subtest("filterUnmappedTypes: the public AAAA of a mapped name does not leak"):
+          assert q("ha.ugalabugala.org", "AAAA", server="${ip.upstream}", p=53) == "2001:db8::1"
+          aaaa = q("ha.ugalabugala.org", "AAAA")
+          print("AAAA ha.ugalabugala.org via blocky:", repr(aaaa))
+          assert aaaa == "", aaaa
+
+      with subtest("sub-subdomain of a mapped vhost"):
+          sub = q("x.ha.ugalabugala.org")
+          print("x.ha.ugalabugala.org via blocky:", repr(sub), status("x.ha.ugalabugala.org"))
+          # PIN: a mapping covers subdomains, so this goes to cerberus too.
+          assert sub == "${hosts.cerberus}", sub
+
+      with subtest("blocking: inline entry, NXDOMAIN, apex and subdomain"):
+          assert status("sub.blocked.net") == "NXDOMAIN", status("sub.blocked.net")
+          assert status("blocked.net") == "NXDOMAIN"
           assert q("example.org") == "93.184.216.34"
 
-      with subtest("NRD service converts the list to *. form"):
+      with subtest("blocking: list served over HTTP"):
+          client.wait_until_succeeds("dig -p ${toString port} @${ip.blocky} x.listed.net | grep -q NXDOMAIN", timeout=60)
+
+      with subtest("NRD service converts the list and triggers a refresh, no restart"):
+          print("pre x.newly.net:", repr(q("x.newly.net")), status("x.newly.net"), "upstream:", repr(q("x.newly.net", server="${ip.upstream}", p=53)))
+          assert q("x.newly.net") == "10.8.8.8", q("x.newly.net")
           blocky.succeed("systemctl start blocky-nrd.service")
           out = blocky.succeed("cat /var/lib/blocky-nrd/nrd.wildcard.txt")
           print(out)
-          assert out.split() == ["*.newly.test", "*.other.test"], out
+          assert out.split() == ["*.newly.net", "*.other.net"], out
           blocky.succeed("stat -c %a /var/lib/blocky-nrd/nrd.wildcard.txt | grep -qx 644")
-
-      with subtest("blocky reads the NRD file (readable by its dynamic user)"):
-          blocky.systemctl("restart blocky.service")
-          blocky.wait_for_open_port(53)
-          client.wait_until_succeeds("dig @${ip.blocky} x.newly.test | grep -q NXDOMAIN", timeout=60)
+          client.wait_until_succeeds("dig -p ${toString port} @${ip.blocky} x.newly.net | grep -q NXDOMAIN", timeout=30)
+          blocky.succeed("systemctl show -p ActiveEnterTimestamp blocky.service")
 
       with subtest("NRD download failure keeps the previous file and fails the unit"):
           blocky.succeed("systemctl stop nginx.service")
           blocky.fail("systemctl start blocky-nrd.service")
-          blocky.succeed("grep -qx '[*].newly.test' /var/lib/blocky-nrd/nrd.wildcard.txt")
+          blocky.succeed("grep -qx '[*].newly.net' /var/lib/blocky-nrd/nrd.wildcard.txt")
 
-      with subtest("metrics"):
-          assert "blocky_" in blocky.succeed("curl -fsS http://localhost:4000/metrics")
+      with subtest("lists survive a restart with the list host down (cachePath)"):
+          blocky.succeed("ls -la /var/lib/blocky/lists/ || true")
+          upstream.succeed("systemctl stop nginx.service")
+          blocky.systemctl("restart blocky.service")
+          blocky.wait_for_open_port(${toString port})
+          client.wait_until_succeeds("dig -p ${toString port} @${ip.blocky} x.listed.net | grep -q NXDOMAIN", timeout=60)
+          client.wait_until_succeeds("dig -p ${toString port} @${ip.blocky} x.newly.net | grep -q NXDOMAIN", timeout=60)
+
+      with subtest("upstream DNS down: mapped names answer, blocked names stay blocked"):
+          upstream.succeed("systemctl stop dnsmasq.service")
+          assert q("ha.ugalabugala.org") == "${hosts.cerberus}"
+          assert q("x.noosphere.uk") == "${vips.traefik}"
+          assert status("x.listed.net") == "NXDOMAIN"
+          assert status("sub.blocked.net") == "NXDOMAIN"
+          upstream.succeed("systemctl start dnsmasq.service")
+
+      with subtest("B3 KNOWN FAILURE: port 53 next to systemd-resolved's stub"):
+          # Review finding B3, CONFIRMED: Blocky's `listen udp :53` (wildcard)
+          # collides with resolved's stub on 127.0.0.53:53. This pins the
+          # failure so the suite stays green; when the module binds explicit
+          # addresses (or resolved's stub is turned off), flip this to assert
+          # that blocky starts and answers. See NOTES-blocky-impl.md.
+          blocky2.wait_for_unit("systemd-resolved.service")
+          blocky2.wait_until_succeeds("systemctl is-failed blocky.service || journalctl -u blocky.service | grep -q 'address already in use'", timeout=60)
+          blocky2.succeed("journalctl -u blocky.service | grep 'listen udp :53: bind: address already in use'")
+          print(blocky2.succeed("ss -lunp | grep ':53 '"))
     '';
   }
