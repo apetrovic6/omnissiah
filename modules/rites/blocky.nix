@@ -360,20 +360,35 @@
         # Blocky tries the database only at startup (3 attempts, 2 s apart),
         # then logs every query to the journal for as long as it runs. That
         # happens when this host boots while cerberus is down. Every 10 minutes:
-        # if this Blocky runs on the fallback and the database answers again,
-        # restart it. The other resolvers cover the second it takes.
+        # if this Blocky runs on the fallback because the database was
+        # UNREACHABLE and it answers again, restart it. The other resolvers
+        # cover the restart (about 35 s on servitor, which loads the lists
+        # before it opens port 53).
+        #
+        # Not when Postgres answered and refused: a wrong password, a missing
+        # role or database (SQLSTATE class 28 or 3D). A restart cannot fix
+        # that, and restarting every 10 minutes would be a DNS outage on this
+        # host every 10 minutes. The unit fails instead, so it shows; fix the
+        # config, and the deploy that carries the fix restarts Blocky. (A
+        # login check would need psql: 150 MiB on servitor for this.)
         systemd.services.blocky-querylog-watchdog = {
           description = "Restart Blocky when its query log fell back to the journal";
-          path = [pkgs.systemd pkgs.bash pkgs.coreutils];
+          path = [pkgs.systemd pkgs.bash pkgs.coreutils pkgs.gnugrep];
           serviceConfig.Type = "oneshot";
           script = ''
             id=$(systemctl show -p InvocationID --value blocky.service)
             [ -n "$id" ] || exit 0
-            if journalctl -q _SYSTEMD_INVOCATION_ID="$id" -g "using console as fallback" | grep -q .; then
-              if timeout 3 bash -c 'exec 3<>/dev/tcp/${ql.host}/5432'; then
-                echo "query log is on the journal fallback and ${ql.host}:5432 answers; restarting blocky"
-                systemctl restart blocky.service
-              fi
+            journalctl -q -o cat _SYSTEMD_INVOCATION_ID="$id" -g "using console as fallback" | grep -q . || exit 0
+            # The fallback message spans several journal lines; the last retry
+            # warning carries the whole error on one.
+            reason=$(journalctl -q -o cat _SYSTEMD_INVOCATION_ID="$id" -g "Error occurred on query writer creation" | tail -n 1)
+            if grep -Eq 'SQLSTATE (28|3D)' <<<"$reason"; then
+              echo "query log is on the journal fallback because the database refused it; not restarting: $reason" >&2
+              exit 1
+            fi
+            if timeout 3 bash -c 'exec 3<>/dev/tcp/${ql.host}/5432'; then
+              echo "query log is on the journal fallback and ${ql.host}:5432 answers; restarting blocky"
+              systemctl restart blocky.service
             fi
           '';
         };

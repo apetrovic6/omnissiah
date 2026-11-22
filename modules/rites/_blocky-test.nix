@@ -307,5 +307,18 @@ in
           )
           # The fallback went to the journal only, never to the database.
           assert logged("probe2.example.org") == "0", logged("probe2.example.org")
+
+      with subtest("query log: database refuses the login; the watchdog does NOT restart, it fails"):
+          db.succeed("sudo -u postgres psql -c \"ALTER ROLE blocky PASSWORD 'wrong'\"")
+          blocky.systemctl("restart blocky.service")
+          blocky.wait_for_open_port(${toString port})
+          assert q("probe4.example.org") == "93.184.216.34"
+          blocky.wait_until_succeeds("journalctl -u blocky.service -q -g 'retry attempt 3/3.*SQLSTATE 28' | grep -q .", timeout=60)
+          blocky.wait_until_succeeds("journalctl -u blocky.service -q -g 'using console as fallback' --since '-30s' | grep -q .", timeout=60)
+          before = invocation()
+          blocky.fail("systemctl start blocky-querylog-watchdog.service")
+          assert invocation() == before, "watchdog restarted blocky although the database refused the login"
+          print(blocky.succeed("journalctl -u blocky-querylog-watchdog.service -q -o cat | tail -n 2"))
+          db.succeed("sudo -u postgres psql -c \"ALTER ROLE blocky PASSWORD 'testpw'\"")
     '';
   }
