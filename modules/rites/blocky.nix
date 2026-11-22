@@ -535,6 +535,19 @@
           ensureDBOwnership = true;
           passwordDependency = "blocky-querylog";
         };
+
+        # Grafana's read-only role (the cluster side is reliquary/blocky-grafana).
+        # It owns nothing and may only SELECT from what `blocky` creates, including
+        # the table Blocky itself creates on first start, which may come after the
+        # grants ran: readOnlyAccess uses default privileges for role `blocky`, so no
+        # re-grant is needed after Blocky's migrations. Its password comes from the
+        # shared `blocky-grafana` var, declared by reliquary-blocky-grafana, which the
+        # database machine (cerberus) imports.
+        services.imperium.postgresql.users.blocky_grafana = mkIf (ql.enable && isDatabaseMachine) {
+          databases = [];
+          readOnlyAccess.blocky.owner = "blocky";
+          passwordDependency = "blocky-grafana";
+        };
       })
     ]);
   };
