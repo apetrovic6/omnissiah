@@ -26,7 +26,6 @@
     ./memos.nix
     ./davical.nix
     ./forgejo-runner.nix
-    ./monitoring.nix
     ./heartbeat.nix
     ./ntfy.nix
     ./pilot.nix
