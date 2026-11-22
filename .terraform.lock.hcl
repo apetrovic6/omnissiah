@@ -9,6 +9,14 @@ provider "registry.opentofu.org/adyxax/forgejo" {
   ]
 }
 
+provider "registry.opentofu.org/bpg/proxmox" {
+  version     = "0.122.0"
+  constraints = "0.122.0"
+  hashes = [
+    "h1:p5dH4quWXfRggp39Vg+2/3teEV98jlMlJrp5vOeOCrU=",
+  ]
+}
+
 provider "registry.opentofu.org/carlpett/sops" {
   version     = "1.4.1"
   constraints = "1.4.1"

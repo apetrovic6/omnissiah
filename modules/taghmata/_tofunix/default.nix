@@ -7,6 +7,7 @@
 #   scriptorium/   code hosting: both forges, their GitHub mirrors, Harbor
 #   pharos/        identity: Pocket ID groups, users and OIDC clients
 #   fabricata.nix  per-product wiring, from ../_products.nix
+#   manufactorum.nix  Proxmox VMs that clan machines are installed onto
 #
 # The state holds resources by type and name (`forgejo_repository.nvf`),
 # never by file, so moving a declaration between these files changes nothing.
@@ -19,11 +20,13 @@
     ./patterns/repos.nix
     ./patterns/robots.nix
     ./patterns/clients.nix
+    ./patterns/vms.nix
     ./scriptorium/forge-noosphere.nix
     ./scriptorium/forge-cerberus.nix
     ./scriptorium/harbor.nix
     ./pharos
     ./fabricata.nix
+    ./manufactorum.nix
   ];
 
   terraform.backend.s3 = {

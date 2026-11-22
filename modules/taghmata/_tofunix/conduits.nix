@@ -14,6 +14,7 @@ in {
     github_secrets.generator = "tofunix-github-secret";
     secrets.generator = "tofunix-harbor-secrets";
     pocket_api_key.generator = "tofunix-pocketid-secret";
+    proxmox_secrets.generator = "tofunix-proxmox-secret";
   };
 
   provider = {
@@ -49,6 +50,15 @@ in {
     pocketid.default = {
       base_url = "https://id.${domain}";
       api_token = relic "pocket_api_key" "api_key";
+    };
+
+    # The Proxmox host mars runs on. API token only: nothing here needs the
+    # provider's SSH access (no snippets, no disk imports). Self-signed cert.
+    # The token ID is not secret; the var holds only the UUID secret.
+    proxmox.default = {
+      endpoint = "https://192.168.1.11:8006/";
+      api_token = "tofu@pam!tofunix=${relic "proxmox_secrets" "api_token"}";
+      insecure = true;
     };
 
     # taghmata, for the Secrets that hand OIDC credentials to the apps. The

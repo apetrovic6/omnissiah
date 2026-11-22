@@ -36,6 +36,10 @@
           version = "2.3.0";
           hash = "sha256-MEMEPn5PerMIh+CfFYyEqM0142RyfT4Eoq/gu4ijFTQ=";
         };
+        "bpg/proxmox" = {
+          version = "0.122.0";
+          hash = "sha256-eOiXPwEF1tGnua6JHGKwf0zI9S6i2EugV6GY1i9R5yw=";
+        };
         "hashicorp/kubernetes" = {
           version = "3.2.1";
           hash = "sha256-U9ZcNapbdiR0xzb/1j8Q2bPO4U2kh+VWse9OaSdehKs=";
