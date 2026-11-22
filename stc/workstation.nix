@@ -221,6 +221,15 @@
       # base16Scheme = "nord";
     };
 
+    # home-manager removed its `programs.wayprompt` module (nixpkgs dropped the
+    # package), but stylix master (44aafe2, 2026-11-18) still themes it, and
+    # any definition of a removed option is an assertion failure that stops
+    # the whole machine from evaluating. Drop this once stylix removes
+    # modules/wayprompt.
+    home-manager.sharedModules = [
+      {stylix.targets.wayprompt.enable = false;}
+    ];
+
     boot.plymouth = {
       enable = true;
     };
