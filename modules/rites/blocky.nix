@@ -71,19 +71,37 @@
         default = 4000;
         description = "Blocky's local HTTP API, including /metrics. Bound to 127.0.0.1 only.";
       };
+      listenAddresses = mkOption {
+        type = types.listOf types.str;
+        default = lib.optional (self.lib.hosts ? ${config.networking.hostName}) self.lib.hosts.${config.networking.hostName} ++ ["127.0.0.1"];
+        defaultText = "[ self.lib.hosts.<hostName> \"127.0.0.1\" ]";
+        description = "IPv4 addresses the DNS port is bound to. Never the wildcard: see ports.dns.";
+      };
       nrdUrl = mkOption {
         type = types.str;
-        default = "https://shreshtait.com/newly-registered-domains/nrd-1w";
+        default = "https://raw.githubusercontent.com/hagezi/nrd/main/domains/nrd7.txt";
         description = "Plain domain list (one per line, `#` comments) of newly registered domains.";
       };
     };
 
     config = mkIf cfg.enable {
+      assertions = [
+        {
+          assertion = cfg.listenAddresses != ["127.0.0.1"];
+          message = "services.imperium.blocky: host '${config.networking.hostName}' is not in self.lib.hosts (modules/cartographa/_chart.nix), so there is no LAN address to listen on; set services.imperium.blocky.listenAddresses.";
+        }
+      ];
+
       services.blocky = {
         enable = true;
         settings = {
           ports = {
-            dns = cfg.port;
+            # Explicit addresses, not the wildcard: systemd-resolved's stub
+            # holds 127.0.0.53:53 and 127.0.0.54:53 on these hosts, and
+            # Blocky's wildcard `listen udp :53` fails with "address already
+            # in use" (reproduced in the VM test; see NOTES-blocky-impl.md).
+            # The LAN address serves clients, 127.0.0.1 the host itself.
+            dns = map (a: "${a}:${toString cfg.port}") cfg.listenAddresses;
             # The HTTP port is Blocky's whole REST API, unauthenticated (it can
             # disable blocking, trigger list refreshes, run queries), not just
             # /metrics. Localhost only; the NRD fetcher below uses it. Scraping
@@ -185,7 +203,12 @@
         };
       };
 
-      # NRD list: the source is a plain domain list with no `*.` variant, so
+      # NRD list: hagezi's nrd7 (domains registered in the last 7 days, all
+      # TLDs, ~3.0M entries / 48 MB). It replaced shreshtait.com's nrd-1w, which
+      # only covered .se/.sk/.nu (7.7k entries). Memory was measured locally
+      # with every list loaded (3.4M denylist entries): ~69 MiB RSS for Blocky,
+      # so size is no reason to drop it on servitor. The source is a plain
+      # domain list with no `*.` variant, so
       # convert it. Written atomically (temp + rename) so Blocky never reads a
       # half-written file; on failure the previous file stays and the unit
       # fails loudly.
@@ -215,7 +238,7 @@
           dir=/var/lib/blocky-nrd
           tmp=$(mktemp "$dir/.nrd.XXXXXX")
           trap 'rm -f "$tmp" "$tmp.raw"' EXIT
-          if ! curl -fsS --retry 3 --max-time 120 ${lib.escapeShellArg cfg.nrdUrl} -o "$tmp.raw"; then
+          if ! curl -fsS --retry 3 --max-time 600 ${lib.escapeShellArg cfg.nrdUrl} -o "$tmp.raw"; then
             echo "blocky-nrd: download of ${cfg.nrdUrl} failed; keeping the previous list" >&2
             rm -f "$tmp.raw"
             exit 1

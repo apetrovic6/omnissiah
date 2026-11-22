@@ -52,6 +52,7 @@
     services.imperium.blocky = {
       enable = true;
       port = dnsPort;
+      listenAddresses = [ip.${name} "127.0.0.1"];
       nrdUrl = "http://localhost/nrd";
     };
     services.blocky.settings = {
@@ -217,15 +218,16 @@ in
           assert status("sub.blocked.net") == "NXDOMAIN"
           upstream.succeed("systemctl start dnsmasq.service")
 
-      with subtest("B3 KNOWN FAILURE: port 53 next to systemd-resolved's stub"):
-          # Review finding B3, CONFIRMED: Blocky's `listen udp :53` (wildcard)
-          # collides with resolved's stub on 127.0.0.53:53. This pins the
-          # failure so the suite stays green; when the module binds explicit
-          # addresses (or resolved's stub is turned off), flip this to assert
-          # that blocky starts and answers. See NOTES-blocky-impl.md.
+      with subtest("B3: port 53 next to systemd-resolved's stub"):
           blocky2.wait_for_unit("systemd-resolved.service")
-          blocky2.wait_until_succeeds("systemctl is-failed blocky.service || journalctl -u blocky.service | grep -q 'address already in use'", timeout=60)
-          blocky2.succeed("journalctl -u blocky.service | grep 'listen udp :53: bind: address already in use'")
-          print(blocky2.succeed("ss -lunp | grep ':53 '"))
+          blocky2.wait_for_unit("blocky.service")
+          blocky2.wait_for_open_port(53)
+          print(blocky2.succeed("ss -lunpt | grep ':53 '"))
+          assert q("ha.ugalabugala.org", server="${ip.blocky2}", p=53) == "${hosts.cerberus}"
+          stub = blocky2.wait_until_succeeds("dig +short +time=3 @127.0.0.53 ha.ugalabugala.org", timeout=60).strip()
+          print("via resolved stub:", repr(stub))
+          assert stub == "${hosts.cerberus}", stub
+          # Blocky itself still answers on loopback.
+          assert blocky2.succeed("dig +short @127.0.0.1 ha.ugalabugala.org").strip() == "${hosts.cerberus}"
     '';
   }
