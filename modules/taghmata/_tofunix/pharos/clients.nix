@@ -4,6 +4,18 @@
   inherit (noosphere) domain;
 in {
   pharos.clients = {
+    # The Hermes dashboard on ryza (modules/rites/hermes.nix), outside the
+    # cluster: public, so no secret has to reach the machine, and admins only,
+    # since the dashboard drives an agent with a shell.
+    hermes = {
+      name = "Hermes";
+      url = "https://hermes.${domain}";
+      callbacks = ["/auth/callback"];
+      groups = ["admin"];
+      public = true;
+      clientId = "hermes";
+    };
+
     argocd = {
       name = "ArgoCD";
       url = "https://argocd.${domain}";

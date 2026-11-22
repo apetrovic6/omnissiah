@@ -1,5 +1,6 @@
-# Confidential OIDC clients in Pocket ID, and the Kubernetes Secret that hands
-# each one's id and secret to its app.
+# OIDC clients in Pocket ID (confidential, or public with `public = true`), and
+# for confidential ones the Kubernetes Secret that hands each one's id and
+# secret to its app.
 #
 #   pharos.clients.karakeep = {
 #     name = "karakeep";
@@ -41,6 +42,19 @@ in {
           default = [];
           description = "`pocketid_group` resources allowed to log in; everyone when empty.";
         };
+        # For apps outside the cluster, where no Kubernetes Secret can reach
+        # them: a public PKCE client has no secret at all, and a fixed id lets
+        # the app's own configuration name it without reading tofu outputs.
+        public = mkOption {
+          type = types.bool;
+          default = false;
+          description = "A public PKCE client, with no secret.";
+        };
+        clientId = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "A fixed client id instead of a generated one.";
+        };
         secret = mkOption {
           default = null;
           description = "The Kubernetes Secret to write the credentials to, if any.";
@@ -80,9 +94,11 @@ in {
           else callback)
         client.callbacks;
         logout_callback_urls = [client.url];
-        pkce_enabled = false;
+        pkce_enabled = client.public;
         launch_url = client.url;
       }
+      // lib.optionalAttrs client.public {is_public = true;}
+      // lib.optionalAttrs (client.clientId != null) {client_id = client.clientId;}
       // lib.optionalAttrs (client.groups != []) {
         allowed_user_groups = map (group: "\${pocketid_group.${group}.id}") client.groups;
       })
