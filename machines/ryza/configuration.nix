@@ -5,6 +5,7 @@
 {...}: {
   imports = [
     ./network.nix
+    ./forgejo-runner.nix
   ];
 
   # tofunix enables the agent on the VM; Proxmox reads IPs and shuts the guest
