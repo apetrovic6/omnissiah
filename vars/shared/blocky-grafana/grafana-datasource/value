@@ -1,0 +1,28 @@
+apiVersion: isindir.github.com/v1alpha3
+kind: SopsSecret
+metadata:
+    name: grafana-datasource-blocky-querylog
+    namespace: observability
+spec:
+    secretTemplates:
+        - name: ENC[AES256_GCM,data:7D00cP0n82rno/10F16/i1zIuPD28HcJlacP3wM7THo+3A==,iv:+o/WL6ew3q5rp+KAjyE9GIYS+HFYqBSgx0aBO+aVdO8=,tag:XimvVzt12K0pocpy8QIZNQ==,type:str]
+          type: ENC[AES256_GCM,data:2rPk3C46,iv:Um+GglCiqJqYK/rlVfOns8H5x844/R7V8pukpBkaBZw=,tag:Yau25u91/N9oLbBBG8Jgqg==,type:str]
+          labels:
+            grafana_datasource: ENC[AES256_GCM,data:dg==,iv:PyBsY4acdJZ2vf1JfFntWPvDPIH00stergaVTgFmDnY=,tag:ZdXoslu2eTxinTdvrUwEPA==,type:str]
+          stringData:
+            blocky-querylog.yaml: ENC[AES256_GCM,data:wY/MCfeStOVxzOQQN02ScVM9jijsXZ6cl1rF75EVrh24NFeZWl9P0dg9/4GnLSMv/w6MmHmzxxF2iWtoDmb33AoXK56EQEStx7ilPwL5iQwY3P9c5tzr62s+KPGX9VB2S1qIMi8KnVh+yTUWPYkQOzUlEjOEkxR2KACjglhfZ/AlLp5gelmLPqbZaEpKTyDWFrdhqAegBjs+N8V9SyBP+0koAHKo7BltkYwtMepc7yLp5fVfzcvVB0X3moBQxNzyN4mZWcyVONw6wy65+Ax3GhzTXDZCZ83XTXYnkokOV9p61BlRrzltsYMAqMoKcbI0C+Akc5YnDCdBL/gHwnY+nruHSACA/KP1a3qhutGVmXUol/1NP+EXpQYDdeuf0Oyy2j60FD80EaWTC+Ruusy5T+Yq3hFmC8gi7f0rIcSxv8Aeu8S8myYCXc3g2WP6jzK7+qiITs5SBVPAGZ9Hwa2hYPsz5P0pfrR0yQ2DycOr7quLJ4gAz1criIDoTJJ16x75J4gQ3OepKvUI9PYcvLP3jWlNQlu14aHqfdCNNXHv/g==,iv:WB4SznEDWgqW7FuXF6nMKcKNM2hykZBBI0ofKFQKmis=,tag:L02H/lSg4Nv/+b2/nrYzGA==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBtaUhucWlVTC8vTC9GUmZa
+            K09MR2ZzYnBvc2U3ZjdQZzJFYVgxOFErT3dnCkNIaFRFZ2N6YlN1TnV3K2xIVGFU
+            Yy9IUE85aUc5VFhCeUZjUFBKT3FFUGsKLS0tIFZsNk9CNXhScS9NTjN4NlAwNjJw
+            T29mOW1ISGNzQlJwYWlGRDU0d2xiR3MKg6XYMtthfpxx0i8NG6rAL5gAokzgNqXL
+            TzYEAMKHU3d4Xi/4NwDjY+TpPKRXf919ke9BzDSYFQtIKVRUXIUPsw==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1juzhlapy63msgtzzelusuqqq0hy24907eh0zd7xxzpkjtt5m053sv6a38g
+    encrypted_suffix: Templates
+    lastmodified: "2026-11-22T17:10:23Z"
+    mac: ENC[AES256_GCM,data:fLv72bLevmDc8L7GTopyGNZG1Nxu2xDxPenXpSYfRaim7JGQiyd5U9Wj165CZzd/hbNi/Dpn7g0fnIeTdnUh9FU+/B9acwNP7duGTFAf5Pu5BI/GTKJSRegGmnwRFTHzbZeQtefbDL1jskb1RJu/1rt0Cvu4nBl6dKbwKaEgm5M=,iv:TDMqj/AvWMGLLTOAmyqtTxVZsdb79Qpm6Ad/3dxflLs=,tag:Lg5Luv3G1DR4uBZXdnbQCA==,type:str]
+    version: 3.13.3
