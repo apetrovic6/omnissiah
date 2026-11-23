@@ -72,12 +72,32 @@ def update_config(path, settings, *, default_profile=False):
             tmp.unlink(missing_ok=True)
 
 
-def main(home, overlay):
+def main(home, overlay, *disabled_profiles):
     os.umask(0o077)
+    # Hermes uses this tombstone for both profile selection and gateway discovery.
+    # Leave profile data and any tombstone written by Hermes itself alone.
+    tombstones = home / "profiles/.deleted"
+    disabled_by_nix = b"disabled by NixOS\n"
+    if disabled_profiles:
+        tombstones.mkdir(parents=True, exist_ok=True)
+    for name in disabled_profiles:
+        try:
+            with (tombstones / name).open("xb") as marker:
+                marker.write(disabled_by_nix)
+        except FileExistsError:
+            pass
+
     for source in sorted(overlay.glob("profiles/*/config.yaml")):
         update_config(home / source.relative_to(overlay), read_config(source))
+        marker = tombstones / source.parent.name
+        try:
+            if marker.read_bytes() == disabled_by_nix:
+                marker.unlink()
+        except FileNotFoundError:
+            pass
     update_config(home / "config.yaml", read_config(overlay / "config.yaml"), default_profile=True)
 
 
 if __name__ == "__main__":
-    main(*map(Path, sys.argv[1:]))
+    home, overlay, *disabled_profiles = sys.argv[1:]
+    main(Path(home), Path(overlay), *disabled_profiles)

@@ -19,6 +19,9 @@
 # MEMORY.md, USER.md, skills, sessions, auth.json), ~/.claude and ~/.codex.
 # Hermes edits its own state. Nix merges the declared profile and routing
 # settings into config.yaml without replacing the rest.
+# Keep a profile declared with enable = false to hide it without losing its
+# state. Dropping a declaration or individual settings from Nix leaves the
+# corresponding files and keys on disk. The merge prunes Nix-managed routes.
 #
 # One-time setup, as the hermes user (`sudo -u hermes -i`):
 #   hermes model              pick providers, log in to ChatGPT (device code)
@@ -44,6 +47,12 @@
     user = "hermes";
     home = "/var/lib/hermes";
     mx = cfg.matrix;
+    enabledProfiles = lib.filterAttrs (_: profile: profile.enable) cfg.profiles;
+    disabledProfiles = lib.attrNames (lib.filterAttrs (_: profile: !profile.enable) cfg.profiles);
+    # Hermes 0.23.0: hermes_constants.py PROFILE_ID_RE and
+    # hermes_cli/profiles.py _RESERVED_NAMES (default is not a named profile).
+    profileIdPattern = "^[a-z0-9][a-z0-9_-]{0,63}$";
+    reservedProfileNames = ["hermes" "default" "test" "tmp" "root" "sudo"];
     yaml = pkgs.formats.yaml {};
     routes = lib.concatLists (lib.mapAttrsToList (name: profile:
       lib.optional (mx.enable && profile.chatId != null) {
@@ -52,7 +61,7 @@
         profile = name;
         chat_id = profile.chatId;
       })
-    cfg.profiles);
+    enabledProfiles);
     profileConfig = pkgs.linkFarm "hermes-config" ([
         {
           name = "config.yaml";
@@ -66,9 +75,15 @@
         name = "profiles/${name}/config.yaml";
         path = yaml.generate "hermes-${name}-config.yaml" profile.settings;
       })
-      cfg.profiles);
+      enabledProfiles);
     configPython = pkgs.python3.withPackages (ps: [ps.ruamel-yaml]);
-    applyProfileConfig = "${lib.getExe configPython} ${./_hermes-merge-config.py} ${home}/.hermes ${profileConfig}";
+    applyProfileConfig = lib.escapeShellArgs ([
+        (lib.getExe configPython)
+        ./_hermes-merge-config.py
+        "${home}/.hermes"
+        profileConfig
+      ]
+      ++ disabledProfiles);
     # Shared with the homeserver, which registers the account
     # (modules/noosphere/vox/matrix-bots.nix).
     mxGenerator = "matrix-bot-${mx.localpart}";
@@ -178,6 +193,11 @@
       profiles = mkOption {
         type = types.attrsOf (types.submodule {
           options = {
+            enable = mkOption {
+              type = types.bool;
+              default = true;
+              description = "Provision and route this profile. Disabling it preserves its files but makes it unavailable to Hermes.";
+            };
             settings = mkOption {
               type = types.attrsOf yaml.type;
               default = {};
@@ -297,7 +317,7 @@
     config = mkIf cfg.enable {
       assertions =
         lib.mapAttrsToList (name: _: {
-          assertion = builtins.match "[a-z0-9][a-z0-9_-]{0,63}" name != null && !lib.elem name ["default" "hermes" "test" "tmp" "root" "sudo"];
+          assertion = builtins.match profileIdPattern name != null && !lib.elem name reservedProfileNames;
           message = "services.imperium.hermes.profiles: '${name}' is not a valid named Hermes profile ID.";
         })
         cfg.profiles;

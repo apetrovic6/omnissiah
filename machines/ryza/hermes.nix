@@ -26,7 +26,7 @@ in {
   options.services.imperium.hermes.stygies.knownHosts = lib.mkOption {
     type = lib.types.str;
     default = "";
-    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty uses trust on first use.";
+    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder.";
   };
 
   config = {
@@ -44,8 +44,10 @@ in {
     services.imperium.hermes = {
       enable = true;
       extraPackages = [pkgs.openssh];
-      # Fill in stygies.knownHosts with the verified host public key after install.
       profiles.coder = {
+        # Hermes uses accept-new. Without a system pin, don't expose a profile
+        # that could trust an unknown host or run its terminal locally on ryza.
+        enable = knownHosts != "";
         # Set to the Matrix room ID once the bot has been invited.
         chatId = null;
         settings.terminal = {

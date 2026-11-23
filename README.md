@@ -195,16 +195,16 @@ engine, change the Strata input and its matching llama.cpp pin together.
 
 ### Hermes coder profile (ryza → stygies)
 
-The ryza gateway serves both `default` and `coder`. The latter runs terminal
-tools over SSH as `hermes` in `~/work` on stygies. Before deploying the pair:
+The ryza gateway serves `coder` only after a host key is pinned. Its terminal
+tools run over SSH as `hermes` in `~/work` on stygies.
 
 1. Generate `hermes-stygies-ssh` on ryza with
    `clan vars generate ryza --generator hermes-stygies-ssh`. Stygies needs only
    the generated public half.
 2. After installing stygies, read its `/etc/ssh/ssh_host_ed25519_key.pub` from
    the VM console. Set `services.imperium.hermes.stygies.knownHosts` on ryza to
-   the key type and base64 value (omit the comment). Until the pin is deployed,
-   Hermes uses SSH trust on first use.
+   the key type and base64 value (omit the comment). An empty pin disables
+   the profile and its Matrix route without deleting existing profile data.
 3. Invite the existing Matrix bot to the coding room, then set
    `services.imperium.hermes.profiles.coder.chatId` to the room ID (`!…`, not a
    `#…` alias). With `null` there is no coder room route.
