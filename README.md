@@ -334,25 +334,43 @@ restrict requests that go directly to Traefik.
 
 ### Hermes on Cerberus Forgejo
 
-Hermes can push topic branches and open PRs on `manjo/rust-app-template` and
-`manjo/pilot`. Only `manjo` can push directly to `master` or merge PRs into it.
-OpenTofu manages the grants, branch rules, and user SSH key, not the bot account
-or its API token.
+Hermes pushes topic branches only to `hermes/rust-app-template` and
+`hermes/pilot`, then opens PRs against the corresponding `manjo` repository.
+Hermes has read access upstream; only `manjo` can push directly to `master`
+or merge PRs into it. OpenTofu manages the forks, grants, branch rules, and
+user SSH key, not the bot account or its tokens.
 
-Before merging a Hermes PR, open Forgejo Actions and verify that a real run
-for the PR's current head commit passed the required jobs. The bot can post
-commit statuses, so a green badge alone is not proof.
+Forgejo requires approval for `pull_request` runs opened or updated by the
+untrusted bot and withholds configured secrets. `pull_request_target` is
+different: it runs base-branch workflows and can receive secrets. Review
+the diff, including build scripts and workflows, before approving each
+run. Never select **Always trust** for `hermes`. Before merging, verify
+in Actions that the run for the current PR head passed the required jobs.
+
+**Before handing Hermes its credentials:** let active CI jobs finish, then
+run `nix run .#forgejo-runner-register -- --all` once from the repo root.
+This re-registers the existing Cerberus runners under `manjo`, preserving
+their labels. In Cerberus Forgejo's **Site Administration → Actions →
+Runners**, verify that no runner is instance-wide. An instance-wide runner
+could pick up jobs from a Hermes-owned fork without upstream PR approval.
 
 1. As a Forgejo site admin, go to **Site Administration → User Accounts →
    Create User Account** on `forge.ugalabugala.org`. Use **Local**, username
    `hermes`, email `hermes@forge.ugalabugala.org`, and a unique password held
    by the operator. Leave **Notify about registration via email** unchecked.
    Edit the new account: keep it active, enable **Restricted account**, set
-   **Maximum number of repositories** to `0`, and leave **Administrator
+   **Maximum number of repositories** to `2`, and leave **Administrator
    account** and **Can create organizations** disabled. Sign in as `hermes`
    and choose **Disable email notifications** in **Settings → Account**.
 2. Stygies already imports `self.nixosModules.hermes-forgejo-bot`.
-3. Reserve `192.168.1.47` for `BC:24:11:5A:6E:02` on the router. Initialize
+3. As `hermes`, create a separate OpenTofu token with access to **All
+   (public, private, and limited)** repositories and the scopes
+   `write:repository` for the forks, `read:user` for the provider's login
+   check, and `read:organization` for its fork owner lookup. Store it with
+   `clan vars generate terra --generator tofunix-hermes-forgejo-forks`
+   and commit the SOPS-encrypted var. Do not put this token on Stygies.
+
+   Reserve `192.168.1.47` for `BC:24:11:5A:6E:02` on the router. Initialize
    OpenTofu with `nix run .#tofunix -- init` using the state
    credentials from `.envrc`. For these resources, the Cerberus provider
    token must belong to a site admin and include `write:repository` for the
@@ -367,12 +385,16 @@ commit statuses, so a green badge alone is not proof.
    ```
 
    Review and apply the plan to create VM 121 on pve2, set the branch rules,
-   and grant the bot access. The bot's SSH key is omitted until its public
-   Clan var exists. The grants make both repos visible to the restricted account.
-4. As `hermes`, open **Settings → Applications → Generate New Token**.
-   Choose **Specific repositories**, select only `manjo/rust-app-template`
-   and `manjo/pilot`, and give **repository** and **issue** Read and Write
-   access (`write:repository`, `write:issue`). Leave all other scopes off.
+   grant upstream read access, and create both forks as `hermes`. The
+   bot's SSH key is omitted until its public Clan var exists.
+4. As `hermes`, open **Settings → Applications → Generate New Token** and
+   choose **Specific repositories**. Select the two `hermes` forks and
+   their two `manjo` upstream repositories. Give **repository** and
+   **issue** Read and Write access (`write:repository`, `write:issue`) and
+   leave all other scopes off. Forgejo's PR POST requires `write:repository`
+   on a token that covers both the base and head repos; ordinary PR and
+   issue comments use `write:issue`. These token scopes don't elevate the
+   bot's upstream repository permission beyond read.
 5. Run `clan vars generate stygies`, supply the token at the hidden prompt,
    and set a separate password for `apetrovic`. Commit the generated vars,
    including the public SSH host key that Clan needs to evaluate Stygies.
@@ -382,12 +404,16 @@ commit statuses, so a green badge alone is not proof.
    key. Keep the public var tracked; removing it schedules the managed key
    for deletion.
 
-On stygies, use `Hermes <hermes@forge.ugalabugala.org>` for Git authorship.
-Use SSH remotes such as `ssh://forgejo@forge.ugalabugala.org:2222/manjo/pilot.git`
-with the Clan-deployed `hermes-forgejo-ssh/id_ed25519` as the SSH identity.
-API clients should read the Clan-deployed `hermes-forgejo-token/token`.
-The paths come from the corresponding generators' `files.<name>.path`; both
-secrets are readable only by the `hermes` user and root.
+On Stygies, use `Hermes <hermes@forge.ugalabugala.org>` for Git authorship.
+For each repo, set `origin` to `ssh://forgejo@forge.ugalabugala.org:2222/hermes/<repo>.git`
+and `upstream` to `ssh://forgejo@forge.ugalabugala.org:2222/manjo/<repo>.git`.
+Fetch from `upstream`, push topic branches only to `origin`, and open PRs
+from `hermes:<topic-branch>` to `manjo:master`.
+
+Use the Clan-deployed `hermes-forgejo-ssh/id_ed25519` as the SSH identity
+and `hermes-forgejo-token/token` for API calls. The paths come from the
+corresponding generators' `files.<name>.path`; both secrets are readable
+only by the `hermes` user and root.
 
 Stygies keeps about 10 GiB of audit logs under `/var/log/audit`. The target is
 roughly 90 days, but actual retention depends on build activity. Auditd warns
