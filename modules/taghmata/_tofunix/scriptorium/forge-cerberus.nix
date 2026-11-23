@@ -7,6 +7,7 @@
   config,
   lib,
   ref,
+  relic,
   vars,
   ...
 }: let
@@ -32,10 +33,22 @@
   };
   publicKey = vars.machine "stygies" "hermes-forgejo-ssh" "id_ed25519.pub";
   hasPublicKey = builtins.pathExists publicKey;
+  forkCredential = "tofunix-hermes-forgejo-forks";
+  manageForks = builtins.pathExists (vars.shared forkCredential forkCredential);
 in {
   reliquary.ntfy_access = {
     generator = "ntfy-access";
     file = "alertmanager-ntfy";
+  };
+
+  # Gitea forks into the authenticated user's namespace, not the upstream
+  # owner's. Keep the operator token separate from the token on Stygies.
+  reliquary.hermes_fork_secrets = lib.mkIf manageForks {
+    generator = forkCredential;
+  };
+  provider.gitea.hermes = lib.mkIf manageForks {
+    inherit (config.provider.gitea.cerberus) base_url;
+    token = relic "hermes_fork_secrets" "forgejo_token";
   };
 
   # NTFY_TOKEN lets the Machines workflow announce the "render manifests" pull
@@ -76,14 +89,27 @@ in {
   resource.gitea_repository_collaborator = lib.mapAttrs' (name: repo:
     lib.nameValuePair "${name}-hermes" {
       provider = "gitea.cerberus";
-      # Protect the default branch before granting push access.
+      # Keep the default branch protected before admitting the bot.
       depends_on = ["gitea_repository_branch_protection.${name}"];
       inherit owner;
       repo = repo.name;
       username = bot;
-      permission = "write";
+      permission = "read";
     })
   repos;
+
+  # Omit the alias and resources together before enrollment. If the credential
+  # is later removed, OpenTofu cannot delete stateful forks via another alias.
+  resource.gitea_fork = lib.optionalAttrs manageForks (
+    lib.mapAttrs (name: repo: {
+      provider = "gitea.hermes";
+      depends_on = ["gitea_repository_collaborator.${name}-hermes"];
+      inherit owner;
+      repo = repo.name;
+      lifecycle.prevent_destroy = true;
+    })
+    repos
+  );
 
   resource.gitea_repository_branch_protection =
     lib.mapAttrs (_: repo: {

@@ -18,7 +18,7 @@
 
       hermes-forgejo-token = {
         prompts.token = {
-          description = "Hermes Forgejo token for manjo/rust-app-template and manjo/pilot (write:repository, write:issue)";
+          description = "Hermes runtime Forgejo PAT for hermes/{rust-app-template,pilot} and manjo/{rust-app-template,pilot} (write:repository, write:issue; never the operator's fork token)";
           type = "hidden";
         };
         files.token = {
