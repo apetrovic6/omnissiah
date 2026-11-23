@@ -10,6 +10,7 @@
   nixpkgs.config.allowUnfreePredicate = pkg: lib.getName pkg == "claude-code";
 
   home-manager = {
+    extraSpecialArgs = {inherit self;};
     useGlobalPkgs = true;
     useUserPackages = true;
     backupFileExtension = "bak";

@@ -61,7 +61,9 @@ in {
     MaxRetentionSec = "90day";
   };
   security.auditd.enable = true;
-  security.audit.rules =
-    map (arch: "-a always,exit -F arch=${arch} -S execve -S execveat -F uid=${hermesUid} -k hermes-exec")
-    ["b64" "b32"];
+  # Match processes running as Hermes and login sessions that later change UID.
+  security.audit.rules = lib.concatMap (arch: [
+    "-a always,exit -F arch=${arch} -S execve -S execveat -F uid=${hermesUid} -k hermes-exec"
+    "-a always,exit -F arch=${arch} -S execve -S execveat -F auid=${hermesUid} -k hermes-exec"
+  ]) ["b64" "b32"];
 }

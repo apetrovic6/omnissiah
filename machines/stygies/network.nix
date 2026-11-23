@@ -32,9 +32,12 @@ in {
             ip daddr { ${resolvers} } udp dport 53 accept
             ip daddr { ${resolvers} } tcp dport 53 accept
             ip daddr ${hosts.cerberus} tcp dport { 443, 2222 } accept
-            # The VIP's HTTPS exception is IP/port-wide, not limited to Forgejo, ncps, or Harbor.
+            # Every cluster web UI on this VIP is reachable from the Hermes user over TCP 443.
+            # The fix is a Traefik IP allowlist on the other routers, outside this VM's scope.
             ip daddr ${vips.traefik} tcp dport { 22, 443 } accept
             ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } counter drop
+            # Block new non-loopback IPv6 traffic so it cannot bypass the LAN restrictions.
+            # This also blocks IPv6 internet access if the VM gains IPv6 routing later.
             meta nfproto ipv6 counter drop
           }
         '';
