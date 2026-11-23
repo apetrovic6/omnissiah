@@ -27,8 +27,17 @@ in {
 
   options.services.imperium.hermes.stygies.knownHosts = lib.mkOption {
     type = lib.types.str;
-    default = "";
     description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder.";
+    # stygies's own host key, from the clan var its sshd was deployed with,
+    # so the pin follows a reinstall instead of going stale. The value ends in
+    # an empty comment; keep only the type and the key. Empty (coder off)
+    # until the var exists.
+    default = let
+      pub = self.lib.vars.machine "stygies" "openssh" "ssh.id_ed25519.pub";
+    in
+      if builtins.pathExists pub
+      then lib.concatStringsSep " " (lib.take 2 (lib.filter (s: s != "") (lib.splitString " " (lib.trim (builtins.readFile pub)))))
+      else "";
   };
 
   config = {
