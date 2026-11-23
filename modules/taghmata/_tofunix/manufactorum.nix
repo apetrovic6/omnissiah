@@ -22,6 +22,15 @@
       memory = 24;
       disk = 200;
     };
+
+    vms.stygies = {
+      description = "Dev VM for Hermes and the user. Managed by tofunix.";
+      vmId = 121;
+      mac = "BC:24:11:5A:6E:02";
+      cores = 6;
+      memory = 16;
+      disk = 150;
+    };
   };
 
   # A pinned release with its checksum, never `latest-…`: the latter changes

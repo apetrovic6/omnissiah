@@ -114,6 +114,17 @@
       roles.default.extraModules = [./users/apetrovic/home.nix];
     };
 
+    stygies-user = {
+      module.name = "users";
+      roles.default.machines.stygies = {};
+      roles.default.settings = {
+        user = "apetrovic";
+        prompt = true;
+        groups = ["wheel"];
+      };
+      roles.default.extraModules = [./users/apetrovic/home-stygies.nix];
+    };
+
     # Docs: https://docs.clan.lol/reference/clanServices/zerotier/
     # The lines below will define a zerotier network and add all machines as 'peer' to it.
     # !!! Manual steps required:

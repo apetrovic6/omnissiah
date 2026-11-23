@@ -54,6 +54,7 @@ with `_` are skipped and must be imported explicitly.
 | `terra`, `luna`, `sol` | Bare-metal `taghmata` nodes: control plane and workloads. terra founded the cluster |
 | `mars` | `taghmata` control-plane node (Proxmox VM) that takes no workloads |
 | `servitor` | Banana Pi BPI-M5 single-board computer; not part of the cluster |
+| `stygies` | Persistent Proxmox dev VM for the operator and the unprivileged Hermes SSH user |
 
 ### The taghmata cluster roles
 
@@ -271,6 +272,23 @@ Anything else is written as a plain `resource.<type>.<name>`. The state knows
 resources by type and name, not by file, so declarations can move freely.
 `nix build .#tofunix.tfjson` builds the generated configuration: the same store
 path before and after a refactor means the plan cannot have changed.
+
+### Installing Stygies
+
+Reserve `192.168.1.47` for `BC:24:11:5A:6E:02` on the router, then apply the
+reviewed OpenTofu plan to create VM 121 on pve2. Once Ryza's Hermes SSH
+configuration is available, run `clan vars generate ryza --generator
+hermes-stygies-ssh` and include the generated vars in the flake. Ryza gets the
+private key; Stygies reads only the public file and denies Hermes SSH until it
+is present. Generate Stygies' own vars with `clan vars generate stygies` and
+set a separate password for `apetrovic`. Clan's admin module requires the
+generated public SSH host key to evaluate the Stygies toplevel.
+
+Boot the attached NixOS ISO and make root reachable over SSH at the reserved
+IP. Run `clan machines install stygies --phases disko,install,reboot` from the
+operator machine. This skips kexec, which hung on Ryza. Keep the hardware
+report collected by the installer. The operator can use the VM console or
+enter the `apetrovic` account from the existing Clan admin login.
 
 ## Addresses and secrets paths
 
