@@ -97,6 +97,7 @@ def apply(home, overlay):
         update_config(home / source.relative_to(overlay), read_config(source))
         soul = source.with_name("SOUL.md")
         if soul.is_file():
+            # Fail closed rather than start the gateway without the managed prompt.
             with soul.open("rb") as src, atomic_write(home / soul.relative_to(overlay), mode="wb") as dst:
                 copyfileobj(src, dst)
         (provisioned / name).touch(exist_ok=True)

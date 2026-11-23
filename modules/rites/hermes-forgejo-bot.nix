@@ -19,6 +19,18 @@
       [url "ssh://forgejo@${forge}:2222/"]
         insteadOf = https://${forge}/
     '';
+
+    taskCommand = pkgs.writeShellScript "hermes-task" ''
+      umask 077
+      exec ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/work/.task-lock" \
+        ${lib.getExe pkgs.python3} ${./_hermes-task.py} "''${0##*/}" "$@"
+    '';
+    taskTools = pkgs.runCommand "hermes-task-tools" {} ''
+      mkdir -p "$out/bin"
+      for command in task-status task-claim task-branch task-done task-clear; do
+        ln -s ${taskCommand} "$out/bin/$command"
+      done
+    '';
   in {
     clan.core.vars.generators = {
       # This key authenticates to Forgejo, not from ryza into stygies.
@@ -57,6 +69,7 @@
     # `fj`, the Forgejo CLI: Hermes opens PRs from its forks and reads review
     # comments with it. Its login comes from the token var (below).
     environment.systemPackages = [pkgs.forgejo-cli];
+    users.users.hermes.packages = [taskTools];
 
     systemd.tmpfiles.settings.hermes-forgejo-bot = {
       "/home/hermes/.config".d = {

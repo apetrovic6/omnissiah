@@ -234,14 +234,16 @@ On ryza, run the login as `hermes`:
 sudo -iu hermes hermes -p coder mcp login kaneo --flow browser
 ```
 
-Open the printed URL in a browser on phalanx and approve access. Hermes stores
-the token in the persisted coder profile. After login succeeds, restart
-`hermes-gateway` on ryza so the gateway picks it up.
+Open the printed URL in a browser on phalanx and approve access. If the
+tunnel is unavailable, paste the final browser redirect URL into the Hermes
+login prompt. Restart `hermes-gateway` only if the tools don't appear within a
+minute after login.
 
-Kaneo's access token expires after 30 days and cannot be refreshed. Repeat
-the browser login and gateway restart when it expires. Until reauthorized,
-Hermes tells the task's Matrix room that the board is unreachable and keeps
-working without Kaneo.
+[Kaneo issues a 30-day access token](https://github.com/usekaneo/kaneo/blob/v2.48.0/apps/api/src/mcp/oauth.ts#L151-L161)
+without a refresh token. Check `expires_at` in `mcp-tokens/kaneo.json` under the
+persisted coder profile. Repeat the browser login when it expires. Until
+reauthorized, Hermes tells the task's Matrix room that the board is
+unreachable and keeps working without Kaneo.
 
 **Emergency stop:** Send `/pause` in the default bot DM to hold new work
 across profiles; `/pause off` resumes. Existing work is not killed. For a hard
@@ -488,6 +490,7 @@ Stygies keeps about 10 GiB of audit logs under `/var/log/audit`. The target is
 roughly 90 days, but actual retention depends on build activity. Auditd warns
 at 10% free space and rotates logs below 5% or on a full disk rather than
 suspending auditing. Disk pressure can shorten the retained history.
+When stdin isn't a terminal, use `ausearch -i -k hermes-exec </dev/null` (or `--input /var/log/audit/audit.log`).
 
 Local Nix builds on Stygies, including `apetrovic`'s, share the Hermes egress
 policy. The root Nix daemon is not filtered by this policy. Stygies sends
