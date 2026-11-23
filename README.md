@@ -410,8 +410,13 @@ could pick up jobs from a Hermes-owned fork without upstream PR approval.
    Commit the SOPS-encrypted var, then review and apply a new OpenTofu
    plan to create both forks. Do not put this token on Stygies.
 4. As `hermes`, open **Settings → Applications → Generate New Token** and
-   choose **Specific repositories**. Select the two `hermes` forks and
-   their two `manjo` upstream repositories. Give **repository** and
+   choose **All (public, private, and limited)**. The account is
+   restricted, so Forgejo lets it reach only its own forks and the repos it
+   was added to as a read collaborator, not even other public repos; the
+   account is the boundary, and the token keeps working when a repo is
+   added to `repos` in `forge-cerberus.nix`. (Forgejo tokens can't be
+   edited, so a Specific-repositories token would have to be replaced for
+   every new repo.) Give **repository** and
    **issue** Read and Write access (`write:repository`, `write:issue`) and
    leave all other scopes off. Forgejo's PR POST requires `write:repository`
    on a token that covers both the base and head repos; ordinary PR and

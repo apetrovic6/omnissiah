@@ -14,6 +14,9 @@
   inherit (config.scriptorium) owner;
   bot = "hermes";
   # Keep the grant explicit; a new product must not inherit Hermes access.
+  # Adding a repo here is all it takes: a read grant, its branch rule, a fork
+  # under hermes, and one more allowed repo for the bot. Its runtime token
+  # (All repositories) reaches the new pair without changes.
   repos = {
     rust-app-template = {
       name = "rust-app-template";
@@ -63,7 +66,8 @@ in {
       restricted = true;
       admin = false;
       active = true;
-      max_repo_creation = 2;
+      # One fork per repo in `repos`, so adding a repo there is all it takes.
+      max_repo_creation = builtins.length (builtins.attrNames repos);
       allow_create_organization = false;
       allow_git_hook = false;
       allow_import_local = false;
