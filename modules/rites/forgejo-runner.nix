@@ -27,7 +27,8 @@
   #   forgejo  command prefix that runs the `forgejo` binary there as an admin,
   #            from the workstation (`register` below appends its arguments)
   #   lanAddress  pinned in /etc/hosts on every other runner, or null when
-  #            local DNS already answers with a LAN address
+  #              local DNS already answers with a LAN address
+  #   scope    owner or owner/repo for offline registration; absent means global
   forges = {
     ugalabugala = {
       url = "https://forge.${self.lib.lab.domain}";
@@ -37,6 +38,9 @@
       # git and registry traffic (nopresh's image push) hairpins out through
       # Pangolin and back. cerberus pins it the same way (nopresh.nix).
       lanAddress = self.lib.hosts.cerberus;
+      # Hermes owns its forks, and runners have no repository allowlist.
+      # Other owners need their own scoped registration if they enable Actions.
+      scope = "manjo";
       # `forgejo-admin` is the wrapper this module installs wherever
       # services.forgejo is enabled.
       forgejo = "ssh root@${self.lib.hosts.cerberus} forgejo-admin";
@@ -624,6 +628,7 @@ in {
 
   perSystem = {
     pkgs,
+    lib,
     inputs',
     ...
   }: {
@@ -658,8 +663,15 @@ in {
         jq -r 'to_entries[] | .key as $m | .value[] | "\($m) \(.)"' <<<"$targets" |
         while read -r machine forge; do
           case "$forge" in
-            ${builtins.concatStringsSep "\n" (map (forge: ''
-              ${forge}) forgejo="${forges.${forge}.forgejo}" ;;'') (builtins.attrNames forges))}
+            ${lib.concatMapStringsSep "\n" (forge: let
+          f = forges.${forge};
+          args = lib.optionals (f ? scope) ["--scope" f.scope];
+        in ''
+          ${forge})
+            forgejo="${f.forgejo}"
+            register_args=(${lib.escapeShellArgs args})
+            ;;
+        '') (builtins.attrNames forges)}
             *) echo "unknown forge: $forge" >&2; exit 1 ;;
           esac
           echo "registering $machine with $forge ..."
@@ -670,7 +682,7 @@ in {
           # </dev/null: the loop's stdin is the machine list; keep clan off it.
           clan vars get "$machine" "forgejo-runner-$forge/secret" </dev/null \
             | tr -d '\n' \
-            | $forgejo forgejo-cli actions register --name "$machine" --secret-stdin=-
+            | $forgejo forgejo-cli actions register --name "$machine" --secret-stdin=- --keep-labels "''${register_args[@]}"
           # It prints the runner uuid with no trailing newline.
           echo
         done

@@ -7,27 +7,96 @@
 # pi-api-keys), by default. Hermes-only ones go in `secrets`, one prompt each:
 #   secrets = ["OPENROUTER_API_KEY"];
 #   clan vars generate ryza --generator hermes-openrouter-api-key --regenerate
-{self, ...}: let
+{
+  self,
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
   inherit (import ../../modules/cartographa/_cartographa.nix) noosphere lab;
+  inherit (self.lib.hosts) stygies;
+  inherit (config.services.imperium.hermes.stygies) knownHosts;
+  hasHostPin = knownHosts != "";
+  hostKeyAlgorithm = builtins.head (lib.splitString " " knownHosts);
 in {
-  imports = [self.nixosModules.hermes];
+  imports = [
+    self.nixosModules.hermes
+    ../../modules/rites/_hermes-stygies-ssh.nix
+  ];
 
-  services.imperium.hermes = {
-    enable = true;
-    dashboard = {
-      enable = true;
-      publicUrl = "https://hermes.${noosphere.domain}";
-      oidc.issuer = "https://id.${noosphere.domain}";
-      # The cluster nodes: Traefik's traffic arrives from whichever one its
-      # pod runs on.
-      allowedSources = with self.lib.hosts; [terra luna sol mars];
+  options.services.imperium.hermes.stygies.knownHosts = lib.mkOption {
+    type = lib.types.str;
+    default = "";
+    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder.";
+  };
+
+  config = {
+    assertions = [
+      {
+        assertion = !hasHostPin || hostKeyAlgorithm == "ssh-ed25519";
+        message = "services.imperium.hermes.stygies.knownHosts must be an ssh-ed25519 host key.";
+      }
+    ];
+
+    # Keep the identity unavailable to the default profile's local terminal
+    # until stygies is pinned. Clan can still generate the public half.
+    clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519" = let
+      keyOwner =
+        if hasHostPin
+        then "hermes"
+        else "root";
+    in {
+      owner = lib.mkForce keyOwner;
+      group = lib.mkForce keyOwner;
     };
-    # @hermes on the lab homeserver, registered on cypramundi
-    # (services.imperium.matrixBots there). DM it from Element.
-    matrix = {
+
+    programs.ssh = lib.mkIf hasHostPin {
+      knownHosts.stygies = {
+        hostNames = [stygies];
+        publicKey = knownHosts;
+      };
+      # A key accepted before the pin was deployed must not override it.
+      # The system block assumes ~/.ssh/config does not override it: OpenSSH
+      # reads the user's config first.
+      extraConfig = ''
+        Host ${stygies}
+          UserKnownHostsFile none
+          HostKeyAlgorithms ${hostKeyAlgorithm}
+      '';
+    };
+    services.imperium.hermes = {
       enable = true;
-      inherit (lab.matrix) homeserver serverName;
-      allowedUsers = ["@kumamte:${lab.matrix.serverName}"];
+      extraPackages = lib.optional hasHostPin pkgs.openssh;
+      profiles.coder = {
+        # Hermes uses accept-new. Without a system pin, don't expose a profile
+        # that could trust an unknown host or run its terminal locally on ryza.
+        enable = hasHostPin;
+        # Set to the Matrix room ID once the bot has been invited.
+        chatId = null;
+        settings.terminal = {
+          backend = "ssh";
+          ssh_host = stygies;
+          ssh_user = "hermes";
+          ssh_key = config.clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519".path;
+          cwd = "~/work";
+        };
+      };
+      dashboard = {
+        enable = true;
+        publicUrl = "https://hermes.${noosphere.domain}";
+        oidc.issuer = "https://id.${noosphere.domain}";
+        # The cluster nodes: Traefik's traffic arrives from whichever one its
+        # pod runs on.
+        allowedSources = with self.lib.hosts; [terra luna sol mars];
+      };
+      # @hermes on the lab homeserver, registered on cypramundi
+      # (services.imperium.matrixBots there). DM it from Element.
+      matrix = {
+        enable = true;
+        inherit (lab.matrix) homeserver serverName;
+        allowedUsers = ["@kumamte:${lab.matrix.serverName}"];
+      };
     };
   };
 }

@@ -46,6 +46,12 @@ in {
       deploy.buildHost = "localhost";
     };
 
+    stygies = {
+      tags = ["base"];
+      deploy.targetHost = "root@${hosts.stygies}";
+      deploy.buildHost = "localhost";
+    };
+
     cypramundi = {
       tags = [];
       deploy.targetHost = "root@${hosts.cypramundi}";

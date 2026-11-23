@@ -25,6 +25,7 @@ in {
     self.inputs.magos.homeModules.herdr
     self.inputs.omnishell.homeManagerModules.default
 
+    ./git.nix
     ./firefox
   ];
 
@@ -110,24 +111,7 @@ in {
 
   nixpkgs.config.allowUnfree = true;
 
-  programs.git = {
-    enable = true;
-    lfs.enable = true;
-
-    settings = {
-      user = {
-        name = "apetrovic";
-        email = "petrovicante6@gmail.com";
-      };
-
-      init.defaultBranch = "master";
-      pull.rebase = true;
-      push.autoSetupRemote = true;
-      rebase.autoStash = true;
-
-      url."git@github.com:devzero-inc/".insteadOf = "https://github.com/devzero-inc/";
-    };
-  };
+  programs.git.settings.url."git@github.com:devzero-inc/".insteadOf = "https://github.com/devzero-inc/";
 
   programs.btop.enable = true;
 

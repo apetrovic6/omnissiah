@@ -32,6 +32,7 @@ rec {
     sol = "192.168.1.42";
     mars = "192.168.1.44";
     ryza = "192.168.1.45"; # Proxmox VM next to mars; static, reserved for BC:24:11:5A:6E:01
+    stygies = "192.168.1.47"; # Proxmox VM on pve2; static, reserved for BC:24:11:5A:6E:02
     cypramundi = "152.53.34.16";
     alfrost = "172.245.55.111";
 

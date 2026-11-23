@@ -24,6 +24,10 @@
           version = "1.5.8";
           hash = "sha256-vvwHjIcX79hWe2xjuw+LSTArTQ61zNUMGL02YgGGvp8=";
         };
+        "go-gitea/gitea" = {
+          version = "0.8.1";
+          hash = "sha256-5XasOnXuplfri018rogl5rZq9OKjJwQ0CUsUusQTIbg=";
+        };
         "carlpett/sops" = {
           version = "1.4.1";
           hash = "sha256-AlnuMNkmsTTRVI7VVoC8q7y64zx/+K833RtgEFK8A2s=";

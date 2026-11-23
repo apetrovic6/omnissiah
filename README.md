@@ -54,6 +54,7 @@ with `_` are skipped and must be imported explicitly.
 | `terra`, `luna`, `sol` | Bare-metal `taghmata` nodes: control plane and workloads. terra founded the cluster |
 | `mars` | `taghmata` control-plane node (Proxmox VM) that takes no workloads |
 | `servitor` | Banana Pi BPI-M5 single-board computer; not part of the cluster |
+| `stygies` | Persistent Proxmox dev VM for the operator and the unprivileged Hermes SSH user |
 
 ### The taghmata cluster roles
 
@@ -193,6 +194,44 @@ The model data is not the module's to keep: `models` is persisted for
 `dataDir` needs its own entry. To update the
 engine, change the Strata input and its matching llama.cpp pin together.
 
+### Hermes coder profile (ryza → stygies)
+
+The ryza gateway serves `coder` only after a host key is pinned. Its terminal
+tools run over SSH as `hermes` in `~/work` on stygies.
+
+1. Generate `hermes-stygies-ssh` on ryza with
+   `clan vars generate ryza --generator hermes-stygies-ssh`. Stygies needs only
+   the generated public half.
+2. After installing stygies, read its `/etc/ssh/ssh_host_ed25519_key.pub` from
+   the VM console. Set `services.imperium.hermes.stygies.knownHosts` on ryza to
+   `ssh-ed25519` type and base64 value (omit the comment). An empty pin leaves
+   the private key root-only and disables the coder profile and its Matrix
+   route without deleting existing profile data.
+3. Invite the existing Matrix bot to the coding room, then set
+   `services.imperium.hermes.profiles.coder.chatId` to the room ID (`!…`, not a
+   `#…` alias). With `null` there is no coder room route.
+
+On ryza as `hermes`, use `hermes -p coder model` to select a provider and
+`hermes -p coder --tui` to start a session. `hermes -p coder webapp` selects the
+same profile if the gateway's Webapp listener is enabled. Interactive config
+changes outside Nix-managed settings survive activation.
+
+**Emergency stop:** Send `/pause` in the default bot DM to hold new work
+across profiles; `/pause off` resumes. Existing work is not killed. For a hard
+stop, pause first, stop `hermes-gateway` on ryza, and kill the remote `hermes`
+processes using the same SSH identity. Set `key` to the `terminal.ssh_key` path
+from `/var/lib/hermes/.hermes/profiles/coder/config.yaml`:
+
+```sh
+sudo systemctl stop hermes-gateway
+sudo -u hermes -H ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+  -i "$key" hermes@192.168.1.47 'exec pkill -KILL -u hermes'
+```
+
+The hard stop affects every process owned by `hermes` on stygies; the SSH
+connection may drop. If SSH itself is unavailable, use the stygies console.
+Restart the gateway and lift the pause when ready.
+
 ## Cluster applications
 
 The applications on taghmata are under `modules/taghmata/nixidy/apps`. Each is
@@ -271,6 +310,156 @@ Anything else is written as a plain `resource.<type>.<name>`. The state knows
 resources by type and name, not by file, so declarations can move freely.
 `nix build .#tofunix.tfjson` builds the generated configuration: the same store
 path before and after a refactor means the plan cannot have changed.
+
+### Installing Stygies
+
+Follow [Hermes on Cerberus Forgejo](#hermes-on-cerberus-forgejo) for the rollout
+order. Use the install command below only after the first OpenTofu apply has
+created VM 121 on pve2 and the Stygies vars are generated.
+
+Before installing, run `clan vars generate ryza --generator hermes-stygies-ssh`
+and include the generated vars in the flake. Ryza gets the private key;
+Stygies reads only the public file and denies Hermes SSH until it is present.
+
+Boot the attached NixOS ISO and make root reachable over SSH at the reserved
+IP. Run `clan machines install stygies --phases disko,install,reboot` from the
+operator machine. This skips kexec, which hung on Ryza. Keep the hardware
+report collected by the installer. The operator can use the VM console or
+enter the `apetrovic` account from the existing Clan admin login.
+
+Cerberus Caddy accepts Stygies requests only for Forgejo, NCPS, and Harbor.
+NCPS and Harbor can arrive through Cerberus's `*.noosphere.uk` proxy even
+though LAN DNS points them directly at Traefik. The Caddy rule does not
+restrict requests that go directly to Traefik.
+
+### Hermes on Cerberus Forgejo
+
+Hermes pushes topic branches only to `hermes/rust-app-template` and
+`hermes/pilot`, then opens PRs against the corresponding `manjo` repository.
+Hermes has read access upstream; only `manjo` can push directly to `master`
+or merge PRs into it. OpenTofu manages the bot account, forks, grants,
+branch rules, and SSH key. Create both API tokens by hand.
+
+Forgejo requires approval for `pull_request` runs opened or updated by the
+untrusted bot and withholds Forgejo Actions secrets. `pull_request_target`
+runs base-branch workflows and can receive those secrets. **Keep the account
+restricted.** While it is restricted, **Always trust** has no effect.
+
+Approving a run executes the PR's code with the runner's own credentials:
+its Cerberus and Noosphere runner tokens and the shared sccache read-write
+key. Use the same review bar as for merging, including build scripts,
+tests, Nix code, and workflows. After any doubtful approval, revoke the
+affected runner's old registrations on both forges, rotate its secrets,
+and re-register it. Rotate the sccache key if it may have been exposed.
+
+Never use **Update branch** or push to a Hermes PR branch. A trusted
+maintainer's push can run the PR head without approval; ask Hermes to
+rebase instead. Immediately before approving, reload the PR and confirm
+that the head SHA matches what you reviewed and that there is only one
+pending run: Forgejo approves all pending runs for the PR at once. Before
+merging, verify in Actions that the run for that head passed the required jobs.
+
+**Before handing Hermes its credentials:** let active CI jobs finish, then
+run `nix run .#forgejo-runner-register -- --all` once from the repo root.
+This re-registers the existing Cerberus runners under `manjo`, preserving
+their labels. In Cerberus Forgejo's **Site Administration → Actions →
+Runners**, verify that no runner is instance-wide. An instance-wide runner
+could pick up jobs from a Hermes-owned fork without upstream PR approval.
+
+1. Run `clan vars generate terra --generator tofunix-hermes-forgejo-password`
+   and commit the SOPS-encrypted var. Only the operator needs this password;
+   do not put it on Stygies. OpenTofu stores it in state despite redacting
+   it from plan output. Keep the var tracked after applying: removing it
+   schedules the account and its grants for deletion. Regenerating it
+   does not rotate the Forgejo password.
+2. Create the bot with OpenTofu.
+   Reserve `192.168.1.47` for `BC:24:11:5A:6E:02` on the router. Initialize
+   OpenTofu with `nix run .#tofunix -- init` using the state
+   credentials from `.envrc`. The Cerberus provider token must belong to a
+   site admin and include `write:repository` for grants and branch rules,
+   `write:admin` for the user and SSH key, and `read:user` (or `write:user`)
+   to refresh them. Adopt the existing template rule once, before applying:
+
+   ```sh
+   nix run .#tofunix -- import \
+     gitea_repository_branch_protection.rust-app-template manjo/rust-app-template/master
+   nix run .#tofunix -- plan
+   ```
+
+   If `hermes` already exists, import it with `nix run .#tofunix -- import
+   gitea_user.hermes <numeric-user-id>` before planning. Import keeps the
+   existing Forgejo password; the generated password is for a new account.
+   Review and apply the plan to create VM 121 on pve2, the restricted bot
+   account, the branch rules, and the upstream read grants.
+3. Sign in as `hermes` and choose **Disable email notifications** in
+   **Settings → Account**. For a new account, decrypt the password only
+   when signing in:
+
+   ```sh
+   sops decrypt --input-type yaml --extract '["password"]' \
+     vars/shared/tofunix-hermes-forgejo-password/tofunix-hermes-forgejo-password/value
+   ```
+
+   Under **Settings → Applications → Generate New Token**, create a
+   separate operator token for **All (public, private, and limited)**
+   repositories with `write:repository` for the forks, `read:user` for
+   the provider's login check, and `read:organization` for its owner lookup.
+   Paste it at the hidden prompt for
+   `clan vars generate terra --generator tofunix-hermes-forgejo-forks`.
+   Commit the SOPS-encrypted var, then review and apply a new OpenTofu
+   plan to create both forks. Do not put this token on Stygies.
+4. As `hermes`, open **Settings → Applications → Generate New Token** and
+   choose **Specific repositories**. Select the two `hermes` forks and
+   their two `manjo` upstream repositories. Give **repository** and
+   **issue** Read and Write access (`write:repository`, `write:issue`) and
+   leave all other scopes off. Forgejo's PR POST requires `write:repository`
+   on a token that covers both the base and head repos; ordinary PR and
+   issue comments use `write:issue`. These token scopes don't elevate the
+   bot's upstream repository permission beyond read.
+5. Stygies already imports `self.nixosModules.hermes-forgejo-bot`. Run
+   `clan vars generate stygies`, supply the token at the hidden prompt,
+   and set a separate password for `apetrovic`. Commit the generated vars,
+   including the public SSH host key that Clan needs to evaluate Stygies.
+   If this merges before those vars are committed, the scheduled
+   `machines.yml` Stygies job will fail until they are available; other
+   matrix jobs still run.
+6. [Install Stygies](#installing-stygies).
+7. Run `nix run .#tofunix -- plan` again, then review and apply it to enroll
+   the bot's SSH key. OpenTofu reads only `id_ed25519.pub`, not the private
+   key. Keep the public var tracked; removing it schedules the managed key
+   for deletion.
+
+On Stygies, `modules/rites/hermes-forgejo-bot.nix` sets up the `hermes` user:
+
+- **Git identity:** `Hermes <hermes@forge.ugalabugala.org>`, from a read-only
+  `~/.config/git/config`, which also rewrites `https://forge.ugalabugala.org/`
+  URLs to SSH.
+- **SSH to the forge:** port 2222 with the Clan-deployed
+  `hermes-forgejo-ssh/id_ed25519`. Forgejo's RSA host key is pinned.
+- **`fj`, the Forgejo CLI:** logged in as the bot by `hermes-fj-login.service`
+  from `hermes-forgejo-token/token`. After rotating only the token, run
+  `systemctl restart hermes-fj-login`.
+
+Both secrets are readable only by `hermes` and root.
+
+For each repo, set `origin` to `ssh://forgejo@forge.ugalabugala.org:2222/hermes/<repo>.git`
+and `upstream` to `ssh://forgejo@forge.ugalabugala.org:2222/manjo/<repo>.git`.
+Fetch from `upstream` and push topic branches only to `origin`. Then open the
+PR against upstream from the fork: in fj, a base starting with `^` means the
+parent repo's branch, for example
+`fj pr create -r hermes/<repo> --base ^master --head <topic-branch> "<title>" --body-file <file>`
+(forgejo-cli 0.7.0 src/prs.rs).
+
+Stygies keeps about 10 GiB of audit logs under `/var/log/audit`. The target is
+roughly 90 days, but actual retention depends on build activity. Auditd warns
+at 10% free space and rotates logs below 5% or on a full disk rather than
+suspending auditing. Disk pressure can shorten the retained history.
+
+Local Nix builds on Stygies, including `apetrovic`'s, share the Hermes egress
+policy. The root Nix daemon is not filtered by this policy. Stygies sends
+ncps and Harbor traffic through Cerberus rather than directly to Traefik.
+Cerberus's Caddy guard matches the Stygies source IP, so other Cerberus
+services also return HTTP 403 to `apetrovic` when accessed from Stygies.
 
 ## Addresses and secrets paths
 
