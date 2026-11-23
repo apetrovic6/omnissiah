@@ -429,16 +429,26 @@ could pick up jobs from a Hermes-owned fork without upstream PR approval.
    key. Keep the public var tracked; removing it schedules the managed key
    for deletion.
 
-On Stygies, use `Hermes <hermes@forge.ugalabugala.org>` for Git authorship.
+On Stygies, `modules/rites/hermes-forgejo-bot.nix` sets up the `hermes` user:
+
+- **Git identity:** `Hermes <hermes@forge.ugalabugala.org>`, from a read-only
+  `~/.config/git/config`, which also rewrites `https://forge.ugalabugala.org/`
+  URLs to SSH.
+- **SSH to the forge:** port 2222 with the Clan-deployed
+  `hermes-forgejo-ssh/id_ed25519`. Forgejo's RSA host key is pinned.
+- **`fj`, the Forgejo CLI:** logged in as the bot by `hermes-fj-login.service`
+  from `hermes-forgejo-token/token`. After rotating only the token, run
+  `systemctl restart hermes-fj-login`.
+
+Both secrets are readable only by `hermes` and root.
+
 For each repo, set `origin` to `ssh://forgejo@forge.ugalabugala.org:2222/hermes/<repo>.git`
 and `upstream` to `ssh://forgejo@forge.ugalabugala.org:2222/manjo/<repo>.git`.
-Fetch from `upstream`, push topic branches only to `origin`, and open PRs
-from `hermes:<topic-branch>` to `manjo:master`.
-
-Use the Clan-deployed `hermes-forgejo-ssh/id_ed25519` as the SSH identity
-and `hermes-forgejo-token/token` for API calls. The paths come from the
-corresponding generators' `files.<name>.path`; both secrets are readable
-only by the `hermes` user and root.
+Fetch from `upstream` and push topic branches only to `origin`. Then open the
+PR against upstream from the fork: in fj, a base starting with `^` means the
+parent repo's branch, for example
+`fj pr create -r hermes/<repo> --base ^master --head <topic-branch> "<title>" --body-file <file>`
+(forgejo-cli 0.7.0 src/prs.rs).
 
 Stygies keeps about 10 GiB of audit logs under `/var/log/audit`. The target is
 roughly 90 days, but actual retention depends on build activity. Auditd warns
