@@ -13,6 +13,9 @@ in {
     gid = 65540;
   };
 
+  # Keep external targets and allow delivery to the Hermes webhook on ryza:8644.
+  services.forgejo.settings.webhook.ALLOWED_HOST_LIST = "external,${self.lib.hosts.ryza}";
+
   services.imperium.forgejo = {
     enable = true;
     package = pkgs.forgejo;
