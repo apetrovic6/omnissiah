@@ -108,7 +108,6 @@ data:
           - isindir/sops-secrets-operator
           - dockerhub:searxng/searxng
           - valkey-io/valkey
-          - woodpecker-ci/woodpecker
           - pocket-id/pocket-id
           - kalbasit/ncps
           - rancher/local-path-provisioner
