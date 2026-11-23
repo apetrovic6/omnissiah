@@ -333,6 +333,11 @@
       obs-studio
       xwayland
 
+      # `fj`, the Forgejo CLI (repos, PRs, issues, Actions) for both forges.
+      # Log in once per machine with `fj -H <forge> auth login` (browser), or
+      # `fj -H <forge> auth add-token` with a token on stdin.
+      forgejo-cli
+
       herdr
       herdr-desktop
       (self.inputs.magos.packages.${system}.opencode)
