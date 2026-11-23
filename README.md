@@ -377,6 +377,15 @@ or its API token.
    The paths come from the corresponding generators' `files.<name>.path`; both
    secrets are readable only by the `hermes` user and root.
 
+Stygies keeps about 10 GiB of audit logs under `/var/log/audit`. The target is
+roughly 90 days, but actual retention depends on build activity. Auditd warns
+at 10% free space and rotates logs below 5% or on a full disk rather than
+suspending auditing. Disk pressure can shorten the retained history.
+
+Local Nix builds on Stygies, including `apetrovic`'s, share the Hermes egress
+policy. The root Nix daemon is not filtered by this policy and still uses ncps
+for substitution.
+
 ## Addresses and secrets paths
 
 No module writes an IP address or a `../../vars/...` path itself. Both come
