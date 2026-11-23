@@ -193,6 +193,43 @@ The model data is not the module's to keep: `models` is persisted for
 `dataDir` needs its own entry. To update the
 engine, change the Strata input and its matching llama.cpp pin together.
 
+### Hermes coder profile (ryza → stygies)
+
+The ryza gateway serves both `default` and `coder`. The latter runs terminal
+tools over SSH as `hermes` in `~/work` on stygies. Before deploying the pair:
+
+1. Generate `hermes-stygies-ssh` on ryza with
+   `clan vars generate ryza --generator hermes-stygies-ssh`. Stygies needs only
+   the generated public half.
+2. After installing stygies, read its `/etc/ssh/ssh_host_ed25519_key.pub` from
+   the VM console. Set `services.imperium.hermes.stygies.knownHosts` on ryza to
+   the key type and base64 value (omit the comment). Until the pin is deployed,
+   Hermes uses SSH trust on first use.
+3. Invite the existing Matrix bot to the coding room, then set
+   `services.imperium.hermes.profiles.coder.chatId` to the room ID (`!…`, not a
+   `#…` alias). With `null` there is no coder room route.
+
+On ryza as `hermes`, use `hermes -p coder model` to select a provider and
+`hermes -p coder --tui` to start a session. `hermes -p coder webapp` selects the
+same profile if the gateway's Webapp listener is enabled. Interactive config
+changes outside Nix-managed settings survive activation.
+
+**Emergency stop:** Send `/pause` in the default bot DM to hold new work
+across profiles; `/pause off` resumes. Existing work is not killed. For a hard
+stop, pause first, stop `hermes-gateway` on ryza, and kill the remote `hermes`
+processes using the same SSH identity. Set `key` to the `terminal.ssh_key` path
+from `/var/lib/hermes/.hermes/profiles/coder/config.yaml`:
+
+```sh
+sudo systemctl stop hermes-gateway
+sudo -u hermes -H ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+  -i "$key" hermes@192.168.1.47 'exec pkill -KILL -u hermes'
+```
+
+The hard stop affects every process owned by `hermes` on stygies; the SSH
+connection may drop. If SSH itself is unavailable, use the stygies console.
+Restart the gateway and lift the pause when ready.
+
 ## Cluster applications
 
 The applications on taghmata are under `modules/taghmata/nixidy/apps`. Each is

@@ -17,7 +17,8 @@
 #
 # Everything Hermes learns lives in its home: ~/.hermes (config.yaml,
 # MEMORY.md, USER.md, skills, sessions, auth.json), ~/.claude and ~/.codex.
-# It edits those itself, so none of it is declarative.
+# Hermes edits its own state. Nix merges the declared profile and routing
+# settings into config.yaml without replacing the rest.
 #
 # One-time setup, as the hermes user (`sudo -u hermes -i`):
 #   hermes model              pick providers, log in to ChatGPT (device code)
@@ -26,8 +27,8 @@
 #   hermes                    talk to it (the TUI); sessions and memory are
 #                             shared with the gateway
 #
-# Isolation: the hermes user has no sudo, no SSH keys into the clan and no
-# access to the CI microVM. Its cron/Kanban workers start through
+# Isolation: the hermes user has no sudo and no access to the CI microVM.
+# Its cron/Kanban workers start through
 # `systemd-run --user`, so they run under its user manager (hence linger),
 # outside the hardening of the gateway unit below.
 {self, ...}: {
@@ -43,6 +44,31 @@
     user = "hermes";
     home = "/var/lib/hermes";
     mx = cfg.matrix;
+    yaml = pkgs.formats.yaml {};
+    routes = lib.concatLists (lib.mapAttrsToList (name: profile:
+      lib.optional (mx.enable && profile.chatId != null) {
+        name = "nixos-matrix-${name}";
+        platform = "matrix";
+        profile = name;
+        chat_id = profile.chatId;
+      })
+    cfg.profiles);
+    profileConfig = pkgs.linkFarm "hermes-config" ([
+        {
+          name = "config.yaml";
+          path = yaml.generate "hermes-default-config.yaml" {
+            gateway.multiplex_profiles = true;
+            gateway.profile_routes = routes;
+          };
+        }
+      ]
+      ++ lib.mapAttrsToList (name: profile: {
+        name = "profiles/${name}/config.yaml";
+        path = yaml.generate "hermes-${name}-config.yaml" profile.settings;
+      })
+      cfg.profiles);
+    configPython = pkgs.python3.withPackages (ps: [ps.ruamel-yaml]);
+    applyProfileConfig = "${lib.getExe configPython} ${./_hermes-merge-config.py} ${home}/.hermes ${profileConfig}";
     # Shared with the homeserver, which registers the account
     # (modules/noosphere/vox/matrix-bots.nix).
     mxGenerator = "matrix-bot-${mx.localpart}";
@@ -149,6 +175,26 @@
         default = [];
       };
 
+      profiles = mkOption {
+        type = types.attrsOf (types.submodule {
+          options = {
+            settings = mkOption {
+              type = types.attrsOf yaml.type;
+              default = {};
+              description = "Non-secret settings merged into this named Hermes profile's config.yaml.";
+            };
+            chatId = mkOption {
+              type = types.nullOr (types.strMatching "![^[:space:]]+");
+              default = null;
+              example = "!roomid:example.org";
+              description = "Matrix room ID routed to this profile by the default bot, or null to omit the route.";
+            };
+          };
+        });
+        default = {};
+        description = "Named profiles to provision under the Hermes home.";
+      };
+
       apiKeys = mkOption {
         type = types.attrsOf (types.submodule {
           options = {
@@ -249,6 +295,15 @@
     };
 
     config = mkIf cfg.enable {
+      assertions =
+        lib.mapAttrsToList (name: _: {
+          assertion = builtins.match "[a-z0-9][a-z0-9_-]{0,63}" name != null && !lib.elem name ["default" "hermes" "test" "tmp" "root" "sudo"];
+          message = "services.imperium.hermes.profiles: '${name}' is not a valid named Hermes profile ID.";
+        })
+        cfg.profiles;
+
+      system.build.hermesConfig = mkIf (cfg.profiles != {}) profileConfig;
+
       users.groups.${user} = {};
       users.users.${user} = {
         isNormalUser = true;
@@ -292,12 +347,25 @@
         })
       ];
 
+      system.activationScripts.hermes-config = mkIf (cfg.profiles != {}) {
+        deps = ["users"];
+        text = ''
+          if ${lib.getExe' pkgs.systemd "systemctl"} is-active --quiet local-fs.target; then
+            ${lib.getExe' pkgs.util-linux "runuser"} -u ${user} -- ${applyProfileConfig}
+          fi
+        '';
+      };
+
       systemd.services.hermes-gateway = {
         description = "Hermes Agent gateway";
         wantedBy = ["multi-user.target"];
         after = ["network-online.target" "user@${toString cfg.uid}.service"];
         wants = ["network-online.target" "user@${toString cfg.uid}.service"];
         path = tools;
+        # Boot activation precedes local mounts, so also merge before the
+        # gateway starts, once the persistent Hermes home is mounted.
+        unitConfig.RequiresMountsFor = [home];
+        preStart = lib.optionalString (cfg.profiles != {}) applyProfileConfig;
         environment =
           sessionEnv
           // lib.optionalAttrs mx.enable {
@@ -317,7 +385,7 @@
         serviceConfig =
           hardening
           // {
-            ExecStart = "${hermes}/bin/hermes gateway run";
+            ExecStart = "${hermes}/bin/hermes -p default gateway run";
             # Hermes drains cron jobs before it exits.
             TimeoutStopSec = 120;
             KillMode = "mixed";
