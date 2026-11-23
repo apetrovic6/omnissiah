@@ -1,8 +1,7 @@
-# Harbor: the pull-through caches for Docker Hub and ghcr.io, and the robot
-# Woodpecker pushes with. Product projects are declared by ../fabricata.nix.
+# Harbor: the pull-through caches for Docker Hub and ghcr.io. Product projects
+# and their CI robots are declared by ../fabricata.nix.
 {
   ref,
-  relic,
   ...
 }: let
   cache = registry: {
@@ -13,8 +12,6 @@
     auto_sbom_generation = true;
   };
 in {
-  reliquary.woodpecker_secrets.generator = "tofunix-harbor-woodpecker-secret";
-
   resource.harbor_registry = {
     docker = {
       provider_name = "docker-hub";
@@ -31,10 +28,5 @@ in {
   resource.harbor_project = {
     docker_cache = cache "docker";
     ghcr_cache = cache "ghcr";
-  };
-
-  scriptorium.robots.woodpecker = {
-    description = "Robot account for Woodpecker CI";
-    secret = relic "woodpecker_secrets" "woodpecker_password";
   };
 }

@@ -2,8 +2,8 @@
 # it on the robot and on the product repo's HARBOR_PASSWORD action secret, so no human ever
 # copies it (see the Harbor OIDC hand-copied-secret incident).
 #
-# Same shape as tofunix-harbor-woodpecker-secret: a sops-encrypted YAML file that the tofunix
-# sops provider decrypts, so the var file itself is not a clan secret.
+# A sops-encrypted YAML file that the tofunix sops provider decrypts, so the var file itself
+# is not a clan secret.
 {
   self,
   lib,

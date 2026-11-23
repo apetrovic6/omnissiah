@@ -1,8 +1,9 @@
 # Harbor robot accounts that push and pull images.
 #
-#   scriptorium.robots.woodpecker = {
-#     description = "Robot account for Woodpecker CI";
-#     secret = relic "woodpecker_secrets" "woodpecker_password";
+#   scriptorium.robots."<name>-ci" = {
+#     description = "CI push for <name>";
+#     secret = relic "robot_<name>" "robot_secret";
+#     project = "<harbor-project>";
 #   };
 #
 # Pull is always granted with push: skopeo checks for existing blobs first.

@@ -14,11 +14,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    woodpecker-ci = {
-      url = "github:woodpecker-ci/helm";
-      flake = false;
-    };
-
     garage-operator = {
       url = "github:rajsinghtech/garage-operator";
       flake = false;

@@ -115,7 +115,6 @@
     "valkey-io/valkey" # docker.io/valkey/valkey
 
     # CI/CD & Auth
-    "woodpecker-ci/woodpecker" # docker.io/woodpeckerci/woodpecker-*
     "pocket-id/pocket-id" # ghcr.io/pocket-id/pocket-id
 
     # Misc

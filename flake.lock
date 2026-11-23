@@ -4104,8 +4104,7 @@
         "steam-config-nix": "steam-config-nix",
         "strata": "strata",
         "tofunix": "tofunix",
-        "treefmt-nix": "treefmt-nix_8",
-        "woodpecker-ci": "woodpecker-ci"
+        "treefmt-nix": "treefmt-nix_8"
       }
     },
     "rust-overlay": {
@@ -4933,22 +4932,6 @@
       "original": {
         "owner": "abenz1267",
         "repo": "walker",
-        "type": "github"
-      }
-    },
-    "woodpecker-ci": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1795235048,
-        "narHash": "sha256-aDIdr5DjArzh/L8hFR3poH7igkNNNQplZhpcYc58omI=",
-        "owner": "woodpecker-ci",
-        "repo": "helm",
-        "rev": "fa296f298e71dbcdeb8a373c792a741d7e62c6fd",
-        "type": "github"
-      },
-      "original": {
-        "owner": "woodpecker-ci",
-        "repo": "helm",
         "type": "github"
       }
     },
