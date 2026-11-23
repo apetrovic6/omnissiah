@@ -202,14 +202,15 @@ tools run over SSH as `hermes` in `~/work` on stygies.
 1. Generate `hermes-stygies-ssh` on ryza with
    `clan vars generate ryza --generator hermes-stygies-ssh`. Stygies needs only
    the generated public half.
-2. After installing stygies, read its `/etc/ssh/ssh_host_ed25519_key.pub` from
-   the VM console. Set `services.imperium.hermes.stygies.knownHosts` on ryza to
-   `ssh-ed25519` type and base64 value (omit the comment). An empty pin leaves
-   the private key root-only and disables the coder profile and its Matrix
-   route without deleting existing profile data.
-3. Invite the existing Matrix bot to the coding room, then set
-   `services.imperium.hermes.profiles.coder.chatId` to the room ID (`!…`, not a
-   `#…` alias). With `null` there is no coder room route.
+2. Install stygies. ryza pins its host key automatically from stygies's
+   `openssh` clan var (`services.imperium.hermes.stygies.knownHosts`). Until
+   that var exists the pin is empty, which leaves the private key root-only
+   and disables the coder profile and its Matrix routes without deleting
+   existing profile data.
+3. Create one Matrix room per project and invite the existing bot. Add each
+   room's ID (`!…`, not a `#…` alias) to
+   `services.imperium.hermes.profiles.coder.rooms` on ryza, by project name.
+   Each room is its own conversation; start a thread per task for a fresh one.
 
 On ryza as `hermes`, use `hermes -p coder model` to select a provider and
 `hermes -p coder --tui` to start a session. `hermes -p coder webapp` selects the

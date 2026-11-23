@@ -120,8 +120,13 @@ def retire(home, overlay, *disabled_profiles):
     path = home / "config.yaml"
     config = read_config(path, missing_ok=True)
     gateway, routes = gateway_state(path, config)
-    retired_routes = {f"nixos-matrix-{name}" for name in retired}
-    remaining = [route for route in routes if route_name(route) not in retired_routes]
+    # Managed routes are named nixos-matrix-<profile>-<room>; match the profile
+    # field, so a profile's routes go however many rooms it had.
+    remaining = [
+        route
+        for route in routes
+        if not (route_name(route).startswith("nixos-matrix-") and route.get("profile") in retired)
+    ]
     changed = remaining != routes
     if changed:
         if remaining:
