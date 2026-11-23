@@ -16,6 +16,8 @@
       self.nixosModules.flatpak
       self.nixosModules.sccache
       self.nixosModules.github-token
+      # `fj` (forgejo-cli), logged in to both forges from the fj-tokens var.
+      self.nixosModules.fj-login
       self.nixosModules.awscli
       self.inputs.magos.nixosModules.desktop
       self.inputs.magos.nixosModules.pi
