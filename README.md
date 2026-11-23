@@ -312,14 +312,13 @@ path before and after a refactor means the plan cannot have changed.
 
 ### Installing Stygies
 
-Reserve `192.168.1.47` for `BC:24:11:5A:6E:02` on the router, then apply the
-reviewed OpenTofu plan to create VM 121 on pve2. Once Ryza's Hermes SSH
-configuration is available, run `clan vars generate ryza --generator
-hermes-stygies-ssh` and include the generated vars in the flake. Ryza gets the
-private key; Stygies reads only the public file and denies Hermes SSH until it
-is present. Generate Stygies' own vars with `clan vars generate stygies` and
-set a separate password for `apetrovic`. Clan's admin module requires the
-generated public SSH host key to evaluate the Stygies toplevel.
+Follow [Hermes on Cerberus Forgejo](#hermes-on-cerberus-forgejo) for the rollout
+order. Use the install command below only after the first OpenTofu apply has
+created VM 121 on pve2 and the Stygies vars are generated.
+
+Before installing, run `clan vars generate ryza --generator hermes-stygies-ssh`
+and include the generated vars in the flake. Ryza gets the private key;
+Stygies reads only the public file and denies Hermes SSH until it is present.
 
 Boot the attached NixOS ISO and make root reachable over SSH at the reserved
 IP. Run `clan machines install stygies --phases disko,install,reboot` from the
@@ -334,6 +333,10 @@ Hermes can push topic branches and open PRs on `manjo/rust-app-template` and
 OpenTofu manages the grants, branch rules, and user SSH key, not the bot account
 or its API token.
 
+Before merging a Hermes PR, open Forgejo Actions and verify that a real run
+for the PR's current head commit passed the required jobs. The bot can post
+commit statuses, so a green badge alone is not proof.
+
 1. As a Forgejo site admin, go to **Site Administration → User Accounts →
    Create User Account** on `forge.ugalabugala.org`. Use **Local**, username
    `hermes`, email `hermes@forge.ugalabugala.org`, and a unique password held
@@ -342,13 +345,9 @@ or its API token.
    **Maximum number of repositories** to `0`, and leave **Administrator
    account** and **Can create organizations** disabled. Sign in as `hermes`
    and choose **Disable email notifications** in **Settings → Account**.
-2. Add `self.nixosModules.hermes-forgejo-bot` to the stygies imports, alongside
-   its `hermes` user and group definitions. Run
-   `clan vars generate stygies --generator hermes-forgejo-ssh` and commit the
-   generated Clan vars. OpenTofu reads only `id_ed25519.pub`, not the private key.
-   Before enrollment the key is omitted from plans. Keep the public var
-   tracked after enrollment; removing it also removes the managed key.
-3. Initialize OpenTofu with `nix run .#tofunix -- init` using the state
+2. Stygies already imports `self.nixosModules.hermes-forgejo-bot`.
+3. Reserve `192.168.1.47` for `BC:24:11:5A:6E:02` on the router. Initialize
+   OpenTofu with `nix run .#tofunix -- init` using the state
    credentials from `.envrc`. For these resources, the Cerberus provider
    token must belong to a site admin and include `write:repository` for the
    grants and branch rules, `write:admin` to add or remove user keys, and
@@ -361,21 +360,28 @@ or its API token.
    nix run .#tofunix -- plan
    ```
 
-   Review and apply that plan before creating the bot token, so the two repos
-   are visible to the restricted account.
+   Review and apply the plan to create VM 121 on pve2, set the branch rules,
+   and grant the bot access. The bot's SSH key is omitted until its public
+   Clan var exists. The grants make both repos visible to the restricted account.
 4. As `hermes`, open **Settings → Applications → Generate New Token**.
    Choose **Specific repositories**, select only `manjo/rust-app-template`
    and `manjo/pilot`, and give **repository** and **issue** Read and Write
    access (`write:repository`, `write:issue`). Leave all other scopes off.
-   Supply the token to the hidden prompt in
-   `clan vars generate stygies --generator hermes-forgejo-token` and commit
-   the encrypted Clan var before deploying stygies.
-5. On stygies, use `Hermes <hermes@forge.ugalabugala.org>` for Git authorship.
-   Use SSH remotes such as `ssh://forgejo@forge.ugalabugala.org:2222/manjo/pilot.git`
-   with the Clan-deployed `hermes-forgejo-ssh/id_ed25519` as the SSH identity.
-   API clients should read the Clan-deployed `hermes-forgejo-token/token`.
-   The paths come from the corresponding generators' `files.<name>.path`; both
-   secrets are readable only by the `hermes` user and root.
+5. Run `clan vars generate stygies`, supply the token at the hidden prompt,
+   and set a separate password for `apetrovic`. Commit the generated vars,
+   including the public SSH host key that Clan needs to evaluate Stygies.
+6. [Install Stygies](#installing-stygies).
+7. Run `nix run .#tofunix -- plan` again, then review and apply it to enroll
+   the bot's SSH key. OpenTofu reads only `id_ed25519.pub`, not the private
+   key. Keep the public var tracked; removing it schedules the managed key
+   for deletion.
+
+On stygies, use `Hermes <hermes@forge.ugalabugala.org>` for Git authorship.
+Use SSH remotes such as `ssh://forgejo@forge.ugalabugala.org:2222/manjo/pilot.git`
+with the Clan-deployed `hermes-forgejo-ssh/id_ed25519` as the SSH identity.
+API clients should read the Clan-deployed `hermes-forgejo-token/token`.
+The paths come from the corresponding generators' `files.<name>.path`; both
+secrets are readable only by the `hermes` user and root.
 
 ## Addresses and secrets paths
 
