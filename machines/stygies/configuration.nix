@@ -76,6 +76,9 @@ in {
       disk_full_action = "rotate";
     };
   };
+  # Use the generated settings without a symlink; aureport also opens with O_NOFOLLOW.
+  environment.etc."audit/auditd.conf".mode = "0644";
+
   # Match processes running as Hermes and login sessions that later change UID.
   security.audit.rules = lib.concatMap (arch: [
     "-a always,exit -F arch=${arch} -S execve -S execveat -F uid=${hermesUid} -k hermes-exec"
