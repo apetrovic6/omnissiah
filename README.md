@@ -346,10 +346,12 @@ the diff, including build scripts and workflows, before approving each
 run. Never select **Always trust** for `hermes`. Before merging, verify
 in Actions that the run for the current PR head passed the required jobs.
 
-**Before handing Hermes its credentials:** restrict Cerberus's LAN runners
-to trusted upstream repositories, not the whole Forgejo instance. A fork
-owner can enable Actions in its own repo, where upstream PR approval does
-not apply. Forking alone does not isolate instance-wide runners.
+**Before handing Hermes its credentials:** let active CI jobs finish, then
+run `nix run .#forgejo-runner-register -- --all` once from the repo root.
+This re-registers the existing Cerberus runners under `manjo`, preserving
+their labels. In Cerberus Forgejo's **Site Administration → Actions →
+Runners**, verify that no runner is instance-wide. An instance-wide runner
+could pick up jobs from a Hermes-owned fork without upstream PR approval.
 
 1. As a Forgejo site admin, go to **Site Administration → User Accounts →
    Create User Account** on `forge.ugalabugala.org`. Use **Local**, username
