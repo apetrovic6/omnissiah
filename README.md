@@ -290,6 +290,11 @@ operator machine. This skips kexec, which hung on Ryza. Keep the hardware
 report collected by the installer. The operator can use the VM console or
 enter the `apetrovic` account from the existing Clan admin login.
 
+Stygies keeps about 10 GiB of audit logs under `/var/log/audit`. The target is
+roughly 90 days, but actual retention depends on build activity. Auditd warns
+at 10% free space and rotates logs below 5% or on a full disk rather than
+suspending auditing. Disk pressure can shorten the retained history.
+
 ## Addresses and secrets paths
 
 No module writes an IP address or a `../../vars/...` path itself. Both come

@@ -60,7 +60,21 @@ in {
     SystemMaxUse = "4G";
     MaxRetentionSec = "90day";
   };
-  security.auditd.enable = true;
+  security.auditd = {
+    enable = true;
+    settings = {
+      # Budget about 10 GiB for ~90 days of builds; the window depends on event volume.
+      max_log_file = 256;
+      num_logs = 40;
+      max_log_file_action = "rotate";
+      space_left = "10%";
+      space_left_action = "syslog";
+      admin_space_left = "5%";
+      # Reclaim the oldest audit logs under disk pressure rather than suspending auditing.
+      admin_space_left_action = "rotate";
+      disk_full_action = "rotate";
+    };
+  };
   # Match processes running as Hermes and login sessions that later change UID.
   security.audit.rules = lib.concatMap (arch: [
     "-a always,exit -F arch=${arch} -S execve -S execveat -F uid=${hermesUid} -k hermes-exec"
