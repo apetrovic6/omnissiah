@@ -56,13 +56,16 @@
     profileIdPattern = "^[a-z0-9][a-z0-9_-]{0,63}$";
     reservedProfileNames = ["hermes" "default" "test" "tmp" "root" "sudo"];
     yaml = pkgs.formats.yaml {};
+    # One route per room. Hermes keys a conversation on the room (and thread),
+    # so every room is its own conversation within the profile.
     routes = lib.concatLists (lib.mapAttrsToList (name: profile:
-      lib.optional (mx.enable && profile.chatId != null) {
-        name = "nixos-matrix-${name}";
-        platform = "matrix";
-        profile = name;
-        chat_id = profile.chatId;
-      })
+      lib.optionals mx.enable (lib.mapAttrsToList (room: chatId: {
+          name = "nixos-matrix-${name}-${room}";
+          platform = "matrix";
+          profile = name;
+          chat_id = chatId;
+        })
+        profile.rooms))
     enabledProfiles);
     profileConfig = pkgs.linkFarm "hermes-config" ([
         {
@@ -207,11 +210,11 @@
               default = {};
               description = "Non-secret settings merged into this named Hermes profile's config.yaml.";
             };
-            chatId = mkOption {
-              type = types.nullOr (types.strMatching "![^[:space:]]+");
-              default = null;
-              example = "!roomid:example.org";
-              description = "Matrix room ID routed to this profile by the default bot, or null to omit the route.";
+            rooms = mkOption {
+              type = types.attrsOf (types.strMatching "![^[:space:]]+");
+              default = {};
+              example = {pilot = "!roomid:example.org";};
+              description = "Matrix rooms routed to this profile by the default bot, by a short name (used in the route name). Each room is its own conversation.";
             };
           };
         });

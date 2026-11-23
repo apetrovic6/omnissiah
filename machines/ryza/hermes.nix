@@ -81,8 +81,14 @@ in {
         # Hermes uses accept-new. Without a system pin, don't expose a profile
         # that could trust an unknown host or run its terminal locally on ryza.
         enable = hasHostPin;
-        # Set to the Matrix room ID once the bot has been invited.
-        chatId = null;
+        # One Matrix room per project, all handled by this profile: each room is
+        # its own conversation, and a thread per task gives a fresh one inside
+        # it. Invite @hermes, then add the room's Internal room ID (Element:
+        # room settings, Advanced), e.g. pilot = "!abc:matrix.example.org".
+        rooms = {
+          tally = "!vR9D2BaWBsjdrDlBt6Vb7_iEKpj4iEny5tRPOnzVUv0";
+          rust-app-template = "!qfeHKyEuU37YpF4mms2eyiISUIbyx8ajidvKeQn3b-c";
+        };
         settings.terminal = {
           backend = "ssh";
           ssh_host = stygies;
