@@ -3,7 +3,9 @@
 import os
 import sys
 from collections.abc import MutableMapping
+from contextlib import contextmanager
 from pathlib import Path
+from shutil import copyfileobj
 from tempfile import NamedTemporaryFile
 
 from ruamel.yaml import YAML
@@ -68,16 +70,22 @@ def update_config(path, settings, *, default_profile=False):
         write_config(path, config)
 
 
-def write_config(path, config):
+@contextmanager
+def atomic_write(path, **kwargs):
     path.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile(dir=path.parent, mode="w", encoding="utf-8", delete=False) as stream:
+    with NamedTemporaryFile(dir=path.parent, delete=False, **kwargs) as stream:
         tmp = Path(stream.name)
         try:
-            yaml.dump(config, stream)
+            yield stream
             stream.close()
             tmp.replace(path)
         finally:
             tmp.unlink(missing_ok=True)
+
+
+def write_config(path, config):
+    with atomic_write(path, mode="w", encoding="utf-8") as stream:
+        yaml.dump(config, stream)
 
 
 def apply(home, overlay):
@@ -87,6 +95,10 @@ def apply(home, overlay):
     for source in sorted(overlay.glob("profiles/*/config.yaml")):
         name = source.parent.name
         update_config(home / source.relative_to(overlay), read_config(source))
+        soul = source.with_name("SOUL.md")
+        if soul.is_file():
+            with soul.open("rb") as src, atomic_write(home / soul.relative_to(overlay), mode="wb") as dst:
+                copyfileobj(src, dst)
         (provisioned / name).touch(exist_ok=True)
         marker = tombstones / name
         try:

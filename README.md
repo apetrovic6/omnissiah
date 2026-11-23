@@ -216,6 +216,32 @@ On ryza as `hermes`, use `hermes -p coder model` to select a provider and
 `hermes -p coder --tui` to start a session. `hermes -p coder webapp` selects the
 same profile if the gateway's Webapp listener is enabled. Interactive config
 changes outside Nix-managed settings survive activation.
+The coder's `SOUL.md` is managed by Nix; a switch or gateway restart
+overwrites edits to that file.
+
+**Kaneo login:** Use a Kaneo account with access to the project workspace.
+A separate workspace member for Hermes is recommended so its edits are
+attributable; an existing member account works too. From phalanx, open a
+tunnel and keep the SSH session open:
+
+```sh
+ssh -o ExitOnForwardFailure=yes -L 28431:127.0.0.1:28431 root@192.168.1.45
+```
+
+On ryza, run the login as `hermes`:
+
+```sh
+sudo -iu hermes hermes -p coder mcp login kaneo --flow browser
+```
+
+Open the printed URL in a browser on phalanx and approve access. Hermes stores
+the token in the persisted coder profile. After login succeeds, restart
+`hermes-gateway` on ryza so the gateway picks it up.
+
+Kaneo's access token expires after 30 days and cannot be refreshed. Repeat
+the browser login and gateway restart when it expires. Until reauthorized,
+Hermes tells the task's Matrix room that the board is unreachable and keeps
+working without Kaneo.
 
 **Emergency stop:** Send `/pause` in the default bot DM to hold new work
 across profiles; `/pause off` resumes. Existing work is not killed. For a hard
