@@ -3,10 +3,15 @@
 import argparse
 import json
 import re
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import NamedTuple
+
+
+ROOM_ID = re.compile(r"!(?:[^\s:]+:\S+|[A-Za-z0-9_-]+)")
+THREAD_ID = re.compile(r"\$[A-Za-z0-9_+/=-]+")
 
 
 class Task(NamedTuple):
@@ -31,10 +36,39 @@ def clean(text):
 
 def read_tasks(path):
     try:
-        lines = path.read_text(encoding="utf-8").rstrip("\n").split("\n")
-        return [Task(*line.split("\t")) for line in lines if line]
+        text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return []
+    if not text:
+        return []
+    tasks = []
+    for line_number, line in enumerate(text.removesuffix("\n").split("\n"), 1):
+        fields = line.split("\t")
+        if len(fields) != 6:
+            raise ValueError(f"line {line_number}: expected six fields")
+        task = Task(*fields)
+        try:
+            if datetime.fromisoformat(task.started_at).tzinfo is None:
+                raise ValueError("missing timezone")
+        except ValueError:
+            raise ValueError(f"line {line_number}: invalid started_at") from None
+        if not ROOM_ID.fullmatch(task.room) or not THREAD_ID.fullmatch(task.thread):
+            raise ValueError(f"line {line_number}: invalid Matrix room or thread ID")
+        tasks.append(task)
+    return tasks
+
+
+def load_state(path, parser, repair_at):
+    try:
+        return read_tasks(path)
+    except ValueError as error:
+        if repair_at is None:
+            parser.exit(2, f"Invalid task state in {path.name} ({error}); ask manjo for 'clear task'.\n")
+        backup = path.with_name(f"{path.name}.bad-{repair_at}")
+        path.rename(backup)
+        print(f"Moved invalid task state to {backup.name}", file=sys.stderr)
+        return []
+
 
 def write_tasks(path, tasks):
     if not tasks:
@@ -59,28 +93,42 @@ def main():
     done = commands.add_parser("task-done")
     branch = commands.add_parser("task-branch")
     for command in (claim, done, branch):
-        command.add_argument("room", type=clean)
-        command.add_argument("thread", type=clean)
+        command.add_argument("room")
+        command.add_argument("thread")
     claim.add_argument("project", type=clean)
-    claim.add_argument("summary", type=clean)
+    claim.add_argument("summary", choices=("-",), help="read the summary from stdin")
     for command in (done, branch):
         command.add_argument("started_at")
     branch.add_argument("branch", type=clean)
-    args = parser.parse_args()
+    argv = sys.argv[1:]
+    if argv in (["task-status", "--"], ["task-clear", "--"]):
+        argv.pop()
+    args = parser.parse_args(argv)
+    action = args.action
+    if action in ("task-claim", "task-done", "task-branch"):
+        if not ROOM_ID.fullmatch(args.room):
+            parser.exit(2, "Invalid Matrix room ID.\n")
+        if not THREAD_ID.fullmatch(args.thread):
+            parser.exit(2, "Invalid Matrix thread/event ID.\n")
+    if action == "task-claim":
+        try:
+            summary = clean(sys.stdin.read())
+        except argparse.ArgumentTypeError as error:
+            parser.exit(2, f"Invalid task summary: {error}.\n")
 
     work = Path.home() / "work"
     current_path = work / ".current-task"
     queue_path = work / ".task-queue"
-    current = read_tasks(current_path)
+    now = datetime.now(UTC)
+    stamp = now.isoformat().replace("+00:00", "Z")
+    repair_at = now.strftime("%Y%m%dT%H%M%S%fZ") if action == "task-clear" else None
+    current = load_state(current_path, parser, repair_at)
     active = current[0] if current else None
-    queue = read_tasks(queue_path)
+    queue = load_state(queue_path, parser, repair_at)
     # Promotion writes the slot first. If interrupted before trimming the queue,
     # the promoted task is already active, not another task to start.
     if active and queue and active.origin == queue[0].origin:
         queue.pop(0)
-    now = datetime.now(UTC)
-    stamp = now.isoformat().replace("+00:00", "Z")
-    action = args.action
     position = None
 
     if action == "task-status":
@@ -89,8 +137,8 @@ def main():
         origin = (args.room, args.thread)
         if active is None:
             if queue:
-                parser.error("queue exists without an active task; use task-clear to advance it")
-            active = Task(stamp, *origin, args.project, "pending", args.summary)
+                parser.exit(2, "Queue exists without an active task; ask manjo for 'clear task'.\n")
+            active = Task(stamp, *origin, args.project, "pending", summary)
             write_tasks(current_path, [active])
             result = "claimed"
         elif active.origin == origin:
@@ -98,7 +146,7 @@ def main():
         else:
             position = next((i for i, task in enumerate(queue, 1) if task.origin == origin), None)
             if position is None:
-                queue.append(Task(stamp, *origin, args.project, "pending", args.summary))
+                queue.append(Task(stamp, *origin, args.project, "pending", summary))
                 write_tasks(queue_path, queue)
                 position = len(queue)
             result = "queued"
@@ -106,7 +154,7 @@ def main():
         if action != "task-clear" and (
             active is None or (args.room, args.thread, args.started_at) != (*active.origin, active.started_at)
         ):
-            parser.error("task no longer owns the slot")
+            parser.exit(2, "Task no longer owns the slot.\n")
         if action == "task-branch":
             active = active._replace(branch=args.branch)
             write_tasks(current_path, [active])

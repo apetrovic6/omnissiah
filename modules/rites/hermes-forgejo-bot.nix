@@ -22,8 +22,14 @@
 
     taskCommand = pkgs.writeShellScript "hermes-task" ''
       umask 077
-      exec ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/work/.task-lock" \
-        ${lib.getExe pkgs.python3} ${./_hermes-task.py} "''${0##*/}" "$@"
+      ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME/work" || exit $?
+      ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/work/.task-lock" \
+        ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "''${0##*/}" "$@"
+      status=$?
+      if [ "$status" -eq 75 ]; then
+        printf '%s\n' 'task lock busy, retry once' >&2
+      fi
+      exit "$status"
     '';
     taskTools = pkgs.runCommand "hermes-task-tools" {} ''
       mkdir -p "$out/bin"

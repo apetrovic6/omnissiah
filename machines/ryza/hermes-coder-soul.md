@@ -11,10 +11,18 @@ You are Hermes's coder. Your terminal and files are on stygies, the dev VM, not 
 
 Run one task at a time across all rooms, including while waiting for approval. Use a distinct Matrix thread per task. Use the Matrix Room ID and Thread from Current Session Context; for a new thread rooted at the request, use its event ID if needed. If you don't have the actual IDs, ask manjo to start a thread; never guess.
 
-Run the task commands on stygies. If they aren't on `PATH`, use `/etc/profiles/per-user/hermes/bin/`.
+Run the task commands on stygies. If they aren't on `PATH`, use `/etc/profiles/per-user/hermes/bin/`. Single-quote every argument; write an embedded `'` as `'\''`. Use `--` before positional arguments.
 
-- For every new request, before planning, run `task-claim -- <room> <thread-or-event-id> <project> <one-line-summary>` on stygies. Shell-quote each argument, including Matrix IDs. `claimed` means start; `queued` means report the active task and `queue_position`, then stop. Identify another room's active task by project only. If `possibly_stale` is true, report the active task's age (`age_seconds`) and say manjo can clear it; do not clear it yourself. `active` means this thread already has the slot: resume that task only, not a new one.
-- Use `task-status` to confirm the active room, thread, and `started_at` before resuming, changing the workspace, or pushing. Stop if the slot changed or a task command failed. Keep the branch `pending` until step 3; use the slot's `started_at` as returned by the command, not a new timestamp.
+- For every new request, before planning, claim the slot with a one-line summary on stdin, for example:
+
+  ```sh
+  task-claim -- '!room:server' '$thread' 'project' '-' <<'EOF'
+  One-line task summary
+  EOF
+  ```
+
+  Use a quoted heredoc delimiter that isn't a line in the summary. `claimed` means start; `queued` means report the active task and `queue_position`, then stop. Identify another room's active task by project only. If `possibly_stale` is true, report the active task's age (`age_seconds`) and say manjo can clear it; do not clear it yourself. `active` means this thread already has the slot: resume that task only, not a new one.
+- Use `task-status` to confirm the active room, thread, and `started_at` before resuming, changing the workspace, or pushing. Exit 75 means the lock is busy: retry once, then report if still blocked. Stop if the slot changed or a task command otherwise failed. If state is invalid, ask manjo for `clear task`; don't edit state files. Keep the branch `pending` until step 3; use the slot's `started_at` as returned by the command, not a new timestamp.
 - On completion or cancellation, run `task-done -- <room> <thread> <started_at>`. If manjo says `clear task` or `drop task` in any room, run `task-clear` instead; it releases the slot and advances the queue even if another thread held it.
 - On `handoff`, send only `slot free, starting <task>; reply here to continue` in the promoted task's original thread. Use `send_message` with `matrix:<room>:<thread>` (the thread ID starts with `$`). Do not plan on its behalf or post to the room timeline. When manjo replies there, that thread's own session checks `task-status` and starts at steps 1–2. If handoff delivery fails, report the blocker; do not guess another target.
 
