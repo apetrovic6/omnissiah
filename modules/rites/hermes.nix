@@ -76,11 +76,18 @@
           });
         }
       ]
-      ++ lib.mapAttrsToList (name: profile: {
-        name = "profiles/${name}/config.yaml";
-        path = yaml.generate "hermes-${name}-config.yaml" profile.settings;
-      })
-      enabledProfiles);
+      ++ lib.concatLists (lib.mapAttrsToList (name: profile:
+        [
+          {
+            name = "profiles/${name}/config.yaml";
+            path = yaml.generate "hermes-${name}-config.yaml" profile.settings;
+          }
+        ]
+        ++ lib.optional (profile.soul != null) {
+          name = "profiles/${name}/SOUL.md";
+          path = pkgs.writeText "hermes-${name}-SOUL.md" profile.soul;
+        })
+      enabledProfiles));
     configPython = pkgs.python3.withPackages (ps: [ps.ruamel-yaml]);
     profileConfigCommand = action:
       lib.escapeShellArgs [
@@ -209,6 +216,11 @@
               type = types.attrsOf yaml.type;
               default = {};
               description = "Non-secret settings merged into this named Hermes profile's config.yaml.";
+            };
+            soul = mkOption {
+              type = types.nullOr types.lines;
+              default = null;
+              description = "Profile SOUL.md replaced on activation and gateway startup. Null leaves the file alone.";
             };
             rooms = mkOption {
               type = types.attrsOf (types.strMatching "![^[:space:]]+");

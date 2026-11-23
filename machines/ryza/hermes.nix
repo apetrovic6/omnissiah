@@ -81,6 +81,7 @@ in {
         # Hermes uses accept-new. Without a system pin, don't expose a profile
         # that could trust an unknown host or run its terminal locally on ryza.
         enable = hasHostPin;
+        soul = builtins.readFile ./hermes-coder-soul.md;
         # One Matrix room per project, all handled by this profile: each room is
         # its own conversation, and a thread per task gives a fresh one inside
         # it. Invite @hermes, then add the room's Internal room ID (Element:
@@ -95,6 +96,13 @@ in {
           ssh_user = "hermes";
           ssh_key = config.clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519".path;
           cwd = "~/work";
+        };
+        # Kaneo uses browser PKCE. Port 28431 is outside both hosts' ephemeral
+        # ranges; keep it fixed for the phalanx-to-ryza SSH tunnel.
+        settings.mcp_servers.kaneo = {
+          url = "https://kaneo.${self.lib.lab.domain}/api/mcp";
+          auth = "oauth";
+          oauth.redirect_port = 28431;
         };
       };
       dashboard = {
