@@ -337,8 +337,8 @@ restrict requests that go directly to Traefik.
 Hermes pushes topic branches only to `hermes/rust-app-template` and
 `hermes/pilot`, then opens PRs against the corresponding `manjo` repository.
 Hermes has read access upstream; only `manjo` can push directly to `master`
-or merge PRs into it. OpenTofu manages the forks, grants, branch rules, and
-user SSH key, not the bot account or its tokens.
+or merge PRs into it. OpenTofu manages the bot account, forks, grants,
+branch rules, and SSH key. Create both API tokens by hand.
 
 Forgejo requires approval for `pull_request` runs opened or updated by the
 untrusted bot and withholds Forgejo Actions secrets. `pull_request_target`
@@ -366,29 +366,19 @@ their labels. In Cerberus Forgejo's **Site Administration → Actions →
 Runners**, verify that no runner is instance-wide. An instance-wide runner
 could pick up jobs from a Hermes-owned fork without upstream PR approval.
 
-1. As a Forgejo site admin, go to **Site Administration → User Accounts →
-   Create User Account** on `forge.ugalabugala.org`. Use **Local**, username
-   `hermes`, email `hermes@forge.ugalabugala.org`, and a unique password held
-   by the operator. Leave **Notify about registration via email** unchecked.
-   Edit the new account: keep it active, enable **Restricted account**, set
-   **Maximum number of repositories** to `2`, and leave **Administrator
-   account** and **Can create organizations** disabled. Sign in as `hermes`
-   and choose **Disable email notifications** in **Settings → Account**.
-2. Stygies already imports `self.nixosModules.hermes-forgejo-bot`.
-3. As `hermes`, create a separate OpenTofu token with access to **All
-   (public, private, and limited)** repositories and the scopes
-   `write:repository` for the forks, `read:user` for the provider's login
-   check, and `read:organization` for its fork owner lookup. Store it with
-   `clan vars generate terra --generator tofunix-hermes-forgejo-forks`
-   and commit the SOPS-encrypted var. Do not put this token on Stygies.
-
+1. Run `clan vars generate terra --generator tofunix-hermes-forgejo-password`
+   and commit the SOPS-encrypted var. Only the operator needs this password;
+   do not put it on Stygies. OpenTofu stores it in state despite redacting
+   it from plan output. Keep the var tracked after applying: removing it
+   schedules the account and its grants for deletion. Regenerating it
+   does not rotate the Forgejo password.
+2. Create the bot with OpenTofu.
    Reserve `192.168.1.47` for `BC:24:11:5A:6E:02` on the router. Initialize
    OpenTofu with `nix run .#tofunix -- init` using the state
-   credentials from `.envrc`. For these resources, the Cerberus provider
-   token must belong to a site admin and include `write:repository` for the
-   grants and branch rules, `write:admin` to add or remove user keys, and
-   `read:user` (or `write:user`) to refresh the key. Adopt the existing
-   template rule once, before applying:
+   credentials from `.envrc`. The Cerberus provider token must belong to a
+   site admin and include `write:repository` for grants and branch rules,
+   `write:admin` for the user and SSH key, and `read:user` (or `write:user`)
+   to refresh them. Adopt the existing template rule once, before applying:
 
    ```sh
    nix run .#tofunix -- import \
@@ -396,9 +386,28 @@ could pick up jobs from a Hermes-owned fork without upstream PR approval.
    nix run .#tofunix -- plan
    ```
 
-   Review and apply the plan to create VM 121 on pve2, set the branch rules,
-   grant upstream read access, and create both forks as `hermes`. The
-   bot's SSH key is omitted until its public Clan var exists.
+   If `hermes` already exists, import it with `nix run .#tofunix -- import
+   gitea_user.hermes <numeric-user-id>` before planning. Import keeps the
+   existing Forgejo password; the generated password is for a new account.
+   Review and apply the plan to create VM 121 on pve2, the restricted bot
+   account, the branch rules, and the upstream read grants.
+3. Sign in as `hermes` and choose **Disable email notifications** in
+   **Settings → Account**. For a new account, decrypt the password only
+   when signing in:
+
+   ```sh
+   sops decrypt --input-type yaml --extract '["password"]' \
+     vars/shared/tofunix-hermes-forgejo-password/tofunix-hermes-forgejo-password/value
+   ```
+
+   Under **Settings → Applications → Generate New Token**, create a
+   separate operator token for **All (public, private, and limited)**
+   repositories with `write:repository` for the forks, `read:user` for
+   the provider's login check, and `read:organization` for its owner lookup.
+   Paste it at the hidden prompt for
+   `clan vars generate terra --generator tofunix-hermes-forgejo-forks`.
+   Commit the SOPS-encrypted var, then review and apply a new OpenTofu
+   plan to create both forks. Do not put this token on Stygies.
 4. As `hermes`, open **Settings → Applications → Generate New Token** and
    choose **Specific repositories**. Select the two `hermes` forks and
    their two `manjo` upstream repositories. Give **repository** and
@@ -407,7 +416,8 @@ could pick up jobs from a Hermes-owned fork without upstream PR approval.
    on a token that covers both the base and head repos; ordinary PR and
    issue comments use `write:issue`. These token scopes don't elevate the
    bot's upstream repository permission beyond read.
-5. Run `clan vars generate stygies`, supply the token at the hidden prompt,
+5. Stygies already imports `self.nixosModules.hermes-forgejo-bot`. Run
+   `clan vars generate stygies`, supply the token at the hidden prompt,
    and set a separate password for `apetrovic`. Commit the generated vars,
    including the public SSH host key that Clan needs to evaluate Stygies.
    If this merges before those vars are committed, the scheduled

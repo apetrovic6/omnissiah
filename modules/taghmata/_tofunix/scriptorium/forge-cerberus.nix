@@ -31,14 +31,42 @@
       checks = [];
     };
   };
+  passwordCredential = "tofunix-hermes-forgejo-password";
+  manageBot = builtins.pathExists (vars.shared passwordCredential passwordCredential);
   publicKey = vars.machine "stygies" "hermes-forgejo-ssh" "id_ed25519.pub";
-  hasPublicKey = builtins.pathExists publicKey;
+  manageKey = manageBot && builtins.pathExists publicKey;
   forkCredential = "tofunix-hermes-forgejo-forks";
-  manageForks = builtins.pathExists (vars.shared forkCredential forkCredential);
+  manageForks = manageBot && builtins.pathExists (vars.shared forkCredential forkCredential);
 in {
   reliquary.ntfy_access = {
     generator = "ntfy-access";
     file = "alertmanager-ntfy";
+  };
+
+  # Unrelated plans must still work before the bot password is generated.
+  reliquary.hermes_password = lib.mkIf manageBot {
+    generator = passwordCredential;
+  };
+
+  resource.gitea_user = lib.optionalAttrs manageBot {
+    hermes = {
+      provider = "gitea.cerberus";
+      username = bot;
+      login_name = bot;
+      email = "hermes@forge.ugalabugala.org";
+      password = relic "hermes_password" "password";
+      restricted = true;
+      admin = false;
+      active = true;
+      max_repo_creation = 2;
+      allow_create_organization = false;
+      allow_git_hook = false;
+      allow_import_local = false;
+      send_notification = false;
+      must_change_password = false;
+      # Forgejo never returns passwords; the provider only sets this on create.
+      lifecycle.ignore_changes = ["password"];
+    };
   };
 
   # Gitea forks into the authenticated user's namespace, not the upstream
@@ -67,7 +95,7 @@ in {
   };
 
   # The public key is absent until stygies has generated its Clan vars.
-  variable = lib.optionalAttrs hasPublicKey {
+  variable = lib.optionalAttrs manageKey {
     hermes_forgejo_public_key = {
       type = "string";
       nullable = false;
@@ -76,27 +104,29 @@ in {
     };
   };
 
-  resource.gitea_public_key = lib.optionalAttrs hasPublicKey {
+  resource.gitea_public_key = lib.optionalAttrs manageKey {
     hermes = {
       provider = "gitea.cerberus";
-      username = bot;
+      inherit (ref.gitea_user.hermes) username;
       title = "hermes@stygies";
       key = ref.var.hermes_forgejo_public_key;
       read_only = false;
     };
   };
 
-  resource.gitea_repository_collaborator = lib.mapAttrs' (name: repo:
-    lib.nameValuePair "${name}-hermes" {
-      provider = "gitea.cerberus";
-      # Keep the default branch protected before admitting the bot.
-      depends_on = ["gitea_repository_branch_protection.${name}"];
-      inherit owner;
-      repo = repo.name;
-      username = bot;
-      permission = "read";
-    })
-  repos;
+  resource.gitea_repository_collaborator = lib.optionalAttrs manageBot (
+    lib.mapAttrs' (name: repo:
+      lib.nameValuePair "${name}-hermes" {
+        provider = "gitea.cerberus";
+        # Keep the default branch protected before admitting the bot.
+        depends_on = ["gitea_repository_branch_protection.${name}"];
+        inherit owner;
+        repo = repo.name;
+        inherit (ref.gitea_user.hermes) username;
+        permission = "read";
+      })
+    repos
+  );
 
   # Omit the alias and resources together before enrollment. If the credential
   # is later removed, OpenTofu cannot delete stateful forks via another alias.
