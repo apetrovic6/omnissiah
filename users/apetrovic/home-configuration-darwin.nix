@@ -6,6 +6,7 @@
 }: {
   imports = [
     ./firefox
+    ./ssh.nix
   ];
 
   home.packages = [];
