@@ -32,7 +32,10 @@ rec {
     sol = "192.168.1.42";
     mars = "192.168.1.44";
     ryza = "192.168.1.45"; # Proxmox VM next to mars; static, reserved for BC:24:11:5A:6E:01
-    stygies = "192.168.1.47"; # Proxmox VM on pve2; static, reserved for BC:24:11:5A:6E:02
+    # Proxmox VM on pve2; static. NOT reserved on the router (it can't), so the
+    # router may lease it to another device: .47 was taken that way, hence a
+    # high address, which the router hands out least.
+    stygies = "192.168.1.248";
     cypramundi = "152.53.34.16";
     alfrost = "172.245.55.111";
 
