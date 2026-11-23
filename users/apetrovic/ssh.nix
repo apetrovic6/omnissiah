@@ -74,6 +74,8 @@
           "luna"
           "sol"
           "servitor"
+          "ryza"
+          "stygies"
           self.lib.hosts.phalanx # phalanx
           self.lib.hosts.enginseer # enginseer
           self.lib.hosts.servitor # servitor
@@ -85,6 +87,8 @@
           self.lib.hosts.mars # mars
           self.lib.hosts.cypramundi # cypramundi
           self.lib.hosts.alfrost # alfrost
+          self.lib.hosts.ryza
+          self.lib.hosts.stygies
         ];
         identityFile = "~/.ssh/apetrovic.pub";
         identitiesOnly = true;

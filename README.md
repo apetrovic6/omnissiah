@@ -225,7 +225,7 @@ from `/var/lib/hermes/.hermes/profiles/coder/config.yaml`:
 ```sh
 sudo systemctl stop hermes-gateway
 sudo -u hermes -H ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-  -i "$key" hermes@192.168.1.47 'exec pkill -KILL -u hermes'
+  -i "$key" hermes@192.168.1.248 'exec pkill -KILL -u hermes'
 ```
 
 The hard stop affects every process owned by `hermes` on stygies; the SSH
@@ -374,7 +374,8 @@ could pick up jobs from a Hermes-owned fork without upstream PR approval.
    schedules the account and its grants for deletion. Regenerating it
    does not rotate the Forgejo password.
 2. Create the bot with OpenTofu.
-   Reserve `192.168.1.47` for `BC:24:11:5A:6E:02` on the router. Initialize
+   stygies uses the static `192.168.1.248` (`_chart.nix`); the router can't
+   reserve it, so check it's still free before installing. Initialize
    OpenTofu with `nix run .#tofunix -- init` using the state
    credentials from `.envrc`. The Cerberus provider token must belong to a
    site admin and include `write:repository` for grants and branch rules,
