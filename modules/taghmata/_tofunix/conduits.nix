@@ -36,6 +36,12 @@ in {
       api_token = relic "forgejo_nix_secrets" "forgejo_token";
     };
 
+    # These endpoints are not exposed by the pinned Forgejo provider.
+    gitea.cerberus = {
+      base_url = "https://forge.${lab.domain}";
+      token = relic "forgejo_nix_secrets" "forgejo_token";
+    };
+
     # Mirror repositories under github.com/apetrovic6.
     github.default = {
       owner = "apetrovic6";

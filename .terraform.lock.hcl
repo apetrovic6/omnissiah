@@ -25,6 +25,14 @@ provider "registry.opentofu.org/carlpett/sops" {
   ]
 }
 
+provider "registry.opentofu.org/go-gitea/gitea" {
+  version     = "0.8.1"
+  constraints = "0.8.1"
+  hashes = [
+    "h1:yweHTWGrhQnuMwTW0VY1Vjer2mslIIfs1gaOliUEM9g=",
+  ]
+}
+
 provider "registry.opentofu.org/goharbor/harbor" {
   version     = "3.12.5"
   constraints = "3.12.5"
