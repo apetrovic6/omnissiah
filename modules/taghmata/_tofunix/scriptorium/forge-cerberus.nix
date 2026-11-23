@@ -18,6 +18,9 @@
     rust-app-template = {
       name = "rust-app-template";
       branch = "master";
+      # Changes reach master only through PRs, as before the rule was adopted:
+      # no direct pushes, not even from the owner.
+      directPush = false;
       # Preserve the template's existing PR checks when adopting its rule.
       checks = [
         "ci / ci-pure (pull_request)"
@@ -28,6 +31,8 @@
     pilot = {
       inherit (ref.forgejo_repository.pilot) name;
       branch = ref.forgejo_repository.pilot.default_branch;
+      # pilot had no rule before; the owner keeps pushing to master directly.
+      directPush = true;
       checks = [];
     };
   };
@@ -147,9 +152,11 @@ in {
       inherit (repo) name;
       username = owner;
       rule_name = repo.branch;
-      # Forgejo's CanUserPush denies even the owner when pushes are disabled.
-      enable_push = true;
-      push_whitelist_users = [owner];
+      # Forgejo's CanUserPush denies even the owner when pushes are disabled,
+      # so a repo that keeps direct pushes allows them for the owner only.
+      # Hermes never needs them: it has read access and pushes to its forks.
+      enable_push = repo.directPush;
+      push_whitelist_users = lib.optional repo.directPush owner;
       merge_whitelist_users = [owner];
       required_approvals = 0;
       status_check_patterns = repo.checks;

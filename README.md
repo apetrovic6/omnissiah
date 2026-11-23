@@ -336,8 +336,9 @@ restrict requests that go directly to Traefik.
 
 Hermes pushes topic branches only to `hermes/rust-app-template` and
 `hermes/pilot`, then opens PRs against the corresponding `manjo` repository.
-Hermes has read access upstream; only `manjo` can push directly to `master`
-or merge PRs into it. OpenTofu manages the bot account, forks, grants,
+Hermes has read access upstream; only `manjo` can merge PRs into `master`.
+Direct pushes to `master` are allowed for `manjo` on `pilot` only;
+`rust-app-template` takes changes through PRs alone. OpenTofu manages the bot account, forks, grants,
 branch rules, and SSH key. Create both API tokens by hand.
 
 Forgejo requires approval for `pull_request` runs opened or updated by the
