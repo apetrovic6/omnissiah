@@ -31,6 +31,7 @@
     };
   };
   publicKey = vars.machine "stygies" "hermes-forgejo-ssh" "id_ed25519.pub";
+  hasPublicKey = builtins.pathExists publicKey;
 in {
   reliquary.ntfy_access = {
     generator = "ntfy-access";
@@ -52,24 +53,24 @@ in {
     data = "\${yamldecode(data.sops_file.ntfy_access.raw).spec.secretTemplates[0].stringData.token}";
   };
 
-  # The configuration can render before stygies is enrolled. A plan still
-  # requires the public key, so missing vars cannot schedule its removal.
-  variable.hermes_forgejo_public_key =
-    {
+  # The public key is absent until stygies has generated its Clan vars.
+  variable = lib.optionalAttrs hasPublicKey {
+    hermes_forgejo_public_key = {
       type = "string";
       nullable = false;
       description = "The public stygies hermes-forgejo-ssh Clan var.";
-    }
-    // lib.optionalAttrs (builtins.pathExists publicKey) {
       default = lib.trim (builtins.readFile publicKey);
     };
+  };
 
-  resource.gitea_public_key.hermes = {
-    provider = "gitea.cerberus";
-    username = bot;
-    title = "hermes@stygies";
-    key = ref.var.hermes_forgejo_public_key;
-    read_only = false;
+  resource.gitea_public_key = lib.optionalAttrs hasPublicKey {
+    hermes = {
+      provider = "gitea.cerberus";
+      username = bot;
+      title = "hermes@stygies";
+      key = ref.var.hermes_forgejo_public_key;
+      read_only = false;
+    };
   };
 
   resource.gitea_repository_collaborator = lib.mapAttrs' (name: repo:
@@ -90,7 +91,9 @@ in {
       inherit (repo) name;
       username = owner;
       rule_name = repo.branch;
-      enable_push = false;
+      # Forgejo's CanUserPush denies even the owner when pushes are disabled.
+      enable_push = true;
+      push_whitelist_users = [owner];
       merge_whitelist_users = [owner];
       required_approvals = 0;
       status_check_patterns = repo.checks;

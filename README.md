@@ -275,7 +275,7 @@ path before and after a refactor means the plan cannot have changed.
 ### Hermes on Cerberus Forgejo
 
 Hermes can push topic branches and open PRs on `manjo/rust-app-template` and
-`manjo/pilot`. Direct pushes to `master` are disabled; only `manjo` can merge.
+`manjo/pilot`. Only `manjo` can push directly to `master` or merge PRs into it.
 OpenTofu manages the grants, branch rules, and user SSH key, not the bot account
 or its API token.
 
@@ -291,10 +291,14 @@ or its API token.
    its `hermes` user and group definitions. Run
    `clan vars generate stygies --generator hermes-forgejo-ssh` and commit the
    generated Clan vars. OpenTofu reads only `id_ed25519.pub`, not the private key.
+   Before enrollment the key is omitted from plans. Keep the public var
+   tracked after enrollment; removing it also removes the managed key.
 3. Initialize OpenTofu with `nix run .#tofunix -- init` using the state
-   credentials from `.envrc`. The Cerberus provider token must belong to a
-   site admin and be able to manage repository rules, collaborators, and user
-   SSH keys. Adopt the existing template rule once, before applying:
+   credentials from `.envrc`. For these resources, the Cerberus provider
+   token must belong to a site admin and include `write:repository` for the
+   grants and branch rules, `write:admin` to add or remove user keys, and
+   `read:user` (or `write:user`) to refresh the key. Adopt the existing
+   template rule once, before applying:
 
    ```sh
    nix run .#tofunix -- import \
