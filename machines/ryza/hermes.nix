@@ -17,6 +17,8 @@
   inherit (import ../../modules/cartographa/_cartographa.nix) noosphere lab;
   inherit (self.lib.hosts) stygies;
   inherit (config.services.imperium.hermes.stygies) knownHosts;
+  hasHostPin = knownHosts != "";
+  hostKeyAlgorithm = builtins.head (lib.splitString " " knownHosts);
 in {
   imports = [
     self.nixosModules.hermes
@@ -30,24 +32,46 @@ in {
   };
 
   config = {
-    programs.ssh = lib.mkIf (knownHosts != "") {
+    assertions = [
+      {
+        assertion = !hasHostPin || hostKeyAlgorithm == "ssh-ed25519";
+        message = "services.imperium.hermes.stygies.knownHosts must be an ssh-ed25519 host key.";
+      }
+    ];
+
+    # Keep the identity unavailable to the default profile's local terminal
+    # until stygies is pinned. Clan can still generate the public half.
+    clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519" = let
+      keyOwner =
+        if hasHostPin
+        then "hermes"
+        else "root";
+    in {
+      owner = lib.mkForce keyOwner;
+      group = lib.mkForce keyOwner;
+    };
+
+    programs.ssh = lib.mkIf hasHostPin {
       knownHosts.stygies = {
         hostNames = [stygies];
         publicKey = knownHosts;
       };
       # A key accepted before the pin was deployed must not override it.
+      # The system block assumes ~/.ssh/config does not override it: OpenSSH
+      # reads the user's config first.
       extraConfig = ''
         Host ${stygies}
           UserKnownHostsFile none
+          HostKeyAlgorithms ${hostKeyAlgorithm}
       '';
     };
     services.imperium.hermes = {
       enable = true;
-      extraPackages = [pkgs.openssh];
+      extraPackages = lib.optional hasHostPin pkgs.openssh;
       profiles.coder = {
         # Hermes uses accept-new. Without a system pin, don't expose a profile
         # that could trust an unknown host or run its terminal locally on ryza.
-        enable = knownHosts != "";
+        enable = hasHostPin;
         # Set to the Matrix room ID once the bot has been invited.
         chatId = null;
         settings.terminal = {

@@ -203,8 +203,9 @@ tools run over SSH as `hermes` in `~/work` on stygies.
    the generated public half.
 2. After installing stygies, read its `/etc/ssh/ssh_host_ed25519_key.pub` from
    the VM console. Set `services.imperium.hermes.stygies.knownHosts` on ryza to
-   the key type and base64 value (omit the comment). An empty pin disables
-   the profile and its Matrix route without deleting existing profile data.
+   `ssh-ed25519` type and base64 value (omit the comment). An empty pin leaves
+   the private key root-only and disables the coder profile and its Matrix
+   route without deleting existing profile data.
 3. Invite the existing Matrix bot to the coding room, then set
    `services.imperium.hermes.profiles.coder.chatId` to the room ID (`!…`, not a
    `#…` alias). With `null` there is no coder room route.
