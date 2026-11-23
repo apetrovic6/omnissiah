@@ -421,8 +421,10 @@ at 10% free space and rotates logs below 5% or on a full disk rather than
 suspending auditing. Disk pressure can shorten the retained history.
 
 Local Nix builds on Stygies, including `apetrovic`'s, share the Hermes egress
-policy. The root Nix daemon is not filtered by this policy and still uses ncps
-for substitution.
+policy. The root Nix daemon is not filtered by this policy. Stygies sends
+ncps and Harbor traffic through Cerberus rather than directly to Traefik.
+Cerberus's Caddy guard matches the Stygies source IP, so other Cerberus
+services also return HTTP 403 to `apetrovic` when accessed from Stygies.
 
 ## Addresses and secrets paths
 

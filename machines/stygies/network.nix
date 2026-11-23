@@ -4,7 +4,7 @@
   self,
   ...
 }: let
-  inherit (self.lib) hosts lan vips;
+  inherit (self.lib) hosts lan;
   hermesUid = toString config.users.users.hermes.uid;
   nixBuildGid = toString config.users.groups.nixbld.gid;
   resolvers = lib.concatStringsSep ", " lan.resolvers;
@@ -13,6 +13,9 @@ in {
     networkmanager.enable = lib.mkForce false;
     useDHCP = lib.mkForce false;
     useNetworkd = true;
+
+    # Reach these cluster services through Cerberus's Caddy guard, not the VIP.
+    hosts.${hosts.cerberus} = ["ncps.noosphere.uk" "harbor.noosphere.uk"];
 
     firewall.extraInputRules = ''
       ip saddr ${lan.cidr} tcp dport 3000-9000 accept
@@ -35,12 +38,11 @@ in {
             ct state { established, related } accept
             ip daddr { ${resolvers} } udp dport 53 accept
             ip daddr { ${resolvers} } tcp dport 53 accept
-            # Caddy on Cerberus proxies many LAN services. The separate Cerberus policy
-            # restricts HTTPS from Stygies (192.168.1.47) to the Forgejo vhost.
+            # Cerberus allows Forgejo SSH and guards HTTPS by vhost: only Forgejo, ncps,
+            # and Harbor are allowed from Stygies.
             ip daddr ${hosts.cerberus} tcp dport { 443, 2222 } accept
-            # Every cluster web UI on this VIP is reachable from the Hermes user over TCP 443.
-            # The fix is a Traefik IP allowlist on the other routers, outside this VM's scope.
-            ip daddr ${vips.traefik} tcp dport { 22, 443 } accept
+            # Drop direct access to the Traefik VIP. kube-proxy SNAT hides Stygies's
+            # source IP from Traefik, so Traefik cannot enforce the same IP guard.
             ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } counter drop
             # Block new non-loopback IPv6 traffic so it cannot bypass the LAN restrictions.
             # This also blocks IPv6 internet access if the VM gains IPv6 routing later.
