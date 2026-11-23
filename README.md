@@ -295,6 +295,10 @@ roughly 90 days, but actual retention depends on build activity. Auditd warns
 at 10% free space and rotates logs below 5% or on a full disk rather than
 suspending auditing. Disk pressure can shorten the retained history.
 
+Local Nix builds on Stygies, including `apetrovic`'s, share the Hermes egress
+policy. The root Nix daemon is not filtered by this policy and still uses ncps
+for substitution.
+
 ## Addresses and secrets paths
 
 No module writes an IP address or a `../../vars/...` path itself. Both come

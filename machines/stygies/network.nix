@@ -6,6 +6,7 @@
 }: let
   inherit (self.lib) hosts lan vips;
   hermesUid = toString config.users.users.hermes.uid;
+  nixBuildGid = toString config.users.groups.nixbld.gid;
   resolvers = lib.concatStringsSep ", " lan.resolvers;
 in {
   networking = {
@@ -23,14 +24,19 @@ in {
         content = ''
           chain output {
             type filter hook output priority filter; policy accept;
-            meta skuid ${hermesUid} jump hermes_egress
+            meta skuid ${hermesUid} jump restricted_egress
+            # Nix builders open sockets with nixbld as their primary GID.
+            # This deliberately limits apetrovic's builds too, but not the root daemon's ncps fetches.
+            meta skgid ${nixBuildGid} jump restricted_egress
           }
 
-          chain hermes_egress {
+          chain restricted_egress {
             oifname "lo" accept
             ct state { established, related } accept
             ip daddr { ${resolvers} } udp dport 53 accept
             ip daddr { ${resolvers} } tcp dport 53 accept
+            # Caddy on Cerberus proxies many LAN services. The separate Cerberus policy
+            # restricts HTTPS from Stygies (192.168.1.47) to the Forgejo vhost.
             ip daddr ${hosts.cerberus} tcp dport { 443, 2222 } accept
             # Every cluster web UI on this VIP is reachable from the Hermes user over TCP 443.
             # The fix is a Traefik IP allowlist on the other routers, outside this VM's scope.
