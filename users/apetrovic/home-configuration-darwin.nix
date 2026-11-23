@@ -24,6 +24,16 @@
   #   enable = true;
   # };
   #
+  # Copy home-manager apps (LibreWolf, Firefox) into
+  # ~/Applications/Home Manager Apps instead of symlinking them: Spotlight
+  # and Launchpad skip symlinked .app bundles, so linked apps never show up.
+  targets.darwin.copyApps.enable = true;
+  targets.darwin.linkApps.enable = false;
+
+  # Mozilla's prebuilt binary instead of nixpkgs' source build: Hydra lags on
+  # aarch64-darwin Firefox, and a cache miss compiles it locally for hours.
+  programs.firefox.package = pkgs.firefox-bin;
+
   programs.eza = {
     enable = true;
     git = true;

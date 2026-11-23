@@ -24,7 +24,7 @@ rec {
     # Machines of this clan, at the address they are deployed to.
     phalanx = "192.168.1.46";
     enginseer = "192.168.1.146";
-    genetor = "192.168.1.109";
+    genetor = "192.168.1.227";
     cerberus = "192.168.1.105";
     servitor = "192.168.1.13";
     terra = "192.168.1.138";
