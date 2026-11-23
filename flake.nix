@@ -133,7 +133,20 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+    nix-homebrew = {
+      url = "github:zhaofengli/nix-homebrew";
+      inputs.brew-src.follows = "brew-src";
+    };
+
+    # brew itself, overriding nix-homebrew's pin. It must be at least as new
+    # as the homebrew-core tap below: when core adopts new bottle DSL (e.g.
+    # `manifest_sha256`, 2026-11-20, needs brew >= 7.0.15) an older brew
+    # reports every formula as unreadable and `brew bundle` fails activation.
+    # Bump this tag whenever homebrew-core is updated.
+    brew-src = {
+      url = "github:Homebrew/brew/7.0.15";
+      flake = false;
+    };
 
     # Optional: Declarative tap management
     homebrew-core = {
