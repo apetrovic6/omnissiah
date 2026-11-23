@@ -84,7 +84,7 @@ spec:
           192.168.1.105 cerberus.omnissiah.internal
           152.53.34.16 cypramundi.omnissiah.internal
           192.168.1.146 enginseer.omnissiah.internal
-          192.168.1.109 genetor.omnissiah.internal
+          192.168.1.227 genetor.omnissiah.internal
           192.168.1.243 keksic.omnissiah.internal
           192.168.1.232 luna.omnissiah.internal
           192.168.1.61 manjaca.omnissiah.internal
@@ -94,4 +94,5 @@ spec:
           192.168.1.45 ryza.omnissiah.internal
           192.168.1.13 servitor.omnissiah.internal
           192.168.1.42 sol.omnissiah.internal
+          192.168.1.248 stygies.omnissiah.internal
           192.168.1.138 terra.omnissiah.internal
