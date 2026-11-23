@@ -49,6 +49,8 @@
     mx = cfg.matrix;
     enabledProfiles = lib.filterAttrs (_: profile: profile.enable) cfg.profiles;
     disabledProfiles = lib.attrNames (lib.filterAttrs (_: profile: !profile.enable) cfg.profiles);
+    hasEnabledProfiles = enabledProfiles != {};
+    retireUnit = "hermes-retire-profiles";
     # Hermes 0.23.0: hermes_constants.py PROFILE_ID_RE and
     # hermes_cli/profiles.py _RESERVED_NAMES (default is not a named profile).
     profileIdPattern = "^[a-z0-9][a-z0-9_-]{0,63}$";
@@ -65,10 +67,10 @@
     profileConfig = pkgs.linkFarm "hermes-config" ([
         {
           name = "config.yaml";
-          path = yaml.generate "hermes-default-config.yaml" {
-            gateway.multiplex_profiles = true;
+          path = yaml.generate "hermes-default-config.yaml" (lib.optionalAttrs hasEnabledProfiles {
+            gateway.multiplex_profiles = hasEnabledProfiles;
             gateway.profile_routes = routes;
-          };
+          });
         }
       ]
       ++ lib.mapAttrsToList (name: profile: {
@@ -77,13 +79,15 @@
       })
       enabledProfiles);
     configPython = pkgs.python3.withPackages (ps: [ps.ruamel-yaml]);
-    applyProfileConfig = lib.escapeShellArgs ([
+    profileConfigCommand = action:
+      lib.escapeShellArgs [
         (lib.getExe configPython)
         ./_hermes-merge-config.py
+        action
         "${home}/.hermes"
         profileConfig
-      ]
-      ++ disabledProfiles);
+      ];
+    applyProfileConfig = profileConfigCommand "apply";
     # Shared with the homeserver, which registers the account
     # (modules/noosphere/vox/matrix-bots.nix).
     mxGenerator = "matrix-bot-${mx.localpart}";
@@ -367,7 +371,7 @@
         })
       ];
 
-      system.activationScripts.hermes-config = mkIf (cfg.profiles != {}) {
+      system.activationScripts.hermes-config = mkIf hasEnabledProfiles {
         deps = ["users"];
         text = ''
           if ${lib.getExe' pkgs.systemd "systemctl"} is-active --quiet local-fs.target; then
@@ -376,16 +380,35 @@
         '';
       };
 
+      # Removing the last pin must undo the old overlay before the gateway
+      # starts. A fresh unpinned install has no markers, so this does nothing.
+      systemd.services.${retireUnit} = mkIf (disabledProfiles != []) {
+        description = "Retire previously provisioned Hermes profiles";
+        unitConfig = {
+          ConditionPathExists = map (name: "|${home}/.hermes/profiles/.nixos-managed/${name}") disabledProfiles;
+          RequiresMountsFor = [home];
+        };
+        serviceConfig =
+          builtins.removeAttrs hardening ["Restart" "RestartSec"]
+          // {
+            Type = "oneshot";
+            ExecStart = "${profileConfigCommand "retire"} ${lib.escapeShellArgs disabledProfiles}";
+          };
+      };
+
       systemd.services.hermes-gateway = {
         description = "Hermes Agent gateway";
         wantedBy = ["multi-user.target"];
-        after = ["network-online.target" "user@${toString cfg.uid}.service"];
+        after =
+          ["network-online.target" "user@${toString cfg.uid}.service"]
+          ++ lib.optional (disabledProfiles != []) "${retireUnit}.service";
+        requires = lib.optional (disabledProfiles != []) "${retireUnit}.service";
         wants = ["network-online.target" "user@${toString cfg.uid}.service"];
         path = tools;
         # Boot activation precedes local mounts, so also merge before the
         # gateway starts, once the persistent Hermes home is mounted.
         unitConfig.RequiresMountsFor = [home];
-        preStart = lib.optionalString (cfg.profiles != {}) applyProfileConfig;
+        preStart = lib.optionalString hasEnabledProfiles applyProfileConfig;
         environment =
           sessionEnv
           // lib.optionalAttrs mx.enable {
