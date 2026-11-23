@@ -16,6 +16,8 @@
       self.nixosModules.flatpak
       self.nixosModules.sccache
       self.nixosModules.github-token
+      # `fj` (forgejo-cli), logged in to both forges from the fj-tokens var.
+      self.nixosModules.fj-login
       self.nixosModules.awscli
       self.inputs.magos.nixosModules.desktop
       self.inputs.magos.nixosModules.pi
@@ -332,11 +334,6 @@
 
       obs-studio
       xwayland
-
-      # `fj`, the Forgejo CLI (repos, PRs, issues, Actions) for both forges.
-      # Log in once per machine with `fj -H <forge> auth login` (browser), or
-      # `fj -H <forge> auth add-token` with a token on stdin.
-      forgejo-cli
 
       herdr
       herdr-desktop
