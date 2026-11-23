@@ -340,11 +340,23 @@ or merge PRs into it. OpenTofu manages the forks, grants, branch rules, and
 user SSH key, not the bot account or its tokens.
 
 Forgejo requires approval for `pull_request` runs opened or updated by the
-untrusted bot and withholds configured secrets. `pull_request_target` is
-different: it runs base-branch workflows and can receive secrets. Review
-the diff, including build scripts and workflows, before approving each
-run. Never select **Always trust** for `hermes`. Before merging, verify
-in Actions that the run for the current PR head passed the required jobs.
+untrusted bot and withholds Forgejo Actions secrets. `pull_request_target`
+runs base-branch workflows and can receive those secrets. **Keep the account
+restricted.** While it is restricted, **Always trust** has no effect.
+
+Approving a run executes the PR's code with the runner's own credentials:
+its Cerberus and Noosphere runner tokens and the shared sccache read-write
+key. Use the same review bar as for merging, including build scripts,
+tests, Nix code, and workflows. After any doubtful approval, revoke the
+affected runner's old registrations on both forges, rotate its secrets,
+and re-register it. Rotate the sccache key if it may have been exposed.
+
+Never use **Update branch** or push to a Hermes PR branch. A trusted
+maintainer's push can run the PR head without approval; ask Hermes to
+rebase instead. Immediately before approving, reload the PR and confirm
+that the head SHA matches what you reviewed and that there is only one
+pending run: Forgejo approves all pending runs for the PR at once. Before
+merging, verify in Actions that the run for that head passed the required jobs.
 
 **Before handing Hermes its credentials:** let active CI jobs finish, then
 run `nix run .#forgejo-runner-register -- --all` once from the repo root.
@@ -397,6 +409,9 @@ could pick up jobs from a Hermes-owned fork without upstream PR approval.
 5. Run `clan vars generate stygies`, supply the token at the hidden prompt,
    and set a separate password for `apetrovic`. Commit the generated vars,
    including the public SSH host key that Clan needs to evaluate Stygies.
+   If this merges before those vars are committed, the scheduled
+   `machines.yml` Stygies job will fail until they are available; other
+   matrix jobs still run.
 6. [Install Stygies](#installing-stygies).
 7. Run `nix run .#tofunix -- plan` again, then review and apply it to enroll
    the bot's SSH key. OpenTofu reads only `id_ed25519.pub`, not the private
