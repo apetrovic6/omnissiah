@@ -8,7 +8,8 @@
   hermesPublicKey = self.lib.vars.shared "hermes-stygies-ssh" "id_ed25519.pub";
   hermesUid = toString config.users.users.hermes.uid;
 in {
-  imports = [./disko.nix ./network.nix];
+  # The Forgejo bot credentials (HOM-17); the hermes user and group are below.
+  imports = [./disko.nix ./network.nix self.nixosModules.hermes-forgejo-bot];
   # The VM architecture is known before the installer writes its facter report.
   nixpkgs.hostPlatform = "x86_64-linux";
 
