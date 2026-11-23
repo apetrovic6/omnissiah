@@ -665,7 +665,7 @@ in {
           case "$forge" in
             ${lib.concatMapStringsSep "\n" (forge: let
           f = forges.${forge};
-          args = lib.optionals (f ? scope) ["--scope" f.scope "--keep-labels"];
+          args = lib.optionals (f ? scope) ["--scope" f.scope];
         in ''
           ${forge})
             forgejo="${f.forgejo}"
@@ -682,7 +682,7 @@ in {
           # </dev/null: the loop's stdin is the machine list; keep clan off it.
           clan vars get "$machine" "forgejo-runner-$forge/secret" </dev/null \
             | tr -d '\n' \
-            | $forgejo forgejo-cli actions register --name "$machine" --secret-stdin=- "''${register_args[@]}"
+            | $forgejo forgejo-cli actions register --name "$machine" --secret-stdin=- --keep-labels "''${register_args[@]}"
           # It prints the runner uuid with no trailing newline.
           echo
         done
