@@ -16,6 +16,17 @@ in {
   # Or disable the firewall altogether.
   networking.firewall.enable = true;
 
+  imports = [
+    {
+      # Extend the vhost type so services adding a host inherit the same guard.
+      options.services.caddy.virtualHosts = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule {
+          config.extraConfig = lib.mkBefore "invoke stygies-access";
+        });
+      };
+    }
+  ];
+
   services.imperium.caddy = {
     enable = true;
     openFirewall = true;
@@ -23,6 +34,20 @@ in {
       plugins = ["github.com/caddy-dns/cloudflare@v0.2.3"];
       hash = "sha256-OIQoJ+Q7rfJkoy/H01L2lEDysOlYzl63s6pOrSj9LlQ=";
     };
+  };
+
+  services.caddy = {
+    # Check the socket peer before any site handler can proxy or respond.
+    globalConfig = "order invoke first";
+    extraConfig = ''
+      &(stygies-access) {
+        @blocked {
+          remote_ip ${self.lib.hosts.stygies}
+          not host ${mkDomain "forge"} ncps.${config.noosphere.domain} harbor.${config.noosphere.domain}
+        }
+        respond @blocked 403
+      }
+    '';
   };
 
   services.caddy.virtualHosts = {

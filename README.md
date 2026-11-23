@@ -326,6 +326,11 @@ operator machine. This skips kexec, which hung on Ryza. Keep the hardware
 report collected by the installer. The operator can use the VM console or
 enter the `apetrovic` account from the existing Clan admin login.
 
+Cerberus Caddy accepts Stygies requests only for Forgejo, NCPS, and Harbor.
+NCPS and Harbor can arrive through Cerberus's `*.noosphere.uk` proxy even
+though LAN DNS points them directly at Traefik. The Caddy rule does not
+restrict requests that go directly to Traefik.
+
 ### Hermes on Cerberus Forgejo
 
 Hermes can push topic branches and open PRs on `manjo/rust-app-template` and
