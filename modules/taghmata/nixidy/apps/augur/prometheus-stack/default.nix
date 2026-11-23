@@ -194,8 +194,8 @@
           # own start time, 3d15h back.)
           #
           # storageClassName = longhorn, because that is what every other
-          # stateful-but-unpinned workload here uses (harbor, forgejo, woodpecker,
-          # the *arr stack, vikunja, karakeep, bytestash), and Prometheus is one of
+          # stateful-but-unpinned workload here uses (harbor, forgejo, the *arr
+          # stack, vikunja, karakeep, bytestash), and Prometheus is one of
           # them: replicas=1 with only a *preferred* anti-affinity, so the pod can
           # land on any node and the volume has to follow it over the network.
           # local-path is what Garage's own pods use, and for a reason that does
