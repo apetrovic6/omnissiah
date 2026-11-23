@@ -85,7 +85,10 @@ in {
         # its own conversation, and a thread per task gives a fresh one inside
         # it. Invite @hermes, then add the room's Internal room ID (Element:
         # room settings, Advanced), e.g. pilot = "!abc:matrix.example.org".
-        rooms = {};
+        rooms = {
+          tally = "!vR9D2BaWBsjdrDlBt6Vb7_iEKpj4iEny5tRPOnzVUv0";
+          rust-app-template = "!qfeHKyEuU37YpF4mms2eyiISUIbyx8ajidvKeQn3b-c";
+        };
         settings.terminal = {
           backend = "ssh";
           ssh_host = stygies;
