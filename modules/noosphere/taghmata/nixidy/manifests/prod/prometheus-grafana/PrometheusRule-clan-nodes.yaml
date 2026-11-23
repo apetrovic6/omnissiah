@@ -45,3 +45,21 @@ spec:
           labels:
             host: servitor
             severity: critical
+        - alert: ClanNodeTargetDown
+          annotations:
+            description: 'The scrape of 192.168.1.248:9100 has failed for over 5 minutes: the host is down, prometheus-node-exporter.service is not running, or its firewall no longer admits the node the Prometheus pod is on (modules/rites/node-exporter.nix).'
+            summary: stygies is not answering its metrics scrape
+          expr: up{job="stygies-node"} == 0
+          for: 5m
+          labels:
+            host: stygies
+            severity: critical
+        - alert: ClanNodeTargetAbsent
+          annotations:
+            description: 'No target for job=stygies-node exists in the Prometheus configuration: check the ScrapeConfig stygies-node in observability and the Targets page.'
+            summary: stygies is not being scraped at all
+          expr: absent(up{job="stygies-node"})
+          for: 5m
+          labels:
+            host: stygies
+            severity: critical
