@@ -1,6 +1,8 @@
 # With `isolation = "microvm"`, each forge's jobs run in a dedicated qemu
 # guest. Jobs cannot see the other forge's token or the host's files,
 # processes and secrets. Ryza also runs the agent and its subscription logins.
+# Both QEMUs run as `microvm`; this isolates guest root and the guest kernel,
+# not a QEMU escape.
 #
 #   identity   unchanged and on the host: the clan vars, `nix run
 #              .#forgejo-runner-register -- <machine>`, the runner name
@@ -31,7 +33,8 @@
     cfg = config.services.imperium.forgejoRunner;
     m = cfg.microvm;
     active = cfg.enable && cfg.isolation == "microvm";
-    legacyUnit = "microvm@${config.networking.hostName}-ci.service";
+    legacyVM = "${config.networking.hostName}-ci";
+    legacyUnit = "microvm@${legacyVM}.service";
     # Stable even when a machine enables just one forge. No overlap with
     # Podman's 10.88 or RKE2's 10.42/10.43.
     links = {
@@ -217,6 +220,8 @@
             gib = n: n * 1024 * 1024 * 1024;
           in {
             experimental-features = ["nix-command" "flakes"];
+            # Sandbox build scratch belongs on the /var disk, not the root tmpfs.
+            build-dir = "/var/nix-builds";
             # As stc/base.nix sets on every clan machine; the guest is not
             # one, so it does not get that module.
             substituters = ["https://ncps.noosphere.uk"];
@@ -242,13 +247,13 @@
       };
       storeOverlay = mkOption {
         type = types.ints.positive;
-        default = 100;
+        default = 50;
         description = "GiB per guest's writable /nix/store overlay. The guest collects garbage below a fifth of it free.";
       };
       var = mkOption {
         type = types.ints.positive;
-        default = 40;
-        description = "GiB per guest's /var: runner state, workspaces, TMPDIR and CARGO_HOME.";
+        default = 20;
+        description = "GiB per guest's /var: Nix build scratch, runner state, workspaces, TMPDIR and CARGO_HOME.";
       };
     };
 
@@ -262,6 +267,9 @@
             message = "forgejoRunner: microVM resources must provide at least one vCPU and one GiB per guest.";
           }
         ];
+        # This exact path has no forge suffix. Never remove the sibling
+        # RuntimeDirectory trees used by the new guests.
+        systemd.tmpfiles.rules = ["R /run/microvm-credentials/${legacyVM} - - - - -"];
       })
 
       (mkIf (active && resourcesFit) {

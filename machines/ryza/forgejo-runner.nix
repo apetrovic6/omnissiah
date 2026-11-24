@@ -23,11 +23,7 @@
       cpus = 6;
       memory = 14;
     };
-    microvm = {
-      uplink = "ens18";
-      storeOverlay = 50;
-      var = 20;
-    };
+    microvm.uplink = "ens18";
   };
   services.imperium.sccache.enable = true;
 }

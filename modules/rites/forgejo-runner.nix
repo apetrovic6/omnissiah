@@ -169,7 +169,9 @@
           {
             nix = {
               settings = {
-                max-jobs = 1;
+                # One build slot per runner. On hosts, builds from both
+                # forges share this daemon and the same capped slice.
+                max-jobs = builtins.length runForges;
                 cores = r.cpus;
               };
               daemonCPUSchedPolicy = "batch";
@@ -321,8 +323,9 @@
             # A job that cannot reach Garage (a runner away from the LAN, an
             # outage) must still compile -- uncached, not red.
             SCCACHE_IGNORE_SERVER_IO_ERROR = "1";
-            # One writable directory per dynamic user, with the same absolute
-            # path for a forge on every machine (sccache hashes Cargo paths).
+            # sccache hashes Cargo paths: this writable state is consistent
+            # across machines for one forge, but cold after the split and
+            # no longer shares entries across forges.
             CARGO_HOME = cargoHome;
             # Do not connect to the other runner's local sccache server.
             SCCACHE_SERVER_PORT = toString forges.${forge}.sccachePort;

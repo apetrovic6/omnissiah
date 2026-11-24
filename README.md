@@ -366,18 +366,21 @@ restrict requests that go directly to Traefik.
 Cerberus, Terra, Luna and Sol run `forgejo-runner-noosphere.service` and
 `forgejo-runner-ugalabugala.service` on the host. On Ryza, the corresponding
 units run in separate `ryza-ci-noosphere` and `ryza-ci-ugalabugala` guests.
-Each unit has one forge token and capacity for one job. The host units and
-`nix-daemon` share the existing machine cap; the Ryza guests each have 3
-vCPUs and 7 GiB RAM. Only Ryza separates the jobs by kernel. The sccache
-key, CI signing key and ncps upload credentials are still shared.
+Each unit has one forge token and capacity for one job. On hosts, the
+two runners and their shared `nix-daemon` run under the existing machine
+cap, with one Nix build slot per runner. The Ryza guests each have 3 vCPUs,
+7 GiB RAM and one Nix build slot. Only Ryza separates jobs by kernel. The
+sccache key, CI signing key and ncps upload credentials are still shared.
 
 The split does not change the machine name, UUID or secret registered with
 either forge. No re-registration or manual state migration is needed. Let
 active jobs finish before changing generations. Each new unit creates
 `/var/lib/forgejo-runner/<forge>` and its job `tmp` directory. Workspaces,
 local action caches and per-forge Cargo homes start cold. The existing host
-Nix stores and ncps cache stay in use; the new Cargo paths may miss old
-sccache entries. Do not copy a legacy `.runner` file into the new state.
+Nix stores and ncps cache stay in use. The first Cargo builds after the
+split are cold in sccache, and the two forges no longer share sccache
+entries because their Cargo paths differ. Do not copy a legacy `.runner`
+file into the new state.
 
 The old host state at `/var/lib/private/forgejo-runner/<machine>` and the
 old Cargo home at `/var/lib/private/forgejo-runner-cargo` are unused. On
