@@ -1,6 +1,9 @@
 """Apply the Nix settings without taking ownership of Hermes's other settings."""
 
+import codecs
+import fcntl
 import os
+import re
 import sys
 from collections.abc import MutableMapping
 from contextlib import contextmanager
@@ -88,13 +91,66 @@ def write_config(path, config):
         yaml.dump(config, stream)
 
 
-def apply(home, overlay):
+CLAUDE_TOKEN_ASSIGNMENT = re.compile(rb"^[ \t]*(?:export[ \t]+)?CLAUDE_CODE_OAUTH_TOKEN[ \t]*=")
+
+
+def read_claude_token(path):
+    try:
+        token = Path(path).read_bytes().rstrip(b"\r\n")
+    except OSError:
+        raise SystemExit(f"Cannot read Hermes profile token file: {path}") from None
+    if not re.fullmatch(rb"[A-Za-z0-9._-]+", token):
+        raise SystemExit(f"Invalid token in Hermes profile token file: {path}")
+    return token
+
+
+def update_claude_token(path, token):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Share Hermes's writer lock so a dashboard/CLI save cannot lose this update.
+    with path.with_name(".env.lock").open("ab") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if path.is_symlink():
+            raise SystemExit(f"Refusing a symlink for the Hermes profile environment: {path}")
+        try:
+            original = path.read_bytes()
+        except FileNotFoundError:
+            original = b""
+
+        bom = codecs.BOM_UTF8 if original.startswith(codecs.BOM_UTF8) else b""
+        assignment = b"CLAUDE_CODE_OAUTH_TOKEN=" + token + b"\n"
+        lines = []
+        replaced = False
+        for line in original[len(bom):].splitlines(keepends=True):
+            if CLAUDE_TOKEN_ASSIGNMENT.match(line):
+                if not replaced:
+                    lines.append(assignment)
+                    replaced = True
+            else:
+                lines.append(line)
+        if not replaced:
+            if lines and not lines[-1].endswith((b"\n", b"\r")):
+                lines.append(b"\n")
+            lines.append(assignment)
+        updated = bom + b"".join(lines)
+        if updated != original or (path.stat().st_mode & 0o777) != 0o600:
+            with atomic_write(path, mode="wb") as stream:
+                stream.write(updated)
+
+
+def apply(home, overlay, *claude_token_files):
+    claude_tokens = {
+        name: read_claude_token(path)
+        for name, path in (spec.split("=", 1) for spec in claude_token_files)
+    }
     tombstones = home / "profiles/.deleted"
     provisioned = home / "profiles/.nixos-managed"
     provisioned.mkdir(parents=True, exist_ok=True)
     for source in sorted(overlay.glob("profiles/*/config.yaml")):
         name = source.parent.name
         update_config(home / source.relative_to(overlay), read_config(source))
+        # Publish the opt-out in config before the dotenv, itself a profile identity marker.
+        if name in claude_tokens:
+            update_claude_token(home / "profiles" / name / ".env", claude_tokens[name])
         soul = source.with_name("SOUL.md")
         if soul.is_file():
             # Fail closed rather than start the gateway without the managed prompt.

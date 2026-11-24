@@ -43,6 +43,7 @@ in {
   systemd.tmpfiles.rules = [
     "d /home/apetrovic/work 0750 apetrovic users -"
     "d /home/hermes/work 0750 hermes hermes -"
+    "d /home/hermes/work-devzero 0750 hermes hermes -"
   ];
 
   nix.settings = {

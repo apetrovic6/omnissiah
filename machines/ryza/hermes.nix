@@ -21,6 +21,12 @@
   hostKeyAlgorithm = builtins.head (lib.splitString " " knownHosts);
   inherit (import ./_coder-projects.nix) forges projects;
   projectNames = lib.attrNames projects;
+  sshTerminal = {
+    backend = "ssh";
+    ssh_host = stygies;
+    ssh_user = "hermes";
+    ssh_key = config.clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519".path;
+  };
   appProjectRule =
     if projectNames == []
     then "No app repos are enabled; do not claim app tasks."
@@ -37,11 +43,10 @@ in {
 
   options.services.imperium.hermes.stygies.knownHosts = lib.mkOption {
     type = lib.types.str;
-    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder.";
+    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder and work.";
     # stygies's own host key, from the clan var its sshd was deployed with,
     # so the pin follows a reinstall instead of going stale. The value ends in
-    # an empty comment; keep only the type and the key. Empty (coder off)
-    # until the var exists.
+    # an empty comment; keep only the type and the key. Empty until the var exists.
     default = let
       pub = self.lib.vars.machine "stygies" "openssh" "ssh.id_ed25519.pub";
     in
@@ -70,6 +75,22 @@ in {
       group = lib.mkForce keyOwner;
     };
 
+    clan.core.vars.generators.hermes-work-claude-token = {
+      prompts.token = {
+        description = "Run `claude-as devzero setup-token` on your PC while signed into DevZero; paste only the token.";
+        type = "hidden";
+      };
+      files.token = {
+        secret = true;
+        owner = "hermes";
+        group = "hermes";
+        mode = "0400";
+        neededFor = "services";
+      };
+      runtimeInputs = [pkgs.coreutils];
+      script = ''cp "$prompts/token" "$out/token"'';
+    };
+
     programs.ssh = lib.mkIf hasHostPin {
       knownHosts.stygies = {
         hostNames = [stygies];
@@ -95,19 +116,31 @@ in {
         # One Matrix room per project. Add the room's Internal room ID to
         # _coder-projects.nix after inviting @hermes.
         rooms = lib.mapAttrs (_: project: project.room) projects;
-        settings.terminal = {
-          backend = "ssh";
-          ssh_host = stygies;
-          ssh_user = "hermes";
-          ssh_key = config.clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519".path;
-          cwd = "~/work";
-        };
+        settings.terminal = sshTerminal // {cwd = "~/work";};
         # Kaneo uses browser PKCE. Port 28431 is outside both hosts' ephemeral
         # ranges; keep it fixed for the phalanx-to-ryza SSH tunnel.
         settings.mcp_servers.kaneo = {
           url = "https://kaneo.${self.lib.lab.domain}/api/mcp";
           auth = "oauth";
           oauth.redirect_port = 28431;
+        };
+      };
+      profiles.work = {
+        enable = hasHostPin;
+        claudeOAuthTokenFile = config.clan.core.vars.generators.hermes-work-claude-token.files.token.path;
+        soul = builtins.readFile ./hermes-work-soul.md;
+        rooms = {
+          devzero = "!9W1zTDhbkbNc7vh-H_aFbS66CxFZ29FL1z-tmoQUUYc";
+          codilas = "!j3n_ajvQEN1cZ_dH3uKMgLld6k_haMuTJ4Kj8dnW5k4";
+        };
+        settings = {
+          auth.adopt_external_logins = false;
+          model = {
+            provider = "anthropic";
+            default = "claude-opus-5-5";
+          };
+          fallback_providers = [];
+          terminal = sshTerminal // {cwd = "~/work-devzero";};
         };
       };
       dashboard = {

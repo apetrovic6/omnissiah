@@ -8,10 +8,9 @@
 # How the model access splits (see the 2026-11-22 notes in memory):
 #   ChatGPT plan     Hermes' own "OpenAI Codex" provider, a device-code login
 #                    stored in ~/.hermes/auth.json
-#   Claude plan      only through the real `claude` binary (`claude -p`) as a
-#                    tool. NOT Hermes' "Anthropic OAuth" provider: that bills
-#                    extra usage and is the third-party use Anthropic's terms
-#                    rule out
+#   Claude plan      use the real `claude` binary (`claude -p`) for Claude Code.
+#                    Hermes' native Anthropic provider is separate: OAuth may
+#                    bill extra usage and must be permitted for the account.
 #   API keys         `apiKeys` (the shared pi-api-keys) and `secrets`; llama-swap
 #                    on phalanx as a custom OpenAI-compatible provider
 #
@@ -50,6 +49,11 @@
     enabledProfiles = lib.filterAttrs (_: profile: profile.enable) cfg.profiles;
     disabledProfiles = lib.attrNames (lib.filterAttrs (_: profile: !profile.enable) cfg.profiles);
     hasEnabledProfiles = enabledProfiles != {};
+    claudeTokenFiles = lib.filterAttrs (_: path: path != null) (lib.mapAttrs (_: profile: profile.claudeOAuthTokenFile) enabledProfiles);
+    hasClaudeTokenFiles = claudeTokenFiles != {};
+    claudeTokenKey = "CLAUDE_CODE_OAUTH_TOKEN";
+    # With sysusers/userborn SOPS installs service secrets as a unit, after activation.
+    sopsUnitInstallsSecrets = hasClaudeTokenFiles && (config.sops.useSystemdActivation or false);
     retireUnit = "hermes-retire-profiles";
     # Hermes 0.23.0: hermes_constants.py PROFILE_ID_RE and
     # hermes_cli/profiles.py _RESERVED_NAMES (default is not a named profile).
@@ -97,7 +101,9 @@
         "${home}/.hermes"
         profileConfig
       ];
-    applyProfileConfig = profileConfigCommand "apply";
+    applyProfileConfig =
+      profileConfigCommand "apply"
+      + lib.concatStrings (lib.mapAttrsToList (name: path: " ${lib.escapeShellArg "${name}=${path}"}") claudeTokenFiles);
     # Shared with the homeserver, which registers the account
     # (modules/noosphere/vox/matrix-bots.nix).
     mxGenerator = "matrix-bot-${mx.localpart}";
@@ -180,6 +186,11 @@
       ProtectKernelModules = true;
       ProtectControlGroups = true;
     };
+    sessionServiceConfig =
+      hardening
+      // lib.optionalAttrs hasClaudeTokenFiles {
+        UnsetEnvironment = claudeTokenKey;
+      };
   in {
     imports = [self.nixosModules.pi-api-keys];
 
@@ -216,6 +227,11 @@
               type = types.attrsOf yaml.type;
               default = {};
               description = "Non-secret settings merged into this named Hermes profile's config.yaml.";
+            };
+            claudeOAuthTokenFile = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Runtime file containing a raw Claude Code setup token. Merged into this enabled profile's .env, never exported by the shared Hermes wrapper.";
             };
             soul = mkOption {
               type = types.nullOr types.lines;
@@ -339,7 +355,11 @@
           assertion = builtins.match profileIdPattern name != null && !lib.elem name reservedProfileNames;
           message = "services.imperium.hermes.profiles: '${name}' is not a valid named Hermes profile ID.";
         })
-        cfg.profiles;
+        cfg.profiles
+        ++ lib.optional hasClaudeTokenFiles {
+          assertion = !(builtins.hasAttr claudeTokenKey allKeys);
+          message = "Scoped Hermes Claude Code tokens cannot also be configured in apiKeys or secrets.";
+        };
 
       system.build.hermesConfig = mkIf (cfg.profiles != {}) profileConfig;
 
@@ -386,8 +406,8 @@
         })
       ];
 
-      system.activationScripts.hermes-config = mkIf hasEnabledProfiles {
-        deps = ["users"];
+      system.activationScripts.hermes-config = mkIf (hasEnabledProfiles && !sopsUnitInstallsSecrets) {
+        deps = ["users"] ++ lib.optional (hasClaudeTokenFiles && (config.system.activationScripts ? setupSecrets)) "setupSecrets";
         text = ''
           if ${lib.getExe' pkgs.systemd "systemctl"} is-active --quiet local-fs.target; then
             ${lib.getExe' pkgs.util-linux "runuser"} -u ${user} -- ${applyProfileConfig}
@@ -416,7 +436,8 @@
         wantedBy = ["multi-user.target"];
         after =
           ["network-online.target" "user@${toString cfg.uid}.service"]
-          ++ lib.optional (disabledProfiles != []) "${retireUnit}.service";
+          ++ lib.optional (disabledProfiles != []) "${retireUnit}.service"
+          ++ lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
         requires = lib.optional (disabledProfiles != []) "${retireUnit}.service";
         wants = ["network-online.target" "user@${toString cfg.uid}.service"];
         path = tools;
@@ -441,7 +462,7 @@
             MATRIX_RECOVERY_KEY_OUTPUT_FILE = "${home}/.hermes/matrix-recovery-key";
           };
         serviceConfig =
-          hardening
+          sessionServiceConfig
           // {
             ExecStart = "${hermes}/bin/hermes -p default gateway run";
             # Hermes drains cron jobs before it exits.
@@ -471,9 +492,9 @@
             HERMES_DASHBOARD_OIDC_CLIENT_ID = cfg.dashboard.oidc.clientId;
           };
         serviceConfig =
-          hardening
+          sessionServiceConfig
           // {
-            ExecStart = "${hermes}/bin/hermes dashboard --host 0.0.0.0 --port ${toString cfg.dashboard.port}";
+            ExecStart = "${hermes}/bin/hermes -p default dashboard --host 0.0.0.0 --port ${toString cfg.dashboard.port}";
             MemoryMax = "2G";
           };
       };

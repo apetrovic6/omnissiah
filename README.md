@@ -283,6 +283,40 @@ The hard stop affects every process owned by `hermes` on stygies; the SSH
 connection may drop. If SSH itself is unavailable, use the stygies console.
 Restart the gateway and lift the pause when ready.
 
+### Hermes work profile (ryza → stygies)
+
+`work` uses Anthropic Claude Opus 5.5 with the DevZero account in both the
+DevZero and Codilas rooms, and in Hermes Mobile. Its terminal runs on stygies
+as `hermes` in `~/work-devzero`. It needs the same stygies host pin as `coder`,
+but does not use the personal task queue or the personal Claude Code login.
+
+1. On your PC, confirm the DevZero account and run
+   `claude-as devzero setup-token`. Run
+   `clan vars generate ryza --generator hermes-work-claude-token` and paste
+   only the token at the hidden prompt. Never put it in shell arguments,
+   logs, or chat. Provision the var before deploying the enabled profile;
+   the gateway's startup checks require it.
+2. Deploy stygies first, then ryza. Invite the existing `@hermes` bot to both
+   rooms. Refresh the mobile profile picker, select `work`, and start a new
+   chat. Use `/new` in either Matrix room if it has earlier context.
+3. On ryza, as `hermes`, run `hermes -p work auth list anthropic`. Expect the
+   setup-token env source to be selected and no other usable Anthropic
+   credential. The same check with `-p default` and `-p coder` should show
+   their personal Claude Code source, not the work token source. Verify that
+   `pwd` in the work terminal returns `/home/hermes/work-devzero`.
+4. Confirm Anthropic and DevZero permit this use. Compare account usage and
+   extra usage in the DevZero and personal Claude accounts before and after
+   timestamped Claude turns from the work app and both rooms, then from
+   `default` and `coder`. Work should affect only DevZero; the controls
+   should affect only personal. A successful reply or a listed OAuth source
+   does not prove the billed account or that usage was included in the plan.
+
+Renew ~11 months after creating the token: repeat `setup-token` in the
+DevZero account, run the same generator with `--regenerate`, and deploy the
+new var to ryza. Restart `hermes-gateway` (applies the dotenv update) and
+`hermes-dashboard` if the deploy did not restart them. Open fresh work
+chats and repeat the billing check.
+
 ## Cluster applications
 
 The applications on taghmata are under `modules/taghmata/nixidy/apps`. Each is
