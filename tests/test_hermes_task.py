@@ -431,5 +431,135 @@ runpy.run_path(tool, run_name="__main__")
                 self.queue.write_text(row(OLD, *MATRIX))
 
 
+DEVZERO_ROOM = "!devzero-room:matrix.example"
+CODILAS_ROOM = "!codilas-room:matrix.example"
+BRANCH_PATTERN = r"^(feature|fix|chore)/[A-Z][A-Z0-9]+-[0-9]+-[a-z0-9][a-z0-9-]*$"
+
+
+class CompanySlots(unittest.TestCase):
+    """The work coder's per-company wrappers: same script, its own state dir and allowlists."""
+
+    def setUp(self):
+        self.home = Path(self.enterContext(TemporaryDirectory()))
+        self.slots = {
+            "devzero": (self.home / "work-devzero/.tasks/devzero", DEVZERO_ROOM, ("api", "web")),
+            "codilas": (self.home / "work-devzero/.tasks/codilas", CODILAS_ROOM, ("backend",)),
+        }
+        for state, _, _ in self.slots.values():
+            state.mkdir(parents=True)
+
+    def env(self, company):
+        state, room, repos = self.slots[company]
+        return {
+            **os.environ,
+            "HOME": str(self.home),
+            "HERMES_TASK_STATE_DIR": str(state),
+            "HERMES_TASK_APP_PROJECTS": json.dumps(repos),
+            "HERMES_TASK_PROJECTS": json.dumps(repos),
+            "HERMES_TASK_ROOMS": json.dumps([room]),
+            "HERMES_TASK_BRANCH_PATTERN": BRANCH_PATTERN,
+        }
+
+    def invoke(self, company, *args, summary="", code=0, env=None):
+        result = subprocess.run(
+            [sys.executable, "-I", "-B", str(TOOL), *args],
+            input=summary, text=True, encoding="utf-8", capture_output=True,
+            env=env or self.env(company), timeout=10, check=False,
+        )
+        self.assertEqual(result.returncode, code, result.stderr)
+        return result
+
+    def task(self, company, *args, summary=""):
+        return json.loads(self.invoke(company, *args, summary=summary).stdout)
+
+    def state(self, company):
+        state = self.slots[company][0]
+        return {path.name: path.read_bytes() for path in state.iterdir()}
+
+    def test_state_lives_in_the_company_dir_never_in_work(self):
+        claim = self.task("devzero", "task-claim", "--", DEVZERO_ROOM, "$t1", "api", "-", summary="DEV-1 task")
+        self.assertEqual(claim["result"], "claimed")
+        self.assertEqual(set(self.state("devzero")), {".current-task"})
+        self.assertFalse((self.home / "work").exists())
+        self.assertEqual(self.state("codilas"), {})
+
+    def test_company_slots_are_independent(self):
+        dz = self.task("devzero", "task-claim", "--", DEVZERO_ROOM, "$t1", "api", "-", summary="DEV-1")
+        cz = self.task("codilas", "task-claim", "--", CODILAS_ROOM, "$t2", "backend", "-", summary="COD-1")
+        self.assertEqual((dz["result"], cz["result"]), ("claimed", "claimed"))
+        queued = self.task("devzero", "task-claim", "--", DEVZERO_ROOM, "$t3", "web", "-", summary="DEV-2")
+        self.assertEqual((queued["result"], queued["queue_position"]), ("queued", 1))
+        self.assertNotIn(".task-queue", self.state("codilas"))
+        done = self.task("codilas", "task-done", "--", CODILAS_ROOM, "$t2", cz["active"]["started_at"])
+        self.assertEqual(done["result"], "idle")
+        status = self.task("devzero", "task-status", "--", DEVZERO_ROOM, "$t1")
+        self.assertTrue(status["owned"])
+        handoff = self.task("devzero", "task-done", "--", DEVZERO_ROOM, "$t1", dz["active"]["started_at"])
+        self.assertEqual((handoff["result"], handoff["active"]["thread"]), ("handoff", "$t3"))
+
+    def test_project_allowlist_covers_matrix_and_app_claims(self):
+        for args in (("--", DEVZERO_ROOM, "$t1", "backend", "-"), ("--app", "new", "--", "backend", "-")):
+            with self.subTest(args=args):
+                result = self.invoke("devzero", "task-claim", *args, summary="x", code=2)
+                self.assertIn("not enabled", result.stderr)
+        self.assertEqual(self.state("devzero"), {})
+
+    def test_room_allowlist_refuses_other_rooms(self):
+        claim = self.task("devzero", "task-claim", "--", DEVZERO_ROOM, "$t1", "api", "-", summary="DEV-1")
+        before = self.state("devzero")
+        stamp = claim["active"]["started_at"]
+        for args in (
+            ("task-claim", "--", CODILAS_ROOM, "$t1", "api", "-"),
+            ("task-status", "--", CODILAS_ROOM, "$t1"),
+            ("task-branch", "--", CODILAS_ROOM, "$t1", stamp, "feature/DEV-1-x"),
+            ("task-done", "--", CODILAS_ROOM, "$t1", stamp),
+        ):
+            with self.subTest(action=args[0]):
+                result = self.invoke("devzero", *args, summary="x", code=2)
+                self.assertEqual(result.stderr, "This Matrix room does not use these task commands.\n")
+        self.assertEqual(self.state("devzero"), before)
+
+    def test_branch_pattern_is_enforced(self):
+        claim = self.task("devzero", "task-claim", "--", DEVZERO_ROOM, "$t1", "api", "-", summary="DEV-1")
+        origin = ("--", DEVZERO_ROOM, "$t1", claim["active"]["started_at"])
+        before = self.state("devzero")
+        for branch in ("hermes/x", "main", "feature/dev-1-x", "feature/DEV-x", "feat/DEV-1-x",
+                       "feature/DEV-1-Fix", "feature/DEV-1-", "pending", "feature/DEV-1-x/y"):
+            with self.subTest(branch=branch):
+                result = self.invoke("devzero", "task-branch", *origin, branch, code=2)
+                self.assertEqual(result.stderr, "Branch name does not match the required pattern.\n")
+        self.assertEqual(self.state("devzero"), before)
+        for branch in ("feature/DEV-1-fix-login", "fix/AB2-10-x", "chore/DEV-123-a-1"):
+            with self.subTest(branch=branch):
+                self.assertEqual(self.task("devzero", "task-branch", *origin, branch)["active"]["branch"], branch)
+
+    def test_app_cycle_in_a_company_slot(self):
+        claim = self.task("codilas", "task-claim", "--app", "new", "--", "backend", "-", summary="COD-7")
+        session = claim["session_id"]
+        app = ("--app", session, "--")
+        stamp = claim["active"]["started_at"]
+        branch = self.task("codilas", "task-branch", *app, stamp, "fix/COD-7-null-check")
+        self.assertEqual(branch["active"]["branch"], "fix/COD-7-null-check")
+        self.assertTrue(self.task("codilas", "task-status", *app)["owned"])
+        self.assertEqual(self.task("codilas", "task-done", *app, stamp)["result"], "idle")
+        self.assertEqual(self.state("codilas"), {})
+
+    def test_bad_company_env_exits_before_any_write(self):
+        cases = {
+            "HERMES_TASK_STATE_DIR": ("relative/dir", "HERMES_TASK_STATE_DIR must be an absolute path.\n"),
+            "HERMES_TASK_PROJECTS": ('"api"', "HERMES_TASK_PROJECTS must be a JSON list of strings.\n"),
+            "HERMES_TASK_ROOMS": ("[1]", "HERMES_TASK_ROOMS must be a JSON list of strings.\n"),
+            "HERMES_TASK_BRANCH_PATTERN": ("(", "HERMES_TASK_BRANCH_PATTERN must be a valid regular expression.\n"),
+        }
+        for name, (value, message) in cases.items():
+            with self.subTest(name=name):
+                env = {**self.env("devzero"), name: value}
+                result = self.invoke("devzero", "task-claim", "--", DEVZERO_ROOM, "$t1", "api", "-",
+                                     summary="x", code=2, env=env)
+                self.assertEqual(result.stderr, message)
+        self.assertEqual(self.state("devzero"), {})
+        self.assertFalse((self.home / "work").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
