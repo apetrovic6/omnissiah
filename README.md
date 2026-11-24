@@ -361,6 +361,40 @@ NCPS and Harbor can arrive through Cerberus's `*.noosphere.uk` proxy even
 though LAN DNS points them directly at Traefik. The Caddy rule does not
 restrict requests that go directly to Traefik.
 
+### Forgejo Actions runners
+
+Cerberus, Terra, Luna and Sol run `forgejo-runner-noosphere.service` and
+`forgejo-runner-ugalabugala.service` on the host. On Ryza, the corresponding
+units run in separate `ryza-ci-noosphere` and `ryza-ci-ugalabugala` guests.
+Each unit has one forge token and capacity for one job. On hosts, the
+two runners and their shared `nix-daemon` run under the existing machine
+cap, with one Nix build slot per runner. The Ryza guests each have 3 vCPUs,
+7 GiB RAM and one Nix build slot. Only Ryza separates jobs by kernel. The
+sccache key, CI signing key and ncps upload credentials are still shared.
+
+The split does not change the machine name, UUID or secret registered with
+either forge. No re-registration or manual state migration is needed. Let
+active jobs finish before changing generations. Each new unit creates
+`/var/lib/forgejo-runner/<forge>` and its job `tmp` directory. Workspaces,
+local action caches and per-forge Cargo homes start cold. The existing host
+Nix stores and ncps cache stay in use. The first Cargo builds after the
+split are cold in sccache, and the two forges no longer share sccache
+entries because their Cargo paths differ. Do not copy a legacy `.runner`
+file into the new state.
+
+The old host state at `/var/lib/private/forgejo-runner/<machine>` and the
+old Cargo home at `/var/lib/private/forgejo-runner-cargo` are unused. On
+Ryza, `/var/lib/microvms/ryza-ci` holds the stopped legacy guest's two disk
+images; the new guests have separate sparse 50 GiB overlay and 20 GiB
+`/var` images. Check allocated space and free space on Ryza before rollout:
+the old images and new caches compete with the host store. Retain old
+state for rollback, or archive/remove it after verifying the cutover and
+deciding it is no longer needed. Do not start the old guest alongside the
+replacement pair.
+
+Inspect either Ryza guest's console with
+`journalctl -u microvm@ryza-ci-<forge>.service` on Ryza.
+
 ### Hermes on Cerberus Forgejo
 
 Hermes pushes topic branches only to `hermes/rust-app-template` and
@@ -375,12 +409,12 @@ untrusted bot and withholds Forgejo Actions secrets. `pull_request_target`
 runs base-branch workflows and can receive those secrets. **Keep the account
 restricted.** While it is restricted, **Always trust** has no effect.
 
-Approving a run executes the PR's code with the runner's own credentials:
-its Cerberus and Noosphere runner tokens and the shared sccache read-write
-key. Use the same review bar as for merging, including build scripts,
-tests, Nix code, and workflows. After any doubtful approval, revoke the
-affected runner's old registrations on both forges, rotate its secrets,
-and re-register it. Rotate the sccache key if it may have been exposed.
+Approving a run executes the PR's code as that forge's runner, with its
+token and the shared sccache read-write key. Use the same review bar as
+for merging, including build scripts, tests, Nix code, and workflows.
+After any doubtful approval, revoke and rotate the affected registration;
+assess both forges if the host or the old shared runner was exposed. Rotate
+the sccache key if it may have been exposed.
 
 Never use **Update branch** or push to a Hermes PR branch. A trusted
 maintainer's push can run the PR head without approval; ask Hermes to

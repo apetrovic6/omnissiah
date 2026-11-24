@@ -35,14 +35,14 @@
         group = "hermes";
         mode = "0700";
       }
-      # The CI microVM's disk images (100 GiB store overlay, 40 GiB /var).
+      # One disk pair per forge (50 GiB store overlay, 20 GiB /var each).
       {
         directory = "/var/lib/microvms";
         user = "microvm";
         group = "kvm";
         mode = "0775";
       }
-      # DynamicUser state: Blocky's list cache, the runner's cargo cache.
+      # Host DynamicUser state, including Blocky's list cache.
       {
         directory = "/var/lib/private";
         mode = "0700";

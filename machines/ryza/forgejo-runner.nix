@@ -1,5 +1,5 @@
-# CI runner for both forges, in a microVM (modules/rites/forgejo-runner-microvm.nix)
-# so jobs never share a kernel with the agent's logins on this host.
+# One CI microVM per forge so jobs do not share a kernel with one another
+# or with the agent's logins on this host.
 #
 # On trial under its own label: a workflow opts in with `runs-on: nix-vm`.
 # Once it has proven itself, it takes the shared `nix` label and cerberus's
@@ -17,7 +17,8 @@
     enable = true;
     isolation = "microvm";
     labels = ["nix-vm:host"];
-    # The VM's size. ryza has 24 GiB; the rest is for the agent and the host.
+    # Combined guest budget. Ryza has 24 GiB; the rest is for the agent and
+    # host, including the hypervisor overhead.
     resources = {
       cpus = 6;
       memory = 14;
