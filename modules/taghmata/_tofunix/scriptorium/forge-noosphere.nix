@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  noosphere,
   ref,
   relic,
   vars,
@@ -24,7 +25,7 @@ in {
       provider = "gitea.noosphere";
       username = bot;
       login_name = bot;
-      email = "hermes@forge.${config.noosphere.domain}";
+      email = "hermes@forge.${noosphere.domain}";
       password = relic "hermes_noosphere_password" "password";
       restricted = true;
       admin = false;

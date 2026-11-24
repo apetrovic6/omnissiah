@@ -688,6 +688,8 @@ in {
               shift
               ;;
             -*) usage ;;
+            # Names reach a Nix string below; allow only what a host name can be.
+            *[!a-z0-9-]*|"") echo "invalid machine name: $1" >&2; exit 1 ;;
             *) machines+=("$1") ;;
           esac
           shift

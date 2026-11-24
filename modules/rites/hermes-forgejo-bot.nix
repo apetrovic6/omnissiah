@@ -8,6 +8,10 @@
     inherit (import ../../machines/ryza/_coder-projects.nix) forges projects;
     sshForge = forges.cerberus;
     httpsForge = forges.noosphere;
+    # A forge's token var, login and Git credentials exist only once its
+    # `botEnabled` flag is set in _coder-projects.nix.
+    activeForges = lib.filterAttrs (_: forge: forge.botEnabled) forges;
+    httpsActive = httpsForge.botEnabled;
     vars = config.clan.core.vars.generators;
     sshKey = vars.hermes-forgejo-ssh.files."id_ed25519".path;
     tokenPath = forge: vars.${forge.tokenGenerator}.files.token.path;
@@ -17,12 +21,17 @@
     credentialHelper = pkgs.writeShellScript "hermes-git-credential-noosphere" ''
       [ "$1" = get ] || exit 0
       protocol= host= username= token=
-      while IFS='=' read -r key value; do
+      seen_protocol=false seen_host=false seen_username=false
+      while IFS= read -r line || [ -n "$line" ]; do
+        [ -n "$line" ] || break
+        # Anything but key=value, or a repeated key, is not from Git: answer nothing.
+        case "$line" in *=*) ;; *) exit 0 ;; esac
+        key=''${line%%=*}
+        value=''${line#*=}
         case "$key" in
-          protocol) protocol=$value ;;
-          host) host=$value ;;
-          username) username=$value ;;
-          "") break ;;
+          protocol) "$seen_protocol" && exit 0; seen_protocol=true; protocol=$value ;;
+          host) "$seen_host" && exit 0; seen_host=true; host=$value ;;
+          username) "$seen_username" && exit 0; seen_username=true; username=$value ;;
         esac
       done
       [ "$protocol" = https ] && [ "$host" = ${lib.escapeShellArg httpsForge.host} ] || exit 0
@@ -36,18 +45,30 @@
       printf 'username=hermes\npassword=%s\n\n' "$token"
     '';
 
+    httpsIdentity = pkgs.writeText "hermes-gitconfig-${httpsForge.host}" ''
+      [user]
+        email = hermes@${httpsForge.host}
+    '';
     # Read-only (a store path, linked in below), so the agent can't change
     # whose name its commits carry or which key it pushes with.
-    gitConfig = pkgs.writeText "hermes-gitconfig" ''
-      [user]
-        name = Hermes
-        email = hermes@${sshForge.host}
-      [url "${sshForge.gitBase}/"]
-        insteadOf = https://${sshForge.host}/
-      [credential "${httpsForge.gitBase}"]
-        helper =
-        helper = ${credentialHelper}
-    '';
+    gitConfig = pkgs.writeText "hermes-gitconfig" (''
+        [user]
+          name = Hermes
+          email = hermes@${sshForge.host}
+        [url "${sshForge.gitBase}/"]
+          insteadOf = https://${sshForge.host}/
+      ''
+      + lib.optionalString httpsActive ''
+        # Never fall back to a username/password prompt on a TTY.
+        [credential]
+          interactive = false
+        [credential "${httpsForge.gitBase}"]
+          helper =
+          helper = ${credentialHelper}
+        # Commits in repos on this forge carry the bot account's address.
+        [includeIf "hasconfig:remote.*.url:${httpsForge.gitBase}/**"]
+          path = ${httpsIdentity}
+      '');
 
     appProjects = lib.attrNames projects;
     taskCommand = pkgs.writeShellScript "hermes-task" ''
@@ -104,7 +125,7 @@
             cp "$prompts/token" "$out/token"
           '';
         })
-      forges;
+      activeForges;
 
     # `fj`, the Forgejo CLI: Hermes opens PRs from its forks and reads review
     # comments with it. Its login comes from the token var (below).
@@ -170,7 +191,7 @@
             ${fj} auth logout ${forge.host} &&
               ${fj} -H ${forge.host} auth add-token < ${token} || status=$?
           fi
-        '') (builtins.attrValues forges)}
+        '') (builtins.attrValues activeForges)}
         exit "$status"
       '';
     };

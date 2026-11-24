@@ -210,7 +210,9 @@ tools run over SSH as `hermes` in `~/work` on stygies.
 3. Create one Matrix room per project and invite the existing bot. Under
    `projects` in `machines/ryza/_coder-projects.nix`, add the repo basename
    with `forge = "cerberus"` or `forge = "noosphere"` and `room = "!…"`, using
-   the room's internal ID, not an alias. Ryza uses this map for Matrix routing
+   the room's internal ID, not an alias. A `noosphere` project is a Nix
+   evaluation error until `forges.noosphere.botEnabled` is `true` (see
+   [Hermes on noosphere Forgejo](#hermes-on-noosphere-forgejo)). Ryza uses this map for Matrix routing
    and the coder prompt; Stygies uses its keys to validate app claims.
    Each room is its own conversation; start a thread per task for a fresh one.
 
@@ -523,12 +525,15 @@ On Stygies, `modules/rites/hermes-forgejo-bot.nix` sets up the `hermes` user:
 
 - **Git identity:** `Hermes <hermes@forge.ugalabugala.org>`, from a read-only
   `~/.config/git/config`, which also rewrites `https://forge.ugalabugala.org/`
-  URLs to SSH.
+  URLs to SSH. Once the noosphere bot is enabled, the same file sets
+  `credential.interactive = false` (HTTPS never prompts) and an `includeIf`
+  on `hasconfig:remote.*.url` switches the commit email to
+  `hermes@forge.noosphere.uk` in repos whose remote is on that forge.
 - **SSH to the forge:** port 2222 with the Clan-deployed
   `hermes-forgejo-ssh/id_ed25519`. Forgejo's RSA host key is pinned.
 - **`fj`, the Forgejo CLI:** logged in as the bot by `hermes-fj-login.service`
-  from the separate `hermes-forgejo-token/token` (Cerberus) and
-  `hermes-forgejo-noosphere-token/token` files. After rotating only a token, run
+  from the separate `hermes-forgejo-token/token` (Cerberus) and, once the
+  noosphere bot is enabled, `hermes-forgejo-noosphere-token/token` files. After rotating only a token, run
   `systemctl restart hermes-fj-login`.
 
 The runtime tokens and SSH key are readable only by `hermes` and root.
@@ -554,8 +559,19 @@ services also return HTTP 403 to `apetrovic` when accessed from Stygies.
 
 ### Hermes on noosphere Forgejo
 
-**Scope the runners before handing Hermes credentials.** Drain noosphere CI.
-In noosphere **Site Administration → Actions → Runners**, compare the UUID
+The noosphere bot is **off** (`forges.noosphere.botEnabled = false` in
+`machines/ryza/_coder-projects.nix`). While it is off no deploy declares or
+prompts for `hermes-forgejo-noosphere-token`, Stygies gets no noosphere Git
+credentials or `fj` login, and a project with `forge = "noosphere"` fails
+evaluation. Follow the steps below in order; set the flag to `true` in the same
+commit as the generated PAT var (step 2).
+
+**Scope the runners before handing Hermes credentials.** First check
+**Site Administration → Actions → Runs** on noosphere for workflow runs of any
+owner other than `manjo` (for example the `monolith-softworks` org). Owner-scoped
+`manjo` runners take no jobs from other owners, so those would queue forever
+after scoping; scope them separately or accept the loss before continuing.
+Drain noosphere CI. In noosphere **Site Administration → Actions → Runners**, compare the UUID
 for each machine with its existing `forgejo-runner-noosphere/uuid` Clan var.
 Stop and reconcile any missing/mismatched running identity before continuing.
 From the updated checkout, run:
@@ -583,8 +599,10 @@ run still schedules. Do not revert to global while a Hermes fork exists.
    **All (public, private, and limited)** with repository and issue **Read
    and Write** only. Run
    `clan vars generate stygies --generator hermes-forgejo-noosphere-token`,
-   paste it at the hidden prompt, and commit the encrypted var. Do not
-   deploy the operator password or reuse the Cerberus PAT. To rotate, use
+   paste it at the hidden prompt, and in the same commit set
+   `forges.noosphere.botEnabled = true` in `machines/ryza/_coder-projects.nix`
+   and commit the encrypted var. Do not deploy the operator password or reuse
+   the Cerberus PAT. To rotate, use
    the same generator with `--regenerate`, deploy it, restart
    `hermes-fj-login.service`, and revoke the old PAT after checking the new one.
 3. Deploy Cerberus first (Caddy guard), then Stygies (host pin and credentials),
