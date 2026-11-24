@@ -53,6 +53,8 @@
       # Technitium already resolves it to the Traefik VIP.
       lanAddress = null;
       sccachePort = 4227;
+      # Hermes-owned forks must not be able to schedule these runners.
+      scope = "manjo";
       forgejo = "kubectl --context default -n forgejo exec -i deploy/forgejo -c forgejo -- forgejo";
     };
   };
@@ -659,35 +661,61 @@ in {
     inputs',
     ...
   }: {
-    # Registers runners with every forge they list. `--all` registers every
-    # machine with forgejoRunner enabled, in one evaluation of all machines.
-    # Idempotent, so it is safe to re-run; run it from the repo root (it reads
-    # clan vars).
+    # `--all` selects every enabled machine. `--forge` limits registration
+    # to one forge; without it each machine registers with every forge it lists.
+    # Idempotent; run from the repo root so Clan can find the vars.
     packages.forgejo-runner-register = pkgs.writeShellApplication {
       name = "forgejo-runner-register";
       runtimeInputs = [inputs'.clan-core.packages.clan-cli pkgs.kubectl pkgs.openssh pkgs.jq pkgs.nix];
       text = ''
-        usage="usage: forgejo-runner-register <machine>... | --all"
-        [ $# -gt 0 ] || { echo "$usage" >&2; exit 1; }
+        usage() {
+          echo "usage: forgejo-runner-register [--forge <${lib.concatStringsSep "|" (builtins.attrNames forges)}>] (--all | <machine>...)" >&2
+          exit 1
+        }
+
+        all=false
+        selected_forge=""
+        machines=()
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --all) all=true ;;
+            --forge)
+              [ "$#" -ge 2 ] && [ -z "$selected_forge" ] || usage
+              case "$2" in
+                ${lib.concatStringsSep "|" (builtins.attrNames forges)}) selected_forge="$2" ;;
+                *) usage ;;
+              esac
+              shift
+              ;;
+            -*) usage ;;
+            *) machines+=("$1") ;;
+          esac
+          shift
+        done
 
         # {machine: [forge, ...]} for the requested machines that have the
         # runner enabled (all of them with --all). `or false` skips machines
         # that never import the module.
         # shellcheck disable=SC2016 # ''${n} is Nix, not shell
         enabled='(cs.''${n}.config.services.imperium.forgejoRunner.enable or false)'
-        if [ "$1" = "--all" ]; then
+        if "$all"; then
+          [ "''${#machines[@]}" -eq 0 ] || usage
           filter="n: $enabled"
         else
-          filter="n: builtins.elem n (builtins.fromJSON '''$(jq -cn '$ARGS.positional' --args "$@")''') && $enabled"
+          [ "''${#machines[@]}" -gt 0 ] || usage
+          filter="n: builtins.elem n (builtins.fromJSON '''$(jq -cn '$ARGS.positional' --args "''${machines[@]}")''') && $enabled"
         fi
         targets="$(nix eval --json .#nixosConfigurations --apply "cs: builtins.listToAttrs (map (n: {
           name = n;
           value = cs.\''${n}.config.services.imperium.forgejoRunner.forges;
         }) (builtins.filter ($filter) (builtins.attrNames cs)))")"
 
-        [ "$targets" != "{}" ] || { echo "no matching machine has services.imperium.forgejoRunner enabled" >&2; exit 1; }
+        pairs="$(jq -r --arg forge "$selected_forge" '
+          to_entries[] | .key as $machine | .value[]
+          | select($forge == "" or . == $forge) | "\($machine) \(.)"
+        ' <<<"$targets")"
+        [ -n "$pairs" ] || { echo "no matching runner registrations" >&2; exit 1; }
 
-        jq -r 'to_entries[] | .key as $m | .value[] | "\($m) \(.)"' <<<"$targets" |
         while read -r machine forge; do
           case "$forge" in
             ${lib.concatMapStringsSep "\n" (forge: let
@@ -712,7 +740,7 @@ in {
             | $forgejo forgejo-cli actions register --name "$machine" --secret-stdin=- --keep-labels "''${register_args[@]}"
           # It prints the runner uuid with no trailing newline.
           echo
-        done
+        done <<<"$pairs"
       '';
     };
   };

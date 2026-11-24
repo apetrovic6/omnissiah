@@ -43,7 +43,7 @@ in {
       &(stygies-access) {
         @blocked {
           remote_ip ${self.lib.hosts.stygies}
-          not host ${mkDomain "forge"} ncps.${config.noosphere.domain} harbor.${config.noosphere.domain}
+          not host ${mkDomain "forge"} ncps.${config.noosphere.domain} harbor.${config.noosphere.domain} forge.${config.noosphere.domain}
         }
         respond @blocked 403
       }

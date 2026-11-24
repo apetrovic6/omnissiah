@@ -1,10 +1,53 @@
 # forge.noosphere.uk, the cluster forge: its organisation, its repositories and
 # where each is mirrored (./../patterns/repos.nix).
 {
+  config,
+  lib,
   ref,
   relic,
+  vars,
   ...
-}: {
+}: let
+  inherit (config.scriptorium) owner;
+  bot = "hermes";
+  passwordCredential = "tofunix-hermes-noosphere-password";
+  manageBot = builtins.pathExists (vars.shared passwordCredential passwordCredential);
+  # Explicit upstream read grants, one repo name per fork the operator enrolls.
+  hermesRepos = [];
+in {
+  reliquary.hermes_noosphere_password = lib.mkIf manageBot {
+    generator = passwordCredential;
+  };
+
+  resource.gitea_user = lib.optionalAttrs manageBot {
+    hermes_noosphere = {
+      provider = "gitea.noosphere";
+      username = bot;
+      login_name = bot;
+      email = "hermes@forge.${config.noosphere.domain}";
+      password = relic "hermes_noosphere_password" "password";
+      restricted = true;
+      admin = false;
+      active = true;
+      max_repo_creation = builtins.length hermesRepos;
+      allow_create_organization = false;
+      allow_git_hook = false;
+      allow_import_local = false;
+      send_notification = false;
+      must_change_password = false;
+      lifecycle.ignore_changes = ["password"];
+    };
+  };
+
+  resource.gitea_repository_collaborator = lib.optionalAttrs manageBot (builtins.listToAttrs (map (repo:
+    lib.nameValuePair "${repo}-hermes-noosphere" {
+      provider = "gitea.noosphere";
+      inherit owner repo;
+      inherit (ref.gitea_user.hermes_noosphere) username;
+      permission = "read";
+    })
+  hermesRepos));
+
   resource.forgejo_organization.monolith-softworks = {
     name = "monolith-softworks";
     full_name = "Monolith Softworks";

@@ -207,10 +207,11 @@ tools run over SSH as `hermes` in `~/work` on stygies.
    that var exists the pin is empty, which leaves the private key root-only
    and disables the coder profile and its Matrix routes without deleting
    existing profile data.
-3. Create one Matrix room per project and invite the existing bot. Add each
-   room's ID (`!…`, not a `#…` alias) to `machines/ryza/_coder-projects.nix`, by
-   project name. Ryza uses this map for Matrix routing and the coder prompt;
-   stygies uses its keys to validate app claims.
+3. Create one Matrix room per project and invite the existing bot. Under
+   `projects` in `machines/ryza/_coder-projects.nix`, add the repo basename
+   with `forge = "cerberus"` or `forge = "noosphere"` and `room = "!…"`, using
+   the room's internal ID, not an alias. Ryza uses this map for Matrix routing
+   and the coder prompt; Stygies uses its keys to validate app claims.
    Each room is its own conversation; start a thread per task for a fresh one.
 
 In Hermes Mobile, pick `coder`, open one chat per task, and name the exact repo
@@ -375,10 +376,10 @@ operator machine. This skips kexec, which hung on Ryza. Keep the hardware
 report collected by the installer. The operator can use the VM console or
 enter the `apetrovic` account from the existing Clan admin login.
 
-Cerberus Caddy accepts Stygies requests only for Forgejo, NCPS, and Harbor.
-NCPS and Harbor can arrive through Cerberus's `*.noosphere.uk` proxy even
-though LAN DNS points them directly at Traefik. The Caddy rule does not
-restrict requests that go directly to Traefik.
+Cerberus Caddy accepts Stygies requests only for the two Forgejo instances,
+NCPS, and Harbor. Stygies pins the three noosphere names to Cerberus, whose
+`*.noosphere.uk` vhost proxies to Traefik. Stygies's Hermes and Nix builder
+egress policy still blocks direct access to the Traefik VIP.
 
 ### Forgejo Actions runners
 
@@ -443,7 +444,7 @@ pending run: Forgejo approves all pending runs for the PR at once. Before
 merging, verify in Actions that the run for that head passed the required jobs.
 
 **Before handing Hermes its credentials:** let active CI jobs finish, then
-run `nix run .#forgejo-runner-register -- --all` once from the repo root.
+run `nix run .#forgejo-runner-register -- --all --forge ugalabugala` from the repo root.
 This re-registers the existing Cerberus runners under `manjo`, preserving
 their labels. In Cerberus Forgejo's **Site Administration → Actions →
 Runners**, verify that no runner is instance-wide. An instance-wide runner
@@ -526,17 +527,18 @@ On Stygies, `modules/rites/hermes-forgejo-bot.nix` sets up the `hermes` user:
 - **SSH to the forge:** port 2222 with the Clan-deployed
   `hermes-forgejo-ssh/id_ed25519`. Forgejo's RSA host key is pinned.
 - **`fj`, the Forgejo CLI:** logged in as the bot by `hermes-fj-login.service`
-  from `hermes-forgejo-token/token`. After rotating only the token, run
+  from the separate `hermes-forgejo-token/token` (Cerberus) and
+  `hermes-forgejo-noosphere-token/token` files. After rotating only a token, run
   `systemctl restart hermes-fj-login`.
 
-Both secrets are readable only by `hermes` and root.
+The runtime tokens and SSH key are readable only by `hermes` and root.
 
-For each repo, set `origin` to `ssh://forgejo@forge.ugalabugala.org:2222/hermes/<repo>.git`
+On Cerberus, set `origin` to `ssh://forgejo@forge.ugalabugala.org:2222/hermes/<repo>.git`
 and `upstream` to `ssh://forgejo@forge.ugalabugala.org:2222/manjo/<repo>.git`.
 Fetch from `upstream` and push topic branches only to `origin`. Then open the
 PR against upstream from the fork: in fj, a base starting with `^` means the
 parent repo's branch, for example
-`fj pr create -r hermes/<repo> --base ^master --head <topic-branch> "<title>" --body-file <file>`
+`fj -H forge.ugalabugala.org pr create -r hermes/<repo> --base ^master --head <topic-branch> "<title>" --body-file <file>`
 (forgejo-cli 0.7.0 src/prs.rs).
 
 Stygies keeps about 10 GiB of audit logs under `/var/log/audit`. The target is
@@ -546,10 +548,71 @@ suspending auditing. Disk pressure can shorten the retained history.
 When stdin isn't a terminal, use `ausearch -i -k hermes-exec </dev/null` (or `--input /var/log/audit/audit.log`).
 
 Local Nix builds on Stygies, including `apetrovic`'s, share the Hermes egress
-policy. The root Nix daemon is not filtered by this policy. Stygies sends
-ncps and Harbor traffic through Cerberus rather than directly to Traefik.
+policy. The root Nix daemon is not filtered by this policy.
 Cerberus's Caddy guard matches the Stygies source IP, so other Cerberus
 services also return HTTP 403 to `apetrovic` when accessed from Stygies.
+
+### Hermes on noosphere Forgejo
+
+**Scope the runners before handing Hermes credentials.** Drain noosphere CI.
+In noosphere **Site Administration → Actions → Runners**, compare the UUID
+for each machine with its existing `forgejo-runner-noosphere/uuid` Clan var.
+Stop and reconcile any missing/mismatched running identity before continuing.
+From the updated checkout, run:
+
+```sh
+nix run .#forgejo-runner-register -- --all --forge noosphere
+```
+
+Forgejo 15.0.12 re-scopes same-UUID runners in place. No runner secret
+rotation, restart, or redeploy is needed, and the command does not contact
+ugalabugala. Check for exactly one row per machine (Cerberus, Terra, Luna,
+Sol, Ryza), with the same UUID and labels and owner `manjo`. If an identified
+legacy row remains, stop its old daemon if still running, then delete only
+that row via its trash action in the noosphere runner list. Do not proceed
+with any instance-wide row, even offline. Check a normal `manjo` Actions
+run still schedules. Do not revert to global while a Hermes fork exists.
+
+1. Run `clan vars generate terra --generator tofunix-hermes-noosphere-password`
+   and commit the SOPS-encrypted var. Review the OpenTofu plan and apply the
+   restricted non-admin `hermes` account on noosphere. If the intended account
+   already exists, import it as `gitea_user.hermes_noosphere` instead. Keep
+   the var tracked after applying; removing it schedules the managed account
+   for deletion. The operator password is also stored in OpenTofu state.
+2. As noosphere `hermes`, generate a PAT under **Settings → Applications**:
+   **All (public, private, and limited)** with repository and issue **Read
+   and Write** only. Run
+   `clan vars generate stygies --generator hermes-forgejo-noosphere-token`,
+   paste it at the hidden prompt, and commit the encrypted var. Do not
+   deploy the operator password or reuse the Cerberus PAT. To rotate, use
+   the same generator with `--regenerate`, deploy it, restart
+   `hermes-fj-login.service`, and revoke the old PAT after checking the new one.
+3. Deploy Cerberus first (Caddy guard), then Stygies (host pin and credentials),
+   then Ryza (coder prompt). As `hermes` on Stygies, check that
+   `getent ahostsv4 forge.noosphere.uk` returns Cerberus, that
+   `curl -fsS https://forge.noosphere.uk/api/v1/version` succeeds with TLS
+   verification, and that the same request forced to the Traefik VIP with
+   `--resolve forge.noosphere.uk:443:192.168.1.251 --connect-timeout 5` cannot
+   connect. An unrelated vhost via Cerberus must still return 403. Check
+   `fj auth list` for both hosts, plus an existing Cerberus Git and `fj` read.
+   Verify an existing project on Ryza is still routed in Matrix and available
+   in the app.
+
+No noosphere project is enrolled by default. To add one, review branch
+protection and Actions on `manjo/<repo>`, add the repo to `hermesRepos` in
+`modules/taghmata/_tofunix/scriptorium/forge-noosphere.nix`, and apply the
+read-only grant. Sign in as `hermes` to create the actual fork; leave fork
+Actions off and never attach a privileged runner to it. Invite the Matrix
+bot and add the `{ forge = "noosphere"; room = "!…"; }` project record.
+Deploy Stygies and then Ryza. The remotes are
+`https://forge.noosphere.uk/hermes/<repo>.git` (`origin`) and
+`https://forge.noosphere.uk/manjo/<repo>.git` (`upstream`); Git reads the PAT
+from the deployed secret file for this HTTPS host only. As `hermes`, check
+noninteractive `git ls-remote` on both, a fork-only dry-run push, and a repo
+read with `fj -H forge.noosphere.uk`. The first task should open its PR from
+the fork against the actual upstream default branch and confirm that
+untrusted PR CI waits for `manjo` approval. Use the same approval rules as
+on Cerberus.
 
 ## Addresses and secrets paths
 

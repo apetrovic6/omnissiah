@@ -1,26 +1,55 @@
-{self, ...}: {
+{...}: {
   flake.nixosModules.hermes-forgejo-bot = {
     config,
     lib,
     pkgs,
     ...
   }: let
-    forge = "forge.${self.lib.lab.domain}";
+    inherit (import ../../machines/ryza/_coder-projects.nix) forges projects;
+    sshForge = forges.cerberus;
+    httpsForge = forges.noosphere;
     vars = config.clan.core.vars.generators;
     sshKey = vars.hermes-forgejo-ssh.files."id_ed25519".path;
-    token = vars.hermes-forgejo-token.files.token.path;
+    tokenPath = forge: vars.${forge.tokenGenerator}.files.token.path;
+    fj = lib.getExe' pkgs.forgejo-cli "fj";
+
+    # The token goes only from the deployed var to Git's credential pipe.
+    credentialHelper = pkgs.writeShellScript "hermes-git-credential-noosphere" ''
+      [ "$1" = get ] || exit 0
+      protocol= host= username= token=
+      while IFS='=' read -r key value; do
+        case "$key" in
+          protocol) protocol=$value ;;
+          host) host=$value ;;
+          username) username=$value ;;
+          "") break ;;
+        esac
+      done
+      [ "$protocol" = https ] && [ "$host" = ${lib.escapeShellArg httpsForge.host} ] || exit 0
+      [ -z "$username" ] || [ "$username" = hermes ] || exit 0
+
+      file=${lib.escapeShellArg (tokenPath httpsForge)}
+      [ -r "$file" ] && [ -s "$file" ] || exit 0
+      # A Clan prompt file can end at EOF without a newline.
+      IFS= read -r token < "$file" || :
+      [ -n "$token" ] || exit 0
+      printf 'username=hermes\npassword=%s\n\n' "$token"
+    '';
 
     # Read-only (a store path, linked in below), so the agent can't change
     # whose name its commits carry or which key it pushes with.
     gitConfig = pkgs.writeText "hermes-gitconfig" ''
       [user]
         name = Hermes
-        email = hermes@${forge}
-      [url "ssh://forgejo@${forge}:2222/"]
-        insteadOf = https://${forge}/
+        email = hermes@${sshForge.host}
+      [url "${sshForge.gitBase}/"]
+        insteadOf = https://${sshForge.host}/
+      [credential "${httpsForge.gitBase}"]
+        helper =
+        helper = ${credentialHelper}
     '';
 
-    appProjects = lib.attrNames (import ../../machines/ryza/_coder-projects.nix);
+    appProjects = lib.attrNames projects;
     taskCommand = pkgs.writeShellScript "hermes-task" ''
       umask 077
       export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON appProjects)}
@@ -40,39 +69,42 @@
       done
     '';
   in {
-    clan.core.vars.generators = {
-      # This key authenticates to Forgejo, not from ryza into stygies.
-      hermes-forgejo-ssh = {
-        files."id_ed25519" = {
-          owner = "hermes";
-          group = "hermes";
-          mode = "0400";
-        };
-        files."id_ed25519.pub".secret = false;
+    clan.core.vars.generators =
+      {
+        # This key authenticates to Forgejo, not from ryza into stygies.
+        hermes-forgejo-ssh = {
+          files."id_ed25519" = {
+            owner = "hermes";
+            group = "hermes";
+            mode = "0400";
+          };
+          files."id_ed25519.pub".secret = false;
 
-        runtimeInputs = [pkgs.openssh];
-        script = ''
-          ssh-keygen -q -t ed25519 -N "" -C hermes@stygies -f "$out/id_ed25519"
-        '';
-      };
-
-      hermes-forgejo-token = {
-        prompts.token = {
-          description = "Hermes runtime Forgejo PAT: All repositories, write:repository + write:issue (never the operator's fork token)";
-          type = "hidden";
+          runtimeInputs = [pkgs.openssh];
+          script = ''
+            ssh-keygen -q -t ed25519 -N "" -C hermes@stygies -f "$out/id_ed25519"
+          '';
         };
-        files.token = {
-          owner = "hermes";
-          group = "hermes";
-          mode = "0400";
-        };
+      }
+      // lib.mapAttrs' (_: forge:
+        lib.nameValuePair forge.tokenGenerator {
+          prompts.token = {
+            description = "Hermes runtime PAT for ${forge.host}: All repositories, write:repository + write:issue (not an operator token)";
+            type = "hidden";
+          };
+          files.token = {
+            secret = true;
+            owner = "hermes";
+            group = "hermes";
+            mode = "0400";
+          };
 
-        runtimeInputs = [pkgs.coreutils];
-        script = ''
-          cp "$prompts/token" "$out/token"
-        '';
-      };
-    };
+          runtimeInputs = [pkgs.coreutils];
+          script = ''
+            cp "$prompts/token" "$out/token"
+          '';
+        })
+      forges;
 
     # `fj`, the Forgejo CLI: Hermes opens PRs from its forks and reads review
     # comments with it. Its login comes from the token var (below).
@@ -99,12 +131,12 @@
     # on cerberus; /var/lib/forgejo/data/ssh holds a stale, unused one).
     programs.ssh = {
       knownHosts.forgejo-cerberus = {
-        hostNames = ["[${forge}]:2222"];
+        hostNames = ["[${sshForge.host}]:${toString sshForge.sshPort}"];
         publicKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDdOp8RNcy2qPdBGzQi8yPCiIPoJTwGd2TlvGKrjGQGIzSW4qXwVv6cPFZvGYDt00ZmaY4mXViMEIkRv4st9+Fzx5brDld7p2Osg2JGnitbrlbYhvbXtalmLR3K7SN1NhA8ClsJ26j9uSDF5CSBNew28MGO5VlE+wioYWzkDBqnzM+3j6aXCL+5YfmjJKVXbchoW1u48nxrNTq1y6/K73ogfwfKI/lye1QufPdazbh0HVOyQkaRxNi4J0jzLRKErKhG/qA3AjvVBchXOe6crbUT216XHFoIengo1zmpSp4zl+YPKB83HdzPz20/zOVgX8Q2M/q6dwrb4yrIkCZdax+eWq+8e4POA0SypoaKcJdbZV7R2JLWZtM5puMNOwnjzRWwDnAU8N2sUGD9cexguOGZdrWvhzr/+/nPcJSMpUY+tQhGrMWaAnYpxqMxq9r/dOYoQacUtmUHNPkBhVn56kQgm52bZTvfae/lU3ZJDrTP1gIVz3BS9n3Q8P3IPJ9/P4grEoJTOIHC5g3yQiGEh0TnqlsgqoJl0LeHOTS/D/nx7NsyiChTcey7/6+hqOgdvXUfFOpG/FU2rR8HtI42Gksh9kx1ZlFFMLrqxeQbcoG+5H5FlynMfx8uy47/4UugoDNTBo9om4vKxAdggor8OOUOLdfiXunSfA1gwQUiUa9+/w==";
       };
       extraConfig = ''
-        Match localuser hermes host ${forge}
-          Port 2222
+        Match localuser hermes host ${sshForge.host}
+          Port ${toString sshForge.sshPort}
           User forgejo
           IdentityFile ${sshKey}
           IdentitiesOnly yes
@@ -112,29 +144,35 @@
       '';
     };
 
-    # Logs fj in as the bot from the token var (stored in
-    # ~hermes/.local/share/forgejo-cli/keys.json), at boot and whenever this
-    # unit changes. `add-token` refuses to replace an existing login for the
-    # host (forgejo-cli 0.7.0 src/auth.rs), so log out first; otherwise a
-    # rotated token would never take effect. After rotating only the token:
+    # fj stores both logins in ~hermes/.local/share/forgejo-cli/keys.json.
+    # Update them in sequence; add-token refuses to replace an existing host
+    # login (forgejo-cli 0.7.0 src/auth.rs). After rotating only a token:
     # `systemctl restart hermes-fj-login`.
     systemd.services.hermes-fj-login = {
-      description = "Log fj in to ${forge} as the Hermes bot";
+      description = "Log fj in to the configured forges as the Hermes bot";
       wantedBy = ["multi-user.target"];
       after = ["network-online.target"];
       wants = ["network-online.target"];
-      unitConfig.ConditionPathExists = token;
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
         User = "hermes";
         Group = "hermes";
         WorkingDirectory = "~";
-        StandardInput = "file:${token}";
-        # Exits 0 when there is no login yet.
-        ExecStartPre = "${lib.getExe' pkgs.forgejo-cli "fj"} auth logout ${forge}";
-        ExecStart = "${lib.getExe' pkgs.forgejo-cli "fj"} -H ${forge} auth add-token";
       };
+      script = ''
+        umask 077
+        status=0
+        ${lib.concatMapStringsSep "\n" (forge: let
+          token = lib.escapeShellArg (tokenPath forge);
+        in ''
+          if [ -s ${token} ]; then
+            ${fj} auth logout ${forge.host} &&
+              ${fj} -H ${forge.host} auth add-token < ${token} || status=$?
+          fi
+        '') (builtins.attrValues forges)}
+        exit "$status"
+      '';
     };
   };
 }

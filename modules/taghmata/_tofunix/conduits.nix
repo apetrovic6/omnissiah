@@ -37,6 +37,11 @@ in {
     };
 
     # These endpoints are not exposed by the pinned Forgejo provider.
+    gitea.noosphere = {
+      base_url = "https://forge.${domain}";
+      token = relic "forgejo_secrets" "forgejo_token";
+    };
+
     gitea.cerberus = {
       base_url = "https://forge.${lab.domain}";
       token = relic "forgejo_nix_secrets" "forgejo_token";
