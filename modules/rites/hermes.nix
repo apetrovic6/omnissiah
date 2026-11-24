@@ -101,9 +101,14 @@
         "${home}/.hermes"
         profileConfig
       ];
-    applyProfileConfig =
-      profileConfigCommand "apply"
-      + lib.concatStrings (lib.mapAttrsToList (name: path: " ${lib.escapeShellArg "${name}=${path}"}") claudeTokenFiles);
+    tokenArgs = lib.concatStrings (lib.mapAttrsToList (name: path: " ${lib.escapeShellArg "${name}=${path}"}") claudeTokenFiles);
+    # The token half is a separate argument list: with systemd-installed secrets
+    # the switch-time merge still applies config and SOUL, and leaves the dotenv
+    # to the gateway start, after sops-install-secrets.service.
+    applyProfileConfigWithoutTokens = profileConfigCommand "apply";
+    applyProfileConfig = applyProfileConfigWithoutTokens + tokenArgs;
+    tokenUnit = "hermes-work-token";
+    checkClaudeTokens = profileConfigCommand "check" + tokenArgs;
     # Shared with the homeserver, which registers the account
     # (modules/noosphere/vox/matrix-bots.nix).
     mxGenerator = "matrix-bot-${mx.localpart}";
@@ -406,13 +411,51 @@
         })
       ];
 
-      system.activationScripts.hermes-config = mkIf (hasEnabledProfiles && !sopsUnitInstallsSecrets) {
-        deps = ["users"] ++ lib.optional (hasClaudeTokenFiles && (config.system.activationScripts ? setupSecrets)) "setupSecrets";
+      # Config and SOUL are applied on every switch. The dotenv token is applied
+      # here only when activation installs the secrets; with systemd-installed
+      # secrets the gateway's preStart does it, after sops-install-secrets.
+      system.activationScripts.hermes-config = mkIf hasEnabledProfiles {
+        deps = ["users"] ++ lib.optional (hasClaudeTokenFiles && !sopsUnitInstallsSecrets && (config.system.activationScripts ? setupSecrets)) "setupSecrets";
         text = ''
           if ${lib.getExe' pkgs.systemd "systemctl"} is-active --quiet local-fs.target; then
-            ${lib.getExe' pkgs.util-linux "runuser"} -u ${user} -- ${applyProfileConfig}
-          fi
+            ${lib.getExe' pkgs.util-linux "runuser"} -u ${user} -- ${
+            if sopsUnitInstallsSecrets
+            then applyProfileConfigWithoutTokens
+            else applyProfileConfig
+          }
+          ${lib.optionalString hasClaudeTokenFiles ''
+            # Re-check the token on every switch. The unit may not exist yet
+            # (first deploy); the boot/timer runs cover that.
+            ${lib.getExe' pkgs.systemd "systemctl"} start --no-block ${tokenUnit}.service || true
+          ''}fi
         '';
+      };
+
+      # Reports a token problem as a failed unit (-> node exporter -> the
+      # HermesWorkTokenUnitFailed alert). The gateway's preStart tolerates the
+      # same problems so default, coder and the app keep working, which is why
+      # nothing depends on this unit and it depends on nothing but the secrets.
+      systemd.services.${tokenUnit} = mkIf hasClaudeTokenFiles {
+        description = "Check the Hermes work profile's Claude token";
+        wantedBy = ["multi-user.target"];
+        after = ["local-fs.target"] ++ lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
+        wants = lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
+        unitConfig.RequiresMountsFor = [home];
+        serviceConfig =
+          builtins.removeAttrs hardening ["Restart" "RestartSec"]
+          // {
+            Type = "oneshot";
+            ExecStart = checkClaudeTokens;
+          };
+      };
+      # A failed oneshot stays failed until it runs again; this also clears it
+      # once the token is fixed without waiting for a deploy.
+      systemd.timers.${tokenUnit} = mkIf hasClaudeTokenFiles {
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnBootSec = "5min";
+          OnUnitInactiveSec = "15min";
+        };
       };
 
       # Removing the last pin must undo the old overlay before the gateway
@@ -439,7 +482,9 @@
           ++ lib.optional (disabledProfiles != []) "${retireUnit}.service"
           ++ lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
         requires = lib.optional (disabledProfiles != []) "${retireUnit}.service";
-        wants = ["network-online.target" "user@${toString cfg.uid}.service"];
+        wants =
+          ["network-online.target" "user@${toString cfg.uid}.service"]
+          ++ lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
         path = tools;
         # Boot activation precedes local mounts, so also merge before the
         # gateway starts, once the persistent Hermes home is mounted.

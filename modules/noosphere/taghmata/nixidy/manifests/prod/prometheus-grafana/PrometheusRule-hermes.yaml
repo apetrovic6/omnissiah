@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: hermes
+  namespace: observability
+spec:
+  groups:
+    - name: hermes.units
+      rules:
+        - alert: HermesWorkTokenUnitFailed
+          annotations:
+            description: 'hermes-work-token.service has been failed on {{ $labels.instance }} for 10 minutes. The gateway is still up, so default, coder and the app work, but the work rooms and the work profile fail with an auth error until this is fixed. `journalctl -u hermes-work-token` on ryza names the problem: a missing, empty or malformed token file, or an Anthropic credential in the root auth.json (`sudo -iu hermes hermes -p default auth list anthropic`) that the work profile would borrow. Fix: run `claude-as devzero setup-token` on the PC, `clan vars generate ryza --generator hermes-work-claude-token --regenerate`, deploy ryza, then `systemctl restart hermes-gateway hermes-dashboard` (a deploy rewrites the dotenv but restarts neither), and `systemctl start hermes-work-token` to clear the alert.'
+            summary: The Hermes work profile has no usable DevZero token
+          expr: node_systemd_unit_state{job="ryza-node",name="hermes-work-token.service",state="failed"} == 1
+          for: 10m
+          labels:
+            notify: phone
+            severity: warning

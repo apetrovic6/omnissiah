@@ -2,6 +2,7 @@
 
 import codecs
 import fcntl
+import json
 import os
 import re
 import sys
@@ -92,56 +93,150 @@ def write_config(path, config):
 
 
 CLAUDE_TOKEN_ASSIGNMENT = re.compile(rb"^[ \t]*(?:export[ \t]+)?CLAUDE_CODE_OAUTH_TOKEN[ \t]*=")
+# Anthropic pool sources in the root auth.json that a work profile may inherit
+# without borrowing a personal login. Hermes' read_credential_pool gives a named
+# profile with no Anthropic rows of its own the root's rows, and a root manual
+# row outranks the profile's env token (agent/credential_pool.py), so anything
+# else would bill the personal account instead of the work token.
+SAFE_ROOT_POOL_SOURCES = re.compile(r"claude_code|env:.+")
+
+
+def warn(message):
+    print(f"hermes: {message}", file=sys.stderr, flush=True)
 
 
 def read_claude_token(path):
+    """Return (state, token_or_reason), state ok/missing/invalid. Never raises, never echoes the token."""
     try:
-        token = Path(path).read_bytes().rstrip(b"\r\n")
-    except OSError:
-        raise SystemExit(f"Cannot read Hermes profile token file: {path}") from None
+        raw = Path(path).read_bytes()
+    except FileNotFoundError:
+        return "missing", f"token file {path} does not exist"
+    except OSError as error:
+        return "invalid", f"cannot read token file {path} ({type(error).__name__})"
+    token = raw.removeprefix(codecs.BOM_UTF8).strip()
+    if not token:
+        return "invalid", f"token file {path} is empty"
     if not re.fullmatch(rb"[A-Za-z0-9._-]+", token):
-        raise SystemExit(f"Invalid token in Hermes profile token file: {path}")
-    return token
+        return "invalid", f"token file {path} does not look like a setup token"
+    return "ok", token
+
+
+def root_pool_problem(home):
+    """Why a profile with no Anthropic rows of its own would borrow a personal credential, or None."""
+    path = home / "auth.json"
+    try:
+        store = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as error:
+        return f"cannot read {path} to check its Anthropic credential pool ({type(error).__name__})"
+    pool = store.get("credential_pool") if isinstance(store, dict) else None
+    entries = pool.get("anthropic") if isinstance(pool, dict) else None
+    if not entries:
+        return None
+    if not isinstance(entries, list):
+        return f"{path}: credential_pool.anthropic is not a list"
+    sources = sorted({str(entry.get("source")) if isinstance(entry, dict) else "?" for entry in entries})
+    unsafe = [source for source in sources if not SAFE_ROOT_POOL_SOURCES.fullmatch(source)]
+    if unsafe:
+        return (
+            f"{path} holds Anthropic credential sources a work profile would borrow instead of its own token: "
+            + ", ".join(unsafe)
+        )
+    return None
 
 
 def update_claude_token(path, token):
+    """Set the key in a profile .env, or drop it when token is None. Raises OSError/ValueError."""
     path.parent.mkdir(parents=True, exist_ok=True)
     # Share Hermes's writer lock so a dashboard/CLI save cannot lose this update.
     with path.with_name(".env.lock").open("ab") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if path.is_symlink():
-            raise SystemExit(f"Refusing a symlink for the Hermes profile environment: {path}")
+            raise ValueError(f"refusing a symlink for the Hermes profile environment: {path}")
         try:
             original = path.read_bytes()
         except FileNotFoundError:
+            if token is None:
+                return
             original = b""
 
-        bom = codecs.BOM_UTF8 if original.startswith(codecs.BOM_UTF8) else b""
-        assignment = b"CLAUDE_CODE_OAUTH_TOKEN=" + token + b"\n"
+        # A BOM makes Hermes's unlocked .env sanitizer rewrite the file on the next
+        # standalone start (hermes_cli/env_loader.py), which can drop this update.
+        body = original.removeprefix(codecs.BOM_UTF8)
+        assignment = b"" if token is None else b"CLAUDE_CODE_OAUTH_TOKEN=" + token + b"\n"
         lines = []
         replaced = False
-        for line in original[len(bom):].splitlines(keepends=True):
+        for line in body.splitlines(keepends=True):
             if CLAUDE_TOKEN_ASSIGNMENT.match(line):
-                if not replaced:
+                if not replaced and assignment:
                     lines.append(assignment)
-                    replaced = True
+                replaced = True
             else:
                 lines.append(line)
-        if not replaced:
+        if not replaced and assignment:
             if lines and not lines[-1].endswith((b"\n", b"\r")):
                 lines.append(b"\n")
             lines.append(assignment)
-        updated = bom + b"".join(lines)
-        if updated != original or (path.stat().st_mode & 0o777) != 0o600:
+        updated = b"".join(lines)
+        if updated != original or (path.exists() and (path.stat().st_mode & 0o777) != 0o600):
             with atomic_write(path, mode="wb") as stream:
                 stream.write(updated)
 
 
+def resolve_tokens(home, specs):
+    """name -> (action, token, problem) for each name=path spec; action is write, remove or keep.
+
+    A missing file is deliberate de-provisioning (var removed or never generated): drop the token
+    from the profile's .env so the profile cannot keep billing a credential nobody provisions. Any
+    other problem (empty, malformed, unreadable, or a root pool that would be borrowed) keeps the
+    last good token: a bad paste during a renewal must not also take down the working one.
+    """
+    pool = root_pool_problem(home)
+    resolved = {}
+    for spec in specs:
+        name, path = spec.split("=", 1)
+        state, value = read_claude_token(path)
+        if state == "missing":
+            resolved[name] = ("remove", None, value)
+        elif state == "invalid":
+            resolved[name] = ("keep", None, value)
+        elif pool:
+            resolved[name] = ("keep", None, pool)
+        else:
+            resolved[name] = ("write", value, None)
+    return resolved
+
+
+def apply_claude_token(home, name, action, token, problem):
+    if problem:
+        # The reason names a path or a source, never the token.
+        warn(f"profile {name} token problem: {problem}")
+    if action == "keep":
+        return
+    path = home / "profiles" / name / ".env"
+    try:
+        update_claude_token(path, token)
+    except (OSError, ValueError) as error:
+        warn(f"profile {name}: cannot update {path}: {error}")
+
+
+def check(home, overlay, *claude_token_files):
+    """Exit non-zero for any token problem apply tolerates (the hermes-work-token unit)."""
+    problems = [problem for _, _, problem in resolve_tokens(home, claude_token_files).values() if problem]
+    for problem in problems:
+        warn(f"token problem: {problem}")
+    if problems:
+        warn("fix the token var and deploy, then restart hermes-gateway and hermes-dashboard (README: Hermes work profile)")
+        sys.exit(1)
+
+
 def apply(home, overlay, *claude_token_files):
-    claude_tokens = {
-        name: read_claude_token(path)
-        for name, path in (spec.split("=", 1) for spec in claude_token_files)
-    }
+    # Never fail for a token: the gateway also serves default and coder. Without a usable
+    # token work keeps its config (auth.adopt_external_logins: false) and its routes, so
+    # its rooms error instead of falling back to default, which Hermes does for a room
+    # without a route (gateway/run.py).
+    claude_tokens = resolve_tokens(home, claude_token_files)
     tombstones = home / "profiles/.deleted"
     provisioned = home / "profiles/.nixos-managed"
     provisioned.mkdir(parents=True, exist_ok=True)
@@ -150,7 +245,7 @@ def apply(home, overlay, *claude_token_files):
         update_config(home / source.relative_to(overlay), read_config(source))
         # Publish the opt-out in config before the dotenv, itself a profile identity marker.
         if name in claude_tokens:
-            update_claude_token(home / "profiles" / name / ".env", claude_tokens[name])
+            apply_claude_token(home, name, *claude_tokens[name])
         soul = source.with_name("SOUL.md")
         if soul.is_file():
             # Fail closed rather than start the gateway without the managed prompt.
@@ -217,4 +312,4 @@ def retire(home, overlay, *disabled_profiles):
 if __name__ == "__main__":
     action, home, overlay, *profiles = sys.argv[1:]
     os.umask(0o077)
-    {"apply": apply, "retire": retire}[action](Path(home), Path(overlay), *profiles)
+    {"apply": apply, "retire": retire, "check": check}[action](Path(home), Path(overlay), *profiles)

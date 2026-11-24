@@ -287,23 +287,31 @@ Restart the gateway and lift the pause when ready.
 
 `work` uses Anthropic Claude Opus 5.5 with the DevZero account in both the
 DevZero and Codilas rooms, and in Hermes Mobile. Its terminal runs on stygies
-as `hermes` in `~/work-devzero`. It needs the same stygies host pin as `coder`,
-but does not use the personal task queue or the personal Claude Code login.
+as `hermes` in `~/work-devzero`. It needs the same stygies host pin as `coder`
+for that terminal, but does not use the personal task queue or the personal
+Claude Code login. The profile and its room routes exist with or without the
+pin; without it the terminal, file and code tools are disabled
+(`agent.disabled_toolsets`), because a room without a route would be answered
+by `default` on the personal login.
 
 1. On your PC, confirm the DevZero account and run
    `claude-as devzero setup-token`. Run
    `clan vars generate ryza --generator hermes-work-claude-token` and paste
    only the token at the hidden prompt. Never put it in shell arguments,
-   logs, or chat. Provision the var before deploying the enabled profile;
-   the gateway's startup checks require it.
+   logs, or chat.
 2. Deploy stygies first, then ryza. Invite the existing `@hermes` bot to both
    rooms. Refresh the mobile profile picker, select `work`, and start a new
    chat. Use `/new` in either Matrix room if it has earlier context.
-3. On ryza, as `hermes`, run `hermes -p work auth list anthropic`. Expect the
-   setup-token env source to be selected and no other usable Anthropic
-   credential. The same check with `-p default` and `-p coder` should show
-   their personal Claude Code source, not the work token source. Verify that
-   `pwd` in the work terminal returns `/home/hermes/work-devzero`.
+3. On ryza, as `hermes`, check both credential pools:
+   - `hermes -p work auth list anthropic`: the setup-token env source is
+     selected and nothing else is usable.
+   - `hermes -p default auth list anthropic`: only the Claude Code source. A
+     `manual` or `hermes_pkce` row (from `hermes auth add anthropic` or a
+     Hermes OAuth login) would be borrowed by `work`, which has no rows of its
+     own, and would outrank its token. Repeat this check after any
+     `hermes auth add`.
+   - `-p coder` shows the personal Claude Code source, not the work token.
+   - `pwd` in the work terminal returns `/home/hermes/work-devzero`.
 4. Confirm Anthropic and DevZero permit this use. Compare account usage and
    extra usage in the DevZero and personal Claude accounts before and after
    timestamped Claude turns from the work app and both rooms, then from
@@ -311,11 +319,55 @@ but does not use the personal task queue or the personal Claude Code login.
    should affect only personal. A successful reply or a listed OAuth source
    does not prove the billed account or that usage was included in the plan.
 
+#### A missing or bad token fails soft, and alerts
+
+A token that is missing, unreadable, empty or malformed does not stop the
+gateway: `default`, `coder`, the Matrix DM and the app keep working. The work
+rooms stay routed to `work` and answer with an auth error, never as `default`.
+Config and SOUL still apply (they carry `auth.adopt_external_logins: false`).
+The dotenv rule: a **missing** file removes the token from work's `.env` (the
+var was removed on purpose); any other problem keeps the last good token and
+logs the reason (never the token) to the journal of the unit that ran it.
+
+`hermes-work-token.service` on ryza is the loud half. It validates the token
+file and the root `auth.json` (nothing but `claude_code` and `env:*` Anthropic
+sources) and fails when either is wrong. It runs at boot, on each switch, and
+every 15 minutes; nothing depends on it. When it has been failed for 10
+minutes, the `HermesWorkTokenUnitFailed` alert reaches the phone through
+Alertmanager and ntfy. A first deploy before the var exists therefore alerts
+and makes the switch report that unit as failed, which is expected until the
+var is generated. The alert is in
+`modules/taghmata/nixidy/apps/augur/prometheus-stack/hermes-alerts.nix`; it
+needs `nix run .#render-prod`, the rendered
+`PrometheusRule-hermes.yaml` committed (`nixidyChecks` fails otherwise), and
+ArgoCD to sync it before it can fire. To see the state:
+`systemctl status hermes-work-token`, `journalctl -u hermes-work-token`.
+
+#### Renewal
+
 Renew ~11 months after creating the token: repeat `setup-token` in the
 DevZero account, run the same generator with `--regenerate`, and deploy the
-new var to ryza. Restart `hermes-gateway` (applies the dotenv update) and
-`hermes-dashboard` if the deploy did not restart them. Open fresh work
+new var to ryza. **A deploy rewrites the dotenv but never restarts the
+units**, and built agents keep their credential pool: always run
+`systemctl restart hermes-gateway hermes-dashboard` afterwards, then
+`systemctl start hermes-work-token` to clear a failed state. Open fresh work
 chats and repeat the billing check.
+
+#### Limits to know
+
+- Never `/model` or configure `work` onto another provider: a provider logged
+  in under `default` would be borrowed from the root `auth.json` and bill the
+  personal account. All `auxiliary.*` slots are pinned to Anthropic Opus 5.5
+  for the same reason.
+- No cron jobs with a `script:` in `work`: they run locally on ryza as
+  `hermes`, with the DevZero token in their environment, outside the stygies
+  boundary. The SOUL says so; nothing enforces it.
+- The dashboard's environment page can reveal the work token (`POST
+  /api/env/reveal?profile=work`) to any authenticated admin session.
+- The work terminal logs in to stygies as the same `hermes` user as `coder`.
+  That user has the task tools, the `fj` login and the Forgejo key, and can
+  read `~/work`. The SOUL is the only guard; isolating them (a second user and
+  key) was explicitly not a goal.
 
 ## Cluster applications
 

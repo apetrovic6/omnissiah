@@ -27,6 +27,34 @@
     ssh_user = "hermes";
     ssh_key = config.clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519".path;
   };
+  # Every auxiliary slot Hermes 0.23.0 defaults to "auto" (hermes_cli/config_defaults.py,
+  # `auxiliary`). Pinned for work: auto-chains (the vision one has no discovery gate,
+  # agent/auxiliary_client.py) could reach a provider logged in under default.
+  workAuxiliarySlots = [
+    "vision"
+    "compression"
+    "approval"
+    "review"
+    "mcp"
+    "title_generation"
+    "memory_query_rewrite"
+    "tts_audio_tags"
+    "voice_chat"
+    "triage_specifier"
+    "kanban_decomposer"
+    "profile_describer"
+    "goal_judge"
+    "group_router"
+    "curator"
+    "monitor"
+    "background_review"
+    "moa_reference"
+    "moa_aggregator"
+  ];
+  workModel = {
+    provider = "anthropic";
+    model = "claude-opus-5-5";
+  };
   appProjectRule =
     if projectNames == []
     then "No app repos are enabled; do not claim app tasks."
@@ -43,7 +71,7 @@ in {
 
   options.services.imperium.hermes.stygies.knownHosts = lib.mkOption {
     type = lib.types.str;
-    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder and work.";
+    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder and the work terminal.";
     # stygies's own host key, from the clan var its sshd was deployed with,
     # so the pin follows a reinstall instead of going stale. The value ends in
     # an empty comment; keep only the type and the key. Empty until the var exists.
@@ -126,7 +154,10 @@ in {
         };
       };
       profiles.work = {
-        enable = hasHostPin;
+        # Always enabled, pin or not. Disabling it would drop its routes, and
+        # Hermes answers a room without a route as `default`, on the personal
+        # login. Without the pin only the terminal goes away (see settings).
+        enable = true;
         claudeOAuthTokenFile = config.clan.core.vars.generators.hermes-work-claude-token.files.token.path;
         soul = builtins.readFile ./hermes-work-soul.md;
         rooms = {
@@ -136,10 +167,22 @@ in {
         settings = {
           auth.adopt_external_logins = false;
           model = {
-            provider = "anthropic";
-            default = "claude-opus-5-5";
+            inherit (workModel) provider;
+            default = workModel.model;
           };
           fallback_providers = [];
+          auxiliary = lib.genAttrs workAuxiliarySlots (_: workModel);
+          # Hermes' ssh backend uses StrictHostKeyChecking=accept-new
+          # (tools/environments/ssh.py), so without the pin the terminal must not
+          # run at all. agent.disabled_toolsets is subtracted last from every
+          # turn's tools (model_tools.py _select_tool_names, read per turn in
+          # gateway/run_turn.py), and the file and code tools run through the
+          # same backend. The key is always written: the merge never deletes,
+          # so [] is what lifts the block once the pin exists.
+          agent.disabled_toolsets =
+            if hasHostPin
+            then []
+            else ["terminal" "file" "code_execution"];
           terminal = sshTerminal // {cwd = "~/work-devzero";};
         };
       };
