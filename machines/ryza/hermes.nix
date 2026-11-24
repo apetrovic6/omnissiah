@@ -63,11 +63,56 @@
     forge = forges.${project.forge};
   in "| `${repo}` | `${project.room}` | `${forge.gitBase}` | `${forge.host}` |")
   projects);
+  # Work coder (HOM-36): rendered from _work-projects.nix.
+  workCoder = config.services.imperium.hermes.workCoder;
+  workCompanies = (import ./_work-projects.nix).check workCoder.companies;
+  forgeLabel = company:
+    if company.kind == "github"
+    then "GitHub `${company.host}`"
+    else "GitLab `${company.host}`";
+  code = text: "`${text}`";
+  workCompanyRows = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: company: let
+    cli =
+      if company.kind == "github"
+      then "gh"
+      else "glab";
+    jira =
+      if company.jiraProjects == []
+      then "none configured: ask manjo"
+      else lib.concatMapStringsSep ", " code company.jiraProjects;
+  in
+    if company.enabled
+    then "| ${name} | `${company.room}` | ${forgeLabel company} | `${name}-task-*` | `${name}-${cli}` | ${jira} | `${workCoder.identityFiles.${name}}` |"
+    else "| ${name} | `${company.room}` | ${forgeLabel company} | not enabled | — | — | — |")
+  workCompanies);
+  workRepoRows = let
+    rows = lib.concatLists (lib.mapAttrsToList (name: company:
+      lib.mapAttrsToList (key: repo: "| ${name} | `${key}` | `${repo.path}` | `https://${company.host}/${repo.path}.git` |") company.repos)
+    workCompanies);
+    empty = lib.attrNames (lib.filterAttrs (_: company: company.repos == {}) workCompanies);
+  in
+    lib.concatStringsSep "\n" (lib.optionals (rows != []) (["| Company | Repo key | Path | Clone URL |" "| --- | --- | --- | --- |"] ++ rows)
+      ++ lib.optional (empty != []) "${lib.optionalString (rows != []) "\n"}No repos are enabled for ${lib.concatStringsSep " or " empty}; do not claim tasks there. Manjo adds repos in `_work-projects.nix` (README, \"Hermes work coder\").");
 in {
   imports = [
     self.nixosModules.hermes
     ../../modules/rites/_hermes-stygies-ssh.nix
   ];
+
+  options.services.imperium.hermes.workCoder = {
+    companies = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
+      default = (import ./_work-projects.nix).companies;
+      description = "Work coder companies (_work-projects.nix); an option only so checks can evaluate other values.";
+    };
+    identityFiles = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      # Stygies's Git identity var paths (only its terminal reads them), for
+      # the SOUL's check. Lazy: only enabled companies have the var.
+      default = lib.mapAttrs (_: company: self.nixosConfigurations.stygies.config.clan.core.vars.generators.${company.identityGenerator}.files.gitconfig.path) workCoder.companies;
+      description = "Per company, the stygies path of its Git identity file.";
+    };
+  };
 
   options.services.imperium.hermes.stygies.knownHosts = lib.mkOption {
     type = lib.types.str;
@@ -159,11 +204,10 @@ in {
         # login. Without the pin only the terminal goes away (see settings).
         enable = true;
         claudeOAuthTokenFile = config.clan.core.vars.generators.hermes-work-claude-token.files.token.path;
-        soul = builtins.readFile ./hermes-work-soul.md;
-        rooms = {
-          devzero = "!9W1zTDhbkbNc7vh-H_aFbS66CxFZ29FL1z-tmoQUUYc";
-          codilas = "!j3n_ajvQEN1cZ_dH3uKMgLld6k_haMuTJ4Kj8dnW5k4";
-        };
+        soul = builtins.replaceStrings ["@companies@" "@repos@"] [workCompanyRows workRepoRows] (builtins.readFile ./hermes-work-soul.md);
+        # One room per company, from _work-projects.nix, routed whether or not
+        # its coding is enabled.
+        rooms = lib.mapAttrs (_: company: company.room) workCompanies;
         settings = {
           auth.adopt_external_logins = false;
           model = {

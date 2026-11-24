@@ -289,7 +289,8 @@ Restart the gateway and lift the pause when ready.
 DevZero and Codilas rooms, and in Hermes Mobile. Its terminal runs on stygies
 as `hermes` in `~/work-devzero`. It needs the same stygies host pin as `coder`
 for that terminal, but does not use the personal task queue or the personal
-Claude Code login. The profile and its room routes exist with or without the
+Claude Code login; its coding tasks use per-company slots (see
+[Hermes work coder](#hermes-work-coder-github--gitlab)). The profile and its room routes exist with or without the
 pin; without it the terminal, file and code tools are disabled
 (`agent.disabled_toolsets`, which always includes `cronjob`), because a room
 without a route would be answered by `default` on the personal login.
@@ -412,6 +413,153 @@ issuing refresh tokens, its tools go missing until you repeat its login.
   That user has the task tools, the `fj` login and the Forgejo key, and can
   read `~/work`. The SOUL is the only guard; isolating them (a second user and
   key) was explicitly not a goal.
+
+### Hermes work coder (GitHub / GitLab)
+
+From the DevZero and Codilas rooms, or the app with `work` selected, `work`
+can take a task such as "fetch DEV-123 from Jira and work on it". It plans,
+waits for explicit approval, implements on stygies, pushes a branch straight
+to the company repo (no forks) and opens a PR (GitHub) or MR (GitLab). It
+pushes and posts as **your own accounts**, with narrow tokens.
+
+Companies, their rooms, Jira projects and repo allowlists are in
+`machines/ryza/_work-projects.nix`. Both companies start with
+`enabled = false`. While a company is off, no Clan var is declared for it (so no
+deploy prompts), stygies gets no credentials, CLI wrapper or task commands for
+it, and the SOUL says coding isn't set up there. A disabled company that lists
+repos fails evaluation.
+
+**What stygies gets per enabled company** (`modules/rites/hermes-work-coder.nix`):
+
+- Two secret vars, owned by `hermes`, mode 0400:
+  - `hermes-work-<company>-{github,gitlab}-token` holds the token.
+  - `hermes-work-<company>-git-identity` holds your commit `user.name` and
+    `user.email` as a Git config fragment. The values never appear in Nix.
+- Task commands `<company>-task-{status,claim,branch,done,clear,drop}`. They are
+  the personal coder's script with its own slot in
+  `~/work-devzero/.tasks/<company>`, the company's room and repo keys as
+  allowlists, and branch names checked by `<company>-task-branch`.
+- Branch names follow `<type>/<JIRA-KEY>-<slug>`, with `type` one of
+  `feature`, `fix` or `chore`. Example: `feature/DEV-123-fix-login`.
+- A CLI wrapper: `devzero-gh` or `codilas-glab`.
+  - It reads the token from the var for each call and passes it only to that
+    child process (`GH_TOKEN`, or `GITLAB_TOKEN` + `GITLAB_HOST`). It also
+    turns off telemetry, update checks and prompts.
+  - Only PR/MR create, view, list, diff, comment/note, edit/update and checks
+    are allowed, plus CI reads and GET-only `api`. Merge, approve, close,
+    delete, settings and GraphQL are refused.
+  - `--repo` must be a listed repo. `create` must use the active task's repo
+    and recorded branch.
+- Entries in the `hermes` Git config, all read-only:
+  - A credential helper per listed repo URL: exact host, `get` only, with the
+    path checked against the allowlist.
+  - An `includeIf` per repo for the identity file and `push.default = nothing`.
+  - A global `pre-push` hook (`hook.hermes-work-guard`) that refuses any push
+    to a company host except:
+    - over `https://`, to a listed repo;
+    - the branch recorded for that company's active task, for that repo;
+    - not the default branch (needs `git remote set-head origin --auto`);
+    - fast-forward only: no deletes, tags or force-pushes.
+
+  The hook exits 0 for other hosts, so the personal coder's Forgejo pushes
+  are unaffected.
+
+**Limits.** These are guard rails against mistakes, not a sandbox. The agent
+runs as `hermes`, which can read the token files, call the store `gh`/`glab`
+directly, or push with `--no-verify`; the SOUL forbids all three. **Company
+branch protection is the backstop**: confirm the default branch of every listed
+repo is protected (GitHub ruleset or branch protection; GitLab protected
+branch) before enabling. A GitHub fine-grained PAT with Contents write can merge
+PRs, and a GitLab `api` token can do anything your account can.
+
+#### Enabling a company (runbook)
+
+1. **Create the token** with your own account.
+   - **DevZero (GitHub):**
+     1. Go to Settings → Developer settings → Fine-grained tokens. Set
+        resource owner **DevZero**.
+     2. Choose *Only select repositories* and pick the repos you will list.
+     3. Set repository permissions **Contents: Read and write** and **Pull
+        requests: Read and write** (Metadata: Read is added automatically).
+     4. Set expiry within the org's policy.
+     5. If the org requires approval, the token stays *pending*, reading
+        public data only, until an org owner approves it.
+   - **Codilas (GitLab, gitlab.codilas.com):** check the version under
+     **Help → Help**. Use a **fine-grained token** if the instance supports
+     them: beta from GitLab 18.10, GA in 19.2. A supporting instance offers
+     **Fine-grained token** in the **Generate token** menu under Edit profile
+     → Access → Personal access tokens.
+     1. Under **Group and project access**, add only the listed projects.
+     2. Give each one these permissions:
+        - **Code: Download**
+        - **Code: Push**
+        - **Merge Request: Create, Read, Update**: covers MR notes; never
+          Merge or Approve.
+        - **Pipeline: Read**
+        - **Job: Read**
+     3. If `codilas-glab` gets a 403 on a read it needs, add that permission.
+
+     Otherwise use a classic PAT with scopes `api`, `read_repository` and
+     `write_repository`. Expiry is at most 365 days unless the admin changed
+     it.
+2. **List the repos.** In `_work-projects.nix`, add
+   `repos.<key> = { path = "<owner>/<name>"; };` or the GitLab
+   `group/sub/project` path. Also add the company's Jira project keys to
+   `jiraProjects`, then set `enabled = true`.
+3. **Generate the vars** in the same commit:
+
+   ```sh
+   clan vars generate stygies --generator hermes-work-devzero-github-token
+   clan vars generate stygies --generator hermes-work-devzero-git-identity
+   # Codilas: hermes-work-codilas-gitlab-token, hermes-work-codilas-git-identity
+   ```
+
+   Paste only the token at its hidden prompt. The identity generator asks for
+   the name and email your commits for that company should carry. Both values
+   must be one line. The email must have exactly one `@`. Neither may contain
+   `[`, `]`, `\` or `"`.
+4. **Deploy stygies first** (commands, guard, credentials), **then ryza**
+   (the SOUL that names them).
+5. **Check** as `hermes` on stygies (`sudo -iu hermes`):
+   - Egress works: `curl -sSI https://github.com` and
+     `curl -sSI https://gitlab.codilas.com`. The hermes uid may reach public
+     IPv4 (`machines/stygies/network.nix`). If the GitLab host resolved to a
+     private address it would be dropped.
+   - `devzero-gh auth status` / `codilas-glab auth status` shows your account.
+   - The credential helper answers only for listed repos:
+     `printf 'url=https://github.com/<owner>/<name>.git\n\n' | git credential fill`
+     prints a password. A non-listed repo fails without a prompt.
+   - In a clone of a listed repo:
+     - `git config --show-origin user.email` comes from the identity file.
+     - `git push --dry-run origin HEAD:refs/heads/main` is refused by the
+       Hermes push guard. `--dry-run` still runs pre-push.
+   - `devzero-task-status --` is idle, and `~/work/.current-task` is unchanged.
+   - Trial run: in the company room, ask for a small Jira ticket. You should
+     see a claim, a plan, then a wait for your `go`. After that it records the
+     branch, pushes, and posts the PR/MR link. Repeat once from the app.
+
+Company CI runs on the company's own runners when the PR/MR opens. Nothing
+runs on ours; Hermes only reads its status.
+
+#### Adding a repo later
+
+Add it to the company's `repos` in `_work-projects.nix`. For GitHub, also add
+it to the fine-grained PAT's selected repositories; for a GitLab fine-grained
+token, add the project to the token. Then deploy stygies, then ryza. The key
+is the name used in task claims, and must be unique within the company.
+
+#### Token renewal
+
+| Token | Lifetime | Renew |
+| --- | --- | --- |
+| DevZero GitHub fine-grained PAT | org policy; prefill allows up to 366 days | regenerate on GitHub with the same repos and permissions |
+| Codilas GitLab token | ≤365 days by default | create a new one with the same permissions |
+
+Run `clan vars generate stygies --generator <name> --regenerate`, commit and
+deploy stygies. The helper and wrappers read the file for each call, so no
+restart is needed. An expired token shows up as a Git `Authentication failed`
+or a 401 from the wrapper. The identity var changes only if your name or email
+does.
 
 ## Cluster applications
 

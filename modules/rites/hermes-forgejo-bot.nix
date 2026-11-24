@@ -68,7 +68,8 @@
         # Commits in repos on this forge carry the bot account's address.
         [includeIf "hasconfig:remote.*.url:${httpsForge.gitBase}/**"]
           path = ${httpsIdentity}
-      '');
+      ''
+      + config.services.imperium.hermesGit.extraConfig);
 
     appProjects = lib.attrNames projects;
     taskCommand = pkgs.writeShellScript "hermes-task" ''
@@ -90,7 +91,15 @@
       done
     '';
   in {
-    clan.core.vars.generators =
+    # Further sections for the same read-only file, e.g. the work coder's
+    # (hermes-work-coder.nix). Empty keeps the file as it was.
+    options.services.imperium.hermesGit.extraConfig = lib.mkOption {
+      type = lib.types.lines;
+      default = "";
+      description = "Extra lines appended to the hermes user's read-only global Git config.";
+    };
+
+    config.clan.core.vars.generators =
       {
         # This key authenticates to Forgejo, not from ryza into stygies.
         hermes-forgejo-ssh = {
@@ -129,10 +138,10 @@
 
     # `fj`, the Forgejo CLI: Hermes opens PRs from its forks and reads review
     # comments with it. Its login comes from the token var (below).
-    environment.systemPackages = [pkgs.forgejo-cli];
-    users.users.hermes.packages = [taskTools];
+    config.environment.systemPackages = [pkgs.forgejo-cli];
+    config.users.users.hermes.packages = [taskTools];
 
-    systemd.tmpfiles.settings.hermes-forgejo-bot = {
+    config.systemd.tmpfiles.settings.hermes-forgejo-bot = {
       "/home/hermes/.config".d = {
         user = "hermes";
         group = "hermes";
@@ -150,7 +159,7 @@
     # built-in SSH server (START_SSH_SERVER) has just an RSA host key; this is
     # the one it serves from FORGEJO_WORK_DIR (/mnt/nas/git/data/ssh/gitea.rsa
     # on cerberus; /var/lib/forgejo/data/ssh holds a stale, unused one).
-    programs.ssh = {
+    config.programs.ssh = {
       knownHosts.forgejo-cerberus = {
         hostNames = ["[${sshForge.host}]:${toString sshForge.sshPort}"];
         publicKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDdOp8RNcy2qPdBGzQi8yPCiIPoJTwGd2TlvGKrjGQGIzSW4qXwVv6cPFZvGYDt00ZmaY4mXViMEIkRv4st9+Fzx5brDld7p2Osg2JGnitbrlbYhvbXtalmLR3K7SN1NhA8ClsJ26j9uSDF5CSBNew28MGO5VlE+wioYWzkDBqnzM+3j6aXCL+5YfmjJKVXbchoW1u48nxrNTq1y6/K73ogfwfKI/lye1QufPdazbh0HVOyQkaRxNi4J0jzLRKErKhG/qA3AjvVBchXOe6crbUT216XHFoIengo1zmpSp4zl+YPKB83HdzPz20/zOVgX8Q2M/q6dwrb4yrIkCZdax+eWq+8e4POA0SypoaKcJdbZV7R2JLWZtM5puMNOwnjzRWwDnAU8N2sUGD9cexguOGZdrWvhzr/+/nPcJSMpUY+tQhGrMWaAnYpxqMxq9r/dOYoQacUtmUHNPkBhVn56kQgm52bZTvfae/lU3ZJDrTP1gIVz3BS9n3Q8P3IPJ9/P4grEoJTOIHC5g3yQiGEh0TnqlsgqoJl0LeHOTS/D/nx7NsyiChTcey7/6+hqOgdvXUfFOpG/FU2rR8HtI42Gksh9kx1ZlFFMLrqxeQbcoG+5H5FlynMfx8uy47/4UugoDNTBo9om4vKxAdggor8OOUOLdfiXunSfA1gwQUiUa9+/w==";
@@ -169,7 +178,7 @@
     # Update them in sequence; add-token refuses to replace an existing host
     # login (forgejo-cli 0.7.0 src/auth.rs). After rotating only a token:
     # `systemctl restart hermes-fj-login`.
-    systemd.services.hermes-fj-login = {
+    config.systemd.services.hermes-fj-login = {
       description = "Log fj in to the configured forges as the Hermes bot";
       wantedBy = ["multi-user.target"];
       after = ["network-online.target"];

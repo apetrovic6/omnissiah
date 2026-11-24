@@ -73,6 +73,41 @@ def app_projects(parser):
     return projects
 
 
+def env_list(parser, name):
+    """An optional JSON list of strings; None when the variable is unset."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    try:
+        values = json.loads(raw)
+    except ValueError:
+        values = None
+    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+        parser.exit(2, f"{name} must be a JSON list of strings.\n")
+    return values
+
+
+def state_dir(parser):
+    """The personal coder keeps ~/work; the company wrappers set their own slot."""
+    raw = os.environ.get("HERMES_TASK_STATE_DIR")
+    if raw is None:
+        return Path.home() / "work"
+    path = Path(raw)
+    if not path.is_absolute():
+        parser.exit(2, "HERMES_TASK_STATE_DIR must be an absolute path.\n")
+    return path
+
+
+def branch_pattern(parser):
+    raw = os.environ.get("HERMES_TASK_BRANCH_PATTERN")
+    if raw is None:
+        return None
+    try:
+        return re.compile(raw)
+    except re.error:
+        parser.exit(2, "HERMES_TASK_BRANCH_PATTERN must be a valid regular expression.\n")
+
+
 def read_tasks(path):
     try:
         text = path.read_text(encoding="utf-8")
@@ -190,18 +225,29 @@ def main():
             if not THREAD_ID.fullmatch(args.thread or ""):
                 parser.exit(2, "Invalid Matrix thread/event ID.\n")
             origin = (args.room, args.thread)
+    # All unset in the personal coder's launcher; the company wrappers set them.
+    work = state_dir(parser)
+    allowed_projects = env_list(parser, "HERMES_TASK_PROJECTS")
+    allowed_rooms = env_list(parser, "HERMES_TASK_ROOMS")
+    pattern = branch_pattern(parser)
+    if allowed_rooms is not None and origin is not None and not origin[0].startswith(APP_PREFIX):
+        if origin[0] not in allowed_rooms:
+            parser.exit(2, "This Matrix room does not use these task commands.\n")
+    if pattern is not None and action == "task-branch" and not pattern.fullmatch(args.branch):
+        parser.exit(2, "Branch name does not match the required pattern.\n")
     list_queue = action == "task-status" and args.queue
     if list_queue and origin is not None:
         parser.exit(2, "Use --queue without an origin.\n")
     if action == "task-claim":
         if mint_app and args.project not in app_projects(parser):
             parser.exit(2, "Project is not enabled for app tasks.\n")
+        if allowed_projects is not None and args.project not in allowed_projects:
+            parser.exit(2, "Project is not enabled for these task commands.\n")
         try:
             summary = clean(sys.stdin.read())
         except argparse.ArgumentTypeError as error:
             parser.exit(2, f"Invalid task summary: {error}.\n")
 
-    work = Path.home() / "work"
     current_path = work / ".current-task"
     queue_path = work / ".task-queue"
     now = datetime.now(UTC)
