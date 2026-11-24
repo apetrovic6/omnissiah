@@ -15,7 +15,7 @@ let
   companies = {
     devzero = {
       title = "DevZero";
-      enabled = false;
+      enabled = true;
       kind = "github";
       host = "github.com";
       room = "!9W1zTDhbkbNc7vh-H_aFbS66CxFZ29FL1z-tmoQUUYc";
@@ -25,24 +25,28 @@ let
       # Required for Git over HTTPS but not used to authenticate (GitHub PAT docs).
       gitUsername = "x-access-token";
       # Jira project keys (e.g. "DEV") whose tickets belong to this company.
-      jiraProjects = [];
+      jiraProjects = [ "INF" ];
       repos = {
+        nautili = { path = "devzero-inc/nautili"; };
+        nautili-harness-flake = { path = "devzero-inc/nautili-harness-flake"; };
+        nautili-marketing-site= { path = "devzero-inc/nautili-marketing-site"; };
         # api = { path = "devzero-inc/api"; };
       };
     };
     codilas = {
       title = "Codilas";
-      enabled = false;
+      enabled = true;
       kind = "gitlab";
       host = "gitlab.codilas.com";
       room = "!j3n_ajvQEN1cZ_dH3uKMgLld6k_haMuTJ4Kj8dnW5k4";
       tokenGenerator = "hermes-work-codilas-gitlab-token";
       identityGenerator = "hermes-work-codilas-git-identity";
       # GitLab accepts any non-empty username with a PAT.
-      gitUsername = "hermes";
+      gitUsername = "ante.petrovic";
       jiraProjects = [];
       repos = {
         # backend = { path = "codilas/platform/backend"; };
+        natl = { path = "natl/monorepo"; };
       };
     };
   };
