@@ -185,6 +185,25 @@ in {
             ["cronjob"]
             ++ lib.optionals (!hasHostPin) ["terminal" "file" "code_execution"];
           terminal = sshTerminal // {cwd = "~/work-devzero";};
+          # Remote MCP servers with browser OAuth (dynamic client
+          # registration), like coder's Kaneo: nothing secret in Nix, tokens
+          # land in the work profile's mcp-tokens/. Fixed redirect ports, next
+          # to Kaneo's 28431, for the phalanx-to-ryza SSH tunnel used by
+          # `hermes -p work mcp login <name> --flow browser` (README).
+          mcp_servers = {
+            # Jira and Confluence: every Atlassian site the signed-in work
+            # account can see. The same endpoint nautili uses on the PC.
+            atlassian = {
+              url = "https://mcp.atlassian.com/v1/mcp";
+              auth = "oauth";
+              oauth.redirect_port = 28432;
+            };
+            opsee = {
+              url = "https://mcp.api.opsee.ai/mcp";
+              auth = "oauth";
+              oauth.redirect_port = 28433;
+            };
+          };
         };
       };
       dashboard = {

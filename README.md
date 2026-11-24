@@ -368,6 +368,34 @@ units**, and built agents keep their credential pool: always run
 `systemctl start hermes-work-token` to clear a failed state. Open fresh work
 chats and repeat the billing check.
 
+#### Jira and Opsee (MCP)
+
+`work` has two remote MCP servers with browser OAuth: `atlassian`
+(`https://mcp.atlassian.com/v1/mcp`, Jira and Confluence for every site the
+signed-in account can see) and `opsee` (`https://mcp.api.opsee.ai/mcp`).
+Nothing secret is in Nix; the tokens live in the work profile's
+`mcp-tokens/`. Both rooms share the one login per server. After deploying
+ryza, sign in once with the **work** accounts. From phalanx, tunnel the fixed
+callback ports:
+
+```sh
+ssh -o ExitOnForwardFailure=yes -L 28432:127.0.0.1:28432 -L 28433:127.0.0.1:28433 root@192.168.1.45
+```
+
+and in that session:
+
+```sh
+sudo -iu hermes hermes -p work mcp login atlassian --flow browser
+sudo -iu hermes hermes -p work mcp login opsee --flow browser
+```
+
+Open each printed URL in the browser on phalanx and approve. Without the
+tunnel, paste the final redirect URL into the prompt. Restart
+`hermes-gateway` only if the tools don't appear within a minute. A
+permission error from Atlassian usually means the org admin hasn't allowed
+the Atlassian remote MCP server or third-party OAuth apps. If a server stops
+issuing refresh tokens, its tools go missing until you repeat its login.
+
 #### Limits to know
 
 - Never `/model` or configure `work` onto another provider: a provider logged
