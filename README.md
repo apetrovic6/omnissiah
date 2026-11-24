@@ -458,6 +458,10 @@ repos fails evaluation.
     `--target-branch`), inline replies, resolve/edit/delete of notes,
     absolute or `/`-rooted API URLs, GraphQL, and `--jq` that reads the
     environment.
+  - Read selectors (`pr view 12`, `mr diff <branch>`, …) must be a number or
+    a branch name: a PR/MR URL would override `--repo`. Body files
+    (`--body-file`, `--description-file`) must not be or link to a token,
+    identity or other secret file.
   - `--repo` must be a listed repo. Every write (create, comment/note,
     edit/update, ready) needs an active task for that repo, and must name the
     task's recorded branch as `--head`/`--source-branch` or as the PR/MR
@@ -480,8 +484,10 @@ repos fails evaluation.
     - that branch is not the default branch (needs
       `git remote set-head origin --auto`);
     - it is fast-forward only: no deletes, tags or force-pushes;
-    - every pushed commit's author and committer email equals the identity
-      file's. A missing identity var refuses the push.
+    - every pushed commit that isn't already on the remote has an author
+      and committer email equal to the identity file's (empty emails
+      refused). Merging the default branch is fine: its commits are on the
+      remote already. A missing identity var refuses the push.
 
   It also refuses HTTP(S) pushes to any host that is neither a company host
   nor one of the personal forges in `_coder-projects.nix`. Pushes to the
@@ -492,7 +498,11 @@ repos fails evaluation.
 runs as `hermes`, which can read the token files, call the store `gh`/`glab`
 directly, or skip the guard with `--no-verify`, `hook.pre-push.enabled=false`,
 `hook.hermes-work-guard.enabled=false` or
-`git -c hook.hermes-work-guard.command=true`. The SOUL forbids all of these. **Company
+`git -c hook.hermes-work-guard.command=true`. The SOUL forbids all of these.
+glab also still reads hermes's `~/.config/glab-cli/config.yml` (aliases, debug,
+per-host `api_protocol`): glab 1.130 has no config-dir variable, and moving
+`XDG_CONFIG_HOME` would hide Hermes's Git config from the Git that glab runs.
+Only a deliberately pre-seeded file there matters. **Company
 branch protection is the backstop**: confirm the default branch of every listed
 repo is protected (GitHub ruleset or branch protection; GitLab protected
 branch) before enabling. A GitHub fine-grained PAT with Contents write can merge

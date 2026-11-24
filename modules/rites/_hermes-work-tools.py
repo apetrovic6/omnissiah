@@ -130,15 +130,19 @@ def identity_email(company):
 
 
 def pushed_emails(remote, local_sha, remote_sha):
-    """Author and committer emails of the commits this ref update sends."""
-    if ZERO.fullmatch(remote_sha):
-        revs = [local_sha, "--not", f"--remotes={remote}"]
-    else:
-        revs = [f"{remote_sha}..{local_sha}"]
-    result = git("log", "--format=%ae%n%ce", *revs, "--")
+    """Author and committer emails (empty ones included) of the commits this ref update sends.
+
+    Commits already on the remote, on any of its branches or at the ref's
+    old tip, aren't ours to vouch for: a merge of the default branch brings
+    colleagues' commits along.
+    """
+    revs = [local_sha, "--not", f"--remotes={remote}"]
+    if not ZERO.fullmatch(remote_sha):
+        revs.append(remote_sha)
+    result = git("log", "--format=%ae%x00%ce", *revs, "--")
     if result.returncode != 0:
         fail(f"{GUARD}: cannot list the pushed commits")
-    return {line for line in result.stdout.splitlines() if line}
+    return [field for line in result.stdout.splitlines() for field in line.split("\0")]
 
 
 def pre_push(config, remote, url):
@@ -200,6 +204,8 @@ def pre_push(config, remote, url):
             if git("merge-base", "--is-ancestor", remote_sha, local_sha).returncode != 0:
                 fail(f"{GUARD}: non-fast-forward push to {remote_ref}; add commits instead of rewriting")
         others = {other for other in pushed_emails(remote, local_sha, remote_sha) if other.lower() != email.lower()}
+        if "" in others:
+            fail(f"{GUARD}: a pushed commit has an empty author or committer email")
         if others:
             fail(f"{GUARD}: pushed commits must be authored and committed with the {name} identity "
                  f"({len(others)} other address(es)); fix the commits before pushing")
@@ -275,6 +281,10 @@ SPECS = {"github": GH, "gitlab": GLAB}
 SCRUB = ("GH_", "GITHUB_", "GITLAB_", "GLAB_", "GL_")
 # jq can read the environment, which holds the token.
 JQ_ENV = re.compile(r"\benv\b|\$ENV|\$__loc__")
+# A read selector: a number or a branch name. gh and glab also take a PR/MR
+# URL, which would override --repo, so nothing that looks like one.
+SELECTOR = re.compile(r"[0-9]+|[A-Za-z0-9_][A-Za-z0-9._/-]*")
+FILE_FLAGS = ("--body-file", "--description-file")
 
 
 def refuse(message):
@@ -330,9 +340,32 @@ def parse(command, args):
     return found, positionals
 
 
+def check_selector(value):
+    first = value.split("/", 1)[0]
+    if (not SELECTOR.fullmatch(value) or "://" in value or "/-/" in value or ".." in value or "//" in value
+            or value.endswith((".lock", "/", ".")) or ("/" in value and "." in first)):
+        refuse(f"selector {value!r} must be a PR/MR number or a branch name, not a URL or path")
+
+
+def check_file(config, company, value):
+    """Body files must not be (or link to) a token, identity or other secret file."""
+    if value == "-":
+        return
+    real = os.path.realpath(value)
+    secrets = [os.path.realpath(path) for path in config.get("secretPaths", [])]
+    files = {os.path.realpath(other[key]) for other in config["companies"].values()
+             for key in ("tokenFile", "identityFile")}
+    if real in files or any(real == root or real.startswith(root.rstrip("/") + "/") for root in secrets):
+        refuse(f"{value} is (or links to) a secret file")
+
+
 def check_endpoint(kind, company, endpoint):
     if endpoint == "user":  # the auth check
         return
+    # Decoded once by the forge: a second encoding layer has no use here.
+    # gh paths never need escapes; glab needs %2F in project paths only.
+    if (kind == "github" and "%" in endpoint) or (kind == "gitlab" and "%25" in endpoint):
+        refuse("api endpoints must not be percent-encoded beyond the GitLab project path")
     decoded = unquote(endpoint)
     if ("://" in endpoint or endpoint.startswith("/") or ".." in decoded or "//" in decoded or "graphql" in decoded.lower()
             or any(char in decoded for char in ":{}\\") or any(char.isspace() for char in decoded)):
@@ -357,7 +390,7 @@ def task_for(company, repo):
     return task
 
 
-def check_cli(kind, company, args):
+def check_cli(config, kind, company, args):
     specs = SPECS[kind]
     words = next((key for key in specs if tuple(args[: len(key)]) == key), None)
     if words is None:
@@ -368,6 +401,9 @@ def check_cli(kind, company, args):
     for name in ("--jq",):
         if name in found and JQ_ENV.search(found[name]):
             refuse("--jq must not read the environment")
+    for name in FILE_FLAGS:
+        if name in found:
+            check_file(config, company, found[name])
     if command.repo == "api":
         method = found.get("--method", "GET")
         if method.upper() != "GET":
@@ -387,6 +423,8 @@ def check_cli(kind, company, args):
     if found.get("--push", False) is not False:
         refuse("mr create must not push; push with git, then pass --push=false")
     if command.bind is None:
+        for value in positionals:
+            check_selector(value)
         return
     task = task_for(company, repo)
     value = positionals[0] if command.bind == "selector" else found.get(command.bind)
@@ -400,7 +438,7 @@ def cli(config, company_name, args):
     if company is None:
         refuse(f"{company_name} is not enabled")
     kind = company["kind"]
-    check_cli(kind, company, args)
+    check_cli(config, kind, company, args)
     token = read_token(company)
     if token is None:
         fail(f"{company_name}: token file missing or empty; see the README", 1)

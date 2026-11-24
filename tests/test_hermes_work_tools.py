@@ -62,7 +62,8 @@ class WorkTools(unittest.TestCase):
 
     def write_config(self):
         self.config.write_text(json.dumps({"branchPattern": BRANCH_PATTERN, "companies": self.companies,
-                                           "personalHosts": ["forge.example.org", "forge.lab.example"]}))
+                                           "personalHosts": ["forge.example.org", "forge.lab.example"],
+                                           "secretPaths": [str(self.root / "secrets")]}))
 
     def run_tool(self, *args, stdin="", cwd=None, code=None):
         result = subprocess.run([sys.executable, "-I", "-B", str(TOOL), str(self.config), *args],
@@ -276,6 +277,40 @@ class WorkTools(unittest.TestCase):
         # Case of the address doesn't matter.
         git(work, "commit", "-q", "--allow-empty", "-m", "case", env={"GIT_AUTHOR_EMAIL": EMAIL.upper()})
         self.assertEqual(self.push(work, self.new_branch(local=git(work, "rev-parse", "HEAD"))).returncode, 0)
+
+    def test_guard_allows_merging_the_default_branch_into_a_pushed_branch(self):
+        # N1: the branch has a PR already; main moved on with a colleague's commit.
+        work = self.repo()
+        self.set_task()
+        git(work, "update-ref", f"refs/remotes/origin/{BRANCH}", self.head)
+        git(work, "switch", "-q", "--detach", self.base)
+        git(work, "commit", "-q", "--allow-empty", "-m", "colleague",
+            env={"GIT_AUTHOR_EMAIL": "colleague@example.org", "GIT_COMMITTER_EMAIL": "colleague@example.org"})
+        git(work, "update-ref", "refs/remotes/origin/main", git(work, "rev-parse", "HEAD"))
+        git(work, "switch", "-q", BRANCH)
+        git(work, "merge", "-q", "--no-edit", "--no-ff", "origin/main")
+        merge = git(work, "rev-parse", "HEAD")
+        line = (f"refs/heads/{BRANCH}", merge, f"refs/heads/{BRANCH}", self.head)
+        result = self.push(work, line)
+        self.assertEqual((result.returncode, result.stderr), (0, ""))
+        # A new own commit with the wrong identity on top is still refused.
+        git(work, "commit", "-q", "--allow-empty", "-m", "wrong", env={"GIT_AUTHOR_EMAIL": "hermes@forge.lab.example"})
+        line = (f"refs/heads/{BRANCH}", git(work, "rev-parse", "HEAD"), f"refs/heads/{BRANCH}", self.head)
+        self.assertRefused(self.push(work, line), "identity")
+
+    def test_guard_refuses_empty_emails(self):
+        # N2: git allows author=<> committer=<>; an empty field must not be skipped.
+        work = self.repo()
+        self.set_task()
+        for env in ({"GIT_AUTHOR_EMAIL": ""}, {"GIT_COMMITTER_EMAIL": ""},
+                    {"GIT_AUTHOR_EMAIL": "", "GIT_COMMITTER_EMAIL": ""}):
+            with self.subTest(env=env):
+                git(work, "reset", "-q", "--hard", self.head)
+                git(work, "commit", "-q", "--allow-empty", "-m", "empty", env=env)
+                fields = git(work, "log", "-1", "--format=%ae|%ce")
+                self.assertIn("|", fields)
+                self.assertIn("", fields.split("|"))
+                self.assertRefused(self.push(work, self.new_branch(local=git(work, "rev-parse", "HEAD"))), "empty")
 
     def test_guard_refuses_without_an_identity_file(self):
         work = self.repo()
@@ -587,6 +622,66 @@ class WorkTools(unittest.TestCase):
         ):
             with self.subTest(args=args):
                 self.refused(company, *args)
+
+    def test_cli_read_selectors_are_numbers_or_branch_names(self):
+        # N3: a PR/MR URL as the selector would override --repo.
+        reads = {
+            "devzero": [("pr", "view"), ("pr", "diff"), ("pr", "checks"), ("run", "view"), ("run", "watch")],
+            "codilas": [("mr", "view"), ("mr", "diff"), ("ci", "trace")],
+        }
+        repo = {"devzero": "example-org/api", "codilas": "example/group/backend"}
+        refused = ("https://github.com/other-org/private/pull/1", "github.com/other-org/private/pull/1",
+                   "https://gitlab.codilas.com/other/secret/-/merge_requests/1", "other/secret/-/merge_requests/1",
+                   "gitlab.codilas.com/other/secret", "http://evil.example/x", "a..b", "x:y", "@{-1}", "a//b",
+                   "-1", "feature/", "x.lock", "#1", "~1", "a b")
+        for company, commands in reads.items():
+            for words in commands:
+                for selector in ("12", BRANCH, "main", "release/1.2"):
+                    with self.subTest(allowed=(words, selector)):
+                        self.cli(company, *words, selector, "--repo", repo[company])
+                for selector in refused:
+                    with self.subTest(refused=(words, selector)):
+                        self.refused(company, *words, selector, "--repo", repo[company])
+
+    def test_cli_api_refuses_extra_percent_encoding(self):
+        for company, endpoint in (
+            ("devzero", "repos/example-org/api/%252e%252e/%252e%252e/user"),
+            ("devzero", "repos/example-org/api/contents/a%20b"),
+            ("devzero", "repos/example-org/api?q=%41"),
+            ("codilas", "projects/example%2Fgroup%2Fbackend/%252e%252e"),
+            ("codilas", "projects/example%252Fgroup%252Fbackend"),
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.refused(company, "api", endpoint)
+        self.cli("codilas", "api", "projects/example%2Fgroup%2Fbackend/merge_requests")
+
+    def test_cli_body_files_must_not_be_secrets(self):
+        self.set_task()
+        self.set_task("codilas", project="backend")
+        secrets = self.root / "secrets/vars/x"
+        secrets.mkdir(parents=True)
+        (secrets / "token").write_text("secret")
+        (self.root / "link-to-token").symlink_to(self.companies["devzero"]["tokenFile"])
+        (self.root / "link-to-secrets").symlink_to(secrets / "token")
+        (self.root / "body.md").write_text("ok")
+        bad = (str(secrets / "token"), self.companies["devzero"]["tokenFile"], self.companies["codilas"]["identityFile"],
+               "link-to-token", "link-to-secrets", "secrets/vars/x/token", "./secrets/../secrets/vars/x/token",
+               str(self.root / "secrets"))
+        commands = (
+            ("devzero", "pr", "create", "--repo", "example-org/api", "--head", BRANCH, "--title", "t", "--body-file"),
+            ("devzero", "pr", "comment", BRANCH, "--repo", "example-org/api", "--body-file"),
+            ("devzero", "pr", "edit", BRANCH, "--repo", "example-org/api", "-F"),
+            ("codilas", "mr", "create", "--repo", "example/group/backend", "--source-branch", BRANCH,
+             "--target-branch", "main", "--title", "t", "--yes", "--description-file"),
+            ("codilas", "mr", "update", BRANCH, "--repo", "example/group/backend", "--description-file"),
+        )
+        for company, *args in commands:
+            for path in bad:
+                with self.subTest(args=args[:2], path=path):
+                    self.assertIn("secret file", self.cli(company, *args, path, code=2))
+            for path in ("body.md", "-", str(self.root / "body.md")):
+                with self.subTest(args=args[:2], ok=path):
+                    self.cli(company, *args, path)
 
     def test_cli_without_token_or_company_fails_clearly(self):
         Path(self.companies["devzero"]["tokenFile"]).unlink()

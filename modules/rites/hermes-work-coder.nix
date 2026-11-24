@@ -36,6 +36,16 @@
     toolsConfig = pkgs.writeText "hermes-work-tools.json" (builtins.toJSON {
       inherit (registry) branchPattern;
       inherit personalHosts;
+      # Body files may not come from here (or link here): a slip would post a
+      # token. The token and identity files themselves are refused too.
+      secretPaths = [
+        "/run/secrets"
+        "/run/secrets-for-users"
+        "/run/credentials"
+        "${home}/.ssh"
+        "${home}/.local/share/forgejo-cli"
+        "${home}/.config/hermes-work"
+      ];
       companies =
         lib.mapAttrs (name: company: {
           inherit (company) kind host gitUsername;
