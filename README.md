@@ -208,26 +208,35 @@ tools run over SSH as `hermes` in `~/work` on stygies.
    and disables the coder profile and its Matrix routes without deleting
    existing profile data.
 3. Create one Matrix room per project and invite the existing bot. Add each
-   room's ID (`!…`, not a `#…` alias) to
-   `services.imperium.hermes.profiles.coder.rooms` on ryza, by project name.
+   room's ID (`!…`, not a `#…` alias) to `machines/ryza/_coder-projects.nix`, by
+   project name. Ryza uses this map for Matrix routing and the coder prompt;
+   stygies uses its keys to validate app claims.
    Each room is its own conversation; start a thread per task for a fresh one.
 
 In Hermes Mobile, pick `coder`, open one chat per task, and name the exact repo
-from `profiles.coder.rooms`. App chats and Matrix threads share one task slot and
+from the coder project map. App chats and Matrix threads share one slot and
 queue; both require explicit plan approval. If queued, return to the same chat
-or thread and say `continue` to check your place or start after promotion. There
-is no push notification. If the coder loses the app task ID from context, ask
-it to `clear task` rather than starting over in a new chat.
+or thread and say `continue`. There is no push notification. If the app task ID
+is lost, use `clear task` only for a confirmed active task. For a queued task,
+confirm its project and position, then say `drop queued <position>` instead;
+this leaves the active task alone.
 
 On ryza as `hermes`, use `hermes -p coder model` to select a provider and
 `hermes -p coder --tui` to start a session. `hermes -p coder webapp` selects the
 same profile if the gateway's Webapp listener is enabled. Interactive config
 changes outside Nix-managed settings survive activation.
 The coder's `SOUL.md` is managed by Nix; a switch or gateway restart
-overwrites edits to that file. After deploying a SOUL change, run
-`hermes -p coder sessions refresh-prompts` on ryza as `hermes` so existing chats
-and threads pick it up on their next turn without losing history. Don't reset
-an active or queued chat to pick up the prompt.
+overwrites edits to that file. **Deploy stygies before ryza.** On stygies as
+`hermes`, first check that `task-status -- '!x:y' '$z'` succeeds. After deploying
+the updated SOUL, run `hermes -p coder sessions refresh-prompts` on ryza as
+`hermes` so existing chats and threads refresh on their next turn without losing
+history. Don't reset an active or queued chat to pick up the prompt.
+
+Before rolling stygies back, stop submitting new app tasks and use
+`task-status --queue` on stygies to check both the active slot and the queue.
+Finish or clear any active app task and drop any remaining queued app entries
+with `task-drop -- '<position>' '<project>'`, checking the positions after each
+drop. Older tools cannot read app rows.
 
 **Kaneo login:** Use a Kaneo account with access to the project workspace.
 A separate workspace member for Hermes is recommended so its edits are

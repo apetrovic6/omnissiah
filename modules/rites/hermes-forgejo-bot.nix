@@ -20,8 +20,10 @@
         insteadOf = https://${forge}/
     '';
 
+    appProjects = lib.attrNames (import ../../machines/ryza/_coder-projects.nix);
     taskCommand = pkgs.writeShellScript "hermes-task" ''
       umask 077
+      export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON appProjects)}
       ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME/work" || exit $?
       ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/work/.task-lock" \
         ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "''${0##*/}" "$@"
@@ -33,7 +35,7 @@
     '';
     taskTools = pkgs.runCommand "hermes-task-tools" {} ''
       mkdir -p "$out/bin"
-      for command in task-status task-claim task-branch task-done task-clear; do
+      for command in task-status task-claim task-branch task-done task-clear task-drop; do
         ln -s ${taskCommand} "$out/bin/$command"
       done
     '';
