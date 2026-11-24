@@ -178,11 +178,12 @@ in {
           # turn's tools (model_tools.py _select_tool_names, read per turn in
           # gateway/run_turn.py), and the file and code tools run through the
           # same backend. The key is always written: the merge never deletes,
-          # so [] is what lifts the block once the pin exists.
+          # so the shorter list is what lifts the block once the pin exists.
+          # cronjob (toolsets.py: cronjob_manage) is always off: a cron `script:`
+          # job runs locally on ryza with the work token in its environment.
           agent.disabled_toolsets =
-            if hasHostPin
-            then []
-            else ["terminal" "file" "code_execution"];
+            ["cronjob"]
+            ++ lib.optionals (!hasHostPin) ["terminal" "file" "code_execution"];
           terminal = sshTerminal // {cwd = "~/work-devzero";};
         };
       };

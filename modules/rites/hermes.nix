@@ -438,7 +438,9 @@
       systemd.services.${tokenUnit} = mkIf hasClaudeTokenFiles {
         description = "Check the Hermes work profile's Claude token";
         wantedBy = ["multi-user.target"];
-        after = ["local-fs.target"] ++ lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
+        # After the gateway: its preStart writes the dotenv this unit compares. Ordering
+        # only; the gateway neither wants nor waits for this unit.
+        after = ["local-fs.target" "hermes-gateway.service"] ++ lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
         wants = lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
         unitConfig.RequiresMountsFor = [home];
         serviceConfig =
