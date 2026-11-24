@@ -171,6 +171,11 @@
               settings = {
                 # One build slot per runner. On hosts, builds from both
                 # forges share this daemon and the same capped slice.
+                # Both may build at once with r.cpus cores each. Their
+                # memory must fit the same slice: concurrent Rust builds
+                # can hit MemoryHigh or OOM on Luna's 3 GiB. If that happens,
+                # use max 1 (r.cpus / length runForges) cores per build;
+                # a lone build then gets fewer cores too.
                 max-jobs = builtins.length runForges;
                 cores = r.cpus;
               };

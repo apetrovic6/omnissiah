@@ -71,6 +71,8 @@
       })
     forgeNames;
     taps = map (guest: guest.tap) guests;
+    writableStoreOverlay = "/nix/.rw-store";
+    buildDir = "${writableStoreOverlay}/builds";
 
     guestServices = {
       vmName,
@@ -140,13 +142,13 @@
                 readOnly = true;
               }
             ];
-            writableStoreOverlay = "/nix/.rw-store";
+            inherit writableStoreOverlay;
 
             # Image files live in /var/lib/microvms/<vm>/ on the host.
             volumes = [
               {
                 image = "nix-store-overlay.img";
-                mountPoint = "/nix/.rw-store";
+                mountPoint = writableStoreOverlay;
                 size = m.storeOverlay * 1024;
               }
               {
@@ -173,6 +175,24 @@
             # to the host; deflate-on-oom (the default) returns them if the
             # guest runs short. `mem` stays the hard cap.
             balloon = true;
+          };
+
+          # A guest killed mid-build leaves scratch on disk. Sweep it at
+          # boot, before the first daemon start, not on a tmpfiles resetup
+          # or a daemon restart while builds can still be running.
+          systemd.services.ci-clean-nix-builds = {
+            description = "Remove stale Nix build scratch";
+            wantedBy = ["multi-user.target"];
+            requiredBy = ["nix-daemon.service"];
+            before = ["nix-daemon.service"];
+            unitConfig.RequiresMountsFor = [buildDir];
+            restartIfChanged = false;
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              # Nix re-creates the directory when the next build starts.
+              ExecStart = "${lib.getExe' pkgs.coreutils "rm"} -rf --one-file-system -- ${buildDir}";
+            };
           };
 
           # Free page reporting only returns FREE pages, and Linux keeps
@@ -220,8 +240,9 @@
             gib = n: n * 1024 * 1024 * 1024;
           in {
             experimental-features = ["nix-command" "flakes"];
-            # Sandbox build scratch belongs on the /var disk, not the root tmpfs.
-            build-dir = "/var/nix-builds";
+            # Outside the overlay upper dir so scratch isn't a store path.
+            # It shares the backing disk where min-free GC frees space.
+            build-dir = buildDir;
             # As stc/base.nix sets on every clan machine; the guest is not
             # one, so it does not get that module.
             substituters = ["https://ncps.noosphere.uk"];
@@ -248,12 +269,12 @@
       storeOverlay = mkOption {
         type = types.ints.positive;
         default = 50;
-        description = "GiB per guest's writable /nix/store overlay. The guest collects garbage below a fifth of it free.";
+        description = "GiB per guest for the writable /nix/store overlay and Nix build scratch. Nix collects store garbage below a fifth of it free.";
       };
       var = mkOption {
         type = types.ints.positive;
         default = 20;
-        description = "GiB per guest's /var: Nix build scratch, runner state, workspaces, TMPDIR and CARGO_HOME.";
+        description = "GiB per guest's /var: runner state, workspaces, TMPDIR and CARGO_HOME.";
       };
     };
 
