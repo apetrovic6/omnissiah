@@ -118,6 +118,16 @@ def read_claude_token(path):
         return "invalid", f"token file {path} is empty"
     if not re.fullmatch(rb"[A-Za-z0-9._-]+", token):
         return "invalid", f"token file {path} does not look like a setup token"
+    # `claude setup-token` prints sk-ant-oat01-…. Hermes sends anything that isn't
+    # sk-ant-*/eyJ/cc- (or is a console sk-ant-api/usr/svc/admin key) as x-api-key
+    # (agent/anthropic_credentials.py _is_oauth_token), which Anthropic rejects with
+    # "401 invalid x-api-key". A paste that lost the prefix (2026-11-24) looked valid
+    # to the check above and failed only at the first turn, without an alert.
+    if not token.startswith(b"sk-ant-oat"):
+        return "invalid", (
+            f"token file {path} does not start with sk-ant-oat (not a `claude setup-token` "
+            "OAuth token; a partial or wrong paste)"
+        )
     return "ok", token
 
 
