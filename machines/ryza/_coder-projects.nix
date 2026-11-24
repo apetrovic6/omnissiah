@@ -17,7 +17,7 @@ let
       # Off until the bot's account and runtime PAT exist (README, "Hermes on
       # noosphere Forgejo"). While false, no clan var is declared for it, so
       # no deploy prompts for the PAT, and no Hermes tooling touches this host.
-      botEnabled = false;
+      botEnabled = true;
     };
   };
 
