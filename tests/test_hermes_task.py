@@ -107,7 +107,8 @@ class TaskTools(unittest.TestCase):
 
         # Once the unrelated head is removed, the next row is in the active
         # room but is not a duplicate of the active thread.
-        self.task("task-drop", "--", "1", "tally")
+        head = self.task("task-status", "--queue")["queue"][0]
+        self.task("task-drop", "--", "1", head["queued_at"])
         status = self.task("task-status", "--", *SAME_ROOM)
         self.assertEqual((status["owned"], status["queue_position"]), (False, 1))
         handoff = self.task("task-done", "--", *MATRIX, active["started_at"])
@@ -225,6 +226,8 @@ class TaskTools(unittest.TestCase):
             ("task-status", "--", "#alias", MATRIX[1]),
             ("task-status", "--", MATRIX[0], "not-an-event"),
             ("task-status", "--app", session, "--", *MATRIX),
+            ("task-status", "--queue", "--", *MATRIX),
+            ("task-status", "--queue", "--app", session),
             ("task-claim", "--app", "new", "--", *MATRIX, "tally", "-"),
             ("task-claim", "--app", session, "--", "tally", "-"),
             ("task-claim", "--", "tally", "-"),
@@ -241,11 +244,23 @@ class TaskTools(unittest.TestCase):
         for project in ("", ".", "..", "x/y", "x y", "x\tname", " tally", "tally2", "répo"):
             with self.subTest(project=project):
                 self.invoke("task-claim", "--app", "new", "--", project, "-", summary="App task", code=2)
-        self.invoke("task-claim", "--", *MATRIX, "../tally", "-", summary="Matrix task", code=2)
+        for project in ("../tally", "..", ".hidden", "-tally"):
+            with self.subTest(matrix_project=project):
+                self.invoke("task-claim", "--", *MATRIX, project, "-", summary="Matrix task", code=2)
         del self.env["HERMES_TASK_APP_PROJECTS"]
         self.invoke("task-claim", "--app", "new", "--", "tally", "-", summary="App task", code=2)
         self.assertEqual(self.state(), {})
         self.assertEqual(self.claim_matrix(project="not-listed")["active"]["project"], "not-listed")
+
+    def test_bad_allowlist_config_is_rejected_before_claim(self):
+        for raw in ("[", '"tally"', '{"tally":true}', '["tally", 7]', "null"):
+            with self.subTest(raw=raw):
+                self.env["HERMES_TASK_APP_PROJECTS"] = raw
+                result = self.invoke("task-claim", "--app", "new", "--", "tally", "-",
+                                     summary="App task", code=2)
+                self.assertEqual(result.stderr, "HERMES_TASK_APP_PROJECTS must be a JSON list of strings.\n")
+                self.assertFalse(result.stdout)
+        self.assertEqual(self.state(), {})
 
     def test_app_mint_retries_collisions_using_secrets(self):
         active_id, queued_id, fresh_id = ("1" * 16, "2" * 16, "3" * 16)
@@ -276,29 +291,94 @@ with patch("secrets.token_hex", side_effect=ids):
     def test_drop_only_matching_queued_row(self):
         active = self.claim_app("tally")
         self.claim_matrix()
-        queued = self.claim_app()
+        queued = self.claim_app(summary="Pick this\trow")
         self.claim_matrix(OTHER_MATRIX)
         before = self.state()
         listing = self.task("task-status", "--queue")
         self.assertEqual(listing["active"], {"origin_kind": "app", "project": "tally"})
-        self.assertEqual(listing["queue"], [
-            {"queue_position": 1, "origin_kind": "matrix", "project": "tally"},
-            {"queue_position": 2, "origin_kind": "app", "project": "rust-app-template"},
-            {"queue_position": 3, "origin_kind": "matrix", "project": "tally"},
+        queue = listing["queue"]
+        first_at, third_at = (queue[i]["queued_at"] for i in (0, 2))
+        queued_at = queued["queued_at"]
+        self.assertEqual(queue, [
+            dict(queue_position=1, origin_kind="matrix", project="tally",
+                 queued_at=first_at, summary="Matrix task"),
+            dict(queue_position=2, origin_kind="app", project="rust-app-template",
+                 queued_at=queued_at, summary="Pick this row"),
+            dict(queue_position=3, origin_kind="matrix", project="tally",
+                 queued_at=third_at, summary="Matrix task"),
         ])
-        for position, project in (("2", "tally"), ("0", "tally"), ("4", "tally"), ("abc", "tally")):
-            with self.subTest(position=position, project=project):
-                self.invoke("task-drop", "--", position, project, code=2)
+        for position, stamp in (("2", first_at), ("0", queued_at), ("4", queued_at), ("abc", queued_at)):
+            with self.subTest(position=position, stamp=stamp):
+                self.invoke("task-drop", "--", position, stamp, code=2)
         self.assertEqual(self.state(), before)
-        dropped = self.task("task-drop", "--", "2", "rust-app-template")
+        dropped = self.task("task-drop", "--", "2", queued_at)
         self.assertEqual(dropped["result"], "dropped")
         self.assertEqual(dropped["active"], listing["active"])
+        self.assertEqual(dropped["dropped"], {
+            "origin_kind": "app", "project": "rust-app-template", "queued_at": queued_at,
+        })
         self.assertEqual(self.current.read_bytes(), before[".current-task"])
         self.assertEqual(self.queue.read_bytes().splitlines(), [
             before[".task-queue"].splitlines()[i] for i in (0, 2)
         ])
         self.assertIsNone(self.task("task-status", "--app", queued["session_id"])["queue_position"])
         self.assertTrue(self.task("task-status", "--app", active["session_id"])["owned"])
+
+    def test_handoff_invalidates_stale_drop_positions_and_promoted_key(self):
+        active = self.claim_matrix(summary="Active task")["active"]
+        promoted = self.claim_app("tally", "First tally task")
+        orphan = self.claim_app("tally", "Orphaned tally task")
+        self.claim_matrix(SAME_ROOM, summary="Live tally task")
+        listing = self.task("task-status", "--queue")
+        self.assertEqual(listing["active"], {
+            "origin_kind": "matrix", "project": "tally", "summary": "Active task",
+        })
+        first, second, third = listing["queue"]
+        self.assertEqual((first["queued_at"], second["queued_at"]),
+                         (promoted["queued_at"], orphan["queued_at"]))
+        self.assertEqual((first["summary"], second["summary"]),
+                         ("First tally task", "Orphaned tally task"))
+        self.assertEqual(len({row["queued_at"] for row in listing["queue"]}), 3)
+        self.task("task-done", "--", *MATRIX, active["started_at"])
+
+        before = self.state()
+        for row in (first, second):
+            with self.subTest(row=row):
+                self.invoke("task-drop", "--", str(row["queue_position"]), row["queued_at"], code=2)
+                self.assertEqual(self.state(), before)
+        status = self.task("task-status", "--app", promoted["session_id"])
+        self.assertTrue(status["owned"])
+        self.assertNotEqual(status["active"]["started_at"], first["queued_at"])
+        self.assertEqual(self.task("task-drop", "--", "1", orphan["queued_at"])["result"], "dropped")
+        self.assertEqual(self.task("task-status", "--queue")["queue"], [
+            {**third, "queue_position": 1},
+        ])
+
+    def test_new_queue_keys_do_not_reuse_a_live_timestamp(self):
+        self.current.write_text(row(OLD, *MATRIX))
+        self.queue.write_text(row("2024-01-01T00:00:00.000001Z", *OTHER_MATRIX))
+        runner = ("-c", """
+import datetime
+import runpy
+import sys
+
+tool = sys.argv.pop(1)
+frozen = datetime.datetime.fromisoformat(sys.argv.pop(1))
+class FrozenDateTime(datetime.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return frozen.astimezone(tz)
+
+datetime.datetime = FrozenDateTime
+runpy.run_path(tool, run_name="__main__")
+""", str(TOOL), OLD)
+        result = self.invoke("task-claim", "--app", "new", "--", "tally", "-",
+                             summary="App task", runner=runner)
+        claim = json.loads(result.stdout)
+        self.assertEqual(claim["queued_at"], "2024-01-01T00:00:00.000002Z")
+        promoted = self.invoke("task-done", "--", *MATRIX, OLD, runner=runner)
+        self.assertEqual(json.loads(promoted.stdout)["active"]["started_at"],
+                         "2024-01-01T00:00:00.000003Z")
 
     def test_legacy_files_remain_readable_and_mix_with_app_rows(self):
         self.current.write_text(row(OLD, *MATRIX, branch="hermes/old"))

@@ -16,7 +16,7 @@ ROOM_ID = re.compile(r"!(?:[^\s:]+:\S+|[A-Za-z0-9_-]+)")
 THREAD_ID = re.compile(r"\$[A-Za-z0-9_+/=-]+")
 APP_PREFIX = "app:"
 APP_ID = re.compile(r"[0-9a-f]{16}")
-PROJECT = re.compile(r"[A-Za-z0-9._-]+")
+PROJECT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 class Task(NamedTuple):
@@ -34,6 +34,9 @@ class Task(NamedTuple):
     @property
     def kind(self):
         return "app" if self.room.startswith(APP_PREFIX) else "matrix"
+
+    def queued_metadata(self):
+        return {"origin_kind": self.kind, "project": self.project, "queued_at": self.started_at}
 
     def as_json(self, owned):
         if self.kind == "matrix":
@@ -55,9 +58,19 @@ def clean(text):
 
 
 def project_name(text):
-    if not PROJECT.fullmatch(text) or text in (".", ".."):
+    if not PROJECT.fullmatch(text):
         raise argparse.ArgumentTypeError("expected a repository basename")
     return text
+
+
+def app_projects(parser):
+    try:
+        projects = json.loads(os.environ.get("HERMES_TASK_APP_PROJECTS", "[]"))
+    except ValueError:
+        projects = None
+    if not isinstance(projects, list) or not all(isinstance(name, str) for name in projects):
+        parser.exit(2, "HERMES_TASK_APP_PROJECTS must be a JSON list of strings.\n")
+    return projects
 
 
 def read_tasks(path):
@@ -117,15 +130,29 @@ def queue_position(queue, origin):
     return next((i for i, task in enumerate(queue, 1) if task.origin == origin), None)
 
 
+def task_stamp(now, active, queue):
+    # The launcher holds the lock. Keep new timestamps distinct from all live
+    # ones, even when two calls see the same clock reading or the clock moves back.
+    latest = max(
+        (datetime.fromisoformat(task.started_at) for task in queue),
+        default=now - timedelta(microseconds=1),
+    )
+    if active is not None:
+        latest = max(latest, datetime.fromisoformat(active.started_at))
+    if now <= latest:
+        now = latest.astimezone(UTC) + timedelta(microseconds=1)
+    return now.isoformat().replace("+00:00", "Z")
+
+
 def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="action", required=True)
     status = commands.add_parser("task-status")
-    status.add_argument("--queue", action="store_true", help="list queued projects and positions")
+    status.add_argument("--queue", action="store_true", help="list queued positions, timestamps and summaries")
     commands.add_parser("task-clear")
     drop = commands.add_parser("task-drop")
     drop.add_argument("position", type=int)
-    drop.add_argument("project")
+    drop.add_argument("queued_at", help="exact timestamp from task-status --queue")
     claim = commands.add_parser("task-claim")
     done = commands.add_parser("task-done")
     branch = commands.add_parser("task-branch")
@@ -167,7 +194,7 @@ def main():
     if list_queue and origin is not None:
         parser.exit(2, "Use --queue without an origin.\n")
     if action == "task-claim":
-        if mint_app and args.project not in json.loads(os.environ.get("HERMES_TASK_APP_PROJECTS", "[]")):
+        if mint_app and args.project not in app_projects(parser):
             parser.exit(2, "Project is not enabled for app tasks.\n")
         try:
             summary = clean(sys.stdin.read())
@@ -178,7 +205,6 @@ def main():
     current_path = work / ".current-task"
     queue_path = work / ".task-queue"
     now = datetime.now(UTC)
-    stamp = now.isoformat().replace("+00:00", "Z")
     repair_at = now.strftime("%Y%m%dT%H%M%S%fZ") if action == "task-clear" else None
     current = load_state(current_path, parser, repair_at)
     active = current[0] if current else None
@@ -204,7 +230,7 @@ def main():
         if active is None:
             if queue:
                 parser.exit(2, "Queue exists without an active task; ask manjo for 'clear task'.\n")
-            active = Task(stamp, *origin, args.project, "pending", summary)
+            active = Task(task_stamp(now, active, queue), *origin, args.project, "pending", summary)
             write_tasks(current_path, [active])
             result = "claimed"
         elif active.origin == origin:
@@ -212,14 +238,14 @@ def main():
         else:
             position = None if mint_app else queue_position(queue, origin)
             if position is None:
-                queue.append(Task(stamp, *origin, args.project, "pending", summary))
+                queue.append(Task(task_stamp(now, active, queue), *origin, args.project, "pending", summary))
                 write_tasks(queue_path, queue)
                 position = len(queue)
             result = "queued"
     elif action == "task-drop":
-        if not 1 <= args.position <= len(queue) or queue[args.position - 1].project != args.project:
-            parser.exit(2, "No queued task matches that position and project.\n")
-        del queue[args.position - 1]
+        if not 1 <= args.position <= len(queue) or queue[args.position - 1].started_at != args.queued_at:
+            parser.exit(2, "No queued task matches that position and queued_at timestamp.\n")
+        dropped = queue.pop(args.position - 1)
         write_tasks(queue_path, queue)
         result = "dropped"
     else:
@@ -232,6 +258,7 @@ def main():
             write_tasks(current_path, [active])
             result = "updated"
         elif queue:
+            stamp = task_stamp(now, active, queue)
             active = queue.pop(0)._replace(started_at=stamp)
             write_tasks(current_path, [active])
             write_tasks(queue_path, queue)
@@ -255,12 +282,20 @@ def main():
     if origin is not None and (action == "task-status" or origin[0].startswith(APP_PREFIX)):
         response["owned"] = owned
     if list_queue:
+        if active and active.kind == "matrix":
+            response["active"] = {
+                "origin_kind": "matrix", "project": active.project, "summary": active.summary,
+            }
         response["queue"] = [
-            {"queue_position": i, "origin_kind": task.kind, "project": task.project}
+            {"queue_position": i, **task.queued_metadata(), "summary": task.summary}
             for i, task in enumerate(queue, 1)
         ]
+    if action == "task-drop":
+        response["dropped"] = dropped.queued_metadata()
     if session_id is not None:
         response["session_id"] = session_id
+        if position is not None:
+            response["queued_at"] = queue[position - 1].started_at
     print(json.dumps(response))
 
 

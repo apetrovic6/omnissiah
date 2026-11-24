@@ -218,8 +218,8 @@ from the coder project map. App chats and Matrix threads share one slot and
 queue; both require explicit plan approval. If queued, return to the same chat
 or thread and say `continue`. There is no push notification. If the app task ID
 is lost, use `clear task` only for a confirmed active task. For a queued task,
-confirm its project and position, then say `drop queued <position>` instead;
-this leaves the active task alone.
+confirm its project and `queued_at` from the queued reply, then say
+`drop queued <queued_at>` instead; this leaves the active task alone.
 
 On ryza as `hermes`, use `hermes -p coder model` to select a provider and
 `hermes -p coder --tui` to start a session. `hermes -p coder webapp` selects the
@@ -235,8 +235,8 @@ history. Don't reset an active or queued chat to pick up the prompt.
 Before rolling stygies back, stop submitting new app tasks and use
 `task-status --queue` on stygies to check both the active slot and the queue.
 Finish or clear any active app task and drop any remaining queued app entries
-with `task-drop -- '<position>' '<project>'`, checking the positions after each
-drop. Older tools cannot read app rows.
+with `task-drop -- '<position>' '<queued_at>'`. Refresh the queue listing before
+each drop. Older tools cannot read app rows.
 
 **Kaneo login:** Use a Kaneo account with access to the project workspace.
 A separate workspace member for Hermes is recommended so its edits are
