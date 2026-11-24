@@ -19,12 +19,16 @@
   inherit (config.services.imperium.hermes.stygies) knownHosts;
   hasHostPin = knownHosts != "";
   hostKeyAlgorithm = builtins.head (lib.splitString " " knownHosts);
-  coderProjects = import ./_coder-projects.nix;
-  projectNames = lib.attrNames coderProjects;
+  inherit (import ./_coder-projects.nix) forges projects;
+  projectNames = lib.attrNames projects;
   appProjectRule =
     if projectNames == []
     then "No app repos are enabled; do not claim app tasks."
     else "Manjo must name the exact repo: ${lib.concatMapStringsSep ", " (repo: "`${repo}`") projectNames}. If unclear or unlisted, ask before claiming or planning.";
+  projectRoutes = lib.concatStringsSep "\n" (lib.mapAttrsToList (repo: project: let
+    forge = forges.${project.forge};
+  in "| `${repo}` | `${project.room}` | `${forge.gitBase}` | `${forge.host}` |")
+  projects);
 in {
   imports = [
     self.nixosModules.hermes
@@ -87,10 +91,10 @@ in {
         # Hermes uses accept-new. Without a system pin, don't expose a profile
         # that could trust an unknown host or run its terminal locally on ryza.
         enable = hasHostPin;
-        soul = builtins.replaceStrings ["@appProjectRule@"] [appProjectRule] (builtins.readFile ./hermes-coder-soul.md);
+        soul = builtins.replaceStrings ["@appProjectRule@" "@projectRoutes@"] [appProjectRule projectRoutes] (builtins.readFile ./hermes-coder-soul.md);
         # One Matrix room per project. Add the room's Internal room ID to
         # _coder-projects.nix after inviting @hermes.
-        rooms = coderProjects;
+        rooms = lib.mapAttrs (_: project: project.room) projects;
         settings.terminal = {
           backend = "ssh";
           ssh_host = stygies;

@@ -13,6 +13,10 @@
         prompts.forgejo-token.description = "Operator-only Cerberus PAT belonging to hermes (all repositories, write:repository, read:organization, read:user)";
         data.forgejo_token = "$forgejo_token";
       };
+      tofunix-hermes-noosphere-password = {
+        random.password = "-hex 16";
+        data.password = "$password";
+      };
     };
   };
 }

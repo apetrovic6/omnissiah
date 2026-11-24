@@ -15,7 +15,7 @@ in {
     useNetworkd = true;
 
     # Reach these cluster services through Cerberus's Caddy guard, not the VIP.
-    hosts.${hosts.cerberus} = ["ncps.noosphere.uk" "harbor.noosphere.uk"];
+    hosts.${hosts.cerberus} = ["ncps.noosphere.uk" "harbor.noosphere.uk" "forge.noosphere.uk"];
 
     firewall.extraInputRules = ''
       ip saddr ${lan.cidr} tcp dport 3000-9000 accept
@@ -38,8 +38,8 @@ in {
             ct state { established, related } accept
             ip daddr { ${resolvers} } udp dport 53 accept
             ip daddr { ${resolvers} } tcp dport 53 accept
-            # Cerberus allows Forgejo SSH and guards HTTPS by vhost: only Forgejo, ncps,
-            # and Harbor are allowed from Stygies.
+            # Cerberus allows Forgejo SSH and guards HTTPS by vhost: only the two
+            # forges, ncps, and Harbor are allowed from Stygies.
             ip daddr ${hosts.cerberus} tcp dport { 443, 2222 } accept
             # Drop direct access to the Traefik VIP. kube-proxy SNAT hides Stygies's
             # source IP from Traefik, so Traefik cannot enforce the same IP guard.
