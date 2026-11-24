@@ -21,6 +21,40 @@
   hostKeyAlgorithm = builtins.head (lib.splitString " " knownHosts);
   inherit (import ./_coder-projects.nix) forges projects;
   projectNames = lib.attrNames projects;
+  sshTerminal = {
+    backend = "ssh";
+    ssh_host = stygies;
+    ssh_user = "hermes";
+    ssh_key = config.clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519".path;
+  };
+  # Every auxiliary slot Hermes 0.23.0 defaults to "auto" (hermes_cli/config_defaults.py,
+  # `auxiliary`). Pinned for work: auto-chains (the vision one has no discovery gate,
+  # agent/auxiliary_client.py) could reach a provider logged in under default.
+  workAuxiliarySlots = [
+    "vision"
+    "compression"
+    "approval"
+    "review"
+    "mcp"
+    "title_generation"
+    "memory_query_rewrite"
+    "tts_audio_tags"
+    "voice_chat"
+    "triage_specifier"
+    "kanban_decomposer"
+    "profile_describer"
+    "goal_judge"
+    "group_router"
+    "curator"
+    "monitor"
+    "background_review"
+    "moa_reference"
+    "moa_aggregator"
+  ];
+  workModel = {
+    provider = "anthropic";
+    model = "claude-opus-5-5";
+  };
   appProjectRule =
     if projectNames == []
     then "No app repos are enabled; do not claim app tasks."
@@ -37,11 +71,10 @@ in {
 
   options.services.imperium.hermes.stygies.knownHosts = lib.mkOption {
     type = lib.types.str;
-    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder.";
+    description = "Verified stygies SSH host public key (type and base64, without a hostname). Empty disables coder and the work terminal.";
     # stygies's own host key, from the clan var its sshd was deployed with,
     # so the pin follows a reinstall instead of going stale. The value ends in
-    # an empty comment; keep only the type and the key. Empty (coder off)
-    # until the var exists.
+    # an empty comment; keep only the type and the key. Empty until the var exists.
     default = let
       pub = self.lib.vars.machine "stygies" "openssh" "ssh.id_ed25519.pub";
     in
@@ -70,6 +103,22 @@ in {
       group = lib.mkForce keyOwner;
     };
 
+    clan.core.vars.generators.hermes-work-claude-token = {
+      prompts.token = {
+        description = "Run `claude-as devzero setup-token` on your PC while signed into DevZero; paste only the token.";
+        type = "hidden";
+      };
+      files.token = {
+        secret = true;
+        owner = "hermes";
+        group = "hermes";
+        mode = "0400";
+        neededFor = "services";
+      };
+      runtimeInputs = [pkgs.coreutils];
+      script = ''cp "$prompts/token" "$out/token"'';
+    };
+
     programs.ssh = lib.mkIf hasHostPin {
       knownHosts.stygies = {
         hostNames = [stygies];
@@ -95,19 +144,47 @@ in {
         # One Matrix room per project. Add the room's Internal room ID to
         # _coder-projects.nix after inviting @hermes.
         rooms = lib.mapAttrs (_: project: project.room) projects;
-        settings.terminal = {
-          backend = "ssh";
-          ssh_host = stygies;
-          ssh_user = "hermes";
-          ssh_key = config.clan.core.vars.generators.hermes-stygies-ssh.files."id_ed25519".path;
-          cwd = "~/work";
-        };
+        settings.terminal = sshTerminal // {cwd = "~/work";};
         # Kaneo uses browser PKCE. Port 28431 is outside both hosts' ephemeral
         # ranges; keep it fixed for the phalanx-to-ryza SSH tunnel.
         settings.mcp_servers.kaneo = {
           url = "https://kaneo.${self.lib.lab.domain}/api/mcp";
           auth = "oauth";
           oauth.redirect_port = 28431;
+        };
+      };
+      profiles.work = {
+        # Always enabled, pin or not. Disabling it would drop its routes, and
+        # Hermes answers a room without a route as `default`, on the personal
+        # login. Without the pin only the terminal goes away (see settings).
+        enable = true;
+        claudeOAuthTokenFile = config.clan.core.vars.generators.hermes-work-claude-token.files.token.path;
+        soul = builtins.readFile ./hermes-work-soul.md;
+        rooms = {
+          devzero = "!9W1zTDhbkbNc7vh-H_aFbS66CxFZ29FL1z-tmoQUUYc";
+          codilas = "!j3n_ajvQEN1cZ_dH3uKMgLld6k_haMuTJ4Kj8dnW5k4";
+        };
+        settings = {
+          auth.adopt_external_logins = false;
+          model = {
+            inherit (workModel) provider;
+            default = workModel.model;
+          };
+          fallback_providers = [];
+          auxiliary = lib.genAttrs workAuxiliarySlots (_: workModel);
+          # Hermes' ssh backend uses StrictHostKeyChecking=accept-new
+          # (tools/environments/ssh.py), so without the pin the terminal must not
+          # run at all. agent.disabled_toolsets is subtracted last from every
+          # turn's tools (model_tools.py _select_tool_names, read per turn in
+          # gateway/run_turn.py), and the file and code tools run through the
+          # same backend. The key is always written: the merge never deletes,
+          # so the shorter list is what lifts the block once the pin exists.
+          # cronjob (toolsets.py: cronjob_manage) is always off: a cron `script:`
+          # job runs locally on ryza with the work token in its environment.
+          agent.disabled_toolsets =
+            ["cronjob"]
+            ++ lib.optionals (!hasHostPin) ["terminal" "file" "code_execution"];
+          terminal = sshTerminal // {cwd = "~/work-devzero";};
         };
       };
       dashboard = {

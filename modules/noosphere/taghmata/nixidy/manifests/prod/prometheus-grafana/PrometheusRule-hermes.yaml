@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: hermes
+  namespace: observability
+spec:
+  groups:
+    - name: hermes.units
+      rules:
+        - alert: HermesWorkTokenUnitFailed
+          annotations:
+            description: 'hermes-work-token.service has been failed on {{ $labels.instance }} for 10 minutes. The gateway is still up, so default, coder and the app work. `journalctl -u hermes-work-token` on ryza says which of two cases this is. (1) The token is missing, empty or malformed, or the work dotenv does not hold it: the work rooms and the work profile answer with an auth error. Fix: run `claude-as devzero setup-token` on the PC, `clan vars generate ryza --generator hermes-work-claude-token --regenerate`, deploy ryza, `systemctl restart hermes-gateway hermes-dashboard` (a deploy rewrites the dotenv but restarts neither), then `systemctl start hermes-work-token`. (2) The message says work is BILLING A PERSONAL CREDENTIAL: the root auth.json has an Anthropic source other than claude_code or env:*, which work borrows and which outranks its token, so it keeps answering on the personal account and a new token does not help. Fix: `sudo -iu hermes hermes -p default auth list anthropic`, then `hermes -p default auth remove anthropic <id>` for that row (or stop the work rooms), then `systemctl start hermes-work-token`.'
+            summary: The Hermes work profile's DevZero token check is failing
+          expr: node_systemd_unit_state{job="ryza-node",name="hermes-work-token.service",state="failed"} == 1
+          for: 10m
+          labels:
+            notify: phone
+            severity: warning
