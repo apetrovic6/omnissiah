@@ -417,7 +417,8 @@ issuing refresh tokens, its tools go missing until you repeat its login.
 ### Hermes work coder (GitHub / GitLab)
 
 From the DevZero and Codilas rooms, or the app with `work` selected, `work`
-can take a task such as "fetch DEV-123 from Jira and work on it". It plans,
+can take a task such as "fetch DEV-123 from Jira and work on it in `api`"
+(the repo key is required unless the company lists only one repo). It plans,
 waits for explicit approval, implements on stygies, pushes a branch straight
 to the company repo (no forks) and opens a PR (GitHub) or MR (GitLab). It
 pushes and posts as **your own accounts**, with narrow tokens.
@@ -445,28 +446,53 @@ repos fails evaluation.
   - It reads the token from the var for each call and passes it only to that
     child process (`GH_TOKEN`, or `GITLAB_TOKEN` + `GITLAB_HOST`). It also
     turns off telemetry, update checks and prompts.
-  - Only PR/MR create, view, list, diff, comment/note, edit/update and checks
-    are allowed, plus CI reads and GET-only `api`. Merge, approve, close,
-    delete, settings and GraphQL are refused.
-  - `--repo` must be a listed repo. `create` must use the active task's repo
-    and recorded branch.
+  - It allows a fixed list of subcommands, and for each a fixed list of flags
+    with their arity, parsed the way gh and glab (pflag) parse them. Any other
+    subcommand or flag is refused, as are short-flag bundles, attached short
+    values, repeated flags and any bare `--`.
+  - Allowed: PR/MR create, view, list, diff, checks; top-level comment
+    (`pr comment` / `mr note create`); title/body edits and ready; CI reads;
+    and `api` as GET only, under a listed repo (`repos/<owner>/<name>/…` or
+    `projects/<url-encoded path>/…`) or exactly `api user`.
+  - Refused: merge, approve, close, auto-merge, retargeting (`--base`,
+    `--target-branch`), inline replies, resolve/edit/delete of notes,
+    absolute or `/`-rooted API URLs, GraphQL, and `--jq` that reads the
+    environment.
+  - `--repo` must be a listed repo. Every write (create, comment/note,
+    edit/update, ready) needs an active task for that repo, and must name the
+    task's recorded branch as `--head`/`--source-branch` or as the PR/MR
+    selector.
+  - The flag list is checked against the real binaries by
+    `tests/test_hermes_work_cli_arity.py`; rerun it whenever gh or glab
+    changes in nixpkgs.
 - Entries in the `hermes` Git config, all read-only:
   - A credential helper per listed repo URL: exact host, `get` only, with the
     path checked against the allowlist.
   - An `includeIf` per repo for the identity file and `push.default = nothing`.
+  - `http.followRedirects = false`, so a redirect can't carry a company token
+    to a URL the guard never judged.
   - A global `pre-push` hook (`hook.hermes-work-guard`) that refuses any push
-    to a company host except:
-    - over `https://`, to a listed repo;
-    - the branch recorded for that company's active task, for that repo;
-    - not the default branch (needs `git remote set-head origin --auto`);
-    - fast-forward only: no deletes, tags or force-pushes.
+    to a company host except one that meets all of these:
+    - it uses exactly `https://<host>/<path>.git` or `https://<host>/<path>`
+      for a listed repo (the forms the `includeIf` matches);
+    - it pushes the branch recorded for that company's active task, for that
+      repo;
+    - that branch is not the default branch (needs
+      `git remote set-head origin --auto`);
+    - it is fast-forward only: no deletes, tags or force-pushes;
+    - every pushed commit's author and committer email equals the identity
+      file's. A missing identity var refuses the push.
 
-  The hook exits 0 for other hosts, so the personal coder's Forgejo pushes
-  are unaffected.
+  It also refuses HTTP(S) pushes to any host that is neither a company host
+  nor one of the personal forges in `_coder-projects.nix`. Pushes to the
+  personal forges, SSH hosts other than the companies', and local paths
+  pass, so the personal coder's Forgejo pushes are unaffected.
 
 **Limits.** These are guard rails against mistakes, not a sandbox. The agent
 runs as `hermes`, which can read the token files, call the store `gh`/`glab`
-directly, or push with `--no-verify`; the SOUL forbids all three. **Company
+directly, or skip the guard with `--no-verify`, `hook.pre-push.enabled=false`,
+`hook.hermes-work-guard.enabled=false` or
+`git -c hook.hermes-work-guard.command=true`. The SOUL forbids all of these. **Company
 branch protection is the backstop**: confirm the default branch of every listed
 repo is protected (GitHub ruleset or branch protection; GitLab protected
 branch) before enabling. A GitHub fine-grained PAT with Contents write can merge
@@ -493,26 +519,38 @@ PRs, and a GitLab `api` token can do anything your account can.
      2. Give each one these permissions:
         - **Code: Download**
         - **Code: Push**
-        - **Merge Request: Create, Read, Update**: covers MR notes; never
-          Merge or Approve.
+        - **Project: Read** (`glab mr create` reads the project first)
+        - **Merge Request: Create, Read, Update**: never Merge or Approve.
+        - **Work Item: Create, Read**: top-level MR notes
+          (`POST …/merge_requests/:iid/notes`).
         - **Pipeline: Read**
         - **Job: Read**
-     3. If `codilas-glab` gets a 403 on a read it needs, add that permission.
+     3. Add **User: Read**, for the `codilas-glab api user` login check.
+     4. If `codilas-glab` gets a 403 on a read it needs, add that permission.
 
-     Otherwise use a classic PAT with scopes `api`, `read_repository` and
-     `write_repository`. Expiry is at most 365 days unless the admin changed
-     it.
+     As of 2026-11-24, gitlab.codilas.com offers only classic PATs. Use one with
+     scopes `api`, `read_repository` and `write_repository`. Expiry is at most
+     365 days unless the admin changed it.
 2. **List the repos.** In `_work-projects.nix`, add
    `repos.<key> = { path = "<owner>/<name>"; };` or the GitLab
    `group/sub/project` path. Also add the company's Jira project keys to
    `jiraProjects`, then set `enabled = true`.
-3. **Generate the vars** in the same commit:
+3. **Generate the vars** without Clan's automatic commits, then make one
+   commit:
 
    ```sh
-   clan vars generate stygies --generator hermes-work-devzero-github-token
-   clan vars generate stygies --generator hermes-work-devzero-git-identity
+   CLAN_NO_COMMIT=1 clan vars generate stygies --generator hermes-work-devzero-github-token
+   CLAN_NO_COMMIT=1 clan vars generate stygies --generator hermes-work-devzero-git-identity
    # Codilas: hermes-work-codilas-gitlab-token, hermes-work-codilas-git-identity
+   git add machines/ryza/_work-projects.nix vars/per-machine/stygies/hermes-work-devzero-github-token \
+     vars/per-machine/stygies/hermes-work-devzero-git-identity
+   git commit -m "feat(hermes): enable devzero work coder"
    ```
+
+   Add anything else `git status` shows under `vars/` or `sops/` for these
+   generators. Clan normally commits each generator's files on its own, which
+   would leave the vars committed without the registry change that enables
+   them. The generators exist only once step 2 sets `enabled = true`.
 
    Paste only the token at its hidden prompt. The identity generator asks for
    the name and email your commits for that company should carry. Both values
@@ -525,16 +563,21 @@ PRs, and a GitLab `api` token can do anything your account can.
      `curl -sSI https://gitlab.codilas.com`. The hermes uid may reach public
      IPv4 (`machines/stygies/network.nix`). If the GitLab host resolved to a
      private address it would be dropped.
-   - `devzero-gh auth status` / `codilas-glab auth status` shows your account.
-   - The credential helper answers only for listed repos:
-     `printf 'url=https://github.com/<owner>/<name>.git\n\n' | git credential fill`
-     prints a password. A non-listed repo fails without a prompt.
+   - `devzero-gh api user --jq .login` / `codilas-glab api user` shows your
+     account. glab's `auth status` can't pass: the wrapper uses no stored
+     login.
+   - The credential helper works for listed repos: `git ls-remote
+     https://github.com/<owner>/<name>.git` lists refs. For a non-listed repo,
+     check only the exit status, so no token is printed:
+     `printf 'url=https://github.com/<other>/<repo>.git\n\n' | git credential fill >/dev/null 2>&1; echo $?`
+     prints a non-zero status, without prompting.
    - In a clone of a listed repo:
      - `git config --show-origin user.email` comes from the identity file.
      - `git push --dry-run origin HEAD:refs/heads/main` is refused by the
        Hermes push guard. `--dry-run` still runs pre-push.
    - `devzero-task-status --` is idle, and `~/work/.current-task` is unchanged.
-   - Trial run: in the company room, ask for a small Jira ticket. You should
+   - Trial run: in the company room, ask for a small Jira ticket, naming the
+     repo key. You should
      see a claim, a plan, then a wait for your `go`. After that it records the
      branch, pushes, and posts the PR/MR link. Repeat once from the app.
 
@@ -555,8 +598,9 @@ is the name used in task claims, and must be unique within the company.
 | DevZero GitHub fine-grained PAT | org policy; prefill allows up to 366 days | regenerate on GitHub with the same repos and permissions |
 | Codilas GitLab token | ≤365 days by default | create a new one with the same permissions |
 
-Run `clan vars generate stygies --generator <name> --regenerate`, commit and
-deploy stygies. The helper and wrappers read the file for each call, so no
+Run `clan vars generate stygies --generator <name> --regenerate`, then deploy
+stygies. Clan commits the regenerated var by default; that is fine for a
+renewal, since nothing else changes with it. The helper and wrappers read the file for each call, so no
 restart is needed. An expired token shows up as a Git `Authentication failed`
 or a 401 from the wrapper. The identity var changes only if your name or email
 does.

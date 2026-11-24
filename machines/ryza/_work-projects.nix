@@ -51,7 +51,9 @@ let
   # and again by the push guard.
   branchPattern = "^(feature|fix|chore)/[A-Z][A-Z0-9]+-[0-9]+-[a-z0-9][a-z0-9-]*$";
 
-  inherit (builtins) all attrNames attrValues concatStringsSep filter length match;
+  inherit (builtins) all attrNames attrValues concatStringsSep elem filter foldl' length match replaceStrings;
+  upper = ["A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S" "T" "U" "V" "W" "X" "Y" "Z"];
+  lower = ["a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m" "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"];
   file = "machines/ryza/_work-projects.nix";
   require = cond: message:
     if cond
@@ -66,10 +68,23 @@ let
       match "[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+" path == null || match ".*\\.git" path != null)
     keys;
     badJira = filter (key: match "[A-Z][A-Z0-9]+" key == null) company.jiraProjects;
+    # Two keys for one repo: only the first could ever push or open a PR/MR.
+    # GitHub paths are case-insensitive.
+    canonical = path:
+      if company.kind == "github"
+      then replaceStrings upper lower path
+      else path;
+    paths = map (key: canonical company.repos.${key}.path) keys;
+    duplicates = foldl' (seen: path:
+      if elem path seen || length (filter (other: other == path) paths) < 2
+      then seen
+      else seen ++ [path]) []
+    paths;
   in
     require (company.enabled || keys == []) "${name} lists repos but has enabled = false. Finish its token and identity steps in the README, then set enabled = true in the same commit as its vars."
     && require (badKeys == []) "${name} repo key(s) ${concatStringsSep ", " badKeys} must be task project names (letters, digits, '.', '_', '-')."
     && require (badPaths == []) "${name} repo(s) ${concatStringsSep ", " badPaths} need a path like owner/name or group/sub/project, without .git."
+    && require (duplicates == []) "${name} lists the repo path(s) ${concatStringsSep ", " duplicates} under more than one key."
     && require (badJira == []) "${name} jiraProjects must be Jira project keys like DEV."
     && require (company.kind == "github" || company.kind == "gitlab") "${name}.kind must be github or gitlab.";
   # Throws on the first problem, else returns the companies unchanged.

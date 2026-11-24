@@ -14,6 +14,7 @@ BRANCH_PATTERN = r"^(feature|fix|chore)/[A-Z][A-Z0-9]+-[0-9]+-[a-z0-9][a-z0-9-]*
 BRANCH = "feature/DEV-1-fix-login"
 TOKEN = "test-token-not-real"
 ZERO = "0" * 40
+EMAIL = "dev@example.com"  # the test identity; never a real address
 FAKE_CLI = """#!{python} -I
 import json, os, sys
 keep = ("GH_", "GITHUB_", "GITLAB_", "GLAB_", "GL_", "DO_NOT_TRACK", "XDG_CONFIG_HOME")
@@ -23,8 +24,9 @@ print(json.dumps({{"argv": sys.argv, "env": {{k: v for k, v in os.environ.items(
 
 def git(cwd, *args, **kwargs):
     env = {"PATH": os.environ["PATH"], "HOME": str(cwd), "GIT_CONFIG_NOSYSTEM": "1",
-           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
-           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": EMAIL,
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": EMAIL}
+    env.update(kwargs.pop("env", {}))
     return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True,
                           check=True, **kwargs).stdout.strip()
 
@@ -44,10 +46,12 @@ class WorkTools(unittest.TestCase):
             state.mkdir(parents=True)
             token = self.root / f"{name}.token"
             token.write_text(TOKEN)  # Clan prompt files may lack a newline.
+            identity = self.root / f"{name}.gitconfig"
+            identity.write_text(f'[user]\n  name = "Ex Ample"\n  email = "{EMAIL}"\n')
             self.companies[name] = {
                 "kind": kind, "host": host, "repos": repos,
                 "gitUsername": "x-access-token" if kind == "github" else "hermes",
-                "tokenFile": str(token), "stateDir": str(state),
+                "tokenFile": str(token), "identityFile": str(identity), "stateDir": str(state),
                 "configDir": str(self.root / "config" / name), "cli": str(fake),
             }
         self.config = self.root / "config.json"
@@ -57,7 +61,8 @@ class WorkTools(unittest.TestCase):
                     "GITLAB_TOKEN": "inherited", "GLAB_X": "1", "GL_HOST": "evil.example"}
 
     def write_config(self):
-        self.config.write_text(json.dumps({"branchPattern": BRANCH_PATTERN, "companies": self.companies}))
+        self.config.write_text(json.dumps({"branchPattern": BRANCH_PATTERN, "companies": self.companies,
+                                           "personalHosts": ["forge.example.org", "forge.lab.example"]}))
 
     def run_tool(self, *args, stdin="", cwd=None, code=None):
         result = subprocess.run([sys.executable, "-I", "-B", str(TOOL), str(self.config), *args],
@@ -234,24 +239,72 @@ class WorkTools(unittest.TestCase):
         git(work, "symbolic-ref", "--delete", "refs/remotes/origin/HEAD")
         self.assertRefused(self.push(work, self.new_branch()), "unknown default branch")
 
-    def test_guard_refuses_other_url_forms_and_repos_on_company_hosts(self):
+    def test_guard_accepts_only_the_two_rendered_url_forms(self):
         work = self.repo()
         self.set_task()
-        for url in ("git@github.com:example-org/api.git", "ssh://git@github.com/example-org/api.git",
+        for url in ("https://github.com/example-org/api.git", "https://github.com/example-org/api"):
+            with self.subTest(accepted=url):
+                self.assertEqual(self.push(work, self.new_branch(), url=url).returncode, 0)
+        # S6: a trailing slash (or any other spelling) misses the includeIf, so the identity wouldn't apply.
+        for url in ("https://github.com/example-org/api.git/", "https://github.com/example-org/api/",
+                    "https://github.com/example-org/Api.git", "https://github.com//example-org/api.git",
+                    "git@github.com:example-org/api.git", "ssh://git@github.com/example-org/api.git",
                     "http://github.com/example-org/api.git", "https://user:pw@github.com/example-org/api.git",
-                    "https://github.com:443/example-org/api.git", "https://GitHub.com/example-org/api.git?x=1"):
-            with self.subTest(url=url):
-                self.assertRefused(self.push(work, self.new_branch(), url=url), "must use https://")
-        self.assertRefused(self.push(work, self.new_branch(), url="https://github.com/other/repo.git"),
-                           "is not an enabled devzero repo")
+                    "https://github.com:443/example-org/api.git", "https://GitHub.com/example-org/api.git?x=1",
+                    "https://github.com/example-org/api.git#x", "https://github.com/other/repo.git"):
+            with self.subTest(refused=url):
+                self.assertRefused(self.push(work, self.new_branch(), url=url), "must use a listed repo")
 
-    def test_guard_ignores_other_hosts(self):
+    def test_guard_requires_the_company_identity_on_every_pushed_commit(self):
         work = self.repo()
-        for url in ("ssh://forgejo@forge.example.org:2222/hermes/tally.git", "https://forge.example.org/hermes/x.git",
-                    "/srv/git/x.git", "../local.git", "file:///srv/x.git"):
+        self.set_task()
+        # The base commit is on the remote already; only new commits are checked.
+        git(work, "commit", "-q", "--allow-empty", "-m", "other author",
+            env={"GIT_AUTHOR_EMAIL": "hermes@forge.lab.example"})
+        other = git(work, "rev-parse", "HEAD")
+        self.assertRefused(self.push(work, self.new_branch(local=other)), "identity")
+        git(work, "commit", "-q", "--allow-empty", "-m", "other committer",
+            env={"GIT_COMMITTER_EMAIL": "someone@example.net"})
+        self.assertRefused(self.push(work, self.new_branch(local=git(work, "rev-parse", "HEAD"))), "identity")
+        # Fast-forward range: only commits after the remote tip.
+        git(work, "reset", "-q", "--hard", self.head)
+        git(work, "commit", "-q", "--allow-empty", "-m", "good follow-up")
+        ff = (f"refs/heads/{BRANCH}", git(work, "rev-parse", "HEAD"), f"refs/heads/{BRANCH}", self.head)
+        self.assertEqual(self.push(work, ff).returncode, 0)
+        ff_bad = (f"refs/heads/{BRANCH}", other, f"refs/heads/{BRANCH}", self.head)
+        self.assertRefused(self.push(work, ff_bad), "identity")
+        # Case of the address doesn't matter.
+        git(work, "commit", "-q", "--allow-empty", "-m", "case", env={"GIT_AUTHOR_EMAIL": EMAIL.upper()})
+        self.assertEqual(self.push(work, self.new_branch(local=git(work, "rev-parse", "HEAD"))).returncode, 0)
+
+    def test_guard_refuses_without_an_identity_file(self):
+        work = self.repo()
+        self.set_task()
+        identity = Path(self.companies["devzero"]["identityFile"])
+        for content in ("", '[user]\n  name = "x"\n', None):
+            with self.subTest(content=content):
+                if content is None:
+                    identity.unlink()
+                else:
+                    identity.write_text(content)
+                self.assertRefused(self.push(work, self.new_branch()), "identity file is missing or empty")
+
+    def test_guard_passes_personal_forges_and_local_urls(self):
+        work = self.repo()
+        for url in ("ssh://forgejo@forge.lab.example:2222/hermes/tally.git", "https://forge.example.org/hermes/x.git",
+                    "ssh://git@elsewhere.example/x.git", "/srv/git/x.git", "../local.git", "file:///srv/x.git"):
             with self.subTest(url=url):
                 result = self.push(work, self.new_branch("main"), url=url)
                 self.assertEqual((result.returncode, result.stderr), (0, ""))
+
+    def test_guard_fails_closed_for_unknown_http_hosts(self):
+        # S5: e.g. www.github.com could redirect to a listed repo and get its token.
+        work = self.repo()
+        self.set_task()
+        for url in ("https://www.github.com/example-org/api.git", "https://evil.example/x.git",
+                    "http://forge.example.org.evil/x.git", "HTTPS://evil.example/x.git"):
+            with self.subTest(url=url):
+                self.assertRefused(self.push(work, self.new_branch(), url=url), "neither a company nor a personal forge")
 
     def test_guard_runs_as_a_config_hook_on_push(self):
         # The installed shape: a global `hook.<name>` entry, Git appending the hook arguments.
@@ -289,6 +342,9 @@ class WorkTools(unittest.TestCase):
         self.assertEqual(result.returncode, code, result.stderr)
         return json.loads(result.stdout) if code == 0 else result.stderr
 
+    def refused(self, company, *args):
+        self.assertIn("refused by Hermes work wrapper", self.cli(company, *args, code=2))
+
     def test_cli_injects_the_token_only_into_the_child_env(self):
         out = self.cli("devzero", "pr", "view", "--repo", "example-org/api", "12")
         self.assertEqual(out["argv"][1:], ["pr", "view", "--repo", "example-org/api", "12"])
@@ -304,76 +360,240 @@ class WorkTools(unittest.TestCase):
             "GLAB_CHECK_UPDATE": "false", "GLAB_NO_PROMPT": "1", "DO_NOT_TRACK": "1",
         })
 
-    def test_cli_subcommand_allowlist(self):
-        refused = [
+    def test_cli_auth_check_is_api_user(self):
+        # F4: glab has no stored login, so `auth status` can't pass; `api user` works for both.
+        self.cli("devzero", "api", "user")
+        self.cli("codilas", "api", "user")
+        self.refused("devzero", "auth", "status")
+        self.refused("codilas", "auth", "status")
+
+    def test_cli_refuses_unlisted_commands_flags_and_forms(self):
+        for company, *args in (
             ("devzero", "pr", "merge", "--repo", "example-org/api", "1"),
             ("devzero", "pr", "close", "--repo", "example-org/api", "1"),
             ("devzero", "repo", "delete", "example-org/api"),
             ("devzero", "secret", "list"),
             ("devzero", "auth", "token"),
-            ("devzero", "auth", "status", "--show-token"),
             ("devzero", "--repo", "example-org/api", "pr", "view"),
+            ("devzero", "pr", "view", "--repo", "example-org/api", "--web"),
+            ("devzero", "pr", "view", "--repo", "example-org/api", "--template", "{{.}}"),
             ("codilas", "mr", "merge", "--repo", "example/group/backend", "1"),
             ("codilas", "mr", "approve", "--repo", "example/group/backend", "1"),
+            ("codilas", "mr", "create", "--fill", "--repo", "example/group/backend"),
             ("codilas", "variable", "list"),
             ("codilas", "auth", "login"),
-        ]
-        for args in refused:
+            # Short-flag bundles and attached values could hide a value flag.
+            ("devzero", "pr", "view", "-cR", "other/repo"),
+            ("devzero", "pr", "view", "-Rother/repo"),
+            ("devzero", "pr", "view", "-R=other/repo"),
+            # Duplicates (pflag keeps the last).
+            ("devzero", "pr", "view", "--repo", "example-org/api", "--repo", "example-org/api"),
+            # Positional counts.
+            ("devzero", "pr", "list", "--repo", "example-org/api", "extra"),
+            ("devzero", "pr", "view", "--repo", "example-org/api", "1", "2"),
+            # Bool values only true/false.
+            ("devzero", "pr", "view", "--repo", "example-org/api", "--comments=yes"),
+        ):
             with self.subTest(args=args):
-                self.assertIn("refused by Hermes work wrapper", self.cli(*args, code=2))
-        self.cli("devzero", "auth", "status")
-        self.cli("codilas", "ci", "status", "--repo", "example/group/backend")
-        self.cli("devzero", "repo", "view", "example-org/web")
+                self.refused(company, *args)
+
+    def test_cli_bare_double_dash_is_refused_anywhere(self):
+        # S4: pflag lets a value-taking option consume `--`, then keeps parsing.
+        for company, *args in (
+            ("devzero", "api", "repos/example-org/api/pulls/1/merge", "--jq", "--", "--method", "PUT"),
+            ("codilas", "api", "projects/example%2Fgroup%2Fbackend/merge_requests/1/merge", "--method", "GET",
+             "--input", "--", "--method", "PUT"),
+            ("devzero", "pr", "comment", BRANCH, "--repo", "example-org/api", "--body", "--",
+             "--repo", "victim-org/secret", "--body", "pwned"),
+            ("codilas", "mr", "note", "create", BRANCH, "--repo", "example/group/backend", "--message", "--",
+             "--repo", "victim/proj", "--message", "pwned"),
+            ("devzero", "pr", "view", "--repo", "example-org/api", "--", "12"),
+            ("devzero", "pr", "view", "--repo", "example-org/api", "--json", "--"),
+        ):
+            with self.subTest(args=args):
+                self.set_task("devzero")
+                self.set_task("codilas", project="backend")
+                self.refused(company, *args)
+
+    def test_cli_option_values_may_start_with_a_dash(self):
+        # F7: a Markdown body starting with a bullet is a value, not a flag.
+        self.set_task("codilas", project="backend")
+        mr = ("mr", "create", "--repo", "example/group/backend", "--source-branch", BRANCH,
+              "--target-branch", "main", "--title", "t", "--push=false", "--yes")
+        out = self.cli("codilas", *mr, "--description", "- Fixed login\n- Tests")
+        self.assertIn("- Fixed login\n- Tests", out["argv"])
+        self.cli("codilas", *mr, "--description-file", "body.md")
+        self.set_task("devzero")
+        self.cli("devzero", "pr", "comment", BRANCH, "--repo", "example-org/api", "--body", "--repo other/x")
 
     def test_cli_requires_an_enabled_repo(self):
         for args in (("pr", "view", "12"), ("pr", "view", "--repo", "other/repo"), ("pr", "view", "-R", "other/repo"),
-                     ("pr", "view", "--repo=other/repo"), ("pr", "view", "--repo", "example-org/api", "--repo", "other/x"),
-                     ("pr", "view", "-Rother/repo", "--repo", "example-org/api"), ("repo", "view"),
-                     ("repo", "view", "other/repo"), ("pr", "view", "--hostname", "x", "--repo", "example-org/api")):
+                     ("pr", "view", "--repo=other/repo"), ("repo", "view"), ("repo", "view", "other/repo"),
+                     ("pr", "view", "--hostname", "x", "--repo", "example-org/api")):
             with self.subTest(args=args):
-                self.assertIn("refused", self.cli("devzero", *args, code=2))
+                self.refused("devzero", *args)
         self.cli("devzero", "pr", "view", "-R", "example-org/api", "12")
         self.cli("devzero", "pr", "view", "--repo=example-org/api.git", "12")
+        self.cli("devzero", "repo", "view", "example-org/web")
+        self.cli("codilas", "ci", "status", "--repo", "example/group/backend")
 
     def test_cli_create_is_bound_to_the_active_task(self):
         create = ("pr", "create", "--repo", "example-org/api", "--base", "main", "--head", BRANCH, "--title", "t")
-        self.assertIn("no active task", self.cli("devzero", *create, code=2))
+        self.assertIn("active task", self.cli("devzero", *create, code=2))
         self.set_task()
         self.cli("devzero", *create)
+        self.cli("devzero", *create, "--body-file", "body.md", "--draft")
         self.assertIn("--head", self.cli("devzero", *create[:-4], "--head", "feature/DEV-2-x", "--title", "t", code=2))
         self.assertIn("--head", self.cli("devzero", "pr", "create", "--repo", "example-org/api", "--title", "t", code=2))
-        self.assertIn("is for api", self.cli("devzero", "pr", "create", "--repo", "example-org/web", "--head", BRANCH, code=2))
-        self.assertIn("--web", self.cli("devzero", *create, "--web", code=2))
+        self.assertIn("is for api", self.cli("devzero", "pr", "create", "--repo", "example-org/web", "--head", BRANCH,
+                                             code=2))
+        for extra in (("--web",), ("--fill",), ("--reviewer", "x"), ("--dry-run",)):
+            with self.subTest(gh=extra):
+                self.refused("devzero", *create, *extra)
 
         mr = ("mr", "create", "--repo", "example/group/backend", "--source-branch", BRANCH,
               "--target-branch", "main", "--title", "t", "--yes")
         self.set_task("codilas", project="backend")
         self.cli("codilas", *mr)
         self.cli("codilas", *mr, "--push=false")
-        self.cli("codilas", *mr, "--fill", "--push=false")
-        for extra in (("--fill",), ("--push",), ("--push=true",), ("--push=false", "--push"), ("--head", "fork/x"),
-                      ("--create-source-branch",), ("--web",)):
-            with self.subTest(extra=extra):
-                self.assertIn("refused", self.cli("codilas", *mr, *extra, code=2))
+        # S3 (auto-merge) and the other unlisted mr create flags.
+        for extra in (("--auto-merge",), ("--auto-merge=true",), ("--fill",), ("--push",), ("--push=true",),
+                      ("--head", "fork/x"), ("--create-source-branch",), ("--web",), ("--remove-source-branch",),
+                      ("--squash-before-merge",)):
+            with self.subTest(glab=extra):
+                self.refused("codilas", *mr, *extra)
         self.assertIn("--source-branch", self.cli("codilas", *mr[:4], "--source-branch", "main", code=2))
 
-    def test_cli_api_is_get_only(self):
-        self.cli("devzero", "api", "repos/example-org/api/pulls/1/comments")
-        self.cli("devzero", "api", "--method", "GET", "-F", "per_page=100", "repos/example-org/api/pulls")
-        self.cli("codilas", "api", "-X", "GET", "projects/1/merge_requests/2/notes")
-        for args in (("api", "-X", "POST", "repos/x"), ("api", "--method=PATCH", "repos/x"),
-                     ("api", "-f", "body=x", "repos/x"), ("api", "--input", "f", "repos/x"),
-                     ("api", "graphql", "-f", "query=x"), ("api", "-X", "GET", "graphql"),
-                     ("api", "--hostname", "evil.example", "repos/x"), ("api",), ("api", "-XPOST", "repos/x")):
+    def test_cli_writes_are_bound_to_the_active_task_and_its_branch(self):
+        # S7: comment/edit/ready and note/update only on the task's own PR/MR, selected by branch.
+        writes = {
+            "devzero": [
+                ("pr", "comment", BRANCH, "--repo", "example-org/api", "--body-file", "f"),
+                ("pr", "edit", BRANCH, "--repo", "example-org/api", "--title", "t"),
+                ("pr", "ready", BRANCH, "--repo", "example-org/api"),
+            ],
+            "codilas": [
+                ("mr", "note", "create", BRANCH, "--repo", "example/group/backend", "--message", "m"),
+                ("mr", "update", BRANCH, "--repo", "example/group/backend", "--title", "t"),
+            ],
+        }
+        for company, commands in writes.items():
+            for args in commands:
+                with self.subTest(no_task=args):
+                    self.assertIn("active task", self.cli(company, *args, code=2))
+        self.set_task()
+        self.set_task("codilas", project="backend")
+        for company, commands in writes.items():
+            for args in commands:
+                with self.subTest(ok=args):
+                    self.cli(company, *args)
+                selector = args.index(BRANCH)
+                for other in ("12", "feature/DEV-2-other", "main"):
+                    with self.subTest(selector=other, args=args):
+                        self.refused(company, *args[:selector], other, *args[selector + 1:])
+        self.set_task(project="web")
+        self.assertIn("is for web", self.cli("devzero", *writes["devzero"][0], code=2))
+
+    def test_cli_no_inline_resolve_delete_or_retarget(self):
+        self.set_task()
+        self.set_task("codilas", project="backend")
+        for company, *args in (
+            ("devzero", "pr", "comment", BRANCH, "--repo", "example-org/api", "--delete-last"),
+            ("devzero", "pr", "comment", BRANCH, "--repo", "example-org/api", "--edit-last", "--body", "x"),
+            ("devzero", "pr", "ready", BRANCH, "--repo", "example-org/api", "--undo"),
+            ("devzero", "pr", "edit", BRANCH, "--repo", "example-org/api", "--base", "other"),
+            ("devzero", "pr", "edit", BRANCH, "--repo", "example-org/api", "--add-reviewer", "x"),
+            ("codilas", "mr", "update", BRANCH, "--repo", "example/group/backend", "--target-branch", "other"),
+            ("codilas", "mr", "update", BRANCH, "--repo", "example/group/backend", "--remove-source-branch"),
+            ("codilas", "mr", "update", BRANCH, "--repo", "example/group/backend", "--lock-discussion"),
+            ("codilas", "mr", "note", BRANCH, "--repo", "example/group/backend", "--message", "m"),
+            ("codilas", "mr", "note", "delete", "1", BRANCH, "--repo", "example/group/backend"),
+            ("codilas", "mr", "note", "resolve", "1", BRANCH, "--repo", "example/group/backend"),
+            ("codilas", "mr", "note", "update", "1", BRANCH, "--repo", "example/group/backend"),
+            ("codilas", "mr", "note", "draft", "create", BRANCH, "--repo", "example/group/backend"),
+            ("codilas", "mr", "note", "create", BRANCH, "--repo", "example/group/backend", "--message", "m",
+             "--reply", "abc"),
+            ("codilas", "mr", "note", "create", BRANCH, "--repo", "example/group/backend", "--message", "m",
+             "--line", "3"),
+            ("codilas", "mr", "note", "create", "delete", BRANCH, "--repo", "example/group/backend", "--message", "m"),
+        ):
             with self.subTest(args=args):
-                self.assertIn("refused", self.cli("devzero", *args, code=2))
+                self.refused(company, *args)
+
+    def test_cli_api_endpoints_are_relative_and_under_listed_repos(self):
+        for company, endpoint in (
+            ("devzero", "repos/example-org/api"),
+            ("devzero", "repos/example-org/api/pulls/1/comments"),
+            ("devzero", "repos/example-org/api?per_page=100"),
+            ("devzero", "repos/example-org/web/actions/runs"),
+            ("codilas", "projects/example%2Fgroup%2Fbackend"),
+            ("codilas", "projects/example%2Fgroup%2Fbackend/merge_requests/2/notes"),
+        ):
+            with self.subTest(allowed=endpoint):
+                self.cli(company, "api", endpoint)
+        for company, endpoint in (
+            # S1: absolute URLs would carry the token to any host.
+            ("codilas", "https://evil.example/api/v4/user"),
+            ("devzero", "https://evil.example/x"),
+            ("codilas", "/api/v4/user"),
+            ("devzero", "/repos/example-org/api"),
+            # S8: other repos, traversal, graphql, placeholders.
+            ("devzero", "repos/other-org/private/contents/README.md"),
+            ("devzero", "repos/example-org/api-evil"),
+            ("devzero", "repos/example-org/api/../../other/x"),
+            ("devzero", "repos/example-org/api/%2e%2e/%2e%2e/other/x"),
+            ("devzero", "repos/example-org/api//x"),
+            ("devzero", "graphql"),
+            ("devzero", "/graphql?query=mutation"),
+            ("devzero", "repos/example-org/api/%67raphql"),
+            ("devzero", "repos/{owner}/{repo}/pulls"),
+            ("devzero", "repos/example-org/api pulls"),
+            ("codilas", "projects/:id/merge_requests"),
+            ("codilas", "projects/:fullpath"),
+            ("codilas", "projects/example/group/backend"),
+            ("codilas", "projects/1/merge_requests"),
+            ("codilas", "projects/example%2Fgroup%2Fbackend%2F..%2Fother"),
+            ("codilas", "users"),
+        ):
+            with self.subTest(refused=endpoint):
+                self.refused(company, "api", endpoint)
+
+    def test_cli_api_is_get_only_with_listed_flags(self):
+        repo = "repos/example-org/api/pulls"
+        self.cli("devzero", "api", "--method", "GET", repo)
+        self.cli("devzero", "api", "-X", "get", "--paginate", "--jq", ".[].number", "--include", repo)
+        self.cli("devzero", "api", "--silent", "-H", "Accept: application/vnd.github.raw+json", repo)
+        self.cli("codilas", "api", "--paginate", "--output", "ndjson", "projects/example%2Fgroup%2Fbackend/pipelines")
+        for company, *args in (
+            ("devzero", "api", "-X", "POST", repo),
+            ("devzero", "api", "--method=PATCH", repo),
+            ("devzero", "api", "--method", "GET", "--method", "PUT", repo),
+            ("devzero", "api", "-f", "body=x", repo),
+            ("devzero", "api", "-F", "x=1", "--method", "GET", repo),
+            ("devzero", "api", "--field", "x=1", repo),
+            ("devzero", "api", "--raw-field", "x=1", repo),
+            ("devzero", "api", "--input", "f", repo),
+            ("devzero", "api", "--hostname", "evil.example", repo),
+            ("devzero", "api", "-H", "X-HTTP-Method-Override: PUT", repo),
+            ("devzero", "api", "--jq", "env.GH_TOKEN", repo),
+            ("devzero", "api", "--jq", "$ENV", repo),
+            ("devzero", "api", "--cache", "1h", repo),
+            ("devzero", "api"),
+            # S2: --form switches glab to POST.
+            ("codilas", "api", "projects/example%2Fgroup%2Fbackend/uploads", "--form", "file=@tok"),
+            ("codilas", "api", "--placeholder", "x=y", "projects/example%2Fgroup%2Fbackend"),
+            ("codilas", "api", "--jq", ".x", "projects/example%2Fgroup%2Fbackend"),
+            ("codilas", "api", "-X", "DELETE", "projects/example%2Fgroup%2Fbackend"),
+        ):
+            with self.subTest(args=args):
+                self.refused(company, *args)
 
     def test_cli_without_token_or_company_fails_clearly(self):
         Path(self.companies["devzero"]["tokenFile"]).unlink()
-        result = self.run_tool("cli", "devzero", "auth", "status")
+        result = self.run_tool("cli", "devzero", "api", "user")
         self.assertEqual(result.returncode, 1)
         self.assertIn("token file missing", result.stderr)
-        self.assertIn("not enabled", self.cli("nope", "auth", "status", code=2))
+        self.assertIn("not enabled", self.cli("nope", "api", "user", code=2))
 
 
 if __name__ == "__main__":

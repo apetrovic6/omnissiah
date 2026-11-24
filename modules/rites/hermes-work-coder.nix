@@ -14,6 +14,9 @@
     ...
   }: let
     registry = import ../../machines/ryza/_work-projects.nix;
+    # The personal coder's forges: the push guard passes their URLs and fails
+    # closed for any other HTTP(S) host.
+    personalHosts = lib.unique (lib.mapAttrsToList (_: forge: forge.host) (import ../../machines/ryza/_coder-projects.nix).forges);
     companies = lib.filterAttrs (_: company: company.enabled) (registry.check config.services.imperium.hermesWork.companies);
     anyEnabled = companies != {};
     home = config.users.users.hermes.home;
@@ -32,10 +35,12 @@
 
     toolsConfig = pkgs.writeText "hermes-work-tools.json" (builtins.toJSON {
       inherit (registry) branchPattern;
+      inherit personalHosts;
       companies =
         lib.mapAttrs (name: company: {
           inherit (company) kind host gitUsername;
           tokenFile = tokenPath company;
+          identityFile = identityPath company;
           stateDir = stateDir name;
           configDir = "${home}/.config/hermes-work/${name}/${cliName company}";
           cli = lib.getExe (cliPackage company);
@@ -73,47 +78,56 @@
     gitConfig =
       ''
         # Hermes work coder: refuses company pushes outside the active task's
-        # branch; exits 0 for every other host.
+        # branch and identity, and HTTP(S) pushes to unknown hosts; passes
+        # the personal forges.
         [hook "hermes-work-guard"]
           event = pre-push
           command = ${tools} pre-push
         [credential]
           interactive = false
+        # A redirect would let Git send a company token to a URL the guard
+        # never judged. Neither personal forge needs one for Git.
+        [http]
+          followRedirects = false
       ''
       + lib.concatStrings (lib.mapAttrsToList companyGitConfig companies);
 
-    taskLauncher = name: company:
-      pkgs.writeShellScript "hermes-${name}-task" ''
-        umask 077
-        export HERMES_TASK_STATE_DIR=${lib.escapeShellArg (stateDir name)}
-        export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON (lib.attrNames company.repos))}
-        export HERMES_TASK_PROJECTS="$HERMES_TASK_APP_PROJECTS"
-        export HERMES_TASK_ROOMS=${lib.escapeShellArg (builtins.toJSON [company.room])}
-        export HERMES_TASK_BRANCH_PATTERN=${lib.escapeShellArg registry.branchPattern}
-        ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HERMES_TASK_STATE_DIR" || exit $?
-        command=''${0##*/}
-        ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HERMES_TASK_STATE_DIR/.task-lock" \
-          ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "task-''${command#${name}-task-}" "$@"
-        status=$?
-        if [ "$status" -eq 75 ]; then
-          printf '%s\n' 'task lock busy, retry once' >&2
-        fi
-        exit "$status"
-      '';
+    taskLauncherText = name: company: ''
+      umask 077
+      export HERMES_TASK_STATE_DIR=${lib.escapeShellArg (stateDir name)}
+      export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON (lib.attrNames company.repos))}
+      export HERMES_TASK_PROJECTS="$HERMES_TASK_APP_PROJECTS"
+      export HERMES_TASK_ROOMS=${lib.escapeShellArg (builtins.toJSON [company.room])}
+      export HERMES_TASK_BRANCH_PATTERN=${lib.escapeShellArg registry.branchPattern}
+      ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HERMES_TASK_STATE_DIR" || exit $?
+      command=''${0##*/}
+      ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HERMES_TASK_STATE_DIR/.task-lock" \
+        ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "task-''${command#${name}-task-}" "$@"
+      status=$?
+      if [ "$status" -eq 75 ]; then
+        printf '%s\n' 'task lock busy, retry once' >&2
+      fi
+      exit "$status"
+    '';
+    taskLauncher = name: company: pkgs.writeShellScript "hermes-${name}-task" (taskLauncherText name company);
     cliWrapper = name: company:
       pkgs.writeShellScript "${name}-${cliName company}" ''
         exec ${tools} cli ${name} "$@"
       '';
-    workTools = pkgs.runCommand "hermes-work-tools" {} (''
-        mkdir -p "$out/bin"
-      ''
-      + lib.concatStrings (lib.mapAttrsToList (name: company: ''
-          for action in status claim branch done clear drop; do
-            ln -s ${taskLauncher name company} "$out/bin/${name}-task-$action"
-          done
-          ln -s ${cliWrapper name company} "$out/bin/${name}-${cliName company}"
-        '')
-        companies));
+    workTools =
+      pkgs.runCommand "hermes-work-tools" {
+        # The rendered launchers, for tests/test_hermes_work_launchers.py.
+        passthru.launcherTexts = lib.mapAttrs taskLauncherText companies;
+      } (''
+          mkdir -p "$out/bin"
+        ''
+        + lib.concatStrings (lib.mapAttrsToList (name: company: ''
+            for action in status claim branch done clear drop; do
+              ln -s ${taskLauncher name company} "$out/bin/${name}-task-$action"
+            done
+            ln -s ${cliWrapper name company} "$out/bin/${name}-${cliName company}"
+          '')
+          companies));
 
     identityScript = ''
       fail() { printf '%s\n' "$1" >&2; exit 1; }
