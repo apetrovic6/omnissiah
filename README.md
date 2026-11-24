@@ -299,7 +299,11 @@ without a route would be answered by `default` on the personal login.
    `claude-as devzero setup-token`. Run
    `clan vars generate ryza --generator hermes-work-claude-token` and paste
    only the token at the hidden prompt. Never put it in shell arguments,
-   logs, or chat.
+   logs, or chat. The token starts with `sk-ant-oat01-` and is about 108
+   characters; the check unit rejects anything without that prefix. If the
+   hidden prompt mangles the paste (it did on 2026-11-24), copy the token and
+   set it from the clipboard instead:
+   `wl-paste | tr -d '\n ' | clan vars set ryza hermes-work-claude-token/token`.
 2. Deploy stygies first, then ryza. Invite the existing `@hermes` bot to both
    rooms. Refresh the mobile profile picker, select `work`, and start a new
    chat. Use `/new` in either Matrix room if it has earlier context.
