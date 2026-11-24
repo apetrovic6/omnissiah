@@ -210,7 +210,9 @@ tools run over SSH as `hermes` in `~/work` on stygies.
 3. Create one Matrix room per project and invite the existing bot. Under
    `projects` in `machines/ryza/_coder-projects.nix`, add the repo basename
    with `forge = "cerberus"` or `forge = "noosphere"` and `room = "!…"`, using
-   the room's internal ID, not an alias. A `noosphere` project is a Nix
+   the room's internal ID, not an alias. For a repo not owned by `manjo`, add
+   `owner = "<user or org>"`; Hermes forks it to `hermes/<repo>` and opens PRs
+   into `<owner>/<repo>`. A `noosphere` project is a Nix
    evaluation error until `forges.noosphere.botEnabled` is `true` (see
    [Hermes on noosphere Forgejo](#hermes-on-noosphere-forgejo)). Ryza uses this map for Matrix routing
    and the coder prompt; Stygies uses its keys to validate app claims.
@@ -895,8 +897,8 @@ services also return HTTP 403 to `apetrovic` when accessed from Stygies.
 
 ### Hermes on noosphere Forgejo
 
-The noosphere bot is **off** (`forges.noosphere.botEnabled = false` in
-`machines/ryza/_coder-projects.nix`). While it is off no deploy declares or
+The noosphere bot is gated by `forges.noosphere.botEnabled` in
+`machines/ryza/_coder-projects.nix` (now `true`). While it is off no deploy declares or
 prompts for `hermes-forgejo-noosphere-token`, Stygies gets no noosphere Git
 credentials or `fj` login, and a project with `forge = "noosphere"` fails
 evaluation. Follow the steps below in order; set the flag to `true` in the same
@@ -953,14 +955,16 @@ run still schedules. Do not revert to global while a Hermes fork exists.
    in the app.
 
 No noosphere project is enrolled by default. To add one, review branch
-protection and Actions on `manjo/<repo>`, add the repo to `hermesRepos` in
+protection and Actions on `<owner>/<repo>`, add the repo to `hermesRepos` in
 `modules/taghmata/_tofunix/scriptorium/forge-noosphere.nix`, and apply the
 read-only grant. Sign in as `hermes` to create the actual fork; leave fork
 Actions off and never attach a privileged runner to it. Invite the Matrix
-bot and add the `{ forge = "noosphere"; room = "!…"; }` project record.
+bot and add the `{ forge = "noosphere"; room = "!…"; }` project record, with
+`owner = "<org>"` for an organisation repo (its tofunix entry sets `org`, and
+the read grant follows it).
 Deploy Stygies and then Ryza. The remotes are
 `https://forge.noosphere.uk/hermes/<repo>.git` (`origin`) and
-`https://forge.noosphere.uk/manjo/<repo>.git` (`upstream`); Git reads the PAT
+`https://forge.noosphere.uk/<owner>/<repo>.git` (`upstream`); Git reads the PAT
 from the deployed secret file for this HTTPS host only. As `hermes`, check
 noninteractive `git ls-remote` on both, a fork-only dry-run push, and a repo
 read with `fj -H forge.noosphere.uk`. The first task should open its PR from
