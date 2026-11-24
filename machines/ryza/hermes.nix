@@ -61,7 +61,7 @@
     else "Manjo must name the exact repo: ${lib.concatMapStringsSep ", " (repo: "`${repo}`") projectNames}. If unclear or unlisted, ask before claiming or planning.";
   projectRoutes = lib.concatStringsSep "\n" (lib.mapAttrsToList (repo: project: let
     forge = forges.${project.forge};
-  in "| `${repo}` | `${project.room}` | `${forge.gitBase}` | `${forge.host}` |")
+  in "| `${repo}` | `${project.owner or "manjo"}` | `${project.room}` | `${forge.gitBase}` | `${forge.host}` |")
   projects);
   # Work coder (HOM-36): rendered from _work-projects.nix.
   workCoder = config.services.imperium.hermes.workCoder;
