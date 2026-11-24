@@ -19,6 +19,9 @@
   inherit (config.services.imperium.hermes.stygies) knownHosts;
   hasHostPin = knownHosts != "";
   hostKeyAlgorithm = builtins.head (lib.splitString " " knownHosts);
+  appProjects = lib.concatMapStringsSep ", " (repo: "`${repo}`") (
+    lib.attrNames config.services.imperium.hermes.profiles.coder.rooms
+  );
 in {
   imports = [
     self.nixosModules.hermes
@@ -81,7 +84,7 @@ in {
         # Hermes uses accept-new. Without a system pin, don't expose a profile
         # that could trust an unknown host or run its terminal locally on ryza.
         enable = hasHostPin;
-        soul = builtins.readFile ./hermes-coder-soul.md;
+        soul = builtins.replaceStrings ["@appProjects@"] [appProjects] (builtins.readFile ./hermes-coder-soul.md);
         # One Matrix room per project, all handled by this profile: each room is
         # its own conversation, and a thread per task gives a fresh one inside
         # it. Invite @hermes, then add the room's Internal room ID (Element:

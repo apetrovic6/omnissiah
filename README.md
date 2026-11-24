@@ -212,12 +212,22 @@ tools run over SSH as `hermes` in `~/work` on stygies.
    `services.imperium.hermes.profiles.coder.rooms` on ryza, by project name.
    Each room is its own conversation; start a thread per task for a fresh one.
 
+In Hermes Mobile, pick `coder`, open one chat per task, and name the exact repo
+from `profiles.coder.rooms`. App chats and Matrix threads share one task slot and
+queue; both require explicit plan approval. If queued, return to the same chat
+or thread and say `continue` to check your place or start after promotion. There
+is no push notification. If the coder loses the app task ID from context, ask
+it to `clear task` rather than starting over in a new chat.
+
 On ryza as `hermes`, use `hermes -p coder model` to select a provider and
 `hermes -p coder --tui` to start a session. `hermes -p coder webapp` selects the
 same profile if the gateway's Webapp listener is enabled. Interactive config
 changes outside Nix-managed settings survive activation.
 The coder's `SOUL.md` is managed by Nix; a switch or gateway restart
-overwrites edits to that file.
+overwrites edits to that file. After deploying a SOUL change, run
+`hermes -p coder sessions refresh-prompts` on ryza as `hermes` so existing chats
+and threads pick it up on their next turn without losing history. Don't reset
+an active or queued chat to pick up the prompt.
 
 **Kaneo login:** Use a Kaneo account with access to the project workspace.
 A separate workspace member for Hermes is recommended so its edits are
@@ -242,7 +252,7 @@ minute after login.
 [Kaneo issues a 30-day access token](https://github.com/usekaneo/kaneo/blob/v2.48.0/apps/api/src/mcp/oauth.ts#L151-L161)
 without a refresh token. Check `expires_at` in `mcp-tokens/kaneo.json` under the
 persisted coder profile. Repeat the browser login when it expires. Until
-reauthorized, Hermes tells the task's Matrix room that the board is
+reauthorized, Hermes tells the task's chat or thread that the board is
 unreachable and keeps working without Kaneo.
 
 **Emergency stop:** Send `/pause` in the default bot DM to hold new work
