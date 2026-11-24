@@ -1,5 +1,4 @@
-# Forgejo Actions runners, one per machine, each registered with every Forgejo
-# it lists in `forges`.
+# Forgejo Actions runners, one service per forge on each machine.
 #
 # Registration is offline and needs no human-copied token. Each machine/forge
 # pair gets a clan var holding a random 40-hex secret. The runner connects with
@@ -38,6 +37,7 @@
       # git and registry traffic (nopresh's image push) hairpins out through
       # Pangolin and back. cerberus pins it the same way (nopresh.nix).
       lanAddress = self.lib.hosts.cerberus;
+      sccachePort = 4228;
       # Hermes owns its forks, and runners have no repository allowlist.
       # Other owners need their own scoped registration if they enable Actions.
       scope = "manjo";
@@ -52,6 +52,7 @@
       localUrl = null;
       # Technitium already resolves it to the Traefik VIP.
       lanAddress = null;
+      sccachePort = 4227;
       forgejo = "kubectl --context default -n forgejo exec -i deploy/forgejo -c forgejo -- forgejo";
     };
   };
@@ -88,9 +89,10 @@
   # same function on both sides is what keeps the toolset identical, which
   # the label warning at the top of this file depends on.
   #
-  #   name     instance name: forgejo-runner-<name>.service, its state dir
+  #   runForges  the connections this system runs (one per guest)
   #   machine  the clan machine whose identity this is, for the forge URLs
   #   cfg      that machine's services.imperium.forgejoRunner
+  #   resources  host CI budget or this guest's share
   #   sccache  null, or that machine's services.imperium.sccache
   #   paths    where the secrets are, on the system that runs the jobs
   #   inVm     the system is a dedicated CI VM, so there is nothing to share
@@ -99,18 +101,16 @@
     config,
     lib,
     pkgs,
-    name,
+    runForges,
     machine,
     cfg,
+    resources,
     sccache,
     paths,
     inVm,
   }: let
-    inherit (lib) mkIf mkMerge genAttrs;
-    # The nixpkgs module's StateDirectory for our instance (also its HOME).
-    stateDir = "/var/lib/forgejo-runner/${name}";
-  in
-    mkMerge [
+    inherit (lib) mkIf mkMerge;
+    systemConfig = [
       {
         networking.hosts = mkMerge (map (forge: let
           f = forges.${forge};
@@ -119,6 +119,7 @@
             ${f.lanAddress} = [(lib.removePrefix "https://" f.url)];
           })
         cfg.forges);
+        services.forgejo-runner.package = pkgs.forgejo-runner;
       }
 
       {
@@ -161,8 +162,8 @@
         };
       }
 
-      (mkIf (cfg.resources != null) (let
-        r = cfg.resources;
+      (mkIf (resources != null) (let
+        r = resources;
       in
         mkMerge [
           {
@@ -174,9 +175,6 @@
               daemonCPUSchedPolicy = "batch";
               daemonIOSchedClass = "idle";
             };
-            # cargo run directly by jobs (outside Nix) otherwise starts one rustc
-            # per core of the whole machine, and they share the memory cap.
-            services.forgejo-runner.instances.${name}.settings.runner.envs.CARGO_BUILD_JOBS = toString r.cpus;
           }
 
           # In a VM, the VM's own size is the cap (forgejo-runner-microvm.nix).
@@ -192,7 +190,6 @@
             # The daemon has to be in the slice too: Nix builds run in its cgroup,
             # not the runner's. Deploy-time store copies go through it as well,
             # which is harmless, since they need little memory.
-            systemd.services."forgejo-runner-${name}".serviceConfig.Slice = "forgejo-ci.slice";
             systemd.services.nix-daemon.serviceConfig.Slice = "forgejo-ci.slice";
 
             # Lowers what kubelet offers the scheduler. Pods already on the node
@@ -207,110 +204,107 @@
             ]);
           })
         ]))
+    ];
 
-      {
-        services.forgejo-runner = {
-          package = pkgs.forgejo-runner;
-          instances.${name} = {
-            enable = true;
-            # The instance's own `labels` option was renamed to
-            # `settings.runner.labels` upstream. Nothing else changes: the
-            # nixpkgs module reads the labels back through
-            # `settings.runner.labels` plus any per-connection
-            # `settings.server.connections.<n>.labels`, and derives
-            # `runtimes.host` from a `:host` suffix and `runtimes.docker` /
-            # `runtimes.podman` from a `:docker` infix off that same list.
-            settings.runner.labels = cfg.labels;
-            # forgejo-runner's job timeout defaults to 3h (its config.example
-            # says so, and nothing here overrode it), which is what killed the
-            # phalanx and enginseer builds:
-            #   [runner]: this step has been cancelled: ctx: context deadline
-            #   exceeded, exec: RUN signal: killed
-            # Three deadlines apply to one job -- the instance's
-            # `ENDLESS_TASK_TIMEOUT`, this one, and the workflow's
-            # `timeout-minutes` -- and the shortest wins, so this is kept above
-            # the workflow's 5h: the workflow owns the deadline you see in the
-            # UI, and the runner never cuts a job short underneath it.
-            settings.runner.timeout = "6h";
-            settings.runner.capacity = cfg.capacity;
-            # `secrets` values are credential paths the module turns into
-            # `file:$CREDENTIALS_DIRECTORY/...` URLs. A bare path in
-            # settings.token_url is rejected at startup ("unsupported secret URL").
-            settings.server.connections = genAttrs cfg.forges (forge: {
-              uuid = paths.forgeUuid forge;
-              url =
-                if forges.${forge}.host == machine
-                then forges.${forge}.localUrl
-                else forges.${forge}.url;
-            });
-            secrets.server.connections = genAttrs cfg.forges (forge: {
-              token_url = paths.forgeSecret forge;
-            });
-            # PATH available to host-executed jobs: node (for actions/checkout),
-            # devenv (the build), nix (devenv shells out to it), the usual
-            # coreutils/git/tar, and a Rust toolchain for steps that run cargo
-            # outside a devenv shell.
-            hostPackages =
-              [config.nix.package]
-              ++ (with pkgs; [
-                bash
-                coreutils
-                gnutar
-                gzip
-                git
-                # Host steps outside a devenv shell had no `diff` (fishing's
-                # and rust-app-template's reported `diff: command not found`),
-                # and rust-app-template ended up parsing JSON with grep. Shared
-                # list, not extraHostPackages: every runner carries `nix:host`,
-                # so a tool on one machine alone fails those jobs at random.
-                diffutils
-                jq
-                nodejs
-                devenv
-                cacert
-                mold
-                cargo
-                rustc
-                gawk
-                # cargo needs a linker for build scripts (proc-macro2, libc,
-                # ...). Without it every build script fails with
-                # `linker 'cc' not found`. This wrapper provides cc/gcc/ld.
-                stdenv.cc
-              ])
-              ++ cfg.extraHostPackages;
-            # DynamicUser gives the service a private /tmp and /var/tmp, and
-            # they are a tmpfs sized at a fraction of RAM (1.5 GiB on sol), not
-            # the disk. A job's `mktemp -d` cargo build (check-template's
-            # generated product) fills it: rustc fails with "No space left on
-            # device" and lld with SIGBUS writing its mmap'd output. Point jobs
-            # at the state dir instead, which is on disk.
-            settings.runner.envs.TMPDIR = "${stateDir}/tmp";
+    instanceConfig = forge: let
+      unit = "forgejo-runner-${forge}";
+      # The nixpkgs module's StateDirectory for this instance (also its HOME).
+      stateDir = "/var/lib/forgejo-runner/${forge}";
+      cargoState = "forgejo-runner-cargo-${forge}";
+      cargoHome = "/var/lib/${cargoState}";
+    in {
+      inherit unit;
+      instance = mkMerge [
+        {
+          enable = true;
+          # The instance's own `labels` option was renamed to
+          # `settings.runner.labels` upstream. Nothing else changes: the
+          # nixpkgs module reads the labels back through
+          # `settings.runner.labels` plus any per-connection
+          # `settings.server.connections.<n>.labels`, and derives
+          # `runtimes.host` from a `:host` suffix and `runtimes.docker` /
+          # `runtimes.podman` from a `:docker` infix off that same list.
+          settings.runner.labels = cfg.labels;
+          # forgejo-runner's job timeout defaults to 3h (its config.example
+          # says so, and nothing here overrode it), which is what killed the
+          # phalanx and enginseer builds:
+          #   [runner]: this step has been cancelled: ctx: context deadline
+          #   exceeded, exec: RUN signal: killed
+          # Three deadlines apply to one job -- the instance's
+          # `ENDLESS_TASK_TIMEOUT`, this one, and the workflow's
+          # `timeout-minutes` -- and the shortest wins, so this is kept above
+          # the workflow's 5h: the workflow owns the deadline you see in the
+          # UI, and the runner never cuts a job short underneath it.
+          settings.runner.timeout = "6h";
+          settings.runner.capacity = cfg.capacity;
+          # `secrets` values are credential paths the module turns into
+          # `file:$CREDENTIALS_DIRECTORY/...` URLs. A bare path in
+          # settings.token_url is rejected at startup ("unsupported secret URL").
+          settings.server.connections.${forge} = {
+            uuid = paths.forgeUuid forge;
+            url =
+              if forges.${forge}.host == machine
+              then forges.${forge}.localUrl
+              else forges.${forge}.url;
           };
-        };
-        # As the service's own (dynamic) user, so the directory is theirs.
-        systemd.services."forgejo-runner-${name}".serviceConfig.ExecStartPre = [
-          "${pkgs.coreutils}/bin/mkdir -p ${stateDir}/tmp"
-        ];
-        # `e`: clean an existing directory without creating or owning it.
-        # Whatever a job left behind goes after a day.
-        systemd.tmpfiles.rules = ["e ${stateDir}/tmp - - - 1d"];
-      }
+          secrets.server.connections.${forge}.token_url = paths.forgeSecret forge;
+          # PATH available to host-executed jobs: node (for actions/checkout),
+          # devenv (the build), nix (devenv shells out to it), the usual
+          # coreutils/git/tar, and a Rust toolchain for steps that run cargo
+          # outside a devenv shell.
+          hostPackages =
+            [config.nix.package]
+            ++ (with pkgs; [
+              bash
+              coreutils
+              gnutar
+              gzip
+              git
+              # Host steps outside a devenv shell had no `diff` (fishing's
+              # and rust-app-template's reported `diff: command not found`),
+              # and rust-app-template ended up parsing JSON with grep. Shared
+              # list, not extraHostPackages: every runner carries `nix:host`,
+              # so a tool on one machine alone fails those jobs at random.
+              diffutils
+              jq
+              nodejs
+              devenv
+              cacert
+              mold
+              cargo
+              rustc
+              gawk
+              # cargo needs a linker for build scripts (proc-macro2, libc,
+              # ...). Without it every build script fails with
+              # `linker 'cc' not found`. This wrapper provides cc/gcc/ld.
+              stdenv.cc
+            ])
+            ++ cfg.extraHostPackages;
+          # DynamicUser gives the service a private /tmp and /var/tmp, and
+          # they are a tmpfs sized at a fraction of RAM (1.5 GiB on sol), not
+          # the disk. A job's `mktemp -d` cargo build (check-template's
+          # generated product) fills it: rustc fails with "No space left on
+          # device" and lld with SIGBUS writing its mmap'd output. Point jobs
+          # at the state dir instead, which is on disk.
+          settings.runner.envs.TMPDIR = "${stateDir}/tmp";
+          # Bound Cargo's default parallelism to the CI budget, not the host.
+          settings.runner.envs.CARGO_BUILD_JOBS = mkIf (resources != null) (toString resources.cpus);
+        }
 
-      # sccache: the shared compilation cache in the `sccache` bucket on
-      # garage-main, for the host steps that run cargo outside the Nix sandbox
-      # (Nix builds are ncps' job). Generator and values: modules/rites/sccache.nix.
-      #
-      # Credentials: the DynamicUser cannot own files, and /run/secrets is
-      # root-only, so the var file travels through systemd LoadCredential and
-      # the job steps read it at $CREDENTIALS_DIRECTORY/sccache-credentials.
-      # The path is handed to jobs as a plain unit-level Environment=, NOT
-      # through settings.runner.envs: the runner writes those into job env
-      # verbatim, and "$CREDENTIALS_DIRECTORY/..." would arrive unexpanded.
-      # Unit-level Environment= reaches the steps because act merges the
-      # daemon's own environment into every job (act/runner/run_context.go,
-      # the os.Environ() loop, "don't override").
-      (mkIf (sccache != null) {
-        services.forgejo-runner.instances.${name} = {
+        # sccache: the shared compilation cache in the `sccache` bucket on
+        # garage-main, for the host steps that run cargo outside the Nix sandbox
+        # (Nix builds are ncps' job). Generator and values: modules/rites/sccache.nix.
+        #
+        # Credentials: the DynamicUser cannot own files, and /run/secrets is
+        # root-only, so the var file travels through systemd LoadCredential and
+        # the job steps read it at $CREDENTIALS_DIRECTORY/sccache-credentials.
+        # The path is handed to jobs as a plain unit-level Environment=, NOT
+        # through settings.runner.envs: the runner writes those into job env
+        # verbatim, and "$CREDENTIALS_DIRECTORY/..." would arrive unexpanded.
+        # Unit-level Environment= reaches the steps because act merges the
+        # daemon's own environment into every job (act/runner/run_context.go,
+        # the os.Environ() loop, "don't override").
+        (mkIf (sccache != null) {
           # The wrapper, not bare sccache (modules/rites/sccache.nix): it
           # unsets CARGO_INSTALL_ROOT -- the job's `devenv shell` sets it to
           # <act work dir>/.devenv/state/cargo-install, a per-job path that
@@ -327,37 +321,55 @@
             # A job that cannot reach Garage (a runner away from the LAN, an
             # outage) must still compile -- uncached, not red.
             SCCACHE_IGNORE_SERVER_IO_ERROR = "1";
-            # The SAME absolute path on every runner. sccache 0.19 hashes
-            # rustc's arguments (which spell the registry-source paths under
-            # CARGO_HOME), its cwd and every CARGO_* env var verbatim --
-            # SCCACHE_BASEDIRS exists in 0.19 but is wired only into the
-            # C-family key, rust.rs never reads it -- so identical paths are
-            # the only sharing lever there is. The extra StateDirectory below
-            # shows up as /var/lib/forgejo-runner-cargo inside every unit's
-            # namespace (on disk it is /var/lib/private/forgejo-runner-cargo,
-            # per host), which is what makes the value host-independent.
-            CARGO_HOME = "/var/lib/forgejo-runner-cargo";
+            # One writable directory per dynamic user, with the same absolute
+            # path for a forge on every machine (sccache hashes Cargo paths).
+            CARGO_HOME = cargoHome;
+            # Do not connect to the other runner's local sccache server.
+            SCCACHE_SERVER_PORT = toString forges.${forge}.sccachePort;
           };
-        };
-        systemd.services."forgejo-runner-${name}" = {
+        })
+      ];
+
+      service = mkMerge [
+        {
+          serviceConfig = {
+            # Both units can burst within the same cap, alongside nix-daemon.
+            Slice = mkIf (!inVm && resources != null) "forgejo-ci.slice";
+            # Run as the service's dynamic user.
+            ExecStartPre = ["${pkgs.coreutils}/bin/mkdir -p ${stateDir}/tmp"];
+          };
+        }
+        (mkIf (sccache != null) {
           # The wrapper only DEFAULTS AWS_SHARED_CREDENTIALS_FILE when unset
           # (`:-`) and never touches it otherwise, so this unit-level value
           # -- unreadable /run/secrets path swapped for the LoadCredential
           # mount -- is what the job's sccache server ends up using.
-          environment.AWS_SHARED_CREDENTIALS_FILE = "/run/credentials/forgejo-runner-${name}.service/sccache-credentials";
+          environment.AWS_SHARED_CREDENTIALS_FILE = "/run/credentials/${unit}.service/sccache-credentials";
           serviceConfig = {
             LoadCredential = [
               "sccache-credentials:${paths.sccacheCredentials}"
             ];
-            StateDirectory = ["forgejo-runner-cargo"];
+            StateDirectory = [cargoState];
             # Same reason the nixpkgs module lists the state dir here: under
             # DynamicUser the id-mapped mounts are noexec, and CARGO_HOME/bin
             # tools a job cargo-installs have to run.
-            ExecPaths = ["/var/lib/forgejo-runner-cargo"];
+            ExecPaths = [cargoHome];
           };
-        };
-      })
-    ];
+        })
+      ];
+      # `e` cleans an existing directory without creating or owning it.
+      tmpRule = "e ${stateDir}/tmp - - - 1d";
+    };
+    instances = lib.genAttrs runForges instanceConfig;
+  in
+    mkMerge (systemConfig
+      ++ [
+        {
+          services.forgejo-runner.instances = lib.mapAttrs (_: data: data.instance) instances;
+          systemd.services = lib.mapAttrs' (_: data: lib.nameValuePair data.unit data.service) instances;
+          systemd.tmpfiles.rules = lib.mapAttrsToList (_: data: data.tmpRule) instances;
+        }
+      ]);
 in {
   flake.nixosModules.forgejo-runner = {
     config,
@@ -373,14 +385,11 @@ in {
     gens = config.clan.core.vars.generators;
     fcfg = config.services.forgejo;
 
-    # Credential ids for the microVM, and the clan var each one comes from.
-    # forgejo-runner-microvm.nix stages these for qemu; the guest reads them
-    # back under guestCredentialDir.
-    credentialSources =
-      listToAttrs (map (forge:
-        nameValuePair (generatorName forge) gens.${generatorName forge}.files."secret".path)
-      cfg.forges)
-      // {
+    # Credential ids for one guest, and the Clan vars they come from. QEMU
+    # hands these back under guestCredentialDir, with no other forge's token.
+    credentialSources = forge:
+      {
+        ${generatorName forge} = gens.${generatorName forge}.files."secret".path;
         ci-signing-key = gens.${ciKeyGenerator}.files."key".path;
         ncps-netrc = gens.${ncpsUploadAuth}.files.netrc.path;
       }
@@ -397,12 +406,12 @@ in {
     imports = [self.nixosModules.reliquary-ncps];
 
     options.services.imperium.forgejoRunner = {
-      enable = mkEnableOption "a Forgejo Actions runner registered with every forge in `forges`";
+      enable = mkEnableOption "one Forgejo Actions runner per forge in `forges`";
 
       forges = mkOption {
         type = types.listOf (types.enum (builtins.attrNames forges));
         default = builtins.attrNames forges;
-        description = "Forgejo instances this runner registers with.";
+        description = "Forgejo instances this machine runs a runner for.";
       };
 
       # Jobs `runs-on: nix` run directly on the host (no container), so they
@@ -412,14 +421,11 @@ in {
         default = ["nix:host"];
       };
 
-      # One slot is shared by every forge. While it is taken the daemon stops
-      # polling the forges the job did NOT come from, so they show the runner
-      # offline until the job ends (checked 2026-11-14: not a hang). A second
-      # slot hides that, at the price of two jobs sharing `resources`.
+      # Each forge polls independently, even when another forge is busy.
       capacity = mkOption {
         type = types.ints.positive;
         default = 1;
-        description = "Jobs this runner runs at once, across all forges.";
+        description = "Jobs each forge's runner runs at once.";
       };
 
       extraHostPackages = mkOption {
@@ -429,9 +435,9 @@ in {
       };
 
       # Where the jobs run. `host`: on this machine, next to everything else
-      # it runs. `microvm`: in a dedicated VM on it, sized by `resources`, with
-      # its own kernel, so a job cannot see the host's files, processes or
-      # secrets beyond the runner's own. Needs
+      # it runs. `microvm`: in one dedicated VM per forge, with its own kernel,
+      # so a job cannot see other guests' or the host's files and processes.
+      # See `resources` for the combined guest budget. Needs
       # self.nixosModules.forgejo-runner-microvm imported, and /dev/kvm.
       isolation = mkOption {
         type = types.enum ["host" "microvm"];
@@ -442,8 +448,8 @@ in {
       # are all etcd members. Runner jobs and Nix builds share one cgroup
       # slice under these caps. Memory is the hard limit (it cannot be
       # throttled, only OOM-killed); CPU also yields to everything else under
-      # contention, through a low weight. With `isolation = "microvm"` it is
-      # the VM's size instead.
+      # contention, through a low weight. With `isolation = "microvm"` these
+      # resources are divided across the guests instead.
       resources = mkOption {
         type = types.nullOr (types.submodule {
           options = {
@@ -488,46 +494,58 @@ in {
       };
 
       # Read by forgejo-runner-microvm.nix.
-      guestModule = mkOption {
-        type = types.deferredModule;
+      guests = mkOption {
+        type = types.attrsOf (types.submodule {
+          options = {
+            module = mkOption {
+              type = types.deferredModule;
+              description = "The runner's runtime as a NixOS guest module.";
+            };
+            credentialSources = mkOption {
+              type = types.attrsOf types.str;
+              description = "Credential ids and host paths for this guest.";
+            };
+          };
+        });
         internal = true;
         readOnly = true;
-        description = "The runner's runtime, as a NixOS module for the CI microVM.";
-      };
-      credentialSources = mkOption {
-        type = types.attrsOf types.str;
-        internal = true;
-        readOnly = true;
-        description = "Credential id -> host path of every secret the microVM runner needs.";
+        description = "CI guests by forge.";
       };
     };
 
     config = mkMerge [
       {
-        services.imperium.forgejoRunner = {
-          inherit credentialSources;
-          guestModule = {
-            config,
-            lib,
-            pkgs,
-            ...
-          }: {
-            config = runtimeConfig {
-              inherit config lib pkgs cfg;
-              name = hostName;
-              machine = hostName;
-              sccache = sccacheFor;
-              inVm = true;
-              paths = {
-                forgeSecret = forge: "${guestCredentialDir}/${generatorName forge}";
-                forgeUuid = forge: gens.${generatorName forge}.files."uuid".value;
-                ciKey = "${guestCredentialDir}/ci-signing-key";
-                ncpsNetrc = "${guestCredentialDir}/ncps-netrc";
-                sccacheCredentials = "${guestCredentialDir}/sccache-credentials";
+        services.imperium.forgejoRunner.guests =
+          lib.genAttrs
+          (lib.optionals (cfg.enable && cfg.isolation == "microvm") cfg.forges)
+          (forge: {
+            credentialSources = credentialSources forge;
+            module = {
+              config,
+              lib,
+              pkgs,
+              ...
+            }: {
+              config = runtimeConfig {
+                inherit config lib pkgs cfg;
+                runForges = [forge];
+                machine = hostName;
+                resources = {
+                  cpus = config.microvm.vcpu;
+                  memory = config.microvm.mem / 1024;
+                };
+                sccache = sccacheFor;
+                inVm = true;
+                paths = {
+                  forgeSecret = f: "${guestCredentialDir}/${generatorName f}";
+                  forgeUuid = f: gens.${generatorName f}.files."uuid".value;
+                  ciKey = "${guestCredentialDir}/ci-signing-key";
+                  ncpsNetrc = "${guestCredentialDir}/ncps-netrc";
+                  sccacheCredentials = "${guestCredentialDir}/sccache-credentials";
+                };
               };
             };
-          };
-        };
+          });
       }
 
       (mkIf (cfg.enable && cfg.isolation == "host" && cfg.storeCache != null) (let
@@ -593,8 +611,9 @@ in {
 
       (mkIf (cfg.enable && cfg.isolation == "host") (runtimeConfig {
         inherit config lib pkgs cfg;
-        name = hostName;
+        runForges = cfg.forges;
         machine = hostName;
+        resources = cfg.resources;
         sccache = sccacheFor;
         inVm = false;
         paths = {

@@ -1,30 +1,25 @@
-# The Forgejo runner in a microVM: `services.imperium.forgejoRunner.isolation
-# = "microvm"` (modules/rites/forgejo-runner.nix) runs the jobs in a dedicated
-# qemu VM on the machine instead of on it, so a job gets its own kernel and
-# cannot see the host's files, processes or other secrets. First on ryza,
-# which also runs the always-on agent and its subscription logins.
+# With `isolation = "microvm"`, each forge's jobs run in a dedicated qemu
+# guest. Jobs cannot see the other forge's token or the host's files,
+# processes and secrets. Ryza also runs the agent and its subscription logins.
 #
 #   identity   unchanged and on the host: the clan vars, `nix run
 #              .#forgejo-runner-register -- <machine>`, the runner name
-#   runtime    the same runtimeConfig the host runner uses, evaluated as the
-#              guest's NixOS config (cfg.guestModule), so the toolset matches
-#   secrets    only the runner's own: one credential per forge, the CI signing
-#              key, the ncps upload netrc, the sccache key. A root unit copies
-#              them out of /run/secrets for qemu (which runs as `microvm` and
-#              cannot read sops' files) and qemu hands them in as systemd
-#              credentials, under /run/credentials/@system in the guest
+#   runtime    the same runtimeConfig as the host runner, with one connection
+#   secrets    only that forge's token plus the shared CI signing key, ncps
+#              netrc and sccache key. A root unit stages them for qemu (which
+#              runs as `microvm`); the guest gets them as systemd credentials
+#              under /run/credentials/@system
 #   store      the host's /nix/store read-only over virtiofs, plus a writable
 #              overlay on its own disk image for what the jobs build
 #   network    a tap with a /24 of its own, NATed out through the host's
 #              uplink: forges, ncps, Harbor, Garage, the internet
-#   size       `resources` is the VM's vCPUs and memory, a hard cap
+#   size       `resources` is the combined budget, divided among guests
 #
 # The guest's Nix database is on its tmpfs root, so after a VM restart the
 # overlay's paths are unregistered again: Nix re-fetches what it needs from
 # ncps, which every runner pushes to, and collects the rest.
 #
-# Inspect the guest from the host: `journalctl -u microvm@<machine>-ci`
-# (console), `systemctl status microvm@<machine>-ci`.
+# Inspect a guest: `journalctl -u microvm@<machine>-ci-<forge>` (console).
 {self, ...}: {
   flake.nixosModules.forgejo-runner-microvm = {
     config,
@@ -36,12 +31,203 @@
     cfg = config.services.imperium.forgejoRunner;
     m = cfg.microvm;
     active = cfg.enable && cfg.isolation == "microvm";
-    vmName = "${config.networking.hostName}-ci";
-    credDir = "/run/microvm-credentials/${vmName}";
-    tap = "vm-ci";
-    # Not 10.88 (podman's default) nor 10.42/10.43 (RKE2's pod and service
-    # ranges).
-    subnet = "10.99.0";
+    legacyUnit = "microvm@${config.networking.hostName}-ci.service";
+    # Stable even when a machine enables just one forge. No overlap with
+    # Podman's 10.88 or RKE2's 10.42/10.43.
+    links = {
+      noosphere = {
+        tap = "vm-ci-noo";
+        subnet = "10.99.0";
+        mac = "02:00:00:c1:00:01";
+      };
+      ugalabugala = {
+        tap = "vm-ci-uga";
+        subnet = "10.99.1";
+        mac = "02:00:00:c1:00:02";
+      };
+    };
+    forgeNames = builtins.attrNames cfg.guests;
+    guestCount = builtins.length forgeNames;
+    resourcesFit = cfg.resources != null && cfg.resources.cpus >= guestCount && cfg.resources.memory >= guestCount;
+    share = total: index: let
+      base = total / guestCount;
+      remainder = total - base * guestCount;
+    in
+      base
+      + (
+        if index < remainder
+        then 1
+        else 0
+      );
+    guests = lib.imap0 (index: forge:
+      links.${forge}
+      // {
+        inherit forge index;
+        inherit (cfg.guests.${forge}) module credentialSources;
+        vmName = "${config.networking.hostName}-ci-${forge}";
+      })
+    forgeNames;
+    taps = map (guest: guest.tap) guests;
+
+    guestServices = {
+      vmName,
+      credentialSources,
+      ...
+    }: let
+      vmUnit = "microvm@${vmName}.service";
+      credDir = "/run/microvm-credentials/${vmName}";
+    in {
+      # The legacy instance could still be running through microvm@.service.
+      # Stop it before the new guests start polling with the same identities.
+      "microvm@${vmName}" = {
+        conflicts = [legacyUnit];
+        after = [legacyUnit];
+      };
+      "microvm-credentials-${vmName}" = {
+        description = "Stage the CI microVM's credentials for qemu";
+        before = [vmUnit];
+        requiredBy = [vmUnit];
+        partOf = [vmUnit];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          RuntimeDirectory = "microvm-credentials/${vmName}";
+          RuntimeDirectoryMode = "0700";
+        };
+        script = ''
+          install -d -m 0700 -o microvm -g kvm ${credDir}
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (id: src: ''
+              install -m 0400 -o microvm -g kvm ${lib.escapeShellArg src} ${credDir}/${id}
+            '')
+            credentialSources)}
+        '';
+        path = [pkgs.coreutils];
+      };
+    };
+
+    guestVM = {
+      forge,
+      index,
+      vmName,
+      tap,
+      subnet,
+      mac,
+      module,
+      credentialSources,
+    }:
+      lib.nameValuePair vmName {
+        autostart = true;
+        config = {
+          imports = [module];
+
+          networking.hostName = vmName;
+          system.stateVersion = config.system.stateVersion;
+
+          microvm = {
+            hypervisor = "qemu";
+            vcpu = share cfg.resources.cpus index;
+            mem = share cfg.resources.memory index * 1024;
+
+            shares = [
+              {
+                tag = "ro-store";
+                source = "/nix/store";
+                mountPoint = "/nix/.ro-store";
+                proto = "virtiofs";
+                readOnly = true;
+              }
+            ];
+            writableStoreOverlay = "/nix/.rw-store";
+
+            # Image files live in /var/lib/microvms/<vm>/ on the host.
+            volumes = [
+              {
+                image = "nix-store-overlay.img";
+                mountPoint = "/nix/.rw-store";
+                size = m.storeOverlay * 1024;
+              }
+              {
+                image = "var.img";
+                mountPoint = "/var";
+                size = m.var * 1024;
+              }
+            ];
+
+            interfaces = [
+              {
+                type = "tap";
+                id = tap;
+                inherit mac;
+              }
+            ];
+
+            credentialFiles = lib.mapAttrs (id: _: "/run/microvm-credentials/${vmName}/${id}") credentialSources;
+
+            # qemu takes host RAM as the guest first touches it and, without
+            # this, never gives any back: after one big build the VM held
+            # all 14 GiB on ryza for good (2026-11-22). The balloon device
+            # brings free page reporting, so pages the guest frees go back
+            # to the host; deflate-on-oom (the default) returns them if the
+            # guest runs short. `mem` stays the hard cap.
+            balloon = true;
+          };
+
+          # Free page reporting only returns FREE pages, and Linux keeps
+          # spare RAM full of page cache (store paths, cargo output), which
+          # counts as used. So when no job is running, drop the cache and
+          # compact, and the freed pages flow back to the host. Busy = any
+          # process in the runner's or nix-daemon's cgroup besides the main
+          # one: a job's steps, or a build.
+          systemd.services.ci-release-memory = {
+            description = "Return idle page cache to the host";
+            serviceConfig.Type = "oneshot";
+            script = let
+              procs = unit: "/sys/fs/cgroup/system.slice/${unit}/cgroup.procs";
+            in ''
+              busy() { [ -r "$1" ] && [ "$(wc -l < "$1")" -gt 1 ]; }
+              if busy ${procs "forgejo-runner-${forge}.service"} \
+                || busy ${procs "nix-daemon.service"}; then
+                exit 0
+              fi
+              sync
+              echo 3 > /proc/sys/vm/drop_caches
+              echo 1 > /proc/sys/vm/compact_memory
+            '';
+          };
+          systemd.timers.ci-release-memory = {
+            wantedBy = ["timers.target"];
+            timerConfig = {
+              OnBootSec = "10min";
+              OnUnitActiveSec = "5min";
+            };
+          };
+
+          networking.useNetworkd = true;
+          networking.useDHCP = false;
+          systemd.network.networks."10-uplink" = {
+            matchConfig.MACAddress = mac;
+            address = ["${subnet}.2/24"];
+            gateway = ["${subnet}.1"];
+            # The LAN's Blocky resolvers: ncps.noosphere.uk and the forges
+            # must resolve to the LAN, as on every other runner.
+            dns = self.lib.lan.resolvers;
+          };
+
+          nix.settings = let
+            gib = n: n * 1024 * 1024 * 1024;
+          in {
+            experimental-features = ["nix-command" "flakes"];
+            # As stc/base.nix sets on every clan machine; the guest is not
+            # one, so it does not get that module.
+            substituters = ["https://ncps.noosphere.uk"];
+            trusted-public-keys = [
+              (builtins.readFile (self.lib.vars.shared "ncps-signing-key" "ncps-signing-key.pub"))
+            ];
+            min-free = gib (m.storeOverlay / 5);
+            max-free = gib (m.storeOverlay / 2);
+          };
+        };
+      };
   in {
     imports = [
       self.inputs.microvm.nixosModules.host
@@ -52,183 +238,70 @@
       uplink = mkOption {
         type = types.str;
         example = "ens18";
-        description = "The host interface the VM's traffic is NATed out through.";
+        description = "The host interface the guests' traffic is NATed out through.";
       };
       storeOverlay = mkOption {
         type = types.ints.positive;
         default = 100;
-        description = "GiB for the guest's writable /nix/store overlay. The guest collects garbage below a fifth of it free.";
+        description = "GiB per guest's writable /nix/store overlay. The guest collects garbage below a fifth of it free.";
       };
       var = mkOption {
         type = types.ints.positive;
         default = 40;
-        description = "GiB for the guest's /var: the runner's state, job work dirs and TMPDIR, CARGO_HOME.";
-      };
-      mac = mkOption {
-        type = types.str;
-        default = "02:00:00:c1:00:01";
-        description = "The guest NIC's MAC (locally administered).";
+        description = "GiB per guest's /var: runner state, workspaces, TMPDIR and CARGO_HOME.";
       };
     };
 
     config = lib.mkMerge [
-      # The host module is imported wherever this file is; only a machine that
-      # actually runs a CI VM gets its services.
       {microvm.host.enable = lib.mkDefault active;}
 
       (mkIf active {
         assertions = [
           {
-            assertion = cfg.resources != null;
-            message = "forgejoRunner: isolation = \"microvm\" needs `resources`, which sizes the VM.";
+            assertion = resourcesFit;
+            message = "forgejoRunner: microVM resources must provide at least one vCPU and one GiB per guest.";
           }
         ];
+      })
 
-        # Copies of the runner's secrets that qemu, running as `microvm`, can
-        # read. In /run, so they never touch the disk, and redone on every VM
-        # start so a rotated var is picked up.
-        systemd.services."microvm-credentials-${vmName}" = {
-          description = "Stage the CI microVM's credentials for qemu";
-          before = ["microvm@${vmName}.service"];
-          requiredBy = ["microvm@${vmName}.service"];
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-          script = ''
-            install -d -m 0700 -o microvm -g kvm ${credDir}
-            ${lib.concatStringsSep "\n" (lib.mapAttrsToList (id: src: ''
-                install -m 0400 -o microvm -g kvm ${lib.escapeShellArg src} ${credDir}/${id}
-              '')
-              cfg.credentialSources)}
-          '';
-          path = [pkgs.coreutils];
-        };
+      (mkIf (active && resourcesFit) {
+        systemd.services = lib.mkMerge (map guestServices guests);
+        microvm.vms = builtins.listToAttrs (map guestVM guests);
 
-        # Host side of the VM's link, and NAT out through the uplink.
-        systemd.network.networks."20-${tap}" = {
-          matchConfig.Name = tap;
-          address = ["${subnet}.1/24"];
-          networkConfig.ConfigureWithoutCarrier = true;
-          linkConfig.RequiredForOnline = "no";
-        };
+        # Host side of each point-to-point link, and NAT out the uplink.
+        systemd.network.networks = builtins.listToAttrs (map ({
+          tap,
+          subnet,
+          ...
+        }:
+          lib.nameValuePair "20-${tap}" {
+            matchConfig.Name = tap;
+            address = ["${subnet}.1/24"];
+            networkConfig.ConfigureWithoutCarrier = true;
+            linkConfig.RequiredForOnline = "no";
+          })
+        guests);
         networking.nat = {
           enable = true;
-          internalInterfaces = [tap];
+          internalInterfaces = taps;
           externalInterface = m.uplink;
+          # NAT adds uplink accepts, but does not drop inter-guest traffic.
+          extraCommands = mkIf (!config.networking.nftables.enable) (lib.concatMapStringsSep "\n" (tap:
+            lib.concatMapStringsSep "\n" (other: ''
+              iptables -w -I nixos-filter-forward -i ${tap} -o ${other} -j DROP
+            '') (builtins.filter (other: other != tap) taps))
+          taps);
         };
-
-        microvm.vms.${vmName} = {
-          autostart = true;
-          config = {
-            imports = [cfg.guestModule];
-
-            networking.hostName = vmName;
-            system.stateVersion = config.system.stateVersion;
-
-            microvm = {
-              hypervisor = "qemu";
-              vcpu = cfg.resources.cpus;
-              mem = cfg.resources.memory * 1024;
-
-              shares = [
-                {
-                  tag = "ro-store";
-                  source = "/nix/store";
-                  mountPoint = "/nix/.ro-store";
-                  proto = "virtiofs";
-                }
-              ];
-              writableStoreOverlay = "/nix/.rw-store";
-
-              # Image files live in /var/lib/microvms/<vm>/ on the host.
-              volumes = [
-                {
-                  image = "nix-store-overlay.img";
-                  mountPoint = "/nix/.rw-store";
-                  size = m.storeOverlay * 1024;
-                }
-                {
-                  image = "var.img";
-                  mountPoint = "/var";
-                  size = m.var * 1024;
-                }
-              ];
-
-              interfaces = [
-                {
-                  type = "tap";
-                  id = tap;
-                  inherit (m) mac;
-                }
-              ];
-
-              credentialFiles = lib.mapAttrs (id: _: "${credDir}/${id}") cfg.credentialSources;
-
-              # qemu takes host RAM as the guest first touches it and, without
-              # this, never gives any back: after one big build the VM held
-              # all 14 GiB on ryza for good (2026-11-22). The balloon device
-              # brings free page reporting, so pages the guest frees go back
-              # to the host; deflate-on-oom (the default) returns them if the
-              # guest runs short. `mem` stays the hard cap.
-              balloon = true;
-            };
-
-            # Free page reporting only returns FREE pages, and Linux keeps
-            # spare RAM full of page cache (store paths, cargo output), which
-            # counts as used. So when no job is running, drop the cache and
-            # compact, and the freed pages flow back to the host. Busy = any
-            # process in the runner's or nix-daemon's cgroup besides the main
-            # one: a job's steps, or a build.
-            systemd.services.ci-release-memory = {
-              description = "Return idle page cache to the host";
-              serviceConfig.Type = "oneshot";
-              script = let
-                procs = unit: "/sys/fs/cgroup/system.slice/${unit}/cgroup.procs";
-              in ''
-                busy() { [ -r "$1" ] && [ "$(wc -l < "$1")" -gt 1 ]; }
-                if busy ${procs "forgejo-runner-${config.networking.hostName}.service"} \
-                  || busy ${procs "nix-daemon.service"}; then
-                  exit 0
-                fi
-                sync
-                echo 3 > /proc/sys/vm/drop_caches
-                echo 1 > /proc/sys/vm/compact_memory
-              '';
-            };
-            systemd.timers.ci-release-memory = {
-              wantedBy = ["timers.target"];
-              timerConfig = {
-                OnBootSec = "10min";
-                OnUnitActiveSec = "5min";
-              };
-            };
-
-            networking.useNetworkd = true;
-            networking.useDHCP = false;
-            systemd.network.networks."10-uplink" = {
-              matchConfig.MACAddress = m.mac;
-              address = ["${subnet}.2/24"];
-              gateway = ["${subnet}.1"];
-              # The LAN's Blocky resolvers: ncps.noosphere.uk and the forges
-              # must resolve to the LAN, as on every other runner.
-              dns = self.lib.lan.resolvers;
-            };
-
-            nix.settings = let
-              gib = n: n * 1024 * 1024 * 1024;
-            in {
-              experimental-features = ["nix-command" "flakes"];
-              # As stc/base.nix sets on every clan machine; the guest is not
-              # one, so it does not get that module.
-              substituters = ["https://ncps.noosphere.uk"];
-              trusted-public-keys = [
-                (builtins.readFile (self.lib.vars.shared "ncps-signing-key" "ncps-signing-key.pub"))
-              ];
-              min-free = gib (m.storeOverlay / 5);
-              max-free = gib (m.storeOverlay / 2);
-            };
-          };
+        networking.nftables.tables.forgejo-ci = mkIf (config.networking.nftables.enable && guestCount > 1) {
+          family = "inet";
+          content = let
+            interfaces = lib.concatMapStringsSep ", " builtins.toJSON taps;
+          in ''
+            chain forward {
+              type filter hook forward priority filter; policy accept;
+              iifname { ${interfaces} } oifname { ${interfaces} } drop
+            }
+          '';
         };
       })
     ];
