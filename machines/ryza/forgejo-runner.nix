@@ -28,7 +28,8 @@
   };
 
   # Enroll the dedicated PAT before enabling the one-job pilot (see README).
-  services.imperium.forgejoEphemeral={ enable = true;
+  services.imperium.forgejoEphemeral = {
+    enable = true;
     repoId = 9;
   };
 

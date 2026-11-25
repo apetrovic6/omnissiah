@@ -7,6 +7,7 @@ config and one fixed verb. Secrets arrive as JSON on stdin, never in argv. Each 
 slot lock; local dispatch also supplies its already-held state lock with --hold-fd.
 
   observe               the VM, support units, VM again, and current run marker
+  check-space           check available space on the VM image filesystem (no reservation)
   reset-failed
   stop-support UNIT...  only this slot's support units
   stage RUN             stdin {"uuid", "token", "handle"}; sets the run marker before staging
@@ -59,7 +60,7 @@ SLOT_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
 TOKEN = re.compile(r"[!-~]{1,4096}")
 UUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 MAX_INPUT = 64 * 1024
-VERBS = ("observe", "start", "stop", "reset-failed", "stop-support", "stage", "scrub", "deliver", "withdraw")
+VERBS = ("observe", "check-space", "start", "stop", "reset-failed", "stop-support", "stage", "scrub", "deliver", "withdraw")
 RUN_VERBS = ("stage", "start", "stop", "scrub", "deliver", "withdraw")
 LOCK_ROOT = Path("/run/forgejo-slotctl")
 LOCK_WAIT = 2.0
@@ -317,8 +318,11 @@ class Slot:
         again = self.systemctl.observe(self.systemctl.vm)
         return {"vm": list(vm), "support": support, "again": list(again)}
 
-    def start(self, min_free_bytes):
+    def check_space(self, min_free_bytes):
         self.files.require_free_space(min_free_bytes)
+
+    def start(self, min_free_bytes):
+        self.check_space(min_free_bytes)
         self.systemctl.start()
 
     def stage(self, payload, save_run):
@@ -605,6 +609,8 @@ def main(
                 raise SlotError("run-mismatch")
         if args.verb == "observe":
             stdout.write(json.dumps({**slot.observe(), "run": current}, separators=(",", ":")).encode())
+        elif args.verb == "check-space":
+            slot.check_space(entry["min_free_bytes"])
         elif args.verb == "start":
             slot.start(entry["min_free_bytes"])
         elif args.verb == "stop":

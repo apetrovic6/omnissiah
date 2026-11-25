@@ -22,6 +22,58 @@
           builtins.unsafeDiscardStringContext (builtins.toJSON
             (import ../rites/_forgejo-ephemeral-jobdir-test.nix {inherit (self.nixosConfigurations) ryza;}))
         );
+        forgejo-ephemeral-ssh = let
+          inherit (self.nixosConfigurations) cerberus;
+          imported = cerberus.extendModules {
+            modules = [self.nixosModules.forgejo-runner-ephemeral];
+          };
+          client = imported.extendModules {
+            modules = [
+              {
+                services.imperium.forgejoEphemeral = {
+                  enable = true;
+                  repoId = 4242;
+                  inventory = lib.mapAttrs (_: entry: entry // {dispatcher = "cerberus";}) self.lib.ciSlots;
+                };
+                clan.core.vars.generators.forgejo-slotctl-ssh.files.id_ed25519.path = lib.mkForce "/run/secrets/fixture-key";
+                clan.core.vars.generators.forgejo-ephemeral-ugalabugala.files.token.path = lib.mkForce "/run/secrets/fixture-pat";
+              }
+            ];
+          };
+          ssh = lib.getExe' client.pkgs.openssh "ssh";
+          wrapper = client.config.services.imperium.forgejoEphemeral.internal.sshClients.ryza;
+          dispatcher = client.config.systemd.services."forgejo-ephemeral-dispatcher@ryza-eph-1";
+          # Change only the executable in a throwaway copy of the deployed
+          # wrapper. -G runs OpenSSH's real parser without connecting.
+          offlineSsh = pkgs.writeShellScript "slotctl-ssh-offline" ''
+            set -eu
+            ${ssh} -G "$@"
+            if [[ $# != 10 || $8 != slot-host || $9 != -- || ''${10} != "$SLOTCTL_TEST_COMMAND" ]]; then
+              printf 'unexpected wrapper argument: %q\n' "$@" >&2
+              exit 1
+            fi
+          '';
+        in
+          assert !imported.config.services.imperium.forgejoEphemeral.enable;
+          assert !imported.config.microvm.host.enable;
+          assert imported.config.system.build.toplevel.drvPath == cerberus.config.system.build.toplevel.drvPath;
+          assert !client.config.microvm.host.enable;
+          assert lib.hasInfix (builtins.unsafeDiscardStringContext "--ssh-command ${wrapper} ")
+          (builtins.unsafeDiscardStringContext dispatcher.serviceConfig.ExecStart);
+            pkgs.runCommand "forgejo-ephemeral-ssh" {} ''
+              export CREDENTIALS_DIRECTORY="$TMPDIR/credentials"
+              export RUNTIME_DIRECTORY="$TMPDIR/runtime"
+              export SLOTCTL_TEST_COMMAND='--slot ryza-eph-1 check-space'
+              mkdir -p "$CREDENTIALS_DIRECTORY" "$RUNTIME_DIRECTORY"
+              touch "$CREDENTIALS_DIRECTORY/slotctl-ssh-key"
+              substitute ${wrapper} ./slotctl-ssh --replace-fail ${ssh} ${offlineSsh}
+              chmod +x ./slotctl-ssh
+              ./slotctl-ssh "$SLOTCTL_TEST_COMMAND" > "$out"
+              grep -Fx 'hostname ${self.lib.hosts.ryza}' "$out"
+              grep -Fx 'bindaddress ${self.lib.hosts.cerberus}' "$out"
+              grep -Fx 'user root' "$out"
+              grep -Fx 'batchmode yes' "$out"
+            '';
         # Fails at eval if a Hermes delegation guard rail stops firing: a work
         # subagent able to reach a personal provider, a meta provider id, a
         # tier outside its allowlist (README "Hermes delegation tiers").

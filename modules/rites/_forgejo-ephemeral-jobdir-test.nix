@@ -39,6 +39,19 @@
     ];
   };
   c = enabled.config;
+  persistent = ryza.extendModules {
+    modules = [{services.imperium.forgejoEphemeral.enable = lib.mkForce false;}];
+  };
+  split = enabled.extendModules {
+    modules = [
+      {
+        services.imperium.forgejoEphemeral.inventory = lib.mkForce {
+          ryza = host;
+          terra = host // {slots.terra-eph-1 = host.slots.ryza-eph-1;};
+        };
+      }
+    ];
+  };
   trusted = enabled.extendModules {
     modules = [{services.imperium.forgejoEphemeral.trustedJobs.enable = lib.mkForce true;}];
   };
@@ -46,7 +59,28 @@
   trustedSlotctlSlots = trustedConfig.services.imperium.forgejoEphemeral.internal.slotctlSlots;
   configuredSlots = builtins.attrNames c.services.imperium.forgejoEphemeral.inventory.ryza.slots;
   services = c.systemd.services;
-  inherit (c.services.imperium.forgejoEphemeral.internal) slots slotctlSlots;
+  inherit (c.services.imperium.forgejoEphemeral.internal) slots slotctlSlots remotePropertyNames;
+  # These service properties are accepted by systemd-run on the slot host.
+  # Static-unit-only settings such as JobTimeoutSec must not reach this list.
+  transientAllowlist = [
+    "After"
+    "CapabilityBoundingSet"
+    "Group"
+    "IPAddressDeny"
+    "InaccessiblePaths"
+    "LimitCORE"
+    "NoNewPrivileges"
+    "PrivateTmp"
+    "ProtectHome"
+    "ProtectSystem"
+    "ReadWritePaths"
+    "Requires"
+    "RestrictAddressFamilies"
+    "RuntimeMaxSec"
+    "TimeoutStopSec"
+    "UMask"
+    "User"
+  ];
   dispatchTemplate = "forgejo-ephemeral-dispatcher@";
   claims = "/run/forgejo-ephemeral/claims";
   lockRoot = "/run/forgejo-slotctl";
@@ -129,17 +163,24 @@
     guestFs = c.microvm.vms.${slot}.config.config.fileSystems."/nix/.ro-store";
     vmStop = services."microvm@".serviceConfig.ExecStopPost ++ vm.serviceConfig.ExecStopPost;
     peers = builtins.filter (peer: peer != slot) (builtins.attrNames slots);
-    peerPaths =
-      lib.concatMap (peer: [
-        "-${slotctlSlots.${peer}.credential_dir}"
+    peerPaths = lib.concatMap (peer: let
+      peerCredentials = slotctlSlots.${peer}.credential_dir;
+      peerParent = builtins.dirOf peerCredentials;
+    in
+      [
+        "-${peerCredentials}"
         "-${slotctlSlots.${peer}.trust_dir}"
         "-${builtins.dirOf slotctlSlots.${peer}.vm_dir}"
-      ])
-      peers;
+      ]
+      ++ lib.optional (peerParent != "/run/microvm-credentials") "-${peerParent}")
+    peers;
   in
     assert lib.assertMsg (violations == {}) "mandatory namespace paths not created first: ${builtins.toJSON violations}";
     assert lib.assertMsg (dispatcherOptional == []) "dispatcher has optional writable paths: ${toString dispatcherOptional}";
+    assert lib.assertMsg (lib.all (name: builtins.elem name transientAllowlist) remotePropertyNames.${slot})
+    "unsupported transient service property in ${slot}: ${toString remotePropertyNames.${slot}}";
     assert builtins.elem "f ${lockRoot}/${slot}.lock 0600 root root - -" c.systemd.tmpfiles.rules;
+    assert credParent == "/run/microvm-credentials" || builtins.elem "d ${credParent} 0755 root root - -" c.systemd.tmpfiles.rules;
     assert lib.sort builtins.lessThan dispatcher.serviceConfig.ReadWritePaths == lib.sort builtins.lessThan [claims credParent job];
     assert dispatchDefinition.overrideStrategy == "asDropin";
     assert builtins.elem "multi-user.target" dispatchDefinition.wantedBy;
@@ -187,6 +228,7 @@
       guestDrv = c.microvm.vms.${slot}.config.config.system.build.toplevel.drvPath;
       inherit prepare created installLines;
       inherit slotctl trustedSlotctl;
+      transientProperties = remotePropertyNames.${slot};
       prepareDrv = builtins.attrNames (builtins.getContext prepare);
       scrubDrv = builtins.attrNames (builtins.getContext (lib.last vmStop));
       vmExecStartPre = vm.serviceConfig.ExecStartPre;
@@ -205,6 +247,12 @@
   uniqueBy = field:
     lib.length (lib.unique (lib.mapAttrsToList (_: slot: slot.${field}) results)) == lib.length (builtins.attrNames slots);
 in
+  assert persistent.config.microvm.host.enable;
+  assert lib.any (check:
+    check.message
+    == "forgejoEphemeral: every inventory entry must use the same dispatcher machine."
+    && !check.assertion)
+  split.config.assertions;
   assert builtins.attrNames slots == configuredSlots;
   assert builtins.attrNames slotctlSlots == configuredSlots;
   assert builtins.attrNames trustedSlotctlSlots == configuredSlots;

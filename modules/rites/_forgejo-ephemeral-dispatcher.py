@@ -22,6 +22,7 @@ import os
 import re
 import secrets
 import selectors
+import shlex
 import signal
 import stat
 import subprocess
@@ -49,6 +50,7 @@ INVENTORY_POLL = 5 * 60
 INTENT_EXPIRY = 24 * 60 * 60
 REFUSAL_LIMIT = 3
 REFUSAL_SPAN = 60 * 60
+PRE_START_MAX_BACKOFF = 60
 PAUSE_FILE = Path("/run/forgejo-ephemeral-dispatcher/pause")
 HOST_PAUSE_FILE = Path("/run/forgejo-ephemeral/pause")
 CLAIM_ROOT = Path("/run/forgejo-ephemeral/claims")
@@ -125,6 +127,10 @@ class HttpError(ApiError):
 
 class SlotError(Exception):
     """A safe diagnostic for a slot that cannot be reused yet."""
+
+
+class StartRefused(SlotError):
+    """slotctl explicitly refused before asking systemd to queue a start."""
 
 
 class StateError(Exception):
@@ -548,6 +554,12 @@ class CommandSlot:
         "run-marker": "cannot read or update the slot run marker",
         "remote-launch": "cannot launch the sandboxed slotctl verb",
     }
+    # These codes in a start reply come from gates before systemctl. In
+    # particular, systemctl-failed can mean the reply to a queued job was lost.
+    START_REFUSALS = frozenset((
+        b"slot-busy", b"slot-lock", b"slot-user-missing", b"run-marker", b"run-mismatch",
+        b"disk-space-check", b"disk-space-low", b"remote-launch",
+    ))
 
     def __init__(self, command, run=None, lock_fd=None, *, remote=False):
         self.command = tuple(command)
@@ -556,15 +568,17 @@ class CommandSlot:
         self.lock_fd = lock_fd
 
     def _call(self, verb, *args, payload=None):
-        hold = () if self.lock_fd is None else ("--hold-fd", str(self.lock_fd))
+        hold = () if self.lock_fd is None or self.remote else ("--hold-fd", str(self.lock_fd))
+        command = ("--slot", SLOT, *hold, verb, *args)
+        argv = (shlex.join(command),) if self.remote else command
         try:
             result = self.run(
-                (*self.command, "--slot", SLOT, *hold, verb, *args),
+                (*self.command, *argv),
                 input=b"" if payload is None else json.dumps(payload).encode(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 # slotctl hands the state lock on to the systemctl calls it makes (see Systemctl there).
-                pass_fds=() if self.lock_fd is None else (self.lock_fd,),
+                pass_fds=(self.lock_fd,) if hold else (),
                 timeout=120 if self.remote else self.TIMEOUTS.get(verb, 30),
                 check=False,
             )
@@ -578,7 +592,12 @@ class CommandSlot:
         if self.remote and result.returncode == 255:
             raise SlotError(f"SSH transport failed for {SLOT}; refusing slot reuse")
         if result.returncode == 1:
-            raise SlotError(self._refusal(verb, result.stderr) or f"slotctl {verb} refused for {SLOT}; reconciling unit state")
+            message = self._refusal(verb, result.stderr)
+            if message is not None and verb == "start" and result.stderr.removesuffix(b"\n") in self.START_REFUSALS:
+                raise StartRefused(message)
+            raise SlotError(message or f"slotctl {verb} refused for {SLOT}; reconciling unit state")
+        if verb == "start" and result.returncode == 2 and result.stderr == b"invalid-request\n":
+            raise StartRefused(f"slotctl start rejected the request for {SLOT} before submission")
         raise SlotError(f"slotctl {verb} failed (exit {result.returncode}) for {SLOT}; reconciling unit state")
 
     def _refusal(self, verb, stderr):
@@ -622,6 +641,9 @@ class CommandSlot:
 
     def stop(self, run):
         self._call("stop", run)
+
+    def check_space(self):
+        self._call("check-space")
 
     def reset_failed(self):
         self._call("reset-failed")
@@ -717,7 +739,7 @@ class Store:
             or active.keys() != {"handle", "name", "runner", "phase", "queued_at"}
             or not handle_ok(active["handle"])
             or not matches(name, active["name"])
-            or active["phase"] not in ("intent", "registered", "start", "cleanup")
+            or active["phase"] not in ("intent", "registered", "start", "cleanup", "release")
         ):
             return False
         if active["phase"] == "intent":
@@ -883,15 +905,21 @@ class Dispatcher:
         self.verdict = None  # {"name", "state": pending|delivered|untrusted, "since": pickup first seen}
         self.repository_verified = False
         self.repository_after = 0
+        # Slot-local backoff for requests that never reached systemd. A peer
+        # can still take the job once we delete the unused registration.
+        self.pre_start_retries = {}
 
-    def _check_run(self, snapshot, active):
-        if snapshot.run is not None and (active is None or snapshot.run != active["name"]):
-            raise SlotError("slot run does not match durable dispatcher state; refusing slot reuse")
+    @staticmethod
+    def _unknown_run(snapshot, active):
+        return snapshot.run is not None and (active is None or snapshot.run != active["name"])
 
     def withdraw(self):
         # A previous delivery is not this dispatcher's verdict.
         snapshot = self.slot.observe()
-        self._check_run(snapshot, self.store.data["active"])
+        if self._unknown_run(snapshot, self.store.data["active"]):
+            if snapshot.vm_idle and snapshot.again_idle:
+                return  # The idle reconciliation pass will scrub this run.
+            raise SlotError("live or pending VM has an unknown slot run; refusing slot reuse")
         self.slot.withdraw(snapshot.run)
 
     def tick(self):
@@ -928,8 +956,9 @@ class Dispatcher:
         active = self.store.data["active"]
         # One slotctl call reads the VM, each support unit, then the VM again.
         snapshot = self.slot.observe()
-        self._check_run(snapshot, active)
         if not snapshot.vm_idle:
+            if self._unknown_run(snapshot, active):
+                raise SlotError("live or pending VM has an unknown slot run; refusing slot reuse")
             if active is None or active["phase"] != "start":
                 raise SlotError("VM is live or has a pending job without a recorded start; refusing slot reuse")
             if snapshot.run != active["name"]:
@@ -954,6 +983,8 @@ class Dispatcher:
         idle, result = snapshot.again_idle, snapshot.again_result
         if not idle:
             raise SlotError("VM state changed during reconciliation; waiting before slot cleanup")
+        if self._unknown_run(snapshot, active):
+            log("scrubbing idle slot with unknown run marker")
         self.slot.scrub(snapshot.run)
         self.verdict = None
         if result == "success":
@@ -978,12 +1009,15 @@ class Dispatcher:
                 else:
                     self.reset_pending = False
                     log(f"reset {VM} after its cancellation stop timed out")
-        if active is None or active["phase"] == "cleanup":
+        if active is None or active["phase"] in ("cleanup", "release"):
             return True
         if active["phase"] == "intent":
             ambiguous = self.store.data["ambiguous"] | {active["handle"]: {"name": active["name"], "runners": None}}
             self.store.save(active=None, ambiguous=ambiguous)
             log(f"registration outcome unresolved for {active['name']}; searching owned runners by exact name")
+        elif active["phase"] == "registered":
+            self.store.save(active=active | {"phase": "release"})
+            log(f"VM start not submitted; local files scrubbed for unused runner {active['runner']['id']}")
         else:
             cleanup = active | {"phase": "cleanup", "queued_at": None}
             self.store.save(active=cleanup)
@@ -1013,7 +1047,15 @@ class Dispatcher:
         if idle and data["active"] is not None:
             active = data["active"]
             self.api.delete(active["runner"])
-            self.claims.finish(self.store, (active["handle"],), active=None, retired=[*data["retired"], active["handle"]])
+            handle = active["handle"]
+            if active["phase"] == "release":
+                self.claims.finish(self.store, (handle,), active=None)
+                previous, _ = self.pre_start_retries.get(handle, (0, 0))
+                delay = min(PRE_START_MAX_BACKOFF, max(POLL, previous * 2))
+                self.pre_start_retries[handle] = delay, self.monotonic() + delay
+                log(f"released job after unused runner {active['runner']['id']} was deleted; retry in {delay}s")
+            else:
+                self.claims.finish(self.store, (handle,), active=None, retired=[*data["retired"], handle])
         inventory_ok = False
         if idle:
             self._delete_recovered()
@@ -1039,12 +1081,15 @@ class Dispatcher:
             return
         data = self.store.data
         blocked = set(data["retired"]) | data["ambiguous"].keys()
+        now = self.monotonic()
         eligible = [
             job for job in jobs
             if job["status"] == "waiting" and job["task_id"] == 0
             and job["runs_on"] == [LABEL] and job["handle"] not in blocked
+            and now >= self.pre_start_retries.get(job["handle"], (0, 0))[1]
         ]
         if eligible and not self._paused():
+            self.slot.check_space()
             self._dispatch(sorted(eligible, key=lambda job: job["id"]))
 
     def _check_cancelled(self, seen):
@@ -1158,6 +1203,8 @@ class Dispatcher:
         return reason, run
 
     def _observe_queue(self, seen, inventory_ok):
+        for handle in self.pre_start_retries.keys() - seen:
+            del self.pre_start_retries[handle]
         data = self.store.data
         changes = {}
         retired = [handle for handle in data["retired"] if handle in seen]
@@ -1274,7 +1321,14 @@ class Dispatcher:
         # Queuing is one-way. Even if the client dies or loses the systemd reply,
         # recovery only monitors this intent and never issues its start a second time.
         self.store.save(active=active | {"phase": "start", "queued_at": self.wall()})
-        self.slot.start(active["name"])
+        try:
+            self.slot.start(active["name"])
+        except StartRefused:
+            # A known early refusal proves no start was submitted. Record it
+            # before cleanup so a restart releases instead of retiring.
+            self.store.save(active=active)
+            raise
+        self.pre_start_retries.pop(handle, None)
         log(f"queued VM start for runner {runner['id']}")
 
     def _record_refusal(self, handle):

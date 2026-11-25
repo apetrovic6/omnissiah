@@ -1266,16 +1266,33 @@ the state directory with
 Remove the relevant pause flag to resume. Both flags survive dispatcher
 restarts, not a host reboot; restore them before resuming maintenance.
 
-**Upgrade from `forgejo-ephemeral-dispatcher.service`.** Before deploying
-the template generation, pause using the old
-`/run/forgejo-ephemeral-dispatcher/pause` flag, drain `ryza-eph-1` as
-above, and stop the old service. Deploy Ryza. Check that only
-`forgejo-ephemeral-dispatcher@ryza-eph-1.service` is running, that its
-journal verifies the PAT identity, and that the old pause flag is still
-present. Slot 1 reuses both the old state directory and pause path; copy
-nothing. Remove the pause flag, then run one `nix-eph` job and check
-cleanup. To roll the generation back, pause slot 1 using the same flag,
-drain, stop the template instance, then deploy the old generation.
+**Upgrade from `forgejo-ephemeral-dispatcher.service`: pause and drain first.**
+
+1. Set the old `/run/forgejo-ephemeral-dispatcher/pause` flag and drain
+   `ryza-eph-1` as above. Do not switch generations with a live or pending VM:
+   the old generation did not write a run marker.
+2. On Ryza, check `df -B1 --output=avail /var/lib/microvms`: require at least
+   `85899345920` available bytes (80 GiB). Stop the old service, then deploy.
+3. Verify that only `forgejo-ephemeral-dispatcher@ryza-eph-1.service` is
+   running, its journal verifies the PAT identity, and the old pause flag is
+   still present. Slot 1 reuses both the state directory and pause path; copy
+   nothing. Remove the pause flag, run one `nix-eph` job, and check cleanup.
+
+To roll back, pause slot 1 using the same flag, drain it, stop the instance,
+then deploy the old generation.
+
+**Run marker recovery.** Slotctl writes a root-only `<slot>.run` file next to
+its staged credential directory (`/run/microvm-credentials/ryza-eph-1.run`
+on the pilot; other slots use `/run/microvm-credentials/forgejo-<slot>/`).
+An unknown marker is logged and scrubbed with the slot's job files once the
+VM and its support units are idle. While the VM is live or has a queued job,
+leave the marker alone. If normal cleanup still refuses (for example, a
+corrupt marker), pause and stop the dispatcher instance, confirm the VM and
+its support units are stopped with no pending jobs, then move only the
+marker aside as root. Restart the still-paused dispatcher and verify its
+scrub and runner reconciliation before unpausing. Do not reset `state.json`;
+if it was lost and Forgejo still has a dispatcher runner, reconcile that
+registration before resuming.
 
 **Operator opt-in: add a second local Ryza slot.** After verifying the
 single-slot upgrade, pause and drain both the `nix-eph` and persistent
@@ -1287,13 +1304,15 @@ slot slices plus the 8 GiB persistent budget total 18 GiB of Ryza's 24 GiB.
 Keep the host-wide pause in place during the deploy so the new instance
 starts paused. No SSH key or new PAT is needed for local slots.
 
-Each start requires the full configured image capacity plus 10 GiB free on
-the image filesystem (80 GiB for either standard Ryza slot). This is a
-preflight, not a reservation: budget disk for both sparse slots growing
-concurrently. After unpausing, queue a three-job `nix-eph` matrix: two VMs
-should run at once and the third wait. Across both instance journals
-require one `registering runner` line and one boot per job attempt; verify
-cleanup for both slots. To roll back capacity, pause and drain both slots
+Before registering and again before starting, the slot requires its full
+configured image capacity plus 10 GiB free on the image filesystem
+(80 GiB per standard Ryza slot). These checks do not reserve space or
+budget for peers: provision for both sparse slots growing concurrently.
+After unpausing, queue a three-job `nix-eph` matrix: two VMs should run at
+once and the third wait. Across both journals require one boot per job
+attempt and no duplicate registration while a claim is held. An unused
+registration from a definite pre-start refusal is deleted before retry.
+Verify cleanup for both slots. To roll back capacity, pause and drain both slots
 and the persistent work, remove `ryza-eph-2`, restore the `nix-vm` budget,
 deploy Ryza, and unpause.
 
@@ -1304,8 +1323,9 @@ per-machine `forgejo-slotctl-ssh` private key. The slot host restricts that
 transport key to the dispatcher's LAN IP and a forced slotctl command. The
 client checks the slot host's ed25519 key from its Clan `openssh` var, not
 trust on first use. Each slot host serializes slotctl calls and rejects
-stale run names, even after a transport error. Keep all dispatchers for
-the same queue on one host: claims do not arbitrate across hosts.
+stale run names. The name checks freshness, not caller authorization;
+authorization comes from the source-restricted SSH key. The inventory
+must use one dispatcher host: claims do not arbitrate across hosts.
 
 **Rotate the PAT.** Pause and wait for cleanup to converge with the old
 PAT as above. Create the replacement with the same scopes, then regenerate

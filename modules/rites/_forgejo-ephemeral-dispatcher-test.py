@@ -15,6 +15,7 @@ import io
 import json
 import os
 import pwd
+import shlex
 import stat
 import subprocess
 import sys
@@ -522,6 +523,102 @@ class DispatcherTests(unittest.TestCase):
         self.tick()
         self.assertIn("SSH transport failed", self.logs.getvalue())
         self.assertEqual([], self.forge.paths())
+
+    def test_low_disk_space_leaves_waiting_job_unclaimed(self):
+        waiting = job()
+        self.forge.jobs = [waiting]
+        with patch.object(S.os, "fstatvfs", return_value=SimpleNamespace(f_bavail=0, f_frsize=4096)):
+            self.tick()
+        self.assertIn("insufficient free space", self.logs.getvalue())
+        self.assertIsNone(self.state()["active"])
+        self.assertFalse(self.claim_file(waiting["handle"]).exists())
+        self.assertEqual([], self.forge.paths("POST"))
+        self.assertEqual([], self.system.mutations("start"))
+        self.tick(D.POLL)
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.assertEqual(1, len(self.system.mutations("start")))
+
+    def test_disk_space_can_drop_after_registration_without_retiring_job(self):
+        waiting = job()
+        handle = waiting["handle"]
+        self.forge.jobs = [waiting]
+        enough = SimpleNamespace(f_bavail=1, f_frsize=4096)
+        low = SimpleNamespace(f_bavail=0, f_frsize=4096)
+        with patch.object(S.os, "fstatvfs", side_effect=(enough, low)):
+            self.tick()
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.assertEqual([], self.system.mutations("start"))
+        self.assertIn("insufficient free space", self.logs.getvalue())
+        self.restart()
+        self.tick(D.POLL)
+        self.assert_scrubbed()
+        self.assertFalse(self.claim_file(handle).exists())
+        self.assertEqual([], self.state()["retired"])
+        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
+        self.assertNotIn("VM idle (success)", self.logs.getvalue())
+        self.tick(D.POLL - 1)
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.tick(1)
+        self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
+        self.assertEqual(1, len(self.system.mutations("start")))
+
+    def test_pre_start_ssh_failure_releases_job_with_backoff(self):
+        real_slotctl = self.slotctl
+        calls = []
+
+        def transport(argv, **options):
+            _, command = argv
+            args = shlex.split(command)
+            reply = real_slotctl(("slotctl", *args), **options)
+            if args[2] == "stage" and len(calls) < 2:
+                # Lose the reply after remote staging; nothing submitted a start.
+                calls.append(args[2])
+                return subprocess.CompletedProcess(argv, 255)
+            return reply
+
+        self.dispatcher.slot = D.CommandSlot(("/nix/store/x-ssh-slotctl",), transport, remote=True)
+        self.forge.jobs = [job()]
+        self.tick()
+        self.assertTrue(self.credential_dir.exists())
+        self.tick(D.POLL)
+        self.assert_scrubbed()
+        self.tick(D.POLL)
+        self.tick(D.POLL)
+        self.assertEqual(2, len(self.forge.paths("DELETE")))
+        self.assertEqual([], self.state()["retired"])
+        self.assertFalse(self.claim_file(job()["handle"]).exists())
+        self.assertEqual([], self.system.mutations("start"))
+        self.tick(2 * D.POLL - 1)
+        self.assertEqual(2, len(self.forge.paths("POST")))
+        self.tick(1)
+        self.assertEqual(3, len(self.forge.paths("POST")))
+        self.assertEqual(1, len(self.system.mutations("start")))
+
+    def test_unknown_run_marker_is_scrubbed_only_when_vm_is_idle(self):
+        self.forge.jobs = [job()]
+        self.pause.touch()
+        token = self.credential_dir / "runner-token"
+        marker = self.credential_dir.parent / f"{D.SLOT}.run"
+        self.dispatcher.slot.stage(SLOT_RUN, uuid_for(99), TOKEN, job()["handle"])
+        self.leave_images()
+        self.system.set(pending="71")
+        self.restart()
+        with self.assertRaisesRegex(D.SlotError, "unknown slot run"):
+            self.dispatcher.withdraw()
+        self.tick()
+        self.assertTrue(token.exists())
+        self.assertTrue(marker.exists())
+        self.assertEqual([], self.forge.calls)
+        self.system.set()
+        self.dispatcher.withdraw()  # Startup must reach normal idle reconciliation.
+        self.tick()
+        self.assert_scrubbed()
+        self.assertFalse(marker.exists())
+        self.assertIn("scrubbing idle slot with unknown run marker", self.logs.getvalue())
+        self.pause.unlink()
+        self.tick(D.POLL)
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.assertEqual(1, len(self.system.mutations("start")))
 
     def test_contract_oldest_exact_waiting_handle_then_next(self):
         first = job(14)
@@ -2109,7 +2206,7 @@ class SlotctlTests(unittest.TestCase):
         try:
             with patch.object(S, "LOCK_WAIT", 0.01):
                 for args in (
-                    ("observe",), ("reset-failed",), ("stop-support", D.SUPPORT[0]),
+                    ("observe",), ("check-space",), ("reset-failed",), ("stop-support", D.SUPPORT[0]),
                     *((verb, SLOT_RUN) for verb in ("stage", "start", "stop", "scrub", "deliver", "withdraw")),
                 ):
                     with self.subTest(args=args):
@@ -2140,6 +2237,7 @@ class SlotctlTests(unittest.TestCase):
             f"--slot {self.SLOT} --hold-fd 9 observe", f"--config /one --slot {self.SLOT} observe",
             f"--slot unknown observe", f"--slot {self.SLOT} start none", f"--slot {self.SLOT} deliver",
             f"--slot {self.SLOT} stop-support microvm-virtiofsd@other.service", f"--slot '{self.SLOT} observe",
+            f"--slot {self.SLOT} check-space {SLOT_RUN}",
             f"--slot {self.SLOT} observe {TOKEN}", "x" * 2048,
         ):
             with self.subTest(command=command[:100]):
@@ -2147,6 +2245,8 @@ class SlotctlTests(unittest.TestCase):
         self.assertEqual([], commands)
         self.assertEqual((0, ""), forced(f"--slot '{self.SLOT}' stage '{SLOT_RUN}'"))
         self.assertEqual([(launcher, [launcher, "--slot", self.SLOT, "stage", SLOT_RUN])], commands)
+        self.assertEqual((0, ""), forced(f"--slot {self.SLOT} check-space"))
+        self.assertEqual((launcher, [launcher, "--slot", self.SLOT, "check-space"]), commands[-1])
 
     def test_named_verbs_refuse_delayed_commands_from_a_previous_run(self):
         next_run = SLOT_RUN[:-1] + "b"
@@ -2170,6 +2270,14 @@ class SlotctlTests(unittest.TestCase):
         self.assertEqual(next_run, marker.read_text())
         self.assertTrue((self.credential_dir / "runner-token").exists())
         self.assertEqual([], list(self.trust_dir.iterdir()))
+
+    def test_check_space_requires_no_run_and_does_not_query_systemd(self):
+        args = ("--slot", self.SLOT, "check-space")
+        with patch.object(S.os, "fstatvfs", return_value=SimpleNamespace(f_bavail=0, f_frsize=4096)):
+            self.assertEqual((1, b"", "disk-space-low\n"), self.slotctl(*args))
+        self.assertEqual((0, b"", ""), self.slotctl(*args))
+        self.assertEqual(self.REFUSED, self.slotctl(*args, SLOT_RUN))
+        self.assertEqual([], self.system.calls)
 
     def test_start_checks_available_space_on_image_filesystem(self):
         gib = 1024 ** 3
@@ -2411,11 +2519,11 @@ class CommandSlotTests(unittest.TestCase):
             calls.append((argv, options["pass_fds"]))
             return subprocess.CompletedProcess(argv, 255, stderr=TOKEN.encode())
 
-        slot = D.CommandSlot(("/nix/store/x-ssh-slotctl",), run, remote=True)
+        slot = D.CommandSlot(("/nix/store/x-ssh-slotctl",), run, lock_fd=9, remote=True)
         with self.assertRaisesRegex(D.SlotError, "^SSH transport failed") as error:
             slot.start(SLOT_RUN)
         self.assertNotIn(TOKEN, str(error.exception))
-        self.assertEqual([(("/nix/store/x-ssh-slotctl", "--slot", D.SLOT, "start", SLOT_RUN), ())], calls)
+        self.assertEqual([(("/nix/store/x-ssh-slotctl", f"--slot {D.SLOT} start {SLOT_RUN}"), ())], calls)
 
     def test_ssh_caps_both_output_streams_before_logging_anything(self):
         for fd in (1, 2):
@@ -2472,7 +2580,7 @@ class SharedConstantsTests(unittest.TestCase):
                 self.assertIsNotNone(slot._refusal("scrub", code.encode() + b"\n"))
         unknown_state = {code for code in S.CODES if code.startswith("unknown-state-")}
         self.assertEqual(set(D.CommandSlot.REFUSALS), set(S.CODES) - unknown_state - {"systemctl-failed"})
-        self.assertEqual(set(D.CommandSlot.ACTIONS), set(S.VERBS) - {"stage", "withdraw"})
+        self.assertEqual(set(D.CommandSlot.ACTIONS), set(S.VERBS) - {"check-space", "stage", "withdraw"})
 
 
 class SlotctlProcessTests(unittest.TestCase):

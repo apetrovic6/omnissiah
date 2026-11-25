@@ -48,16 +48,19 @@
     # Hide both parts of each other microVM, including stopped legacy guests.
     inaccessibleVMs = slot:
       ["-/persist"]
-      ++ lib.concatMap (name:
+      ++ lib.concatMap (name: let
+        local = builtins.hasAttr name localSlots;
+        credentials =
+          if local
+          then slotCredentials name
+          else credParent;
+      in
         [
-          "-${
-            if builtins.hasAttr name localSlots
-            then slotCredentials name
-            else credParent
-          }/${name}"
+          "-${credentials}/${name}"
           "-${config.microvm.stateDir}/${name}"
         ]
-        ++ lib.optional (builtins.hasAttr name localSlots) "-${slotCredentials name}/${name}-trust")
+        ++ lib.optional local "-${credentials}/${name}-trust"
+        ++ lib.optional (credentials != credParent) "-${credentials}")
       (builtins.filter (name: name != slot) (builtins.attrNames config.microvm.vms ++ (host.legacyVMs or [])));
     slotCapabilities = ["CAP_CHOWN" "CAP_FOWNER" "CAP_DAC_OVERRIDE"];
     commonSandbox = {
@@ -429,7 +432,6 @@
           IPAddressDeny = "any";
           User = "root";
           Group = "root";
-          JobTimeoutSec = "15s";
           RuntimeMaxSec = "95s";
           TimeoutStopSec = "5s";
           Requires = dependencies;
@@ -452,7 +454,7 @@
         exit "$status"
       '';
     in {
-      inherit spec slotDirs prepareDirs slotctlEntry sandbox remoteAction dependencies vm controlDir trustDir;
+      inherit spec slotDirs prepareDirs slotctlEntry sandbox remoteProperties remoteAction dependencies vm controlDir trustDir;
       users.groups.${slotUser} = {};
       users.users.${slotUser} = {
         isSystemUser = true;
@@ -632,8 +634,9 @@
         set -eu
         exec ${lib.getExe' pkgs.openssh "ssh"} -T -F ${sshConfig} \
           -i "$CREDENTIALS_DIRECTORY/slotctl-ssh-key" -S "$RUNTIME_DIRECTORY/s" \
-          slot-host "$@"
+          slot-host -- "$1"
       '';
+    sshClients = lib.genAttrs (lib.unique (builtins.filter (machine: machine != hostName) (builtins.attrValues serves))) sshClient;
     # Keep the live Ryza pilot's state and pause marker through the upgrade.
     legacyDispatcher = slot: machine: hostName == "ryza" && machine == "ryza" && slot == "ryza-eph-1";
     stateName = slot: machine:
@@ -655,7 +658,7 @@
       transport =
         if local
         then "--slotctl ${slotctl}"
-        else "--ssh-command ${sshClient machine}";
+        else "--ssh-command ${sshClients.${machine}}";
     in {
       overrideStrategy = "asDropin";
       wantedBy = ["multi-user.target"];
@@ -737,14 +740,18 @@
         type = lib.types.attrs;
         default = {
           slots = lib.mapAttrs (_: data: {inherit (data) slotDirs prepareDirs;}) localSlots;
-          inherit slotctlSlots;
+          remotePropertyNames = lib.mapAttrs (_: data: builtins.attrNames data.remoteProperties) localSlots;
+          inherit slotctlSlots sshClients;
         };
-        description = "The slots' directories, preparation scripts and slotctl entries for eval checks.";
+        description = "Slot directories, slotctl entries, and remote transport details for checks.";
       };
     };
 
-    config = lib.mkIf cfg.enable (lib.mkMerge [
-      {
+    config = lib.mkMerge [
+      # Override the upstream option default (true), but not another host
+      # module's mkDefault opt-in, such as the persistent Forgejo runner.
+      {microvm.host.enable = lib.mkOverride 1100 false;}
+      (lib.mkIf cfg.enable {
         assertions = [
           {
             assertion = hosted || dispatching;
@@ -753,6 +760,10 @@
           {
             assertion = !dispatching || cfg.repoId != null;
             message = "forgejoEphemeral: dispatchers need the numeric ID of manjo/rust-app-template.";
+          }
+          {
+            assertion = lib.length (lib.unique (lib.mapAttrsToList dispatcherFor inventory)) <= 1;
+            message = "forgejoEphemeral: every inventory entry must use the same dispatcher machine.";
           }
           {
             assertion =
@@ -768,8 +779,8 @@
           }
         ];
         systemd.tmpfiles.rules = lib.optional dispatching "d ${runRoot} 0700 root root - -";
-      }
-      (lib.mkIf hosted {
+      })
+      (lib.mkIf (cfg.enable && hosted) {
         assertions = [
           {
             assertion = config.networking.firewall.enable && !config.networking.nftables.enable;
@@ -793,12 +804,19 @@
             "d ${credParent} 0755 root root - -"
             "d ${lockRoot} 0700 root root - -"
           ]
-          ++ map (slot: "f ${lockRoot}/${slot}.lock 0600 root root - -") (builtins.attrNames localSlots);
+          ++ lib.concatMap (slot: let
+            credentials = slotCredentials slot;
+          in
+            ["f ${lockRoot}/${slot}.lock 0600 root root - -"]
+            # An optional inaccessible path would be skipped if its peer's
+            # installer had not run yet when this namespace was created.
+            ++ lib.optional (credentials != credParent) "d ${credentials} 0755 root root - -")
+          (builtins.attrNames localSlots);
         # The guard owns forwarding and SNAT; don't add its TAP to stock NAT.
         boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = lib.mkDefault true;
         microvm.host.enable = true;
       })
-      (lib.mkIf dispatching {
+      (lib.mkIf (cfg.enable && dispatching) {
         clan.core.vars.generators.${generator} = {
           share = false;
           prompts.token = {
@@ -856,7 +874,7 @@
           }
           // lib.mapAttrs' (slot: machine: lib.nameValuePair "${dispatch}@${slot}" (mkDispatcher slot machine)) serves;
       })
-      (lib.mkIf remoteClient {
+      (lib.mkIf (cfg.enable && remoteClient) {
         clan.core.vars.generators.${sshGenerator} = {
           share = false;
           files.id_ed25519 = {
@@ -872,7 +890,7 @@
           '';
         };
       })
-      (lib.mkIf remoteServer {
+      (lib.mkIf (cfg.enable && remoteServer) {
         assertions = [
           {
             assertion = builtins.hasAttr sourceDispatcher self.lib.hosts;
@@ -887,6 +905,6 @@
           ''command="${forcedCommand}",restrict,from="${self.lib.hosts.${sourceDispatcher}}" ${readEd25519 cfg.dispatcherPublicKeyFile}''
         ];
       })
-    ]);
+    ];
   };
 }
