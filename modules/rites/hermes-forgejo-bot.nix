@@ -81,7 +81,7 @@
         if [ -e "$HOME/work/$old" ]; then
           printf '%s\n' "workspace migration pending: ~/work/$old is a personal task slot file in the company tree." \
             "If the migration has not run, see README, Hermes workspaces on stygies. If it has (~/personal holds the slot)," \
-            "it is a stray: check that ~/work/$old holds no live task, then remove it." >&2
+            "it is a stray. Don't touch it: stop and ask manjo to check it for a live task and remove it." >&2
           exit 2
         fi
       done

@@ -118,6 +118,7 @@ class WorkspaceMigration(unittest.TestCase):
         self.assert_new_layout(before)
         self.assertIn(f"moved {self.home}/work -> {self.home}/personal", log)
         self.assertIn(f"moved {self.home}/work-devzero -> {self.home}/work", log)
+        self.assertIn("moved; wrote", log)
         self.assertTrue(self.stamped())
 
     def test_already_migrated_is_a_silent_no_op(self):
@@ -215,7 +216,10 @@ class WorkspaceMigration(unittest.TestCase):
     def test_fresh_home_does_nothing_but_stamp(self):
         self.tmpfiles_skeleton()
         before = snapshot(self.home)
-        self.assertEqual(self.run_migration(), (0, ""))
+        status, log = self.run_migration()
+        self.assertEqual(status, 0)
+        self.assertIn(f"no {self.home}/work-devzero: the new layout, nothing to move; wrote", log)
+        self.assertEqual(self.run_migration(), (0, ""))  # the stamp: silent from now on
         self.assertEqual(snapshot(self.home), before)
         self.assertTrue(self.stamped())
 
@@ -239,8 +243,10 @@ class WorkspaceMigration(unittest.TestCase):
                 self.home.mkdir()
                 self.new_layout_scenario(name)
                 before = snapshot(self.home)
-                for _ in range(2):
-                    self.assertEqual(self.run_migration(), (0, ""))
+                status, log = self.run_migration()
+                self.assertEqual(status, 0)
+                self.assertIn("the new layout, nothing to move; wrote", log)  # one line, whenever it stamps
+                self.assertEqual(self.run_migration(), (0, ""))
                 self.assertEqual(snapshot(self.home), before)
                 self.assertTrue(self.stamped())
 
@@ -353,6 +359,84 @@ class WorkspaceMigration(unittest.TestCase):
         status, log = self.run_migration()
         self.assertEqual(status, 0, log)
         self.assertTrue((self.home / "personal/rust-app-template").is_dir())
+
+    # --- fix round 2 ------------------------------------------------------------------------
+
+    def test_old_personal_slot_without_work_devzero_refuses_not_stamps(self):
+        # R1: the old layout with its evidence missing must not be stamped as the new one.
+        for name in ("work/.task-lock", "work/.task-queue", "work/.current-task"):
+            with self.subTest(slot=name):
+                shutil.rmtree(self.home)
+                self.home.mkdir()
+                write(self.home / "work/tally/README.md", "tally\n")
+                write(self.home / name)
+                (self.home / "personal").mkdir()  # tmpfiles
+                before = snapshot(self.home)
+                status, log = self.run_migration()
+                self.assertEqual(status, migrate.REFUSED, log)
+                self.assertIn("has the old personal slot", log)
+                self.assertIn("create an empty", log)
+                self.assertEqual(snapshot(self.home), before)
+                self.assertFalse(self.stamped())
+        # The recovery the message names: an empty ~/work-devzero, then run again.
+        (self.home / "work-devzero").mkdir()
+        status, log = self.run_migration()
+        self.assertEqual(status, 0, log)
+        self.assertEqual((self.home / "personal/tally/README.md").read_text(), "tally\n")
+        self.assertFalse((self.home / "work").exists())
+        self.assertFalse((self.home / "work-devzero").exists())
+        self.assertTrue(self.stamped())
+
+    def test_no_stamp_while_work_devzero_still_holds_files(self):
+        # R4: a file lands in ~/work-devzero during a personal-only move (only with the gateway running).
+        write(self.home / "work/tally/README.md", "tally\n")
+        write(self.home / "work/.task-lock")
+        (self.home / "work-devzero").mkdir()
+        real = migrate.processes_in
+
+        def arrive(trees):
+            if len(trees) == 3:  # the final check, right before the renames
+                write(self.home / "work-devzero/.tasks/devzero/.task-queue", ROW)
+            return real(trees)
+
+        migrate.processes_in = arrive
+        self.addCleanup(setattr, migrate, "processes_in", real)
+        status, log = self.run_migration()
+        self.assertEqual(status, 0, log)
+        self.assertTrue((self.home / "personal/tally").is_dir())
+        self.assertIn("still holds files; not stamping", log)
+        self.assertFalse(self.stamped())
+        # Next run: the company half is now pending and runs.
+        migrate.processes_in = real
+        status, log = self.run_migration()
+        self.assertEqual(status, 0, log)
+        self.assertEqual((self.home / "work/.tasks/devzero/.task-queue").read_text(), ROW)
+        self.assertTrue(self.stamped())
+
+    def test_process_entering_during_the_walk_refuses_before_any_rename(self):
+        # R8: re-checked right before the renames, and ~/personal (an empty target skeleton) counts too.
+        self.old_layout()
+        self.tmpfiles_skeleton()
+        proc = self.fake_proc({})
+        real = migrate.gitdir_rewrites
+
+        def walk_then_enter(trees, moves):
+            found = real(trees, moves)
+            entry = proc / "4300"
+            entry.mkdir()
+            (entry / "stat").write_text("4300 (sh) S 1 1 1 0\n")
+            (entry / "cmdline").write_bytes(b"sh\0")
+            (entry / "cwd").symlink_to(self.home / "personal")
+            return found
+
+        migrate.gitdir_rewrites = walk_then_enter
+        self.addCleanup(setattr, migrate, "gitdir_rewrites", real)
+        before = snapshot(self.home)
+        status, log = self.run_migration()
+        self.assertEqual(status, migrate.REFUSED, log)
+        self.assertIn(f"4300 (sh) in {self.home}/personal", log)
+        self.assertEqual(snapshot(self.home), before)
+        self.assertFalse(self.stamped())
 
     @unittest.skipIf(shutil.which("git") is None, "needs git")
     def test_linked_worktrees_follow_the_move(self):

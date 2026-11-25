@@ -146,7 +146,7 @@ class RenderedLaunchers(unittest.TestCase):
         self.assertFalse((self.home / "work").exists())
 
     def test_launchers_refuse_until_the_workspace_migration_ran(self):
-        # The old personal slot still in ~/work: the personal commands refuse, company ones don't care.
+        # The old personal slot still in ~/work: the personal commands refuse (the company ones too: R8b test).
         (self.home / "work").mkdir()
         for name in (".current-task", ".task-queue", ".task-lock"):
             with self.subTest(old=name):
@@ -155,7 +155,7 @@ class RenderedLaunchers(unittest.TestCase):
                 result = self.run_task("task-status", "--queue", code=2)
                 self.assertIn(f"workspace migration pending: ~/work/{name}", result.stderr)
                 old.unlink()
-        self.assertIn("remove it", result.stderr)  # the stray-file case says what to do
+        self.assertIn("ask manjo", result.stderr)  # the stray-file case never tells an agent to delete state
         # An empty ~/work-devzero (a stray mkdir) is not old state: the company commands work.
         (self.home / "work-devzero/.tasks/devzero").mkdir(parents=True)
         for company in ("devzero", "codilas"):
@@ -169,6 +169,25 @@ class RenderedLaunchers(unittest.TestCase):
                 self.assertIn("workspace migration pending: ~/work-devzero still holds files", result.stderr)
                 self.assertEqual(self.state(company), before)
         self.assertEqual(self.sentinel.read_text(), "personal sentinel\n")
+
+
+    def test_company_launchers_refuse_while_work_is_the_old_personal_tree(self):
+        # A refused migration left the old personal tree in ~/work and only directories in ~/work-devzero:
+        # a company slot must not be created among the personal repos.
+        (self.home / "work-devzero/.tasks/devzero").mkdir(parents=True)
+        (self.home / "work/tally").mkdir(parents=True)
+        for name in (".current-task", ".task-queue", ".task-lock"):
+            old = self.home / "work" / name
+            old.write_text("")
+            for company in ("devzero", "codilas"):
+                with self.subTest(old=name, company=company):
+                    result = self.run_task(f"{company}-task-status", "--queue", code=2)
+                    self.assertIn(f"~/work/{name} is a personal task slot file", result.stderr)
+                    self.assertIn("ask manjo", result.stderr)
+            old.unlink()
+        self.assertFalse((self.home / "work/.tasks").exists())
+        # Gone: the company commands work again.
+        self.run_task("devzero-task-status", "--queue")
 
 
 if __name__ == "__main__":

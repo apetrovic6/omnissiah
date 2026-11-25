@@ -115,9 +115,18 @@
       if [ -n "$(${lib.getExe' pkgs.findutils "find"} ${lib.escapeShellArg "${home}/work-devzero"} -mindepth 1 ! -type d -print -quit 2>/dev/null)" ]; then
         printf '%s\n' 'workspace migration pending: ~/work-devzero still holds files.' \
           'If the migration has not run, see README, Hermes workspaces on stygies. If it has (~/work holds the company' \
-          'tree), they are strays: check `find ~/work-devzero ! -type d` for anything live, then remove ~/work-devzero.' >&2
+          "tree), they are strays. Don't touch them: stop and ask manjo to check them for anything live." >&2
         exit 2
       fi
+      # ~/work may still be the OLD personal tree (a refused migration): a slot made in
+      # it would put company state among the personal repos.
+      for old in .current-task .task-queue .task-lock; do
+        if [ -e ${lib.escapeShellArg "${home}/work"}/"$old" ]; then
+          printf '%s\n' "workspace migration pending: ~/work/$old is a personal task slot file, so ~/work is not the company tree yet." \
+            "See README, Hermes workspaces on stygies. Don't touch it: stop and ask manjo." >&2
+          exit 2
+        fi
+      done
       ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HERMES_TASK_STATE_DIR" || exit $?
       command=''${0##*/}
       ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HERMES_TASK_STATE_DIR/.task-lock" \

@@ -316,8 +316,8 @@ tmpfiles): `~/work` → `~/personal`, then `~/work-devzero` → `~/work`. It act
 only on evidence of the old layout: `~/work-devzero`, which every old
 generation created. Without it, or once the done-stamp
 `~/.local/state/hermes-workspace-migrate.done` exists, it does nothing. The
-stamp is written after a success, or on first sight of a home without
-`~/work-devzero`. Linked Git worktrees are repointed: their `.git` files inside
+stamp is written, with a log line, only once `~/work-devzero` is gone: after a
+success, or on first sight of a home without it. Linked Git worktrees are repointed: their `.git` files inside
 the moved trees, the repos' `worktrees/*/gitdir` back-pointers, and the `.git`
 file of a worktree outside the trees that a back-pointer names. A worktree
 outside the trees that no back-pointer names needs
@@ -326,7 +326,10 @@ outside the trees that no back-pointer names needs
 shebangs and `activate`) must be recreated, and each `.envrc` needs
 `direnv allow` again (direnv keys its allow list by path). Nix gcroots
 (`result`, `.direnv`, `.devenv`) dangle until rebuilt, so GC may collect their
-closures. None of this loses data.
+closures. None of this loses data. If the script is killed between the renames
+and the Git rewrites (a window of milliseconds), the rerun has nothing to move,
+so a linked worktree keeps a stale link. Fix that one with
+`git -C <repo> worktree repair <worktree path>`.
 
 It **refuses and changes nothing** when:
 
@@ -336,7 +339,14 @@ It **refuses and changes nothing** when:
 - old and new trees both hold content (an empty-directory skeleton left by
   tmpfiles doesn't count), or `~/work` mixes personal repos with company
   directories;
-- any of the three directories is a symlink, or a directory can't be read.
+- any of the three directories is a symlink, or a directory can't be read;
+- there is no `~/work-devzero`, but `~/work` has the old personal slot files
+  (`.task-lock`, `.task-queue`, `.current-task`). That is the old layout with its
+  evidence missing. If `~/work` is the old personal tree, create an empty
+  `~/work-devzero` as `hermes` and run `sudo hermes-workspace-migrate`.
+
+A `hermes` process is checked for once more right before the renames, with
+`~/personal` included.
 
 A refusal never fails the deploy. It is printed in the deploy output and
 logged: `journalctl -t hermes-workspace-migrate`. Until the move is done the
@@ -346,14 +356,20 @@ hide a task.
 **Deploy window (one time).** `/pause` doesn't stop running work, so use the
 hard stop:
 
-1. Both slots idle. Before this change, run `task-status --queue` and
-   `<company>-task-status --queue` on stygies.
+1. On stygies, check both slots are idle, as `hermes`: `~hermes` is mode 700,
+   so a check as another user sees nothing and looks idle. Use
+   `sudo -iu hermes task-status --queue` and
+   `sudo -iu hermes <company>-task-status --queue` (the old commands, before
+   this change), or the loop under the manual fallback. Also check
+   `sudo ls -A ~hermes/work-devzero` lists something. That is the evidence the
+   migration needs; if it lists nothing, stop and look before deploying.
 2. On ryza: `sudo systemctl stop hermes-gateway hermes-dashboard`.
 3. On stygies: `pgrep -u hermes -a` shows nothing, or only `sshd` sessions.
    Kill leftovers as in the emergency stop above.
 4. `clan machines update stygies` on its own. Check the output (or
-   `journalctl -t hermes-workspace-migrate`) for `moved … -> …`, and check
-   that `ls ~hermes` shows `personal` and `work` but no `work-devzero`.
+   `journalctl -t hermes-workspace-migrate`) for `moved … -> …` and the
+   done-stamp line, and check that `sudo ls -A ~hermes` shows `personal` and
+   `work` but no `work-devzero`.
 5. `clan machines update ryza`, as a separate run. Until ryza switches, its
    old coder cwd `~/work` is the company tree and its old work cwd
    `~/work-devzero` is gone. Never deploy ryza first: its new work cwd `~/work`
@@ -376,13 +392,20 @@ sudo hermes-workspace-migrate
 
 `hermes-workspace-migrate` is the exact script and arguments activation uses,
 run as `hermes`. It prints what it moved, or why it refuses again; exit 0 means
-done or nothing to do. To check that the slots are idle, this prints nothing
-when they are (an idle slot has no `.current-task`):
+done or nothing to do. To check that the slots are idle, run this as `hermes`.
+It prints nothing when they are (an idle slot has no `.current-task`). For the
+old layout:
 
 ```sh
-for f in ~hermes/work/.current-task ~hermes/work-devzero/.tasks/*/.current-task; do
-  [ -s "$f" ] && echo "active: $f"
-done
+sudo -u hermes sh -c 'for f in /home/hermes/work/.current-task /home/hermes/work-devzero/.tasks/*/.current-task; do
+  [ -s "$f" ] && echo "active: $f"; done; true'
+```
+
+For the new layout (before a rollback):
+
+```sh
+sudo -u hermes sh -c 'for f in /home/hermes/personal/.current-task /home/hermes/work/.tasks/*/.current-task; do
+  [ -s "$f" ] && echo "active: $f"; done; true'
 ```
 
 Don't move the trees with `mv` or prune them with `find … -delete`. `mv` into
@@ -392,17 +415,22 @@ an empty `.git/refs` and break a repo.
 **Rollback past this change is one-way.** The old generation recreates
 `~/work-devzero` empty. Its personal launcher writes its slot into `~/work`
 (the company tree), and its company launchers see idle slots. So before rolling
-stygies back, with the gateway stopped and both slots idle, reverse the move by
-hand on stygies as `hermes`:
+stygies back, with the gateway stopped and both slots idle (the new-layout
+check above), reverse the move by hand on stygies as `hermes`:
 
 ```sh
 set -eu
 cd ~
+# First: if a step below fails, the next roll-forward still migrates.
+rm -f ~/.local/state/hermes-workspace-migrate.done
 [ ! -e work-devzero ] || rmdir work-devzero   # fails, and stops, if not empty
 mv -T work work-devzero
 mv -T personal work
-rm -f ~/.local/state/hermes-workspace-migrate.done
 ```
+
+If it stops halfway, `sudo hermes-workspace-migrate` is safe in any partial
+state. It moves the trees forward to the new layout again, or refuses on
+anything ambiguous. Fix the cause, then start the rollback over.
 
 Then run `git -C <repo> worktree repair <worktree paths>` for repos with linked
 worktrees. Rolling forward again migrates afresh. A stray old-slot file the new

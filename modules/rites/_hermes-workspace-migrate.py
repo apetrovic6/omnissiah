@@ -11,11 +11,14 @@ creates the new directories, but tolerates the empty skeleton tmpfiles leaves af
 run: a tree of empty directories is not state.
 
 It acts only on evidence of the old layout: ~/work-devzero, which every old generation created.
-Without it, or once ~/.local/state/hermes-workspace-migrate.done exists (written after a
-success, or on first sight of a home without the old layout), it does nothing. It plans both
+Without it, or once ~/.local/state/hermes-workspace-migrate.done exists (written, with a log
+line, once ~/work-devzero is gone: after a success, or on first sight of a home without it), it
+does nothing. Except: no ~/work-devzero but the old personal slot files at the top of ~/work
+refuses, since that is the old layout with its evidence missing. It plans both
 moves and every Git path rewrite before doing anything, and refuses (changes nothing) when the
 state is ambiguous or unreadable, a slot being moved has an active task, a task command holds a
-slot lock, or a hermes process has its cwd in a tree being moved.
+slot lock, or a hermes process has its cwd in a tree being moved (checked again right before
+the renames).
 
 Exit status: 0 nothing to do or migrated, 3 refused, 1 unexpected error. The caller never fails
 the deploy on it.
@@ -245,21 +248,32 @@ def prune_stale(home):
         log(f"removed the empty {stale}")
 
 
-def stamp(home):
+# The old personal slot's files: never at the top of ~/work in the new layout.
+PERSONAL_SLOT_FILES = (".task-lock", ".task-queue", ".current-task")
+
+
+def stamp(home, why):
     path = home / STAMP
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("migrated to ~/personal and ~/work\n", encoding="utf-8")
+    log(f"{why}; wrote {path}, so this never runs again (README, Hermes workspaces on stygies)")
 
 
 def migrate(home, companies):
     if (home / STAMP).exists():
         return 0
     old_work = home / "work-devzero"
+    work, personal = home / "work", home / "personal"
     if not old_work.exists() and not old_work.is_symlink():
         # No old generation ever ran here, or the move is done: never classify ~/work again.
-        stamp(home)
+        # Unless ~/work still has the old personal slot: then the evidence is missing, not the old layout.
+        stray = [name for name in PERSONAL_SLOT_FILES if os.path.lexists(work / name)]
+        if stray:
+            raise Refused(f"{work} has the old personal slot ({', '.join(stray)}) but there is no {old_work}. "
+                          f"If {work} is the old personal tree, create an empty {old_work} as hermes and run "
+                          "`sudo hermes-workspace-migrate` again; if not, ask manjo")
+        stamp(home, f"no {old_work}: the new layout, nothing to move")
         return 0
-    work, personal = home / "work", home / "personal"
     with ExitStack() as stack:
         try:
             move_personal, move_work, slots = plan(home, companies)
@@ -268,7 +282,7 @@ def migrate(home, companies):
         if not (move_personal or move_work):
             prune_stale(home)
             if not old_work.exists():
-                stamp(home)
+                stamp(home, "nothing left to move")
             return 0
         lock_slots(stack, slots)
         busy = [str(slot) for slot in slots if active(slot)]
@@ -288,6 +302,12 @@ def migrate(home, companies):
             rewrites = gitdir_rewrites(trees, moves)
         except OSError as error:
             raise Refused(f"cannot read the workspace ({error})") from None
+        # Once more right before the renames: the walk above can take a while. ~/personal too, since
+        # an empty target skeleton is pruned and replaced.
+        running = processes_in([work, old_work, personal])
+        if running:
+            raise Refused("hermes processes have their working directory in a tree to move: "
+                          + "; ".join(running) + ". Stop them (README, deploy window), then run again")
 
         if move_personal:
             if personal.exists():
@@ -315,7 +335,11 @@ def migrate(home, companies):
         for item in failed:
             log(f"warning: could not update {item}; run `git worktree repair <worktree path>` in its repo")
         prune_stale(home)
-        stamp(home)
+        if old_work.exists() or old_work.is_symlink():
+            # A file arrived in ~/work-devzero during a personal-only move: run again once it is sorted.
+            log(f"warning: {old_work} still holds files; not stamping, so the next run looks again")
+        else:
+            stamp(home, "moved")
         return 0
 
 
