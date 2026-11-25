@@ -55,6 +55,121 @@
     provider = "anthropic";
     model = "claude-opus-5-5";
   };
+  # Delegation tiers (modules/rites/_hermes-delegation-tiers; README "Hermes delegation tiers").
+  # Which Alibaba Token Plan endpoint the pi-api-keys Qwen key belongs to: "alibaba-token-plan"
+  # (Singapore) or "alibaba-token-plan-cn" (Beijing). The README says how to check.
+  qwenTokenPlanProvider = "alibaba-token-plan";
+  # Personal subscriptions and keys: the Claude Code login (Max), the ChatGPT Plus device login in
+  # the root auth.json, and the pi-api-keys DeepSeek and Qwen keys. A fallback runs at its tier's
+  # effort: Hermes fallback entries are provider + model only.
+  coderTiers = [
+    {
+      name = "plan";
+      description = "A hard design question inside an approved task: a cross-cutting change, an unclear root cause, or two viable approaches to weigh.";
+      provider = "anthropic";
+      model = "claude-fable-5-2";
+      effort = "high";
+      fallback = [
+        {
+          provider = "anthropic";
+          model = "claude-opus-5-5";
+        }
+      ];
+    }
+    {
+      name = "implement";
+      description = "A well-specified change you already planned: files, approach and tests named in the goal.";
+      provider = "anthropic";
+      model = "claude-sonnet-5-5";
+      effort = "medium";
+      # Terra (fast, efficient) for when Sol's 5-hour Plus window is spent.
+      fallback = [
+        {
+          provider = "openai-codex";
+          model = "gpt-6.2-sol";
+        }
+        {
+          provider = "openai-codex";
+          model = "gpt-6.1-terra";
+        }
+      ];
+    }
+    {
+      name = "review";
+      description = "Independent review of the finished diff before the PR: bugs, missing tests, rule violations. Once per PR.";
+      provider = "anthropic";
+      model = "claude-opus-5-5";
+      effort = "high";
+      fallback = [
+        {
+          provider = "openai-codex";
+          model = "gpt-6.2-sol";
+        }
+      ];
+    }
+    {
+      name = "quick";
+      description = "Mechanical work: find usages, summarise a file or log, rename, format, draft a commit or PR body.";
+      provider = "anthropic";
+      model = "claude-haiku-5-5";
+      effort = "low";
+      # Luna costs little of the Plus window; DeepSeek (pay per token) last.
+      fallback = [
+        {
+          provider = "openai-codex";
+          model = "gpt-6-luna";
+        }
+        {
+          provider = "deepseek";
+          model = "deepseek-flash";
+        }
+      ];
+    }
+    {
+      name = "bulk";
+      description = "Reading a lot of text: long logs, large diffs, many files, where the answer is a short summary. Never for code you will push.";
+      provider = "deepseek";
+      model = "deepseek-v4-pro";
+      effort = "high";
+      fallback = [
+        {
+          provider = qwenTokenPlanProvider;
+          model = "qwen3.8-max";
+        }
+      ];
+    }
+  ];
+  # Work: the DevZero token only. Every tier keeps the parent's credentials (provider = null) and
+  # changes the model, so a child can't reach a personal login: a profile with no Codex grant of
+  # its own borrows the root store's (hermes_cli/auth.py), whatever auth.adopt_external_logins says.
+  # Off until manjo enables work delegation; the assertion below holds either way.
+  workTiersEnabled = false;
+  workTiers = [
+    {
+      name = "plan";
+      description = "A hard design question inside an approved task: a cross-cutting change, an unclear root cause, or two viable approaches to weigh.";
+      model = "claude-opus-5-5";
+      effort = "xhigh";
+    }
+    {
+      name = "implement";
+      description = "A well-specified change you already planned: files, approach and tests named in the goal.";
+      model = "claude-sonnet-5-5";
+      effort = "medium";
+    }
+    {
+      name = "review";
+      description = "Independent review of the finished diff before the PR: bugs, missing tests, rule violations. Once per PR.";
+      model = "claude-opus-5-5";
+      effort = "high";
+    }
+    {
+      name = "quick";
+      description = "Mechanical work: find usages, summarise a file or log, rename, format, draft a commit or PR body.";
+      model = "claude-haiku-5-5";
+      effort = "low";
+    }
+  ];
   appProjectRule =
     if projectNames == []
     then "No app repos are enabled; do not claim app tasks."
@@ -142,6 +257,16 @@ in {
           !lib.any (path: remoteHome == path || lib.hasPrefix "${path}/" remoteHome) config.services.imperium.hermes.sshHostOnlyPaths;
         message = "services.imperium.hermes.sshHostOnlyPaths must not contain stygies's hermes home, or every coder and work command would leave its workspace.";
       }
+      {
+        # Work bills only DevZero: its subagents keep the parent's credentials (the work token).
+        # Any provider here could resolve to a personal login (the root Codex grant, the shared
+        # DeepSeek and Qwen keys in the wrapper's environment).
+        assertion = let
+          d = config.services.imperium.hermes.profiles.work.delegation;
+        in
+          d.allowedProviders == [] && lib.all (tier: tier.provider == null && tier.fallback == []) d.tiers;
+        message = "services.imperium.hermes.profiles.work.delegation: tiers must not name a provider or fallback, and allowedProviders must stay empty (work bills only the DevZero token).";
+      }
     ];
 
     # Keep the identity unavailable to the default profile's local terminal
@@ -197,6 +322,14 @@ in {
         # One Matrix room per project. Add the room's Internal room ID to
         # _coder-projects.nix after inviting @hermes.
         rooms = lib.mapAttrs (_: project: project.room) projects;
+        # The SOUL's "Delegation" section says when to use which tier.
+        delegation = {
+          tiers = coderTiers;
+          default = "implement";
+          allowedProviders = ["anthropic" "openai-codex" "deepseek" qwenTokenPlanProvider];
+          # The SOUL asks for at most two at once; this is the hard cap.
+          maxConcurrentChildren = 3;
+        };
         settings.terminal = sshTerminal // {cwd = "~/personal";};
         # Kaneo uses browser PKCE. Port 28431 is outside both hosts' ephemeral
         # ranges; keep it fixed for the phalanx-to-ryza SSH tunnel.
@@ -216,6 +349,13 @@ in {
         # One room per company, from _work-projects.nix, routed whether or not
         # its coding is enabled.
         rooms = lib.mapAttrs (_: company: company.room) workCompanies;
+        delegation = {
+          tiers = lib.optionals workTiersEnabled workTiers;
+          default = lib.mkIf workTiersEnabled "implement";
+          # Parent credentials only; asserted below.
+          allowedProviders = [];
+          maxConcurrentChildren = 3;
+        };
         settings = {
           auth.adopt_external_logins = false;
           model = {
