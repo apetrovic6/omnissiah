@@ -81,6 +81,7 @@
       repos."9" = {
         owner = "manjo";
         name = "rust-app-template";
+        schedules = false;
       };
       users = ["manjo"];
     };
@@ -105,6 +106,28 @@
     modules = [{services.imperium.forgejoEphemeral.trustedJobs.enable = lib.mkForce true;}];
   };
   trustedConfig = trusted.config;
+  # One extra pool on the enabled fixture; for assertions, option types and PAT prompts.
+  withPool = pool:
+    (enabled.extendModules {
+      modules = [
+        {
+          services.imperium.forgejoEphemeral.pools.extra = pool;
+          clan.core.vars.generators.forgejo-ephemeral-noosphere.files.token.path = lib.mkForce "/run/secrets/noosphere-test-pat";
+        }
+      ];
+    }).config;
+  failsWith = machine: message: lib.any (check: check.message == message && !check.assertion) machine.assertions;
+  noosphereUser = {
+    forge = "noosphere";
+    scope.user = "manjo";
+    labels = ["nix-eph"];
+    dispatch = [7];
+  };
+  inanna = {
+    owner = "manjo";
+    name = "inanna";
+  };
+  prompt = machine: forge: machine.clan.core.vars.generators."forgejo-ephemeral-${forge}".prompts.token.description;
   trustedSlotctlSlots = trustedConfig.services.imperium.forgejoEphemeral.internal.slotctlSlots;
   configuredSlots = builtins.attrNames c.services.imperium.forgejoEphemeral.inventory.ryza.slots;
   services = c.systemd.services;
@@ -322,6 +345,37 @@ in
   assert ryza.config.clan.core.vars.generators.forgejo-ephemeral-ugalabugala.prompts.token.description
   == "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user only)";
   assert lib.all (check: check.assertion) multiPool.assertions;
+  # Review M1/L2: trust needs users, trusted repos must be dispatched, dispatch lists are nonempty.
+  assert failsWith (withPool (noosphereUser // {trust.repos."7" = inanna;}))
+  "forgejoEphemeral: pool extra lists trusted repos, so trust.users must not be empty.";
+  assert failsWith (withPool (noosphereUser
+    // {
+      trust = {
+        repos."8" = inanna;
+        users = ["manjo"];
+      };
+    }))
+  "forgejoEphemeral: every trusted repo of pool extra must also be in its dispatch list.";
+  assert lib.all (check: check.assertion)
+  (withPool (noosphereUser
+    // {
+      trust = {
+        repos."7" = inanna;
+        users = ["manjo"];
+      };
+    })).assertions;
+  assert !(builtins.tryEval (builtins.deepSeq (withPool (noosphereUser // {dispatch = [];})).services.imperium.forgejoEphemeral.pools.extra.dispatch true)).success;
+  assert (poolsFor (withPool (noosphereUser
+    // {
+      trust = {
+        repos."7" = inanna // {schedules = true;};
+        users = ["manjo"];
+      };
+    }))).extra.trust.repos."7".schedules;
+  # Review L3: Public only unless the forge has an org pool; read:repository only with trust on.
+  assert prompt (withPool noosphereUser) "noosphere" == "Forgejo dispatcher PAT for manjo on forge.noosphere.uk (Public only; write:user only)";
+  assert prompt multiPool "noosphere" == "Forgejo dispatcher PAT for noosphere-ci on forge.noosphere.uk (write:user and write:organization)";
+  assert prompt trustedConfig "ugalabugala" == "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user and read:repository)";
   assert !dynamicSlot.fixed_pilot;
   assert dynamicGuest.microvm.credentialFiles == lib.genAttrs dynamicCredentials (id: "${dynamicSlot.credential_dir}/${id}");
   assert lib.sort builtins.lessThan dynamicRunner.serviceConfig.LoadCredential == dynamicCredentials;
@@ -355,6 +409,7 @@ in
         repos."42" = {
           owner = "Monolith-Softworks";
           name = "inanna";
+          schedules = false;
         };
         users = ["manjo"];
       };

@@ -18,16 +18,28 @@
 #   (Forgejo also admits site admins). This scope lets an owner manage the
 #   whole org via the API, not just runners: for example edit/delete the org,
 #   manage teams and membership, and set/delete Actions secrets and variables.
+#   Three of those powers matter most here:
+#     - org webhooks (/orgs/<org>/hooks, owner; api.go:1260-1266): a hook can
+#       send every event of every org repo, payloads included, to any URL;
+#     - team repository grants (PUT /teams/<id>/repos/<org>/<repo>;
+#       api.go:1302-1308): any team can get write on any org repo, which makes
+#       its members default-branch writers of a trusted repo (see PRECONDITION;
+#       the dispatcher's branch protection check then refuses trust);
+#     - org rename (POST /orgs/<org>/rename; api.go:1229): the dispatcher
+#       survives it by failing closed, since Forgejo answers 307 and redirects
+#       aren't followed.
 #   It is not tied to the configured org: normal permissions and visibility
 #   checks apply to any org the account can access.
 #   Public only rejects non-public orgs on the org routes and private repos
 #   on the repository lookup routes. Owner-scoped runner job listings filter
 #   by owner, not by repository visibility (shared/runners.go). With
 #   `read:repository`, ordinary repo GETs can read accessible public repos,
-#   not just trusted ones; the deploy-key list also requires repo admin. A
-#   broader visibility PAT can reach non-public resources where the account
-#   has permission. `read:repository` does not grant ordinary repo writes,
-#   but does not negate account SSH-key or org-owner authority.
+#   not just trusted ones; the deploy-key and branch protection lists also
+#   require repo admin. A broader visibility PAT can reach non-public
+#   resources where the account has permission. `read:repository` does not
+#   grant ordinary repo writes, but does not negate account SSH-key or
+#   org-owner authority. GET /users/<login> (trust user pinning) needs only
+#   the user scope; Public only hides non-public users from it.
 #   In particular, DELETE /repos/<owner>/<repo> uses the owner's scope
 #   (`write:user` or `write:organization`) and checks delete permission,
 #   not `write:repository`. That route does not use checkTokenPublicOnly;
@@ -54,7 +66,18 @@
 #   trust.users for push/dispatch. The run must not be a fork or AGit PR or
 #   await approval, and must be on the DEFAULT BRANCH ONLY (prettyref equals
 #   repository.default_branch). Only a push or workflow_dispatch by someone
-#   in trust.users, or a schedule triggered by forgejo-actions (-2), qualifies.
+#   in trust.users qualifies, or, where trust.repos.<id>.schedules is set, a
+#   schedule triggered by forgejo-actions (-2). trust.repos needs trust.users
+#   (asserted in Nix and in the dispatcher's Pool).
+#   trust.users entries other than the PAT account are pinned to their account
+#   ID at first use (GET /users/<login>, user scope) and kept in the slot's
+#   dispatcher state next to owner_id. A slot without a pin adopts its peers'
+#   (and refuses if they disagree) before fetching. Forgejo frees a renamed
+#   or deleted login at once (USERNAME_COOLDOWN_PERIOD defaults to 0), so a
+#   new account with the same login gets "ID differs from the pinned trust
+#   user". To accept a legitimately recreated account, remove its entry from
+#   trust_ids in that pool's state file on every slot while the dispatchers
+#   are stopped.
 #   A dispatch accepts any ref git resolves ("pull/5/head", a PR head SHA,
 #   another branch, a tag): none of those is the default branch, so none is
 #   trusted. Pushes to other branches aren't trusted either. Residual: a tag
@@ -82,6 +105,37 @@
 #   var is missing, systemd refuses to start the dispatcher, which stops
 #   untrusted dispatch too. This module declares both (ci-credentials.nix), so
 #   a missing one means it was never generated or deployed.
+#
+# PRECONDITION: trust.users filters who TRIGGERS a run, never who WROTE the
+#   code it runs. Any default-branch push, by anyone, re-creates the repo's
+#   schedules as forgejo-actions (services/actions/notifier_helper.go:542-627),
+#   and a trusted push or dispatch runs whatever earlier writers left on the
+#   default branch. So a repository belongs in trust.repos only if nobody
+#   outside trust.users can write its default branch:
+#     - no other collaborator, and no team, with write or admin on the repo.
+#       For an org repo that includes the Owners team and every team granted
+#       the repo (or all repos); "org member" means a member of any such team.
+#       A member of only read teams can't write and doesn't count;
+#     - a branch protection rule named exactly like the default branch whose
+#       push allowlist (if pushes are enabled) and merge allowlist are both on,
+#       name only trust.users and no team, with no unprotected file patterns
+#       (a push touching only those skips the push allowlist). Without a merge
+#       allowlist any writer can merge a PR (IsUserMergeWhitelisted falls back
+#       to write access); the push allowlist has no admin bypass (CanUserPush);
+#     - no write deploy key, and not a pull mirror (a mirror sync pushes as
+#       the repo owner, services/mirror/mirror_pull.go).
+#   The dispatcher checks the last two points on every resolution (the first
+#   one is what keeps them true, since repo admins can edit the rule):
+#   GET /repos/<owner>/<repo>/branch_protections (read:repository, repo admin)
+#   must show that rule; with no exact-name rule, two of them, a team, a
+#   non-trust user or any other gap the run is untrusted, and an unreadable
+#   list follows the same 10-minute fail-closed path as the deploy keys.
+#   Glob rules are not evaluated: exact names win over globs in Forgejo.
+#   Residuals: the check sees today's writers, not who wrote the branch
+#   before; audit the default branch when adding a repo or loosening a rule.
+#   Repo admins (org owners included) can edit the rule or switch the default
+#   branch; the next resolution catches it, so they must be in trust.users.
+#   Site admins bypass everything.
 #
 # CHANNEL: a second virtiofs share, not fw_cfg, because fw_cfg is fixed at boot.
 #   Host: `trustDir`, root:root 0700. The slot host's slotctl creates it

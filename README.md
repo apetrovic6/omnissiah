@@ -1073,8 +1073,12 @@ a fork run; do not open up fork scheduling more broadly.
    ```
 
    `dispatch = "owner"` admits jobs from the pool owner's whole queue;
-   use a list of positive upstream IDs to restrict it. Labels, dispatch
-   and trust entries filter the dispatcher, not the PAT. Every slot serves
+   use a nonempty list of positive upstream IDs to restrict it. A trusted
+   repo must be in that list, and `trust.repos` needs `trust.users` (both
+   asserted). Labels, dispatch and trust entries filter the dispatcher, not
+   the PAT. With `trustedJobs` off the trust entries are inert; each
+   dispatcher then logs `trust allowlist configured but trusted jobs are
+   off` once per pool at startup. Every slot serves
    every pool, rotating across eligible pools and taking the smallest
    numerical eligible job ID within the selected pool. Jobs must request
    exactly one configured label; a guest with dynamic routing gets only
@@ -1233,9 +1237,12 @@ services.imperium.forgejoEphemeral.pools.noosphere-auspex = {
 ```
 
 1. As `manjo` on Noosphere, create a dedicated **Public only** PAT with
-   **`write:user`** and **`read:repository`** as requested by the Noosphere
-   prompt. Repository scope is used for trust lookups only; do not add
-   `write:organization` for this user-only pilot. With the pool configured,
+   **`write:user` only**, as the Noosphere prompt requests for a user-only
+   forge. Plain dispatch works on a private `auspex` too: the user job
+   listing filters by owner, not visibility. Do not add
+   `write:organization` for this user-only pilot. The prompt asks for
+   `read:repository` only once `trustedJobs` is on (step 4), and drops
+   Public only once the forge has an org pool. With the pool configured,
    generate the per-machine var:
 
    ```sh
@@ -1257,7 +1264,12 @@ services.imperium.forgejoEphemeral.pools.noosphere-auspex = {
    and disappear after completion; verify local cleanup too.
 4. To test trust, pause and drain again. Enable `trustedJobs` if not already
    on (follow the trust opt-in below for every forge with trusted repos).
-   Add `trust.repos."<auspex ID>" = { owner = "manjo"; name = "auspex"; };`
+   That adds `read:repository` to the Noosphere prompt: regenerate the var
+   with a new PAT (`--regenerate`). Trust lookups on a private `auspex`
+   need a PAT without Public only; otherwise they fail closed. Check the
+   trust precondition below for `auspex` (default branch protection rule
+   included), then add
+   `trust.repos."<auspex ID>" = { owner = "manjo"; name = "auspex"; };`
    and `trust.users = [ "manjo" ];` to the Noosphere pool, using the real ID
    as the string key. Deploy Ryza, unpause, and verify an eligible default
    branch push delivers credentials. The PR must still get none.
@@ -1452,10 +1464,14 @@ verified at startup. After pickup, the dispatcher looks up only repos
 listed in that pool's `trust.repos`, mapping job `task_id` → task →
 `run_number` → run. The run's repo ID and owner must match the allowlist,
 and it must be on the **default branch**: a push or `workflow_dispatch`
-by someone in `trust.users`, or a schedule triggered by `forgejo-actions`
-(user ID `-2`). Only after those checks and a successful check for the absence
-of write deploy keys does the dispatcher write the CI signing key and ncps
-upload netrc into
+by someone in `trust.users`, or, only for repos with
+`trust.repos.<id>.schedules = true`, a schedule triggered by
+`forgejo-actions` (user ID `-2`). Logins in `trust.users` other than the
+PAT account are pinned to their account ID the first time they trigger a
+run (`pinned trust user … to account N` in the journal). The repo must not
+be a pull mirror, must have no write deploy key, and its default branch
+protection must confine writers to `trust.users` (below). Only then does
+the dispatcher write the CI signing key and ncps upload netrc into
 `/run/microvm-credentials/ryza-eph-1-trust` (root `0700`, files `0400`). The
 guest sees that directory as a read-only virtiofs share at `/run/ci-trust`,
 readable only by guest root. The nix-daemon's post-build hook then uploads
@@ -1475,6 +1491,39 @@ schedule auto-merges on fork PRs in trusted repos: a merge can land as an
 allowed user's default-branch push, including commits added after review.
 Require approvals and dismiss stale approvals on the default branch.
 
+**Precondition for `trust.repos`.** `trust.users` filters who *triggers* a
+run, never who *wrote* the code it runs: a trusted push runs whatever
+earlier writers left on the default branch, and any default-branch push, by
+anyone, re-creates the repo's schedules as `forgejo-actions`. So list a
+repository only if nobody outside `trust.users` can write its default
+branch:
+
+- No other collaborator and no team with write or admin on it. For an org
+  repo that includes the Owners team and every team granted the repo; an
+  "org member" here means a member of any such team. Read-only teams don't
+  count.
+- A branch protection rule named exactly like the default branch (not a
+  glob) with the merge allowlist on, the push allowlist on (or pushes
+  disabled), both naming only `trust.users` and no team, and no
+  unprotected file patterns. Without a merge allowlist any writer can merge
+  a PR into the branch.
+- No write deploy key, and not a pull mirror.
+
+The dispatcher checks the last two on every resolution
+(`GET /repos/<owner>/<repo>/branch_protections`, which needs
+`read:repository` and repo admin) and logs the gap, for example
+`untrusted: run #N (default branch protection lets every writer merge)`.
+The first point is what keeps the rule in place, since repo admins can edit
+it. The check sees today's writers only, so audit the default branch when
+you add a repo.
+
+**Schedules are a separate opt-in** (`schedules = true` on the repo entry,
+off by default). A scheduled run's trigger is always `forgejo-actions`, so
+trusting it means trusting whoever last wrote the default branch. Enable it
+only for a repo that meets the precondition and has a scheduled workflow
+that needs the cache, such as a nightly `nix flake update` or a cache-warming
+build of `master`. Ryza's `rust-app-template` pool has it off.
+
 **Opt in.**
 
 1. Pause and wait for cleanup (above).
@@ -1489,6 +1538,8 @@ Require approvals and dismiss stale approvals on the default branch.
    repo entry's owner to `"monolith-softworks"` and set
    `trust.users = [ "manjo" ];` on the pool. The PAT must belong to an org
    owner for runner operations; the user queue cannot serve org repos.
+   Check the precondition above for every trusted repo, and add its
+   default branch protection rule before deploying.
    If rotating the pilot PAT, regenerate its var:
 
    ```sh
@@ -1514,7 +1565,13 @@ Require approvals and dismiss stale approvals on the default branch.
 - An unlisted repo gets an untrusted verdict without repository calls.
   `trust lookup pending: … HTTP 403…` after pickup can indicate missing
   `read:repository`, insufficient repository permissions (including admin
-  permission for deploy-key listing), or a Public only PAT on a private repo.
+  permission for deploy-key and branch protection listing), or a Public only
+  PAT on a private repo. `Forgejo trust user: HTTP 404` or `307` means a
+  `trust.users` login was deleted, renamed or isn't visible to the PAT.
+- If a trusted user's account is recreated under the same login, its runs
+  log `ID differs from the pinned trust user`. To accept the new account,
+  stop the dispatchers and remove that login from `trust_ids` in the pool's
+  state file of every slot.
   After 10 minutes the dispatcher gives up for that job; dispatch still works.
 - The isolation probe above still applies: `$CREDENTIALS_DIRECTORY` holds
   only the five one-job runtime inputs. A trusted job can still check that

@@ -115,7 +115,7 @@ class Pool:
             or not isinstance(scope, dict) or len(scope) != 1
             or not isinstance(labels, list) or not labels or not all(matches(LABEL_NAME, label) for label in labels)
             or len(set(labels)) != len(labels)
-            or not (dispatch == "owner" or isinstance(dispatch, list) and all(map(positive, dispatch)))
+            or not (dispatch == "owner" or isinstance(dispatch, list) and dispatch and all(map(positive, dispatch)))
             or not positive(maxSlots)
             or not isinstance(trust, dict) or trust.keys() != {"repos", "users"}
             or not isinstance(trust["repos"], dict) or not isinstance(trust["users"], list)
@@ -132,12 +132,17 @@ class Pool:
         for repo_id, repo in trust["repos"].items():
             if (
                 not matches(re.compile(r"[1-9][0-9]*"), repo_id)
-                or not isinstance(repo, dict) or repo.keys() != {"owner", "name"}
+                or not isinstance(repo, dict) or repo.keys() != {"owner", "name", "schedules"}
                 or not matches(LOGIN_NAME, repo["owner"]) or repo["owner"].lower() != owner.lower()
                 or not matches(REPO_NAME, repo["name"]) or repo["name"] in (".", "..")
+                or type(repo["schedules"]) is not bool
+                or (dispatch != "owner" and int(repo_id) not in dispatch)
             ):
                 raise ValueError
             repos[int(repo_id)] = repo
+        # An allowlisted repo with nobody allowed would still trust every writer through its schedules.
+        if repos and not trust["users"]:
+            raise ValueError
         self.name, self.forge, self.host, self.login = name, forge, host, login.lower()
         self.owner, self.kind = owner.lower(), kind
         self.labels = frozenset(labels)
@@ -373,6 +378,29 @@ class Forgejo:
             or metadata.get("id") != owner
         ):
             raise ApiError(f"Forgejo repository: {path} does not match the configured repository ID and owner")
+        if type(repo.get("mirror")) is not bool:
+            raise ApiError("Forgejo repository: unexpected repository metadata")
+        return repo
+
+    def user(self, login):
+        """A trust user's account ID (GET /users/{login}, user scope). A renamed account answers 307: not followed."""
+        user, _ = self._request("trust user", "GET", f"/users/{login}", (200,))
+        name = user.get("login") if isinstance(user, dict) else None
+        if not matches(LOGIN_NAME, name) or name.lower() != login or not positive(user.get("id")):
+            raise ApiError("Forgejo trust user: unexpected account metadata")
+        return user["id"]
+
+    def branch_protections(self, path):
+        """All branch protection rules (GET /repos/{o}/{r}/branch_protections: one unpaginated list).
+
+        The route needs read:repository and repository admin access (routers/api/v1/api.go:864-872).
+        """
+        rules, _ = self._request("branch protections", "GET", f"{path}/branch_protections", (200,))
+        if rules is None:  # Forgejo serializes the empty result as a nil slice.
+            return []
+        if not isinstance(rules, list) or any(not isinstance(rule, dict) for rule in rules):
+            raise ApiError("Forgejo branch protections: unexpected response")
+        return rules
 
     def task(self, path, task_id):
         """The task a runner created for a job. Tasks are listed newest first (`id` DESC)."""
@@ -441,8 +469,10 @@ class Forgejo:
         return body["workflow_runs"][0]
 
 
-def trusted_run(run, repo_id, owner, account, pool):
+def trusted_run(run, repo_id, owner, account, pool, trust_ids):
     """None when the run is trusted, else a fixed reason. Fields are server-set; nothing the job controls.
+
+    trust_ids maps each resolved trust.users login to its pinned account ID (Queue._trust_ids).
 
     Forgejo v15.0.12 semantics:
     - is_fork_pull_request is true for fork PRs AND for every AGit PR (models/issues/pull.go:473-488). Re-runs
@@ -460,6 +490,9 @@ def trusted_run(run, repo_id, owner, account, pool):
       dispatch accepts any ref git resolves (routers/api/v1/repo/action.go DispatchWorkflow, modules/git/
       repo_ref.go:69-82). "pull/5/head" or a commit SHA stays verbatim and never equals the default branch name.
       Residual: a tag named exactly like the default branch looks the same; only a writer can create one.
+    - Any default-branch push, by anyone, re-creates the repository's schedules with the forgejo-actions user as
+      trigger (notifier_helper.go:542-627). A schedule therefore says nothing about who wrote it, so schedule
+      trust is a per-repository opt-in (trust.repos.<id>.schedules) and relies on protection_gap.
     """
     try:
         repository, user = run["repository"], run["trigger_user"]
@@ -491,28 +524,87 @@ def trusted_run(run, repo_id, owner, account, pool):
         return "awaiting approval"
     on_default = run["prettyref"] == repository["default_branch"]
     login = user.get("login")
-    allowed = (
-        positive(user["id"]) and matches(LOGIN_NAME, login) and login.lower() in pool.trust_users
-        and (login.lower() != pool.login or user["id"] == account)
+    listed = positive(user["id"]) and matches(LOGIN_NAME, login) and login.lower() in pool.trust_users
+    # Only the PAT account is checked live (GET /user); every other login is pinned on first use.
+    pinned = account if listed and login.lower() == pool.login else trust_ids.get(login.lower()) if listed else None
+    denied = None if listed and user["id"] == pinned else "not in the trust allowlist" if pinned is None else (
+        "ID differs from the pinned trust user; reconcile the account before trusting it"
     )
     if event == "push" and trigger_event == "push":
         if schedule != 0:
             return "push run carries a schedule"
-        if not allowed:
-            return "push user not in the trust allowlist"
+        if denied:
+            return f"push user {denied}"
         return None if on_default else "push not on the default branch"
     if trigger_event == "schedule" and event in ("push", "schedule"):
         if schedule <= 0:
             return "schedule run without a schedule"
         if user["id"] != ACTIONS_USER:
             return "schedule not triggered by forgejo-actions"
-        return None if on_default else "schedule not on the default branch"
+        if not on_default:
+            return "schedule not on the default branch"
+        return None if pool.trust_repos[repo_id]["schedules"] else "schedule trust not enabled for this repository"
     if event == "workflow_dispatch" and trigger_event == "workflow_dispatch":
-        if not allowed:
-            return "dispatch user not in the trust allowlist"
+        if denied:
+            return f"dispatch user {denied}"
         # Any ref git resolves is accepted: refs/pull/N/head ("#N"), "pull/5/head", a SHA, another branch or a tag.
         return None if on_default else "dispatch not on the default branch"
     return "event is not push, schedule or workflow_dispatch"
+
+
+GLOB_SPECIAL = set("*?[]{}\\!")
+
+
+def protection_gap(rules, branch, users):
+    """None if only trust.users can change the default branch, else a fixed reason. Malformed rules raise ApiError.
+
+    Forgejo v15.0.12 applies the first matching rule, exact names before globs (models/git/protected_branch_list.go
+    sort, GetFirstMatched; exact names compare case-insensitively). Only an exact-name rule for the default branch
+    is accepted, so no glob semantics are emulated here. Writes to a protected branch (routers/private/
+    hook_pre_receive.go:360-490) are a direct push, allowed by CanUserPush (no admin bypass), or a PR merge, allowed
+    by IsUserMergeWhitelisted, which falls back to plain write access without a merge allowlist. A push that only
+    touches unprotected_file_patterns skips the push allowlist. Write deploy keys are refused separately.
+    Whitelist names list only accounts and teams that currently have read access (services/convert/convert.go
+    ToBranchProtection), which is the set that can write today.
+    """
+    matched = []
+    for rule in rules:
+        name = rule.get("rule_name")
+        if not isinstance(name, str):
+            raise ApiError("Forgejo branch protections: unexpected rule metadata")
+        if not GLOB_SPECIAL.intersection(name) and name.casefold() == branch.casefold():
+            matched.append(rule)
+    if len(matched) != 1:
+        return "default branch has no single branch protection rule of its own"
+    rule = matched[0]
+    try:
+        push, push_list = rule["enable_push"], rule["enable_push_whitelist"]
+        merge_list, unprotected = rule["enable_merge_whitelist"], rule["unprotected_file_patterns"]
+        lists = [rule[key] for key in (
+            "merge_whitelist_usernames", "merge_whitelist_teams", "push_whitelist_usernames", "push_whitelist_teams"
+        )]
+        if not (
+            all(type(flag) is bool for flag in (push, push_list, merge_list))
+            and isinstance(unprotected, str)
+            and all(isinstance(names, list) and all(isinstance(name, str) for name in names) for names in lists)
+        ):
+            raise TypeError
+    except (KeyError, TypeError):
+        raise ApiError("Forgejo branch protections: unexpected rule metadata") from None
+    # With pushes off, CanUserPush refuses everyone before it reads the push allowlist.
+    names = lists[0] + (lists[2] if push else [])
+    teams = lists[1] + (lists[3] if push else [])
+    if push and not push_list:
+        return "default branch protection lets every writer push"
+    if not merge_list:
+        return "default branch protection lets every writer merge"
+    if unprotected.strip():
+        return "default branch protection has unprotected file patterns"
+    if teams:
+        return "default branch protection allows a team"
+    if any(name.lower() not in users for name in names):
+        return "default branch protection allows a user outside trust.users"
+    return None
 
 
 def run_ssh(argv, *, input, timeout, **_):
@@ -746,7 +838,7 @@ class Store:
         name = runner_pattern(slot)
         if (
             not isinstance(data, dict)
-            or data.keys() != {"version", "slot", "owner_id", "active", "ambiguous", "retired", "refusals"}
+            or data.keys() - {"trust_ids"} != {"version", "slot", "owner_id", "active", "ambiguous", "retired", "refusals"}
             or not positive(data["version"])
             or data["version"] != 2
             or data["slot"] != slot
@@ -755,6 +847,11 @@ class Store:
             or not all(handle_ok(handle) for handle in data["retired"])
             or not isinstance(data["ambiguous"], dict)
             or not isinstance(data["refusals"], dict)
+            or not isinstance(data.get("trust_ids", {}), dict)
+            or not all(
+                matches(LOGIN_NAME, login) and login == login.lower() and positive(value)
+                for login, value in data.get("trust_ids", {}).items()
+            )
         ):
             return False
         for handle, budget in data["refusals"].items():
@@ -952,6 +1049,8 @@ class Queue:
         self.trust = trust
         self.claims = claims
         self.claims.recover(store)
+        if trust is None and (self.pool.trust_repos or self.pool.trust_users):
+            self._log("trust allowlist configured but trusted jobs are off; no run gets CI upload credentials")
         self.api_after = self.api_delay = 0
         self.inventory_after = self.busy_after = 0
         self.busy_misses = 0
@@ -1204,7 +1303,7 @@ class Queue:
                 rerun = self.api.run_by_number(path, run["index_in_repo"])
                 if rerun["id"] != run["id"]:
                     raise ApiError("run changed before delivery")
-                reason = trusted_run(rerun, repo_id, owner, account, self.pool)
+                reason = trusted_run(rerun, repo_id, owner, account, self.pool, self._trust_ids(rerun))
         except ApiError as error:
             self._defer(verdict, f"trust lookup pending: {error}", error)
             return
@@ -1241,17 +1340,48 @@ class Queue:
             return None
         return job
 
+    def _trust_ids(self, run):
+        """Pinned account IDs of trust.users, resolving the run's trigger user on first sight.
+
+        A login's ID is persisted with owner_id: taken from a peer slot that already pinned it, else fetched once.
+        A later account under the same login (Forgejo frees renamed and deleted names at once:
+        USERNAME_COOLDOWN_PERIOD defaults to 0) does not match.
+        """
+        pinned = self.store.data.get("trust_ids", {})
+        user = run.get("trigger_user") if isinstance(run, dict) else None
+        login = user.get("login") if isinstance(user, dict) else None
+        if matches(LOGIN_NAME, login):
+            login = login.lower()
+            if login in self.pool.trust_users and login != self.pool.login and login not in pinned:
+                peers = {
+                    Store(directory, self.pool.state_file, slot=slot).data.get("trust_ids", {}).get(login)
+                    for slot, directory in self.claims.states.items() if slot != SLOT
+                } - {None}
+                if len(peers) > 1:
+                    raise ApiError(f"slots pinned trust user {login} to different accounts; reconcile dispatcher state")
+                pinned = {name: value for name, value in pinned.items() if name in self.pool.trust_users}
+                pinned[login] = peers.pop() if peers else self.api.user(login)
+                self.store.save(trust_ids=pinned)
+                self._log(f"pinned trust user {login} to account {pinned[login]}")
+        return pinned
+
     def _resolve(self, job, path, owner, account):
         """(None, run) for a trusted run, else (reason, run). Lookup failures raise ApiError."""
-        self.api.repository(path, job["repo_id"], owner)
+        repository = self.api.repository(path, job["repo_id"], owner)
         task = self.api.task(path, job["task_id"])
         run = self.api.run_by_number(path, task["run_number"])
         if run.get("commit_sha") != task["head_sha"] or run.get("workflow_id") != task["workflow_id"]:
             return "task and run disagree", run
-        reason = trusted_run(run, job["repo_id"], owner, account, self.pool)
-        if reason is None and not self.api.deploy_keys_read_only(path):
+        reason = trusted_run(run, job["repo_id"], owner, account, self.pool, self._trust_ids(run))
+        if reason is not None:
+            return reason, run
+        # A pull mirror's sync pushes as the repository owner (services/mirror/mirror_pull.go SyncPushCommits).
+        if repository["mirror"]:
+            return "repository is a pull mirror", run
+        if not self.api.deploy_keys_read_only(path):
             return "repository has a write deploy key", run
-        return reason, run
+        branch = run["repository"]["default_branch"]
+        return protection_gap(self.api.branch_protections(path), branch, self.pool.trust_users), run
 
     def _observe_queue(self, seen, inventory_ok):
         for handle in self.pre_start_retries.keys() - seen:

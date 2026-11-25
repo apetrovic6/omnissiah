@@ -50,6 +50,7 @@ REPO_NAME = "rust-app-template"
 REPOSITORY = f"/api/v1/repos/manjo/{REPO_NAME}"
 TASKS = REPOSITORY + "/actions/tasks?status=running&page={}&limit=50"
 KEYS = REPOSITORY + "/keys?page={}&limit=50"
+PROTECTIONS = REPOSITORY + "/branch_protections"
 RUN = REPOSITORY + "/actions/runs?run_number={}&limit=50"
 HERMES = 77
 # Synthetic, shaped like the real files (nix-store --generate-binary-cache-key; reliquary-ncps netrc).
@@ -64,14 +65,28 @@ GUEST_CREDENTIALS = {"runner-uuid", "runner-token", "job-handle", "forgejo-url",
 PILOT_POOL = {
     "forge": "ugalabugala", "host": "forge.ugalabugala.org", "login": "manjo", "scope": {"user": "manjo"},
     "labels": [LABEL], "dispatch": [REPO], "maxSlots": 2,
-    "trust": {"repos": {str(REPO): {"owner": "manjo", "name": REPO_NAME}}, "users": ["manjo"]},
+    "trust": {"repos": {str(REPO): {"owner": "manjo", "name": REPO_NAME, "schedules": False}}, "users": ["manjo"]},
+}
+SCHEDULE_POOL = PILOT_POOL | {
+    "trust": {"repos": {str(REPO): {"owner": "manjo", "name": REPO_NAME, "schedules": True}}, "users": ["manjo"]},
 }
 ORG = "monolith-softworks"
 ORG_ID = 64
 ORG_POOL = PILOT_POOL | {
     "forge": "noosphere", "host": "forge.noosphere.uk", "scope": {"org": ORG}, "dispatch": "owner",
-    "trust": {"repos": {str(REPO): {"owner": ORG, "name": "inanna"}}, "users": ["manjo"]},
+    "trust": {"repos": {str(REPO): {"owner": ORG, "name": "inanna", "schedules": False}}, "users": ["manjo"]},
 }
+
+
+def protection(branch="master", **fields):
+    """The default branch rule a trusted repo needs, as Forgejo v15.0.12 serializes it (convert.ToBranchProtection)."""
+    return {
+        "branch_name": branch, "rule_name": branch,
+        "enable_push": True, "enable_push_whitelist": True,
+        "push_whitelist_usernames": ["manjo"], "push_whitelist_teams": [], "push_whitelist_deploy_keys": False,
+        "enable_merge_whitelist": True, "merge_whitelist_usernames": ["manjo"], "merge_whitelist_teams": [],
+        "protected_file_patterns": "", "unprotected_file_patterns": "", "apply_to_admins": False,
+    } | fields
 
 
 def make_queue(pool, forge, slot, state_dirs, claim_root, clock, pat_file, trust=None):
@@ -192,7 +207,11 @@ class FakeForge:
         self.page_size = 50
         self.next_link = None
         self.observe_post = None
-        self.repository = {"id": REPO, "name": repo_name, "owner": {"id": self.owner_id, "login": scope or "manjo"}}
+        self.repository = {
+            "id": REPO, "name": repo_name, "owner": {"id": self.owner_id, "login": scope or "manjo"}, "mirror": False,
+        }
+        self.protections = [protection()]
+        self.users = {}
         self.tasks = []
         self.runs = []
         self.keys = [{"id": 3, "title": "read-only mirror", "read_only": True}]
@@ -303,6 +322,10 @@ class FakeForge:
                 return 400, {"error": "unexpected key query"}, {}
             page = int(query["page"][0])
             return 200, self.keys[(page - 1) * 50 : page * 50], {"X-Total-Count": str(len(self.keys))}
+        if method == "GET" and path == self.repository_path + "/branch_protections":
+            return 200, self.protections, {}
+        if method == "GET" and path.startswith("/api/v1/users/") and path[len("/api/v1/users/"):] in self.users:
+            return 200, self.users[path[len("/api/v1/users/"):]], {}
         if method == "GET" and path.startswith(self.repository_path + "/actions/runs?"):
             query = parse_qs(urlsplit(path).query)
             if query.get("limit") != ["50"] or "status" in query:
@@ -1649,11 +1672,19 @@ class DispatcherTests(unittest.TestCase):
             data | {"active": data["active"] | {"queued_at": None}},
             data | {"refusals": {job()["handle"]: {"count": True, "first_at": self.clock.wall()}}},
             data | {"refusals": {job()["handle"]: {"count": 1, "first_at": float("nan")}}},
+            data | {"trust_ids": []},
+            data | {"trust_ids": {"Manjo": OWNER}},
+            data | {"trust_ids": {"manjo": 0}},
+            data | {"trust_ids": {"bad/login": OWNER}},
+            data | {"trust_ids": {"manjo": True}},
         ):
             with self.subTest(invalid=invalid):
                 (self.state_dir / "state.json").write_text(json.dumps(invalid))
                 with self.assertRaises(D.StateError):
                     self.restart()
+        # Pinned trust users ride along with the rest of the state, readable by every peer slot.
+        (self.state_dir / "state.json").write_text(json.dumps(data | {"trust_ids": {"manjo": OWNER, "hermes": HERMES}}))
+        self.restart()
 
 
 class TrustedJobTests(unittest.TestCase):
@@ -1757,11 +1788,13 @@ class TrustedJobTests(unittest.TestCase):
         for path in self.trust_dir.iterdir():
             info = path.stat()
             self.assertEqual((0o400, os.getuid()), (stat.S_IMODE(info.st_mode), info.st_uid))
-        self.assertEqual([REPOSITORY, TASKS.format(1), RUN.format(7), KEYS.format(1), RUN.format(7)], self.lookups())
+        self.assertEqual(
+            [REPOSITORY, TASKS.format(1), RUN.format(7), KEYS.format(1), PROTECTIONS, RUN.format(7)], self.lookups()
+        )
         self.assertEqual(polls + 2, self.forge.paths("GET").count(JOBS))  # The poll plus the pre-delivery recheck.
         self.assertIn("trusted: run #7 (push); delivered CI upload credentials", self.logs.getvalue())
         self.assert_settled_cadence()
-        self.assertEqual(5, len(self.lookups()))
+        self.assertEqual(6, len(self.lookups()))
         self.assertEqual([], self.system.mutations("stop"))
         self.system.set()
         self.tick(D.POLL)
@@ -1776,11 +1809,15 @@ class TrustedJobTests(unittest.TestCase):
             (REPO, {"trigger_user": {"id": HERMES, "login": "hermes"}}, "push user not in the trust allowlist"),
             (REPO, {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch"}, None),
             (REPO, {"trigger_event": "schedule", "ScheduleID": 1}, "schedule not triggered by forgejo-actions"),
-            (REPO, {"trigger_event": "schedule", "ScheduleID": 1, "trigger_user": {"id": -2}}, None),
+            (REPO, {"trigger_event": "schedule", "ScheduleID": 1, "trigger_user": {"id": -2}}, "schedule trust not enabled for this repository"),
+            (REPO, {"trigger_event": "schedule", "ScheduleID": 1, "trigger_user": {"id": -2}, "schedules": True}, None),
             (REPO, {}, None),
         ):
             with self.subTest(repo_id=repo_id, overrides=overrides):
-                self.build(pool=D.Pool("monolith-softworks", **ORG_POOL), scope=ORG, repo_name="inanna")
+                overrides = dict(overrides)
+                schedules = overrides.pop("schedules", False)
+                trust = {"repos": {str(REPO): {"owner": ORG, "name": "inanna", "schedules": schedules}}, "users": ["manjo"]}
+                self.build(pool=D.Pool("monolith-softworks", **(ORG_POOL | {"trust": trust})), scope=ORG, repo_name="inanna")
                 self.forge.runs = [run(**({"repository": repository} | overrides))]
                 waiting = job(repo_id=repo_id, owner_id=ORG_ID)
                 self.forge.jobs = [waiting]
@@ -1808,7 +1845,7 @@ class TrustedJobTests(unittest.TestCase):
             {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "prettyref": "master"},
         ):
             with self.subTest(fields=fields):
-                self.build()
+                self.build(pool=D.Pool("ugalabugala", **SCHEDULE_POOL))
                 self.forge.runs = [run(**fields)]
                 self.boot()
                 self.pick_up()
@@ -2085,11 +2122,202 @@ class TrustedJobTests(unittest.TestCase):
 
     def test_gate_off_never_looks_up_or_delivers(self):
         self.build(trusted=False)
+        self.assertIn("trust allowlist configured but trusted jobs are off", self.logs.getvalue())
         self.boot()
         self.pick_up()
         self.tick(D.BUSY_POLL_FAST)
         self.assertEqual([], self.lookups())
         self.assertFalse(self.trust_dir.exists())
+
+    SCHEDULE = {"trigger_event": "schedule", "ScheduleID": 9, "trigger_user": {"id": -2, "login": "forgejo-actions"}}
+
+    def org_round(self, run_fields, *, schedules=False, users=("manjo",), login="manjo", identity=None, protections=None):
+        """One org-pool job (monolith-softworks/inanna) picked up with the given run; returns what was delivered."""
+        trust = {"repos": {str(REPO): {"owner": ORG, "name": "inanna", "schedules": schedules}}, "users": list(users)}
+        self.build(pool=D.Pool("monolith-softworks", **(ORG_POOL | {"login": login, "trust": trust})), scope=ORG, repo_name="inanna")
+        if identity is not None:
+            self.forge.identity = identity
+        if protections is not None:
+            self.forge.protections = protections
+        repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}
+        self.forge.runs = [run(**({"repository": repository} | run_fields))]
+        waiting = job(owner_id=ORG_ID)
+        self.forge.jobs = [waiting]
+        self.tick()
+        self.system.set(active="active")
+        self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+        self.tick(D.POLL)
+        return self.delivered()
+
+    def test_schedules_are_untrusted_unless_the_repository_opts_in(self):
+        # Review probe F1: an allowlisted repo without trust.users is now a configuration error.
+        with self.assertRaises(ValueError):
+            D.Pool("monolith-softworks", **(ORG_POOL | {"trust": ORG_POOL["trust"] | {"users": []}}))
+        # Review probe F1b: an org member's push is refused, and so is the schedule it registers.
+        self.assertEqual({}, self.org_round({"trigger_user": {"id": 555, "login": "org-member"}}))
+        self.assertIn("push user not in the trust allowlist", self.logs.getvalue())
+        self.assertEqual({}, self.org_round(self.SCHEDULE))
+        self.assertIn("untrusted: run #7 (schedule trust not enabled for this repository)", self.logs.getvalue())
+        self.assertFalse(any(path.endswith("/branch_protections") for path in self.lookups()))
+        # Opted in, a schedule still needs the branch protection precondition.
+        outsider = protection(push_whitelist_usernames=["manjo", "org-member"])
+        self.assertEqual({}, self.org_round(self.SCHEDULE, schedules=True, protections=[outsider]))
+        self.assertIn("default branch protection allows a user outside trust.users", self.logs.getvalue())
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.org_round(self.SCHEDULE, schedules=True)))
+        self.assertIn("trusted: run #7 (schedule)", self.logs.getvalue())
+
+    def test_default_branch_protection_must_confine_writers_to_trust_users(self):
+        team = protection(merge_whitelist_teams=["Owners"])
+        for reason, rules in (
+            ("default branch has no single branch protection rule of its own", []),
+            ("default branch has no single branch protection rule of its own", [protection("feature")]),
+            ("default branch has no single branch protection rule of its own", [protection(rule_name="mast*", branch_name="")]),
+            ("default branch has no single branch protection rule of its own", [protection(rule_name="*", branch_name="")]),
+            ("default branch has no single branch protection rule of its own", [protection(), protection("Master")]),
+            ("default branch protection lets every writer push", [protection(enable_push_whitelist=False)]),
+            ("default branch protection lets every writer merge", [protection(enable_merge_whitelist=False)]),
+            ("default branch protection has unprotected file patterns", [protection(unprotected_file_patterns=".forgejo/**")]),
+            ("default branch protection allows a team", [protection(push_whitelist_teams=["writers"])]),
+            ("default branch protection allows a team", [team]),
+            ("default branch protection allows a user outside trust.users", [protection(merge_whitelist_usernames=["hermes"])]),
+        ):
+            with self.subTest(reason=reason, rules=rules):
+                self.build()
+                self.forge.protections = rules
+                self.boot()
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertIn(f"untrusted: run #7 ({reason})", self.logs.getvalue())
+        for rules in (
+            [protection("Master")],  # Exact names match case-insensitively, as in Forgejo.
+            [protection(enable_push=False, push_whitelist_usernames=["hermes"])],  # Pushes are off; merges are confined.
+            [protection(push_whitelist_usernames=[], merge_whitelist_usernames=["Manjo"])],
+            [protection(rule_name="*", branch_name="", enable_push_whitelist=False), protection()],
+        ):
+            with self.subTest(rules=rules):
+                self.build()
+                self.forge.protections = rules
+                self.boot()
+                self.pick_up()
+                self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+
+    def test_unreadable_branch_protection_fails_closed_after_the_deadline(self):
+        for reply in ((403, {"message": "forbidden"}), (200, {"rules": []}), (200, [protection(enable_push="yes")]),
+                      (200, [{"branch_name": "master"}])):
+            with self.subTest(reply=reply):
+                self.build()
+                self.boot()
+                for _ in range(2):
+                    self.forge.reply_once("GET", PROTECTIONS, *reply)
+                self.pick_up()
+                self.assertIn("trust lookup pending: Forgejo branch protections", self.logs.getvalue())
+                self.assertEqual({}, self.delivered())
+                self.forge.protections = None if reply[0] == 403 else self.forge.protections
+                self.tick(D.TRUST_DEADLINE)
+                self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
+                self.assertEqual({}, self.delivered())
+
+    def test_pull_mirrors_are_never_trusted(self):
+        self.forge.repository["mirror"] = True
+        self.boot()
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.assertIn("untrusted: run #7 (repository is a pull mirror)", self.logs.getvalue())
+        self.build()
+        self.forge.repository["mirror"] = None
+        self.boot()
+        self.pick_up()
+        self.assertIn("trust lookup pending: Forgejo repository: unexpected repository metadata", self.logs.getvalue())
+
+    def test_trust_users_are_pinned_by_account_id(self):
+        # Review probe F2: PAT account noosphere-ci, trust.users = [manjo]. The first manjo run pins manjo's ID.
+        identity = {"login": "noosphere-ci", "id": 4242}
+        self.build(pool=D.Pool("monolith-softworks", **(ORG_POOL | {"login": "noosphere-ci"})), scope=ORG, repo_name="inanna")
+        self.forge.identity = identity
+        self.forge.users = {"manjo": {"id": OWNER, "login": "Manjo"}}
+        repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}
+        self.forge.runs = [run(repository=repository)]
+        waiting = job(owner_id=ORG_ID)
+        self.forge.jobs = [waiting]
+        self.tick()
+        self.system.set(active="active")
+        self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+        self.tick(D.POLL)
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.assertIn(f"pinned trust user manjo to account {OWNER}", self.logs.getvalue())
+        state = json.loads((self.state_dir / self.pool.state_file).read_text())
+        self.assertEqual({"manjo": OWNER}, state["trust_ids"])
+        self.assertEqual(1, self.forge.paths("GET").count("/api/v1/users/manjo"))
+        # manjo is renamed and someone registers the free name: same login, new ID. Fails closed with no new lookup.
+        for case in ("renamed", "restart"):
+            with self.subTest(case=case):
+                self.forge.users = {"manjo": {"id": 999999, "login": "manjo"}}
+                if case == "restart":
+                    self.restart()
+                self.system.set()
+                self.forge.jobs = []
+                self.tick(D.POLL)
+                self.forge.runs = [run(repository=repository, trigger_user={"id": 999999, "login": "manjo"})]
+                self.forge.jobs = [waiting | {"handle": f"next-{case}"}]
+                self.tick(D.POLL)
+                self.system.set(active="active")
+                self.forge.jobs = [waiting | {"handle": f"next-{case}", "status": "running", "task_id": 71}]
+                self.tick(D.POLL)
+                self.assertEqual({}, self.delivered())
+                self.assertIn("(push user ID differs from the pinned trust user; reconcile the account", self.logs.getvalue())
+                self.assertEqual(1, self.forge.paths("GET").count("/api/v1/users/manjo"))
+
+    def test_trust_user_pins_are_shared_with_peer_slots(self):
+        pool = D.Pool("monolith-softworks", **(ORG_POOL | {"login": "noosphere-ci"}))
+        repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}
+        for peers, expected in (
+            ({"ryza-eph-2": OWNER}, {"ncps-netrc", "ci-signing-key"}),  # Adopted without a lookup, ignoring the impostor.
+            ({"ryza-eph-2": OWNER, "ryza-eph-3": 999999}, set()),
+        ):
+            with self.subTest(peers=peers):
+                self.build(pool=pool, scope=ORG, repo_name="inanna")
+                self.forge.identity = {"login": "noosphere-ci", "id": 4242}
+                self.forge.users = {"manjo": {"id": 999999, "login": "manjo"}}
+                states = {D.SLOT: self.state_dir}
+                for slot, account in peers.items():
+                    directory = self.state_dir.parent / slot
+                    directory.mkdir()
+                    (directory / pool.state_file).write_text(json.dumps({
+                        "version": 2, "slot": slot, "owner_id": ORG_ID, "active": None, "ambiguous": {},
+                        "retired": [], "refusals": {}, "trust_ids": {"manjo": account},
+                    }))
+                    states[slot] = directory
+                slot, slotctl = command_slot(self.config, self.system.run)
+                self.slotctls.append(slotctl)
+                queue = make_queue(pool, self.forge, slot, states, self.state_dir.parent, self.clock, self.pat_file,
+                                   trust=D.Trust(self.sources))
+                self.dispatcher = D.Dispatcher([queue], self.clock.monotonic, pause=self.pause)
+                self.forge.runs = [run(repository=repository)]
+                waiting = job(owner_id=ORG_ID)
+                self.forge.jobs = [waiting]
+                self.tick()
+                self.system.set(active="active")
+                self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+                self.tick(D.POLL)
+                self.assertEqual(expected, set(self.delivered()))
+                self.assertNotIn("/api/v1/users/manjo", self.forge.paths("GET"))
+                if not expected:
+                    self.assertIn("slots pinned trust user manjo to different accounts", self.logs.getvalue())
+
+    def test_pat_account_is_checked_by_id_and_unresolvable_users_fail_closed(self):
+        # Review probe F2 control: the PAT login with another ID is refused.
+        self.assertEqual({}, self.org_round({"trigger_user": {"id": 999999, "login": "manjo"}}))
+        self.assertIn("push user ID differs from the pinned trust user", self.logs.getvalue())
+        self.assertNotIn("/api/v1/users/manjo", self.forge.paths("GET"))
+        # A trust user whose account cannot be resolved (deleted, renamed: 404 or 307) is never trusted.
+        identity = {"login": "noosphere-ci", "id": 4242}
+        self.assertEqual({}, self.org_round({}, login="noosphere-ci", identity=identity))
+        self.assertIn("trust lookup pending: Forgejo trust user: HTTP 404", self.logs.getvalue())
+        self.tick(D.TRUST_DEADLINE)
+        self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
+        self.assertEqual({}, self.delivered())
+        state = json.loads((self.state_dir / self.pool.state_file).read_text())
+        self.assertNotIn("trust_ids", state)
 
 
 class SlotConfigurationTests(unittest.TestCase):
@@ -2186,11 +2414,18 @@ class SlotConfigurationTests(unittest.TestCase):
             self.assert_pilot()
 
     def test_rejects_duplicate_queues_and_cross_owner_trust_repos(self):
+        trusted = PILOT_POOL["trust"]["repos"][str(REPO)]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "pools.json"
             for entries in (
                 {"first": PILOT_POOL, "second": PILOT_POOL | {"scope": {"user": "Manjo"}}},
                 {"org": ORG_POOL | {"trust": PILOT_POOL["trust"]}},
+                # Review L2 and M1: dead trust entries, an empty dispatch list, trust without users, no schedule flag.
+                {"pilot": PILOT_POOL | {"dispatch": [REPO + 1]}},
+                {"pilot": PILOT_POOL | {"dispatch": []}},
+                {"pilot": PILOT_POOL | {"trust": PILOT_POOL["trust"] | {"users": []}}},
+                {"pilot": PILOT_POOL | {"trust": {"repos": {str(REPO): trusted | {"schedules": 1}}, "users": ["manjo"]}}},
+                {"pilot": PILOT_POOL | {"trust": {"repos": {str(REPO): {"owner": "manjo", "name": REPO_NAME}}, "users": ["manjo"]}}},
             ):
                 with self.subTest(entries=entries):
                     path.write_text(json.dumps(entries))

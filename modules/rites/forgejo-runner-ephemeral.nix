@@ -98,6 +98,18 @@
             (builtins.attrNames pool.trust.repos);
           message = "forgejoEphemeral: trusted repos for pool ${name} must use canonical positive numeric IDs and belong to the scope owner.";
         }
+        {
+          # Without users the allowlist would still trust every writer's schedules.
+          assertion = pool.trust.repos == {} || pool.trust.users != [];
+          message = "forgejoEphemeral: pool ${name} lists trusted repos, so trust.users must not be empty.";
+        }
+        {
+          assertion =
+            pool.dispatch
+            == "owner"
+            || lib.all (id: builtins.match "[1-9][0-9]*" id == null || builtins.elem (lib.toInt id) pool.dispatch) (builtins.attrNames pool.trust.repos);
+          message = "forgejoEphemeral: every trusted repo of pool ${name} must also be in its dispatch list.";
+        }
       ])
       cfg.pools);
     inherit (self.lib.hosts) cerberus;
@@ -820,7 +832,7 @@
               description = "Accepted runs-on labels. A job must request exactly one of these.";
             };
             dispatch = mkOption {
-              type = types.either (types.enum ["owner"]) (types.listOf types.ints.positive);
+              type = types.either (types.enum ["owner"]) (types.nonEmptyListOf types.ints.positive);
               description = ''Repositories to dispatch: "owner" for the whole scope, or a list of numeric repo IDs.'';
             };
             maxSlots = mkOption {
@@ -839,15 +851,39 @@
                     type = forgejoRepoName;
                     description = "Expected repository name.";
                   };
+                  schedules = mkOption {
+                    type = types.bool;
+                    default = false;
+                    description = ''
+                      Trust this repository's scheduled runs. Forgejo re-creates every schedule
+                      on any default-branch push and runs it as forgejo-actions, so this trusts
+                      whoever last wrote the default branch, not trust.users. Enable only where
+                      the trust.repos precondition holds and a schedule needs the cache.
+                    '';
+                  };
                 };
               });
               default = {};
-              description = "Repositories eligible for trusted jobs, keyed by numeric repo ID.";
+              description = ''
+                Repositories eligible for trusted jobs, keyed by numeric repo ID. List a repository
+                only if nobody outside trust.users can write its default branch: no other
+                collaborator, team or org owner with write or admin on it, an exact-name branch
+                protection rule for the default branch whose push and merge allowlists are subsets
+                of trust.users with no teams and no unprotected file patterns, no write deploy key,
+                and not a pull mirror. trust.users filters who triggers a run, never who wrote the
+                code it runs. The dispatcher checks the protection rule, deploy keys and mirror flag
+                for every resolution (see _forgejo-ephemeral-trusted.nix).
+              '';
             };
             trust.users = mkOption {
               type = types.listOf forgejoLogin;
               default = [];
-              description = "Users whose pushes or workflow dispatches qualify for trust on allowlisted repositories.";
+              description = ''
+                Users whose pushes or workflow dispatches qualify for trust on allowlisted
+                repositories. Required when trust.repos is set. Each login other than the PAT
+                account is pinned to its account ID on first use (dispatcher state), so a new
+                account reusing the name is not trusted.
+              '';
             };
           };
         });
@@ -965,8 +1001,9 @@
           scopes =
             ["write:user"]
             ++ lib.optional hasOrg "write:organization"
-            ++ lib.optional (cfg.trustedJobs.enable || forge == "noosphere") "read:repository";
-          publicOnly = lib.optionalString (forge == "ugalabugala" && lib.toLower login == "manjo" && !hasOrg) "Public only; ";
+            ++ lib.optional cfg.trustedJobs.enable "read:repository";
+          # Public only rejects non-public orgs on the org routes; user queues work with it.
+          publicOnly = lib.optionalString (!hasOrg) "Public only; ";
           scopesText = lib.concatStringsSep " and " scopes + lib.optionalString (scopes == ["write:user"]) " only";
         in
           lib.nameValuePair generator {
