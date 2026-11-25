@@ -755,6 +755,240 @@ replacement pair.
 Inspect either Ryza guest's console with
 `journalctl -u microvm@ryza-ci-<forge>.service` on Ryza.
 
+#### Ryza one-job pilot (`nix-eph`)
+
+This opt-in pilot runs only `manjo/rust-app-template` jobs requesting exactly
+`nix-eph` on `forge.ugalabugala.org`. The dispatcher boots one fixed slot,
+`ryza-eph-1`, for one job handle. The guest gets only that registration's
+single-use token, UUID and job handle; the job can read them. There is no
+dispatcher PAT, persistent runner secret, sccache key, ncps netrc or signing
+key in the guest. It shares the host Nix store read-only and can use ncps
+with public verification keys; writable store and `/var` images are disposable.
+Treat all host store contents as visible to the job; do not put plaintext
+secrets in store paths.
+Existing persistent runners, registrations, labels (including `nix-vm`), state
+and resource limits are unchanged. They are **not** safe for arbitrary
+untrusted workflows: this pilot does not prevent rogue jobs from requesting
+their credential-bearing labels. Review the entire workflow before approving
+a fork run; do not open up fork scheduling more broadly.
+
+**Enroll (operator only).**
+
+1. Verify the upstream repo is public, owned by `manjo`, and note its numeric
+   Forgejo repo ID (not the fork's ID). Create a dedicated PAT as `manjo` in
+   Cerberus Forgejo: **Public only**, **`write:user` only**. Authenticated
+   `/api/v1/user/actions/runners*` polling and registration cleanup use that
+   scope: it includes reads and permits POST/DELETE. `read:user` cannot
+   mutate; Forgejo has no runner-only scope and specific-repo PATs cannot
+   carry `write:user`. The dispatcher filters the repo ID itself; that does
+   not scope the PAT to the repo.
+2. Locally on Ryza's config, set `services.imperium.forgejoEphemeral.repoId`
+   to that positive ID and `services.imperium.forgejoEphemeral.enable = true`.
+   The flag declares Ryza's generator and runtime and enables Cerberus's
+   pilot HTTP guard. It defaults to false and remains off in the checked-in
+   configuration. Before deploying the pilot, run:
+
+   ```sh
+   CLAN_NO_COMMIT=1 clan vars generate ryza --generator forgejo-ephemeral-ugalabugala
+   ```
+
+   Paste the PAT only at the hidden prompt, never into a command, shell
+   environment or log. It is a per-machine, host-only `root:root` `0400` secret.
+   Commit the flag flip and repo ID **together with** the encrypted per-machine
+   var and its Clan access metadata; never deploy the flag on its own.
+3. Check host RAM/disk headroom for the additional 2-vCPU/4-GiB guest and
+   sparse 50-GiB overlay and 20-GiB `/var` images. Review the `vm-eph-1` tap
+   ACLs: public HTTPS and only Cerberus (`192.168.1.105`) on the LAN for
+   DNS (TCP/UDP 53) and HTTPS (TCP 443). Ryza source-NATs the tap to the
+   dedicated `ryza-eph` address in the [network chart](modules/cartographa/_chart.nix).
+   The guest pins `forge.ugalabugala.org` and `ncps.noosphere.uk` to Cerberus;
+   Caddy allows only those HTTP hosts from the slot's source address and
+   relays NCPS through its `*.noosphere.uk` proxy. There is no direct
+   Traefik VIP access or guest access to Ryza's control plane or other CI
+   guests. Confirm the resolved addresses and dependency endpoints before
+   rollout; don't broaden ACLs or PAT scopes to make a failing check pass.
+   Check that the router has no TCP 443 hairpin port-forward to Cerberus:
+   a hairpin could hide the slot's dedicated source address from Caddy.
+4. Cerberus's guard is unconditional; deploy it at any time
+   (`clan machines update cerberus`), even with the pilot off. Before enabling
+   Ryza, check that `caddy.service` is active and its latest config load
+   succeeded. In `/etc/caddy/caddy_config`, confirm that the vhosts invoke
+   `stygies-access` and that `@blockedEphemeral` matches `192.168.1.249` and
+   allows only Forgejo and NCPS. Check again before rolling Cerberus back
+   while the pilot is enabled. Do not enable the slot without the guard.
+   Once verified, deploy Ryza
+   (`clan machines update ryza`), check
+   `journalctl -u forgejo-ephemeral-dispatcher` for auth errors, and verify
+   `microvm@ryza-eph-1.service` stays stopped without demand. No persistent
+   runner registration command is needed.
+
+**Exercise the pilot.** Open a reviewed `pull_request` test PR in
+`rust-app-template`. Change `ci-impure`'s runner selection and timeout,
+insert the probe below first, and retain the checkout/build/test steps.
+Do not use `pull_request_target` or reference Actions secrets, and set
+`persist-credentials: false` on checkout. Forgejo still creates its normal
+per-task Git token; it is distinct from the runner token.
+
+Host-mode workflow steps may not inherit `CREDENTIALS_DIRECTORY` from the
+runner service; this has not been verified. The probe fails closed if the
+variable is missing or points elsewhere. Treat that as an inconclusive
+credential check, not a pass; do not dump credentials to diagnose it.
+
+```yaml
+jobs:
+  ci-impure:
+    runs-on: nix-eph
+    timeout-minutes: 60
+    steps:
+      - name: Check one-job isolation without disclosing credentials
+        shell: bash
+        run: |
+          set +x
+          set -euo pipefail
+          fail() { printf 'isolation FAILED: %s\n' "$1" >&2; exit 1; }
+          d=${CREDENTIALS_DIRECTORY:?missing runtime credential directory}
+          [[ "$d" == /run/credentials/forgejo-one-job.service ]] ||
+            fail 'unexpected credential directory'
+          for k in runner-uuid runner-token job-handle; do
+            [[ -f "$d/$k" && -r "$d/$k" && -s "$d/$k" ]] ||
+              fail 'expected credential not available'
+          done
+          shopt -s dotglob nullglob
+          for path in "$d"/*; do
+            case ${path##*/} in
+              runner-uuid|runner-token|job-handle) ;;
+              *) fail 'unexpected runtime credential' ;;
+            esac
+          done
+          [[ ! -e "$HOME/.netrc" && ! -e /root/.netrc &&
+             ! -e /var/lib/microvms &&
+             ! -e /var/lib/forgejo-ephemeral-dispatcher &&
+             ! -e /run/microvm-credentials &&
+             ! -v AWS_SHARED_CREDENTIALS_FILE ]] || fail 'unexpected host or cache path'
+          awk '
+            { for (i = 7; i <= NF && $i != "-"; i++); fs = $(i+1) }
+            fs ~ /^(virtiofs|9p|nfs.*|cifs)$/ {
+              if (fs != "virtiofs" || $5 != "/nix/.ro-store" || $6 !~ /(^|,)ro(,|$)/)
+                bad = 1
+              else
+                store++
+            }
+            END { exit (bad || store != 1) }
+          ' /proc/self/mountinfo || fail 'unexpected shared mount or writable lower store'
+          for url in https://forge.ugalabugala.org/api/v1/version https://ncps.noosphere.uk/nix-cache-info; do
+            peer=$(curl -fsS --noproxy '*' --connect-timeout 3 --max-time 8 \
+              -o /dev/null -w '%{remote_ip}' "$url") ||
+              fail 'allowed HTTPS endpoint did not respond successfully'
+            [[ $peer == 192.168.1.105 ]] || fail 'allowed HTTPS endpoint did not use Cerberus'
+          done
+          rc=0
+          longhorn=$(curl -s --noproxy '*' --connect-timeout 3 --max-time 8 \
+            --resolve longhorn.noosphere.uk:443:192.168.1.251 -o /dev/null \
+            -w '%{http_code} %{time_connect}' https://longhorn.noosphere.uk/) || rc=$?
+          [[ ( $rc == 7 || $rc == 28 ) && $longhorn == '000 0.000000' ]] ||
+            fail 'direct Longhorn VIP TCP connection was not blocked'
+          proxmox=$(curl -sS --noproxy '*' --connect-timeout 3 --max-time 8 \
+            --resolve proxmox.ugalabugala.org:443:192.168.1.105 -o /dev/null \
+            -w '%{http_code}' https://proxmox.ugalabugala.org/) ||
+            fail 'could not verify the Cerberus guard response'
+          [[ $proxmox == 403 ]] || fail 'Cerberus did not deny Proxmox with HTTP 403'
+          for addr in 10.99.2.1 10.99.0.2 10.99.1.2 192.168.1.105; do
+            if timeout 3 bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$addr" 22 2>/dev/null; then
+              fail 'CI control port reachable'
+            fi
+          done
+          printf 'isolation probe passed\n'
+```
+
+Before approval, confirm from a permitted source that the Longhorn VIP
+accepts TCP 443 and the Proxmox vhost produces its expected upstream
+response without the pilot guard. A closed port or an upstream error
+does not prove the pilot policy.
+Also verify the negative port-22 targets actually listen; substitute
+confirmed control ports/addresses (including an unrelated LAN listener) if
+not. For a host-file canary, put a non-secret file on Ryza outside
+`/nix/store` and add a presence check for its path to the probe. Do not dump
+environments, mount tables, credential directories or file contents.
+
+**Verify cleanup and cancellation.** Check the dispatcher and slot journals
+for the job attempt, runner ID, VM exit and deletion. Using `manjo`'s
+dedicated PAT, confirm that an authenticated Actions runner inventory
+(`GET /api/v1/user/actions/runners`, all pages) succeeds and no longer
+contains that runner ID. Keep the PAT out of command arguments, shell
+history and logs. Also verify both `nix-store-overlay.img` and
+`var.img` are gone from `/var/lib/microvms/ryza-eph-1/job` and
+`/run/microvm-credentials/ryza-eph-1` is gone. The deadlines are workflow
+60 min, runner 65 min, guest 70 min and host 75 min (plus bounded start/stop).
+Forgejo v15.0.12 deletes assigned ephemeral registrations on
+[`UpdateTask` completion](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/routers/api/actions/runner/runner.go#L332-L339)
+and on [`StopTask`](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/services/actions/task.go);
+its [runner interceptor](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/routers/api/actions/runner/interceptor.go#L21-L45)
+rejects unknown registrations. Use the tagged source and PAT-side absence
+as evidence; do not copy or replay the runner token. A never-assigned
+registration still needs dispatcher reconciliation.
+
+On an idle slot, use
+`sudo systemctl edit --runtime --drop-in=pilot-cancellation.conf microvm@ryza-eph-1.service`
+to add a temporary drop-in:
+
+```ini
+[Service]
+ExecStartPre=/run/current-system/sw/bin/sleep 75
+```
+
+Run `sudo systemctl daemon-reload`. The delay counts against the unit's
+90-second `TimeoutStartSec`; leave time for normal preflight. Queue the
+reviewed pilot job, wait for registration and the startup delay, then
+cancel in the UI during the delay, before any task is assigned or steps
+run. The dispatcher stops the slot after two consecutive successful job
+polls no longer list its handle. It polls every 15 seconds during the
+first five minutes, then every minute. Verify local and remote cleanup,
+remove only the test drop-in
+(`/run/systemd/system/microvm@ryza-eph-1.service.d/pilot-cancellation.conf`),
+and run `sudo systemctl daemon-reload` again. Also test cancelling with a
+reviewed job already running; verify the same cleanup without the delay
+override.
+
+**Compare performance.** Benchmark a trusted revision on the persistent
+`nix-vm` runner, then the same checkout, steps, dependencies and inputs
+on `nix-eph` (exclude probe time or include an equivalent timing boundary).
+Compare fresh writable state on both sides on the same host/forge under
+similar load; if the persistent workspace/action/Cargo caches cannot be
+made fresh safely, label that result warm rather than calling it a cold
+baseline. Do not flush the shared host store or ncps. Record substitution
+hits, store/cache warmth, sccache policy, CPU/RAM/build slots, job wall time,
+queue-to-pickup including boot, teardown/revocation latency and peak RAM/disk.
+Repeat the ephemeral run with fresh images; fresh disks do not mean cold
+shared caches.
+
+**Pause before maintenance, rotation or disable.** On Ryza, run
+`sudo touch /run/forgejo-ephemeral-dispatcher/pause`. This blocks new
+dispatches without stopping the dispatcher or its cleanup. Let any
+in-flight dispatch or job finish (or cancel it and let cleanup run).
+Keep the old PAT valid and wait for the slot to be idle, its local
+artifacts removed and its Forgejo runner deleted. Check dispatcher logs
+and confirm `/var/lib/forgejo-ephemeral-dispatcher/state.json` has no
+pending cleanup (`active` is null and `ambiguous` is empty); do not edit
+the state. The pause survives a dispatcher restart, not a host reboot;
+recheck it before proceeding if the host reboots. To resume, remove the
+pause file.
+
+**Rotate the PAT.** Pause and wait for cleanup to converge with the old
+PAT as above. Create the replacement with the same scopes, then regenerate
+the encrypted Ryza var using the enrollment command with `--regenerate`
+and deploy the new var while still paused. The var path does not change;
+the running service loads the PAT only at startup. Explicitly run
+`sudo systemctl restart forgejo-ephemeral-dispatcher` on Ryza. In the new
+service invocation's journal, require `Forgejo PAT identity verified as manjo`
+before revoking the old PAT. This verifies authentication and identity,
+not write scope. Remove the pause file only after verifying the rotation.
+
+**Disable the pilot.** Pause, cancel any queued `nix-eph` runs you do not
+intend to leave waiting, and wait for local and remote cleanup as above.
+Deploy `enable = false` to Ryza; the Cerberus guard stays in place.
+Revoke the dedicated PAT only after cleanup; do not erase pending
+reconciliation state.
+
 ### Hermes on Cerberus Forgejo
 
 Hermes pushes topic branches only to `hermes/rust-app-template` and

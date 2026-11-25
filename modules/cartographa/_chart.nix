@@ -11,6 +11,7 @@ rec {
   lan = {
     cidr = "192.168.1.0/24";
     gateway = "192.168.1.1";
+    ryza-eph = "192.168.1.249"; # Dedicated CI SNAT address, not a DNS host; keep free of DHCP leases.
     # The LAN's resolvers: Blocky on each, identical configs
     # (modules/rites/blocky.nix), the only resolvers that know the
     # split-horizon names. On three independent machines (cerberus and ryza

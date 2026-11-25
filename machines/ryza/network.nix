@@ -11,6 +11,7 @@
 {
   self,
   lib,
+  config,
   ...
 }: {
   networking.networkmanager.enable = lib.mkForce false;
@@ -21,7 +22,9 @@
   # networkd applies the first file that matches.
   systemd.network.networks."10-lan" = {
     matchConfig.MACAddress = "bc:24:11:5a:6e:01";
-    address = ["${self.lib.hosts.ryza}/24"];
+    address =
+      ["${self.lib.hosts.ryza}/24"]
+      ++ lib.optional config.services.imperium.forgejoEphemeral.enable "${self.lib.lan.ryza-eph}/32";
     gateway = [self.lib.lan.gateway];
     # The LAN's Blocky resolvers, the only ones that know the split-horizon
     # names (ncps.noosphere.uk must resolve to the LAN for substitution).
