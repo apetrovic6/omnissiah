@@ -67,6 +67,20 @@
       name = "plan";
       description = "A hard design question inside an approved task: a cross-cutting change, an unclear root cause, or two viable approaches to weigh.";
       provider = "anthropic";
+      model = "claude-opus-5-5";
+      effort = "high";
+      fallback = [
+        {
+          provider = "openai-codex";
+          model = "gpt-6.2-sol";
+        }
+      ];
+    }
+    # Fable has its own weekly cap on Max: keep it for the few designs where a mistake is expensive.
+    {
+      name = "critical";
+      description = "Planning or design where a mistake is expensive or hard to undo: security boundaries (auth, secrets, sandboxes, network rules), data that can't be rebuilt (migrations, deletions), changes that can lock manjo out (SSH, firewall, boot), or a task whose plan or implementation already failed once.";
+      provider = "anthropic";
       model = "claude-fable-5-2";
       effort = "high";
       fallback = [

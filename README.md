@@ -308,7 +308,8 @@ Restart the gateway and lift the pause when ready.
 
 | Tier | Model (effort) | Fallback, in order |
 | --- | --- | --- |
-| `plan` | claude-fable-5-2 (high) | claude-opus-5-5 |
+| `plan` | claude-opus-5-5 (high) | gpt-6.2-sol |
+| `critical` | claude-fable-5-2 (high) | claude-opus-5-5 |
 | `implement` (default) | claude-sonnet-5-5 (medium) | gpt-6.2-sol, gpt-6.1-terra |
 | `review` | claude-opus-5-5 (high) | gpt-6.2-sol |
 | `quick` | claude-haiku-5-5 (low) | gpt-6-luna, deepseek-flash |

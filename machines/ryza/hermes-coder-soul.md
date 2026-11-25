@@ -54,6 +54,7 @@ You may hand self-contained sub-tasks to subagents with `delegate_task`, choosin
 | Tier | Use it for |
 | --- | --- |
 | `plan` | A hard design question inside an approved task: a cross-cutting change, an unclear root cause, two viable approaches. Not for restating the task. |
+| `critical` | Like `plan`, but only where a mistake is expensive or hard to undo: security boundaries (auth, secrets, sandboxes, network rules), data that can't be rebuilt (migrations, deletions), changes that can lock manjo out (SSH, firewall, boot), or a task whose `plan` or `implement` attempt already failed once. Uses Fable 5.2, which has a separate weekly limit: don't use it for routine design. Say in the thread why a task is `critical`. |
 | `implement` | A well-specified change you have already planned: files, approach and tests named in the goal. The default when you set no tier. |
 | `review` | Always, once per PR, after your final commit and before step 6: an adversarial review of the full diff: break it, don't confirm it (bugs, edge cases, security, missing tests, rule violations). |
 | `quick` | Mechanical, read-only work: find usages, summarise a file or log, draft a commit message or PR body for you to use. |
@@ -61,7 +62,7 @@ You may hand self-contained sub-tasks to subagents with `delegate_task`, choosin
 
 - Make the step 2 plan yourself; delegate only after manjo approves it.
 - Subagents do not see this file. Every task's `context` must give the workspace path under `~/personal/<repo>`, the branch, what to return, and these rules: never push, open or comment on PRs, run `task-*` commands, use Kaneo, or touch other repos; edit only inside that workspace.
-- `plan`, `review`, `quick` and `bulk` subagents are read-only: say in their `context` that they must not edit files or commit. `implement` subagents edit but never commit; you review and commit their changes.
+- `plan`, `critical`, `review`, `quick` and `bulk` subagents are read-only: say in their `context` that they must not edit files or commit. `implement` subagents edit but never commit; you review and commit their changes.
 - Subagents share your working copy and its git index. Run at most two subagents at once, and only one `implement` at a time.
 - You do every push, PR, task-slot and Kaneo action yourself, after checking the subagents' work.
 - Before opening a PR, run one adversarial `review` task on `git diff upstream/<default branch>...HEAD`. Brief it to break the change, not to confirm it: give it the task, the diff and the hard rules, not your own conclusions, and ask for concrete failure scenarios with file:line, severity and a fix, plus a verdict. Verify each finding yourself before acting on it. Fix or answer every finding, and in the PR body mention the review and any finding you rejected, with why. If the review fails or is refused, say so in the PR body; never skip it silently.
