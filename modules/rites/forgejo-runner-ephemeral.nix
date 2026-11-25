@@ -14,6 +14,7 @@
     slot = "ryza-eph-1";
     slice = "forgejo-ephemeral.slice";
     vm = "microvm@${slot}";
+    installer = "install-microvm-${slot}";
     # Root-only writes to current/booted and the virtiofsd working directory.
     # QEMU owns only its runtime data, never the parent used by root hooks.
     controlDir = "${config.microvm.stateDir}/${slot}";
@@ -110,8 +111,47 @@
           'FORWARD -i ${tap} -j ${outChain}' 'FORWARD -o ${tap} -j ${inChain}'
       }
     '';
+    # Every directory a slot unit names as a mandatory namespace path, in
+    # creation order (parents first). The eval check
+    # (_forgejo-ephemeral-jobdir-test.nix) reads this list.
+    slotDirs = [
+      {
+        path = controlDir;
+        owner = "root";
+        group = slotUser;
+        mode = "0750";
+      }
+      {
+        path = vmDir;
+        owner = slotUser;
+        group = slotUser;
+        mode = "0700";
+      }
+      {
+        path = credParent;
+        owner = "root";
+        group = "root";
+        mode = "0755";
+      }
+    ];
+    installLine = dir: ''"$install" -d -o ${dir.owner} -g ${dir.group} -m ${dir.mode} -- ${lib.escapeShellArg dir.path}'';
+    # Refuses a pre-existing symlink. This is a check, not a race-free guard:
+    # it relies on the writers of the microvm-owned state dir being trusted.
+    prepareDirs = pkgs.writeShellScript "${slot}-prepare-dirs" ''
+      set -eu
+      for dir in ${lib.escapeShellArgs (map (dir: dir.path) slotDirs)}; do
+        if [[ -L "$dir" ]]; then
+          printf 'Refusing pre-existing symlink for slot directory: %s\n' "$dir" >&2
+          exit 1
+        fi
+      done
+      install=${lib.getExe' pkgs.coreutils "install"}
+      ${lib.concatMapStringsSep "\n" installLine slotDirs}
+    '';
     preflight = pkgs.writeShellScript "${slot}-preflight" ''
       set -eu
+      # WorkingDirectory is optional so privileged stop hooks can clean a failed start.
+      [[ . -ef ${lib.escapeShellArg vmDir} ]]
       for file in ${lib.escapeShellArgs (map (id: "${credDir}/${id}") credIds)}; do
         [[ -f "$file" && ! -L "$file" && -r "$file" && -s "$file" ]]
       done
@@ -121,10 +161,17 @@
     '';
     scrub = pkgs.writeShellScript "${slot}-scrub" ''
       set -eu
-      ${lib.getExe' pkgs.coreutils "rm"} -f -- ${lib.escapeShellArgs (map (image: "${vmDir}/${image}") images)}
-      if [[ -d ${credDir} && ! -L ${credDir} ]]; then
+      if [[ ! -L ${lib.escapeShellArg controlDir} && ! -L ${lib.escapeShellArg vmDir} ]]; then
+        ${lib.getExe' pkgs.coreutils "rm"} -f -- ${lib.escapeShellArgs (map (image: "${vmDir}/${image}") images)}
+      fi
+      if [[ ! -L ${credParent} && -d ${credDir} && ! -L ${credDir} ]]; then
         ${lib.getExe' pkgs.coreutils "rm"} -f -- ${lib.escapeShellArgs (map (id: "${credDir}/${id}") credIds)}
-        ${lib.getExe' pkgs.coreutils "rmdir"} -- ${credDir}
+        # Even '+' commands get the unit's ReadWritePaths bind mounts, so a
+        # listed directory is a mount point here (EBUSY). The slot no longer
+        # lists credDir; if rmdir still fails, the dispatcher's scrub removes
+        # it or reports unexpected files. Never fail the stop path on this.
+        ${lib.getExe' pkgs.coreutils "rmdir"} -- ${credDir} \
+          || printf 'Leaving %s for the dispatcher scrub\n' ${credDir} >&2
       fi
     '';
     guest = {
@@ -291,6 +338,13 @@
         default = null;
         description = "Numeric Forgejo repository ID of manjo/rust-app-template, the only eligible repository.";
       };
+      internal = lib.mkOption {
+        internal = true;
+        readOnly = true;
+        type = lib.types.attrs;
+        default = {inherit slotDirs prepareDirs;};
+        description = "The slot directories and the script that creates them, for the eval check.";
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -335,31 +389,29 @@
           mode = "0700";
         }
       ];
-      systemd.tmpfiles.rules = ["d ${credParent} 0755 root root - -"];
       users.groups.${slotUser} = {};
       users.users.${slotUser} = {
         isSystemUser = true;
         group = slotUser;
-        extraGroups = ["kvm"];
+        # No kvm group: /dev/kvm, /dev/vhost-net and /dev/net/tun are 0666 on
+        # Ryza. Without it the slot can't write the microvm:kvm 0775 state
+        # dir or the persistent guests' dirs, even outside its sandbox.
       };
-      systemd.tmpfiles.settings."10-microvm" = {
-        ${controlDir}.d = {
-          user = lib.mkForce "root";
-          group = lib.mkForce slotUser;
-          mode = lib.mkForce "0750";
-        };
-        ${vmDir}.d = {
-          user = slotUser;
-          group = slotUser;
-          mode = "0700";
-        };
-      };
+      # tmpfiles refuses the owner transition from the microvm-owned state
+      # directory to this root-owned slot ("unsafe path transition"), so the
+      # installer creates controlDir and job/. Keep the upstream GC link.
+      systemd.tmpfiles.settings."10-microvm".${controlDir} = lib.mkForce {};
+      # Root-owned /run: tmpfiles accepts this one (the installer also makes it).
+      systemd.tmpfiles.rules = ["d ${credParent} 0755 root root - -"];
       microvm.vms.${slot} = {
         autostart = false;
         restartIfChanged = false;
         config = {
           imports = [guest];
           system.stateVersion = config.system.stateVersion;
+          # virtiofsd --readonly enforces this on the host; make the guest
+          # mount flag truthful too. Last, so it overrides "defaults" (rw).
+          fileSystems."/nix/.ro-store".options = lib.mkAfter ["ro"];
         };
       };
       systemd.network.networks."20-${tap}" = {
@@ -381,6 +433,22 @@
         IOWeight = 20;
       };
       systemd.services = {
+        ${installer} = {
+          unitConfig = {
+            RequiresMountsFor = [config.microvm.stateDir];
+            # Re-run before every VM, dispatcher and support-unit start, so
+            # repeated manual restarts must not trip start-limit-hit.
+            StartLimitIntervalSec = 0;
+          };
+          serviceConfig = {
+            # Both the installer and its pre-start must be able to start with no slot directory.
+            WorkingDirectory = lib.mkForce "/";
+            ExecStartPre = ["+${prepareDirs}"];
+          };
+          script = lib.mkBefore ''
+            cd -- ${lib.escapeShellArg controlDir}
+          '';
+        };
         ${guard} = {
           description = "Restrict traffic on the Forgejo one-job tap";
           after = ["firewall.service"];
@@ -399,8 +467,8 @@
           description = "Dispatch Forgejo jobs to Ryza's one-job slot";
           wantedBy = ["multi-user.target"];
           wants = ["network-online.target"];
-          requires = ["install-microvm-${slot}.service" "${guard}.service"];
-          after = ["network-online.target" "install-microvm-${slot}.service" "${guard}.service"];
+          requires = ["${installer}.service" "${guard}.service"];
+          after = ["network-online.target" "${installer}.service" "${guard}.service"];
           path = [pkgs.systemd];
           serviceConfig = {
             Type = "exec";
@@ -412,7 +480,9 @@
             RuntimeDirectoryMode = "0700";
             RuntimeDirectoryPreserve = "yes";
             ProtectSystem = "strict";
-            ReadWritePaths = [credParent "-${vmDir}"];
+            # The installer creates both before systemd builds this namespace.
+            # An optional missing path would stay read-only until restart.
+            ReadWritePaths = [credParent vmDir];
             ProtectHome = true;
             PrivateTmp = true;
             RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
@@ -426,15 +496,21 @@
           };
         };
         ${vm} = {
+          # A oneshot without RemainAfterExit: every start re-runs it.
+          requires = ["${installer}.service"];
           bindsTo = ["${guard}.service"];
           after = ["${guard}.service"];
           serviceConfig = {
             Slice = slice;
             User = slotUser;
             Group = slotUser;
-            WorkingDirectory = vmDir;
+            # Optional, so namespace setup and chdir cannot fail before the
+            # first ExecStartPre or in the '+' stop hooks; preflight checks it.
+            # QEMU only reads the credentials (fw_cfg), so credDir is not
+            # listed: its bind mount made the scrub's rmdir fail with EBUSY.
+            WorkingDirectory = "-${vmDir}";
             ProtectSystem = "strict";
-            ReadWritePaths = [vmDir "-${credDir}"];
+            ReadWritePaths = ["-${vmDir}"];
             ProtectHome = true;
             PrivateTmp = true;
             # The pre-created TAP carries frames via /dev/net/tun, not IP sockets.
@@ -446,22 +522,26 @@
             RuntimeMaxSec = "75min";
             TimeoutStartSec = "90s";
             TimeoutStopSec = "30s";
-            ExecStartPre = [preflight];
+            ExecStartPre = ["+${prepareDirs}" preflight];
             ExecStopPost = ["+${scrub}"];
             LimitCORE = 0;
           };
         };
         "microvm-set-booted@${slot}" = {
           overrideStrategy = "asDropin";
+          requires = ["${installer}.service"];
           serviceConfig = {
             User = "root";
             Group = "root";
           };
         };
-        "microvm-virtiofsd@${slot}".serviceConfig = {
-          Slice = slice;
-          RestrictAddressFamilies = ["AF_UNIX"];
-          IPAddressDeny = "any";
+        "microvm-virtiofsd@${slot}" = {
+          requires = ["${installer}.service"];
+          serviceConfig = {
+            Slice = slice;
+            RestrictAddressFamilies = ["AF_UNIX"];
+            IPAddressDeny = "any";
+          };
         };
       };
     };
