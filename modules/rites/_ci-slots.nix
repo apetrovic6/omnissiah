@@ -13,8 +13,9 @@
 #   legacyVMs         stopped microVMs whose state is still on this host. The
 #                     slot units cannot see their directories, nor those of any
 #                     other microVM declared on the host.
-#   slots.<name>      one per throwaway VM. Exactly one per host until the
-#                     dispatchers can share a queue (HOM-32 PR 4).
+#   dispatcher       machine that serves this host's slots; defaults to the
+#                    slot host. A different machine uses forced-command SSH.
+#   slots.<name>     one per throwaway VM, with globally unique names.
 #     index           1, 2, ...: tap `vm-eph-<index>`, MAC
 #                     02:00:00:c1:00:<index + 2, hex>, subnet
 #                     10.99.<index + 1>.0/24 (10.99.0 and 10.99.1 belong to the

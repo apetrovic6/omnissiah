@@ -1007,13 +1007,14 @@ Inspect either Ryza guest's console with
 #### Ryza one-job pilot (`nix-eph`)
 
 This opt-in pilot runs only `manjo/rust-app-template` jobs requesting exactly
-`nix-eph` on `forge.ugalabugala.org`. The dispatcher boots one fixed slot,
-`ryza-eph-1`, for one job handle. The guest gets only that registration's
-single-use token, UUID and job handle; the job can read them. There is no
-dispatcher PAT, persistent runner secret, sccache key, ncps netrc or signing
-key in the guest (the opt-in trusted jobs below add the last two, root-only,
-for exactly-resolved manjo runs). It shares the host Nix store read-only and can use ncps
-with public verification keys; writable store and `/var` images are disposable.
+`nix-eph` on `forge.ugalabugala.org`. Ryza ships with one local slot,
+`ryza-eph-1`. Each dispatcher boots its assigned slot for one job handle.
+The guest gets only that registration's single-use token, UUID and job
+handle; the job can read them. There is no dispatcher PAT, persistent runner
+secret, sccache key, ncps netrc or signing key in the guest (the opt-in
+trusted jobs below add the last two, root-only, for exactly-resolved manjo
+runs). The guest shares the host Nix store read-only and can use ncps with
+public verification keys; writable store and `/var` images are disposable.
 Treat all host store contents as visible to the job; do not put plaintext
 secrets in store paths.
 
@@ -1090,7 +1091,7 @@ a fork run; do not open up fork scheduling more broadly.
    while the pilot is enabled. Do not enable the slot without the guard.
    Once verified, deploy Ryza
    (`clan machines update ryza`), check
-   `journalctl -u forgejo-ephemeral-dispatcher` for auth errors, and verify
+   `journalctl -u forgejo-ephemeral-dispatcher@ryza-eph-1.service` for auth errors, and verify
    `microvm@ryza-eph-1.service` stays stopped without demand. No persistent
    runner registration command is needed.
 
@@ -1249,25 +1250,72 @@ queue-to-pickup including boot, teardown/revocation latency and peak RAM/disk.
 Repeat the ephemeral run with fresh images; fresh disks do not mean cold
 shared caches.
 
-**Pause before maintenance, rotation or disable.** On Ryza, run
-`sudo touch /run/forgejo-ephemeral-dispatcher/pause`. This blocks new
-dispatches without stopping the dispatcher or its cleanup. Let any
-in-flight dispatch or job finish (or cancel it and let cleanup run).
-Keep the old PAT valid and wait for the slot to be idle, its local
-artifacts removed and its Forgejo runner deleted. Check dispatcher logs
-and confirm `/var/lib/forgejo-ephemeral-dispatcher/state.json` has no
-pending cleanup (`active` is null and `ambiguous` is empty); do not edit
-the state. The pause survives a dispatcher restart, not a host reboot;
-recheck it before proceeding if the host reboots. To resume, remove the
-pause file.
+**Pause before maintenance, rotation or disable.** On the dispatcher host,
+`sudo touch /run/forgejo-ephemeral/pause` pauses every slot. To pause only
+`ryza-eph-1`, use `sudo touch /run/forgejo-ephemeral-dispatcher/pause`.
+For another slot, find its `--pause-file` in
+`systemctl cat forgejo-ephemeral-dispatcher@<slot>.service`.
+Pause blocks new dispatches, not cleanup. Let any in-flight job finish
+(or cancel it) and keep the old PAT valid until cleanup converges. Check
+each affected slot: its VM is idle, the artifacts and Forgejo runner are
+gone, and its `state.json` has `active: null` and `ambiguous: {}`. Find
+the state directory with
+`systemctl show -p StateDirectory --value forgejo-ephemeral-dispatcher@<slot>.service`;
+`ryza-eph-1` still uses
+`/var/lib/forgejo-ephemeral-dispatcher`. Do not edit state or claim files.
+Remove the relevant pause flag to resume. Both flags survive dispatcher
+restarts, not a host reboot; restore them before resuming maintenance.
+
+**Upgrade from `forgejo-ephemeral-dispatcher.service`.** Before deploying
+the template generation, pause using the old
+`/run/forgejo-ephemeral-dispatcher/pause` flag, drain `ryza-eph-1` as
+above, and stop the old service. Deploy Ryza. Check that only
+`forgejo-ephemeral-dispatcher@ryza-eph-1.service` is running, that its
+journal verifies the PAT identity, and that the old pause flag is still
+present. Slot 1 reuses both the old state directory and pause path; copy
+nothing. Remove the pause flag, then run one `nix-eph` job and check
+cleanup. To roll the generation back, pause slot 1 using the same flag,
+drain, stop the template instance, then deploy the old generation.
+
+**Operator opt-in: add a second local Ryza slot.** After verifying the
+single-slot upgrade, pause and drain both the `nix-eph` and persistent
+`nix-vm` work before changing capacity. In `machines/ryza/forgejo-runner.nix`
+reduce the persistent guests' combined budget from 6 vCPUs / 14 GiB to
+4 vCPUs / 8 GiB. In `modules/rites/_ci-slots.nix` add `ryza-eph-2` under
+`ryza.slots`: same sizing as `ryza-eph-1`, but `index = 2`. The two 5 GiB
+slot slices plus the 8 GiB persistent budget total 18 GiB of Ryza's 24 GiB.
+Keep the host-wide pause in place during the deploy so the new instance
+starts paused. No SSH key or new PAT is needed for local slots.
+
+Each start requires the full configured image capacity plus 10 GiB free on
+the image filesystem (80 GiB for either standard Ryza slot). This is a
+preflight, not a reservation: budget disk for both sparse slots growing
+concurrently. After unpausing, queue a three-job `nix-eph` matrix: two VMs
+should run at once and the third wait. Across both instance journals
+require one `registering runner` line and one boot per job attempt; verify
+cleanup for both slots. To roll back capacity, pause and drain both slots
+and the persistent work, remove `ryza-eph-2`, restore the `nix-vm` budget,
+deploy Ryza, and unpause.
+
+Remote slot transport is available but not configured on Ryza. An inventory
+entry with `dispatcher = "<machine>"` assigns its slots to that dispatcher
+host. Enable the module on both hosts; the dispatcher holds the PAT and its
+per-machine `forgejo-slotctl-ssh` private key. The slot host restricts that
+transport key to the dispatcher's LAN IP and a forced slotctl command. The
+client checks the slot host's ed25519 key from its Clan `openssh` var, not
+trust on first use. Each slot host serializes slotctl calls and rejects
+stale run names, even after a transport error. Keep all dispatchers for
+the same queue on one host: claims do not arbitrate across hosts.
 
 **Rotate the PAT.** Pause and wait for cleanup to converge with the old
 PAT as above. Create the replacement with the same scopes, then regenerate
 the encrypted Ryza var using the enrollment command with `--regenerate`
 and deploy the new var while still paused. The var path does not change;
 the running service loads the PAT only at startup. Explicitly run
-`sudo systemctl restart forgejo-ephemeral-dispatcher` on Ryza. In the new
-service invocation's journal, require `Forgejo PAT identity verified as manjo`
+`sudo systemctl restart forgejo-ephemeral-dispatcher@ryza-eph-1.service`
+on Ryza (restart all dispatcher instances using that PAT if more than one
+is enabled). In the new service invocation's journal, require
+`Forgejo PAT identity verified as manjo`
 before revoking the old PAT. This verifies authentication and identity,
 not write scope. Remove the pause file only after verifying the rotation.
 
@@ -1327,7 +1375,7 @@ Otherwise require approvals and dismiss stale approvals on `master`.
    vars on Ryza itself (`modules/rites/ci-credentials.nix`), with or without
    the persistent runner.
 4. `clan machines update ryza`, then
-   `sudo systemctl restart forgejo-ephemeral-dispatcher`. Require both
+   `sudo systemctl restart forgejo-ephemeral-dispatcher@ryza-eph-1.service`. Require both
    `Forgejo PAT identity verified as manjo` and
    `repository manjo/rust-app-template verified as ID 9` in the journal; the
    dispatcher checks the repository right away, even while paused. Then

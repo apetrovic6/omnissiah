@@ -49,11 +49,10 @@
 #   a missing one means it was never generated or deployed.
 #
 # CHANNEL: a second virtiofs share, not fw_cfg, because fw_cfg is fixed at boot.
-#   Host: `trustDir`, root:root 0700. The dispatcher, through slotctl (its
-#     root child in the same unit), creates it empty before each boot and
-#     writes 0400 root files into it on a trusted verdict.
-#     Readers: root, which means the dispatcher, PID 1 and virtiofsd (root,
-#     supervisord). QEMU's user (microvm-eph) cannot open it.
+#   Host: `trustDir`, root:root 0700. The slot host's slotctl creates it
+#     empty before each boot and writes 0400 root files on a trusted verdict.
+#     Readers: host root and virtiofsd (supervised by PID 1). The slot's
+#     QEMU user cannot open it.
 #   Guest: mounted read-only (virtiofsd --readonly, cache=never, no ACLs/xattrs,
 #     ro,nosuid,nodev,noexec) at /run/ci-trust. The guest sees the host's
 #     modes and uids, and the kernel enforces them on virtiofs: Linux v6.18
@@ -87,11 +86,9 @@
 # module enables, so they no longer depend on the persistent runner.
 {
   cfg,
-  slot,
-  vm,
+  localSlots,
   dispatch,
-  controlDir,
-  trustDir,
+  dispatching,
   cacheHost,
 }: {
   config,
@@ -102,85 +99,99 @@
   ccfg = config.services.imperium.ciCredentials;
   guestTrustDir = "/run/ci-trust";
   names = ["ci-signing-key" "ncps-netrc" ".ci-signing-key.tmp" ".ncps-netrc.tmp"];
-  # Same pattern and caveat as the slot scrub (forgejo-runner-ephemeral.nix):
-  # never fail the stop path; the dispatcher's scrub removes what is left.
-  trustScrub = pkgs.writeShellScript "${slot}-trust-scrub" ''
-    set -u
-    if [[ -d ${trustDir} && ! -L ${trustDir} ]]; then
-      ${lib.getExe' pkgs.coreutils "rm"} -f -- ${lib.escapeShellArgs (map (name: "${trustDir}/${name}") names)}
-      ${lib.getExe' pkgs.coreutils "rmdir"} -- ${trustDir} \
-        || printf 'Leaving %s for the dispatcher scrub\n' ${trustDir} >&2
-    fi
-  '';
-  # A boot must start with an empty share: anything else may be another job's keys.
-  trustPreflight = pkgs.writeShellScript "${slot}-trust-preflight" ''
-    set -eu
-    [[ -d ${trustDir} && ! -L ${trustDir} ]]
-    [[ "$(${lib.getExe' pkgs.coreutils "stat"} -c '%u %a' ${trustDir})" == "0 700" ]]
-    [[ -z "$(${lib.getExe' pkgs.findutils "find"} ${trustDir} -mindepth 1 -print -quit)" ]]
-  '';
-  guest = {
-    config,
-    lib,
-    pkgs,
+  mkTrustedSlot = slot: {
+    vm,
+    controlDir,
+    trustDir,
     ...
-  }: {
-    microvm.shares = [
-      {
-        tag = "ci-trust";
-        socket = "${controlDir}/${slot}-virtiofs-ci-trust.sock";
-        source = trustDir;
-        mountPoint = guestTrustDir;
-        proto = "virtiofs";
-        readOnly = true;
-        # New files must show up mid-boot: no cached negative lookups.
-        cache = "never";
-        posixAcl = false;
-      }
-    ];
-    # nofail: a missing share must not stop the job from running (it just won't upload).
-    fileSystems.${guestTrustDir}.options = lib.mkAfter ["ro" "nosuid" "nodev" "noexec" "nofail"];
-    # Uploads only once both credentials are present and well formed. The URL's
-    # secret-key signs on upload, so no secret-key-files (forgejo-runner.nix
-    # explains why the persistent runners pass it the same way).
-    nix.settings.post-build-hook = pkgs.writeShellScript "push-to-ncps" ''
+  }: let
+    # Same pattern and caveat as the slot scrub (forgejo-runner-ephemeral.nix):
+    # never fail the stop path; the dispatcher's scrub removes what is left.
+    trustScrub = pkgs.writeShellScript "${slot}-trust-scrub" ''
       set -u
-      key=${guestTrustDir}/ci-signing-key
-      netrc=${guestTrustDir}/ncps-netrc
-      # Bounded: a wedged share must not hang every build.
-      t=${lib.getExe' pkgs.coreutils "timeout"}
-      { "$t" 5 ${lib.getExe' pkgs.coreutils "test"} -f "$key" && "$t" 5 ${lib.getExe' pkgs.coreutils "test"} -f "$netrc"; } || exit 0
-      "$t" 5 ${lib.getExe' pkgs.gnugrep "grep"} -qxE '[A-Za-z0-9._-]+:[A-Za-z0-9+/]+={0,2}' "$key" || exit 0
-      "$t" 5 ${lib.getExe' pkgs.gnugrep "grep"} -qx 'machine ${cacheHost}' "$netrc" || exit 0
-      # 1800 s like the persistent runners' hook (forgejo-runner.nix), sized for large dependency closures.
-      # shellcheck disable=SC2086 # OUT_PATHS is a space-separated list
-      "$t" 1800 \
-        ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
-        copy --option connect-timeout 5 --option netrc-file "$netrc" \
-        --to "https://${cacheHost}/upload?compression=zstd&parallel-compression=true&secret-key=$key" $OUT_PATHS \
-        || echo "push-to-ncps: upload failed (exit $?), continuing" >&2
-      exit 0
+      if [[ -d ${trustDir} && ! -L ${trustDir} ]]; then
+        ${lib.getExe' pkgs.coreutils "rm"} -f -- ${lib.escapeShellArgs (map (name: "${trustDir}/${name}") names)}
+        ${lib.getExe' pkgs.coreutils "rmdir"} -- ${trustDir} \
+          || printf 'Leaving %s for the dispatcher scrub\n' ${trustDir} >&2
+      fi
     '';
-    assertions = [
-      {
-        assertion = lib.all (user: !(builtins.elem user config.nix.settings.trusted-users)) ["forgejo-one-job" "@forgejo-one-job" "*"];
-        message = "forgejoEphemeral: the job user must not be a Nix trusted user (it could replace the upload hook).";
-      }
-    ];
-  };
-in {
-  config = lib.mkIf (cfg.enable && cfg.trustedJobs.enable) {
-    services.imperium.ciCredentials.enable = true;
-    # List options: these merge with the definitions in forgejo-runner-ephemeral.nix.
-    systemd.services.${dispatch}.serviceConfig.LoadCredential = [
-      "trusted-ci-signing-key:${ccfg.signingKey}"
-      "trusted-ncps-netrc:${ccfg.ncpsNetrc}"
-    ];
-    systemd.services.${vm}.serviceConfig = {
+    # A boot must start with an empty share: anything else may be another job's keys.
+    trustPreflight = pkgs.writeShellScript "${slot}-trust-preflight" ''
+      set -eu
+      [[ -d ${trustDir} && ! -L ${trustDir} ]]
+      [[ "$(${lib.getExe' pkgs.coreutils "stat"} -c '%u %a' ${trustDir})" == "0 700" ]]
+      [[ -z "$(${lib.getExe' pkgs.findutils "find"} ${trustDir} -mindepth 1 -print -quit)" ]]
+    '';
+    guest = {
+      config,
+      lib,
+      pkgs,
+      ...
+    }: {
+      microvm.shares = [
+        {
+          tag = "ci-trust";
+          socket = "${controlDir}/${slot}-virtiofs-ci-trust.sock";
+          source = trustDir;
+          mountPoint = guestTrustDir;
+          proto = "virtiofs";
+          readOnly = true;
+          # New files must show up mid-boot: no cached negative lookups.
+          cache = "never";
+          posixAcl = false;
+        }
+      ];
+      # nofail: a missing share must not stop the job from running (it just won't upload).
+      fileSystems.${guestTrustDir}.options = lib.mkAfter ["ro" "nosuid" "nodev" "noexec" "nofail"];
+      # Uploads only once both credentials are present and well formed. The URL's
+      # secret-key signs on upload, so no secret-key-files (forgejo-runner.nix
+      # explains why the persistent runners pass it the same way).
+      nix.settings.post-build-hook = pkgs.writeShellScript "push-to-ncps" ''
+        set -u
+        key=${guestTrustDir}/ci-signing-key
+        netrc=${guestTrustDir}/ncps-netrc
+        # Bounded: a wedged share must not hang every build.
+        t=${lib.getExe' pkgs.coreutils "timeout"}
+        { "$t" 5 ${lib.getExe' pkgs.coreutils "test"} -f "$key" && "$t" 5 ${lib.getExe' pkgs.coreutils "test"} -f "$netrc"; } || exit 0
+        "$t" 5 ${lib.getExe' pkgs.gnugrep "grep"} -qxE '[A-Za-z0-9._-]+:[A-Za-z0-9+/]+={0,2}' "$key" || exit 0
+        "$t" 5 ${lib.getExe' pkgs.gnugrep "grep"} -qx 'machine ${cacheHost}' "$netrc" || exit 0
+        # 1800 s like the persistent runners' hook (forgejo-runner.nix), sized for large dependency closures.
+        # shellcheck disable=SC2086 # OUT_PATHS is a space-separated list
+        "$t" 1800 \
+          ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
+          copy --option connect-timeout 5 --option netrc-file "$netrc" \
+          --to "https://${cacheHost}/upload?compression=zstd&parallel-compression=true&secret-key=$key" $OUT_PATHS \
+          || echo "push-to-ncps: upload failed (exit $?), continuing" >&2
+        exit 0
+      '';
+      assertions = [
+        {
+          assertion = lib.all (user: !(builtins.elem user config.nix.settings.trusted-users)) ["forgejo-one-job" "@forgejo-one-job" "*"];
+          message = "forgejoEphemeral: the job user must not be a Nix trusted user (it could replace the upload hook).";
+        }
+      ];
+    };
+  in {
+    services.${vm}.serviceConfig = {
       ExecStartPre = lib.mkBefore ["+${trustPreflight}"];
       # First: the base scrub is `set -eu`, and a failure there would skip later ExecStopPost lines.
       ExecStopPost = lib.mkBefore ["+${trustScrub}"];
     };
-    microvm.vms.${slot}.config = guest;
+    inherit guest;
   };
+  trusted = lib.mapAttrs mkTrustedSlot localSlots;
+in {
+  config = lib.mkIf (cfg.enable && cfg.trustedJobs.enable) (lib.mkMerge [
+    {
+      systemd.services = lib.mkMerge (lib.mapAttrsToList (_: data: data.services) trusted);
+      microvm.vms = lib.mapAttrs (_: data: {config = data.guest;}) trusted;
+    }
+    (lib.mkIf dispatching {
+      services.imperium.ciCredentials.enable = true;
+      systemd.services."${dispatch}@".serviceConfig.LoadCredential = [
+        "trusted-ci-signing-key:${ccfg.signingKey}"
+        "trusted-ncps-netrc:${ccfg.ncpsNetrc}"
+      ];
+    })
+  ]);
 }
