@@ -6,6 +6,7 @@
     pkgs,
     ...
   }: let
+    inherit (lib) mkOption types;
     cfg = config.services.imperium.forgejoEphemeral;
     inherit (config.networking) hostName;
     inventory = cfg.inventory;
@@ -23,20 +24,82 @@
     dispatching = serves != {};
     remoteClient = lib.any (machine: machine != hostName) (builtins.attrValues serves);
     remoteServer = hosted && sourceDispatcher != hostName;
-    generator = "forgejo-ephemeral-ugalabugala";
     sshGenerator = "forgejo-slotctl-ssh";
     dispatch = "forgejo-ephemeral-dispatcher";
-    forgeHost = "forge.${self.lib.lab.domain}";
+    forgeHosts = {
+      ugalabugala = "forge.ugalabugala.org";
+      noosphere = "forge.noosphere.uk";
+    };
     cacheHost = "ncps.noosphere.uk";
-    # The forge account whose runners the dispatcher registers, and the one
-    # label it serves (pools and label sets: HOM-32 PR 5).
-    login = "manjo";
-    label = "nix-eph";
     credParent = "/run/microvm-credentials";
     runRoot = "/run/forgejo-ephemeral";
     claims = "${runRoot}/claims";
     lockRoot = "/run/forgejo-slotctl";
-    repoName = "rust-app-template";
+    poolNamePattern = "[a-z][a-z0-9-]{0,62}";
+    forgejoLogin = types.strMatching "[A-Za-z0-9][A-Za-z0-9._-]{0,39}";
+    forgejoRepoName = types.addCheck (types.strMatching "[A-Za-z0-9._-]{1,100}") (name: name != "." && name != "..");
+    pools = builtins.attrValues cfg.pools;
+    # Keep the existing guest and VM units byte-identical on the pilot.
+    # Remote slots and any other label/forge selection need boot credentials.
+    fixedPilot =
+      !remoteServer
+      && lib.length pools == 1
+      && (builtins.head pools).forge == "ugalabugala"
+      && (builtins.head pools).labels == ["nix-eph"];
+    userPools = builtins.filter (pool: pool.scope ? user) pools;
+    allUnique = values: lib.length values == lib.length (lib.unique values);
+    # All scopes on a forge share one PAT. A user scope determines its
+    # account; with only org scopes the operator account is manjo.
+    forgeSettings = lib.genAttrs (lib.unique (map (pool: pool.forge) pools)) (forge: let
+      userPool = lib.findFirst (pool: pool.forge == forge) null userPools;
+    in {
+      login =
+        if userPool == null
+        then "manjo"
+        else userPool.scope.user;
+      hasOrg = lib.any (pool: pool.forge == forge && pool.scope ? org) pools;
+      generator = "forgejo-ephemeral-${forge}";
+      credential = "forgejo-pat-${forge}";
+    });
+    poolsFile = pkgs.writeText "${hostName}-forgejo-ephemeral-pools.json" (builtins.toJSON (
+      lib.mapAttrs (_: pool: {
+        inherit (pool) forge scope labels dispatch maxSlots trust;
+        host = forgeHosts.${pool.forge};
+        inherit (forgeSettings.${pool.forge}) login;
+      })
+      cfg.pools
+    ));
+    poolAssertions = lib.concatLists (lib.mapAttrsToList (name: pool: let
+        scopeKind =
+          if pool.scope ? user
+          then "user"
+          else "org";
+        validScope = builtins.attrNames pool.scope == [scopeKind];
+      in [
+        {
+          assertion = builtins.match poolNamePattern name != null;
+          message = "forgejoEphemeral: name of pool ${name} must match ${poolNamePattern}.";
+        }
+        {
+          assertion = validScope;
+          message = "forgejoEphemeral: pool ${name} must name exactly one user or org in scope.";
+        }
+        {
+          assertion = pool.labels != [] && allUnique pool.labels;
+          message = "forgejoEphemeral: pool ${name} must have a nonempty list of unique labels.";
+        }
+        {
+          assertion =
+            !validScope
+            || lib.all (id:
+              builtins.match "[1-9][0-9]*" id
+              != null
+              && lib.toLower pool.trust.repos.${id}.owner == lib.toLower pool.scope.${scopeKind})
+            (builtins.attrNames pool.trust.repos);
+          message = "forgejoEphemeral: trusted repos for pool ${name} must use canonical positive numeric IDs and belong to the scope owner.";
+        }
+      ])
+      cfg.pools);
     inherit (self.lib.hosts) cerberus;
     allSlotNames = lib.concatMap (entry: builtins.attrNames entry.slots) (builtins.attrValues inventory);
     # The live pilot keeps its fw_cfg paths. New/remote slots have their own
@@ -110,7 +173,7 @@
       vmDir = "${controlDir}/job";
       credentials = slotCredentials slot;
       credDir = "${credentials}/${slot}";
-      credIds = ["runner-token" "runner-uuid" "job-handle"];
+      credIds = ["runner-token" "runner-uuid" "job-handle"] ++ lib.optionals (!fixedPilot) ["forgejo-url" "runner-label"];
       # Root-only host dir behind a second virtiofs share (HOM-31).
       trustDir = "${credentials}/${slot}-trust";
       overlay = "/nix/.rw-store";
@@ -250,6 +313,7 @@
         # Cleanup still needs this path when delivery is disabled.
         trust_dir = trustDir;
         deliver = cfg.trustedJobs.enable;
+        fixed_pilot = fixedPilot;
         user = slotUser;
         group = slotUser;
         min_free_bytes = (spec.overlay + spec.var + 10) * 1024 * 1024 * 1024;
@@ -286,6 +350,21 @@
         ...
       }: let
         stateDir = "/var/lib/forgejo-one-job";
+        urlArg =
+          if fixedPilot
+          then "https://${forgeHosts.ugalabugala}"
+          else ''"$url"'';
+        labelArg =
+          if fixedPilot
+          then "nix-eph:host"
+          else ''"$label:host"'';
+        checkCredentials =
+          if fixedPilot
+          then ''test -n "$uuid" && test -n "$handle" && test -s "$CREDENTIALS_DIRECTORY/runner-token"''
+          else ''
+            url=$(cat "$CREDENTIALS_DIRECTORY/forgejo-url")
+            label=$(cat "$CREDENTIALS_DIRECTORY/runner-label")
+            [[ -n "$uuid" && -n "$handle" && -n "$url" && -n "$label" && -s "$CREDENTIALS_DIRECTORY/runner-token" ]]'';
         runnerConfig = (pkgs.formats.yaml {}).generate "forgejo-one-job.yml" {
           runner = {
             capacity = 1;
@@ -305,7 +384,7 @@
           useNetworkd = true;
           useDHCP = false;
           enableIPv6 = false;
-          hosts.${cerberus} = [forgeHost cacheHost];
+          hosts.${cerberus} = [forgeHosts.ugalabugala cacheHost] ++ lib.optional (!fixedPilot) forgeHosts.noosphere;
         };
         systemd.network.networks."10-uplink" = {
           matchConfig.MACAddress = mac;
@@ -411,10 +490,10 @@
             mkdir -p tmp cargo work
             uuid=$(cat "$CREDENTIALS_DIRECTORY/runner-uuid")
             handle=$(cat "$CREDENTIALS_DIRECTORY/job-handle")
-            test -n "$uuid" && test -n "$handle" && test -s "$CREDENTIALS_DIRECTORY/runner-token"
+            ${checkCredentials}
             exec ${lib.getExe pkgs.forgejo-runner} --config ${runnerConfig} one-job \
-              --url https://${forgeHost} --uuid "$uuid" --token-url 'file:$CREDENTIALS_DIRECTORY/runner-token' \
-              --label ${label}:host --handle "$handle" --wait
+              --url ${urlArg} --uuid "$uuid" --token-url 'file:$CREDENTIALS_DIRECTORY/runner-token' \
+              --label ${labelArg} --handle "$handle" --wait
           '';
         };
       };
@@ -678,12 +757,11 @@
               (lib.getExe pkgs.python3)
               "-I -B ${./_forgejo-ephemeral-dispatcher.py}"
               "--slot ${slot} --machine ${machine} ${transport}"
-              "--forge-host ${forgeHost} --login ${login} --label ${label}"
-              "--repo-id ${toString cfg.repoId}"
+              "--pools ${poolsFile}"
               "--state-dir ${stateDirs.${slot}} --pause-file /run/${runtime}/pause"
               "--host-pause-file ${runRoot}/pause --claim-states ${claimStates}"
             ]
-            ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs --repo ${repoName}");
+            ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs");
           LoadCredential = lib.optional (!local) "slotctl-ssh-key:${config.clan.core.vars.generators.${sshGenerator}.files.id_ed25519.path}";
           StateDirectory = state;
           RuntimeDirectory = runtime;
@@ -717,13 +795,64 @@
         description = "Public slotctl key of the assigned dispatcher, used only on a remote slot host.";
       };
       trustedJobs.enable = lib.mkEnableOption ''
-        delivering the CI signing key and ncps upload netrc to jobs whose exact run is a manjo push,
-        schedule or dispatch (HOM-31). The PAT then also needs read:repository.
+        delivering the CI signing key and ncps upload netrc to jobs whose exact run matches
+        the pool's trust allowlist and default-branch policy. The PAT then also needs read:repository.
         For remote slots enable on both sides. See _forgejo-ephemeral-trusted.nix'';
-      repoId = lib.mkOption {
-        type = lib.types.nullOr lib.types.ints.positive;
-        default = null;
-        description = "Numeric Forgejo repository ID of manjo/rust-app-template, required on dispatching hosts.";
+      pools = mkOption {
+        type = types.attrsOf (types.submodule {
+          options = {
+            forge = mkOption {
+              type = types.enum (builtins.attrNames forgeHosts);
+              description = "Forgejo instance hosting this queue.";
+            };
+            scope = mkOption {
+              type = types.attrsOf forgejoLogin;
+              description = ''
+                Exactly one queue owner: { user = "login"; } or { org = "organization"; }.
+                The forge's PAT needs write:user and must belong to the user pool's account,
+                or to manjo if the forge only has org pools. Listing jobs and listing,
+                registering, and deleting org runners also require that the PAT belongs to
+                an organization owner and has write:organization.
+              '';
+            };
+            labels = mkOption {
+              type = types.listOf (types.strMatching "[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
+              description = "Accepted runs-on labels. A job must request exactly one of these.";
+            };
+            dispatch = mkOption {
+              type = types.either (types.enum ["owner"]) (types.listOf types.ints.positive);
+              description = ''Repositories to dispatch: "owner" for the whole scope, or a list of numeric repo IDs.'';
+            };
+            maxSlots = mkOption {
+              type = types.ints.positive;
+              default = lib.max 1 (lib.length dispatcherNames);
+              description = "Maximum simultaneous slot claims for this pool. Defaults to the number of slots served.";
+            };
+            trust.repos = mkOption {
+              type = types.attrsOf (types.submodule {
+                options = {
+                  owner = mkOption {
+                    type = forgejoLogin;
+                    description = "Expected repository owner (must match the pool's scope).";
+                  };
+                  name = mkOption {
+                    type = forgejoRepoName;
+                    description = "Expected repository name.";
+                  };
+                };
+              });
+              default = {};
+              description = "Repositories eligible for trusted jobs, keyed by numeric repo ID.";
+            };
+            trust.users = mkOption {
+              type = types.listOf forgejoLogin;
+              default = [];
+              description = "Users whose pushes or workflow dispatches qualify for trust on allowlisted repositories.";
+            };
+          };
+        });
+        default = {};
+        description = "Forgejo queues served by every slot on the dispatcher. Configure only on the dispatcher.";
       };
       egressAddress = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -741,9 +870,9 @@
         default = {
           slots = lib.mapAttrs (_: data: {inherit (data) slotDirs prepareDirs;}) localSlots;
           remotePropertyNames = lib.mapAttrs (_: data: builtins.attrNames data.remoteProperties) localSlots;
-          inherit slotctlSlots sshClients;
+          inherit slotctlSlots sshClients poolsFile;
         };
-        description = "Slot directories, slotctl entries, and remote transport details for checks.";
+        description = "Slot, pool, and transport details for checks.";
       };
     };
 
@@ -752,32 +881,42 @@
       # module's mkDefault opt-in, such as the persistent Forgejo runner.
       {microvm.host.enable = lib.mkOverride 1100 false;}
       (lib.mkIf cfg.enable {
-        assertions = [
-          {
-            assertion = hosted || dispatching;
-            message = "forgejoEphemeral: ${hostName} must host or dispatch a slot in the inventory.";
-          }
-          {
-            assertion = !dispatching || cfg.repoId != null;
-            message = "forgejoEphemeral: dispatchers need the numeric ID of manjo/rust-app-template.";
-          }
-          {
-            assertion = lib.length (lib.unique (lib.mapAttrsToList dispatcherFor inventory)) <= 1;
-            message = "forgejoEphemeral: every inventory entry must use the same dispatcher machine.";
-          }
-          {
-            assertion =
-              lib.all (slot: builtins.match "[a-z][a-z0-9-]{0,62}" slot != null && slot != "ryza" && !lib.hasSuffix "-trust" slot) allSlotNames
-              && lib.length (lib.unique allSlotNames) == lib.length allSlotNames;
-            message = "forgejoEphemeral: slot names must be unique, match [a-z][a-z0-9-]{0,62}, and not be ryza or end in -trust.";
-          }
-          {
-            assertion =
-              lib.all (index: index >= 1 && index <= 253) indexes
-              && lib.length (lib.unique indexes) == lib.length indexes;
-            message = "forgejoEphemeral: slot indexes on ${hostName} must be unique and between 1 and 253.";
-          }
-        ];
+        assertions =
+          [
+            {
+              assertion = hosted || dispatching;
+              message = "forgejoEphemeral: ${hostName} must host or dispatch a slot in the inventory.";
+            }
+            {
+              assertion = dispatching == (cfg.pools != {});
+              message = "forgejoEphemeral: dispatchers must configure at least one pool; slot-only hosts must not configure pools.";
+            }
+            {
+              assertion = allUnique (map (pool: [pool.forge (lib.mapAttrs (_: lib.toLower) pool.scope)]) pools);
+              message = "forgejoEphemeral: pool queue identities (forge, scope kind, and case-insensitive owner) must be unique.";
+            }
+            {
+              assertion = allUnique (map (pool: pool.forge) userPools);
+              message = "forgejoEphemeral: a forge can have at most one user scope because it uses one PAT.";
+            }
+            {
+              assertion = lib.length (lib.unique (lib.mapAttrsToList dispatcherFor inventory)) <= 1;
+              message = "forgejoEphemeral: every inventory entry must use the same dispatcher machine.";
+            }
+            {
+              assertion =
+                lib.all (slot: builtins.match "[a-z][a-z0-9-]{0,62}" slot != null && slot != "ryza" && !lib.hasSuffix "-trust" slot) allSlotNames
+                && lib.length (lib.unique allSlotNames) == lib.length allSlotNames;
+              message = "forgejoEphemeral: slot names must be unique, match [a-z][a-z0-9-]{0,62}, and not be ryza or end in -trust.";
+            }
+            {
+              assertion =
+                lib.all (index: index >= 1 && index <= 253) indexes
+                && lib.length (lib.unique indexes) == lib.length indexes;
+              message = "forgejoEphemeral: slot indexes on ${hostName} must be unique and between 1 and 253.";
+            }
+          ]
+          ++ lib.optionals dispatching poolAssertions;
         systemd.tmpfiles.rules = lib.optional dispatching "d ${runRoot} 0700 root root - -";
       })
       (lib.mkIf (cfg.enable && hosted) {
@@ -817,26 +956,37 @@
         microvm.host.enable = true;
       })
       (lib.mkIf (cfg.enable && dispatching) {
-        clan.core.vars.generators.${generator} = {
-          share = false;
-          prompts.token = {
-            description =
-              if cfg.trustedJobs.enable
-              then "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user and read:repository)"
-              else "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user only)";
-            type = "hidden";
-          };
-          files.token = {
-            secret = true;
-            owner = "root";
-            group = "root";
-            mode = "0400";
-          };
-          runtimeInputs = [pkgs.coreutils];
-          script = ''
-            cp "$prompts/token" "$out/token"
-          '';
-        };
+        clan.core.vars.generators = lib.mapAttrs' (forge: {
+          login,
+          hasOrg,
+          generator,
+          ...
+        }: let
+          scopes =
+            ["write:user"]
+            ++ lib.optional hasOrg "write:organization"
+            ++ lib.optional (cfg.trustedJobs.enable || forge == "noosphere") "read:repository";
+          publicOnly = lib.optionalString (forge == "ugalabugala" && lib.toLower login == "manjo" && !hasOrg) "Public only; ";
+          scopesText = lib.concatStringsSep " and " scopes + lib.optionalString (scopes == ["write:user"]) " only";
+        in
+          lib.nameValuePair generator {
+            share = false;
+            prompts.token = {
+              description = "Forgejo dispatcher PAT for ${login} on ${forgeHosts.${forge}} (${publicOnly}${scopesText})";
+              type = "hidden";
+            };
+            files.token = {
+              secret = true;
+              owner = "root";
+              group = "root";
+              mode = "0400";
+            };
+            runtimeInputs = [pkgs.coreutils];
+            script = ''
+              cp "$prompts/token" "$out/token"
+            '';
+          })
+        forgeSettings;
         # Only hosts with an ephemeral root (ryza) have this option.
         services = lib.optionalAttrs (options.services.imperium ? impermanence) {
           imperium.impermanence.directories = map (directory: {
@@ -861,7 +1011,12 @@
                 commonSandbox
                 // {
                   Type = "exec";
-                  LoadCredential = ["forgejo-pat:${config.clan.core.vars.generators.${generator}.files.token.path}"];
+                  LoadCredential = lib.mapAttrsToList (_: {
+                    credential,
+                    generator,
+                    ...
+                  }: "${credential}:${config.clan.core.vars.generators.${generator}.files.token.path}")
+                  forgeSettings;
                   StateDirectoryMode = "0700";
                   RuntimeDirectoryMode = "0700";
                   RuntimeDirectoryPreserve = "yes";

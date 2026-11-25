@@ -52,7 +52,7 @@ in {
         # Protect the slot source even if Ryza is on a different generation.
         @blockedEphemeral {
           remote_ip ${lib.concatMapStringsSep " " (host: self.lib.lan.${host.egress.untrusted}) (builtins.attrValues self.lib.ciSlots)}
-          not host ${mkDomain "forge"} ncps.${config.noosphere.domain}
+          not host ${mkDomain "forge"} ncps.${config.noosphere.domain} forge.${config.noosphere.domain}
         }
         respond @blockedEphemeral 403
       }

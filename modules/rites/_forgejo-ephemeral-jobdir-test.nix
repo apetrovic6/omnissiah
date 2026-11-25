@@ -19,7 +19,6 @@
       {
         services.imperium.forgejoEphemeral = {
           enable = lib.mkForce true;
-          repoId = lib.mkForce 4242;
           inventory =
             inventory
             // {
@@ -39,6 +38,56 @@
     ];
   };
   c = enabled.config;
+  multiPool =
+    (enabled.extendModules {
+      modules = [
+        {
+          services.imperium.forgejoEphemeral.pools = {
+            noosphere = {
+              forge = "noosphere";
+              scope.user = "noosphere-ci";
+              labels = ["nix-eph" "nix-nightly"];
+              dispatch = [7];
+              maxSlots = 1;
+            };
+            monolith-softworks = {
+              forge = "noosphere";
+              scope.org = "monolith-softworks";
+              labels = ["nix-eph"];
+              dispatch = "owner";
+              trust = {
+                repos."42" = {
+                  owner = "Monolith-Softworks";
+                  name = "inanna";
+                };
+                users = ["manjo"];
+              };
+            };
+          };
+          clan.core.vars.generators.forgejo-ephemeral-noosphere.files.token.path = lib.mkForce "/run/secrets/noosphere-test-pat";
+        }
+      ];
+    }).config;
+  poolsFor = machine: builtins.fromJSON machine.services.imperium.forgejoEphemeral.internal.poolsFile.text;
+  pilot = {
+    forge = "ugalabugala";
+    host = "forge.ugalabugala.org";
+    login = "manjo";
+    scope.user = "manjo";
+    labels = ["nix-eph"];
+    dispatch = [9];
+    maxSlots = 1;
+    trust = {
+      repos."9" = {
+        owner = "manjo";
+        name = "rust-app-template";
+      };
+      users = ["manjo"];
+    };
+  };
+  patGenerators = machine: builtins.filter (lib.hasPrefix "forgejo-ephemeral-") (builtins.attrNames machine.clan.core.vars.generators);
+  dispatcherCredentials = machine: machine.systemd.services.${dispatchTemplate}.serviceConfig.LoadCredential;
+  multiPools = poolsFor multiPool;
   persistent = ryza.extendModules {
     modules = [{services.imperium.forgejoEphemeral.enable = lib.mkForce false;}];
   };
@@ -160,7 +209,12 @@
     violations = lib.filterAttrs (_: v: v != []) (lib.listToAttrs (map (u: lib.nameValuePair u.name (unsafe u)) units));
     dispatcherOptional = builtins.filter (lib.hasPrefix "-") (dispatcher.serviceConfig.ReadWritePaths or []);
     settings = c.systemd.tmpfiles.settings."10-microvm";
-    guestFs = c.microvm.vms.${slot}.config.config.fileSystems."/nix/.ro-store";
+    guest = c.microvm.vms.${slot}.config.config;
+    guestFs = guest.fileSystems."/nix/.ro-store";
+    guestRunner = guest.systemd.services.forgejo-one-job;
+    guestCredentials = ["job-handle" "runner-token" "runner-uuid"];
+    guestDNS = builtins.head guest.systemd.network.networks."10-uplink".dns;
+    poolPath = c.services.imperium.forgejoEphemeral.internal.poolsFile;
     vmStop = services."microvm@".serviceConfig.ExecStopPost ++ vm.serviceConfig.ExecStopPost;
     peers = builtins.filter (peer: peer != slot) (builtins.attrNames slots);
     peerPaths = lib.concatMap (peer: let
@@ -185,6 +239,9 @@
     assert dispatchDefinition.overrideStrategy == "asDropin";
     assert builtins.elem "multi-user.target" dispatchDefinition.wantedBy;
     assert builtins.elem "${dispatchName}.service" services.${dispatchTemplate}.aliases;
+    assert lib.hasInfix (builtins.unsafeDiscardStringContext "--pools ${poolPath} ") (builtins.unsafeDiscardStringContext dispatcher.serviceConfig.ExecStart);
+    assert !(lib.hasInfix "--trusted-jobs" dispatcher.serviceConfig.ExecStart);
+    assert lib.hasSuffix " --trusted-jobs" trustedConfig.systemd.services.${dispatchName}.serviceConfig.ExecStart;
     assert lib.all (path:
       builtins.elem path vm.serviceConfig.InaccessiblePaths
       && builtins.elem path dispatcher.serviceConfig.InaccessiblePaths)
@@ -215,8 +272,13 @@
     assert !((settings.${control} or {}) ? d) && !(builtins.hasAttr job settings);
     # Guest lower store is mounted ro, after "defaults".
     assert lib.last guestFs.options == "ro";
+    assert guest.microvm.credentialFiles == lib.genAttrs guestCredentials (id: "${slotctl.credential_dir}/${id}");
+    assert lib.sort builtins.lessThan guestRunner.serviceConfig.LoadCredential == guestCredentials;
+    assert lib.hasInfix "--url https://forge.ugalabugala.org " guestRunner.script && lib.hasInfix "--label nix-eph:host " guestRunner.script;
+    assert guest.networking.hosts.${guestDNS} == ["forge.ugalabugala.org" "ncps.noosphere.uk"];
     # The dispatcher can modify this slot's directories, not a peer's.
     assert slotctl.vm_dir == job && slotctl.credential_dir == "${credParent}/${slot}";
+    assert slotctl.fixed_pilot;
     assert lib.all writable [slotctl.vm_dir slotctl.credential_dir slotctl.trust_dir];
     # Cleanup always has a trust path; only the trusted fixture permits delivery.
     assert slotctl.trust_dir == trustDir && !slotctl.deliver && trustedSlotctl.deliver;
@@ -246,8 +308,65 @@
   results = lib.mapAttrs checkSlot slots;
   uniqueBy = field:
     lib.length (lib.unique (lib.mapAttrsToList (_: slot: slot.${field}) results)) == lib.length (builtins.attrNames slots);
+  dynamicSlot = multiPool.services.imperium.forgejoEphemeral.internal.slotctlSlots.ryza-eph-1;
+  dynamicGuest = multiPool.microvm.vms.ryza-eph-1.config.config;
+  dynamicRunner = dynamicGuest.systemd.services.forgejo-one-job;
+  dynamicDNS = builtins.head dynamicGuest.systemd.network.networks."10-uplink".dns;
+  dynamicCredentials = ["forgejo-url" "job-handle" "runner-label" "runner-token" "runner-uuid"];
 in
   assert persistent.config.microvm.host.enable;
+  assert patGenerators persistent.config == [];
+  assert poolsFor ryza.config == {ugalabugala = pilot;};
+  assert !ryza.config.services.imperium.forgejoEphemeral.trustedJobs.enable;
+  assert patGenerators ryza.config == ["forgejo-ephemeral-ugalabugala"];
+  assert ryza.config.clan.core.vars.generators.forgejo-ephemeral-ugalabugala.prompts.token.description
+  == "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user only)";
+  assert lib.all (check: check.assertion) multiPool.assertions;
+  assert !dynamicSlot.fixed_pilot;
+  assert dynamicGuest.microvm.credentialFiles == lib.genAttrs dynamicCredentials (id: "${dynamicSlot.credential_dir}/${id}");
+  assert lib.sort builtins.lessThan dynamicRunner.serviceConfig.LoadCredential == dynamicCredentials;
+  assert lib.hasInfix ''--url "$url"'' dynamicRunner.script && lib.hasInfix ''--label "$label:host"'' dynamicRunner.script;
+  assert dynamicGuest.networking.hosts.${dynamicDNS} == ["forge.ugalabugala.org" "ncps.noosphere.uk" "forge.noosphere.uk"];
+  assert multiPools
+  == {
+    ugalabugala = pilot // {maxSlots = 2;};
+    noosphere = {
+      forge = "noosphere";
+      host = "forge.noosphere.uk";
+      login = "noosphere-ci";
+      scope.user = "noosphere-ci";
+      labels = ["nix-eph" "nix-nightly"];
+      dispatch = [7];
+      maxSlots = 1;
+      trust = {
+        repos = {};
+        users = [];
+      };
+    };
+    monolith-softworks = {
+      forge = "noosphere";
+      host = "forge.noosphere.uk";
+      login = "noosphere-ci";
+      scope.org = "monolith-softworks";
+      labels = ["nix-eph"];
+      dispatch = "owner";
+      maxSlots = 2;
+      trust = {
+        repos."42" = {
+          owner = "Monolith-Softworks";
+          name = "inanna";
+        };
+        users = ["manjo"];
+      };
+    };
+  };
+  assert patGenerators multiPool == ["forgejo-ephemeral-noosphere" "forgejo-ephemeral-ugalabugala"];
+  assert dispatcherCredentials c == ["forgejo-pat-ugalabugala:/run/secrets/ephemeral-test-pat"];
+  assert lib.sort builtins.lessThan (dispatcherCredentials multiPool)
+  == [
+    "forgejo-pat-noosphere:/run/secrets/noosphere-test-pat"
+    "forgejo-pat-ugalabugala:/run/secrets/ephemeral-test-pat"
+  ];
   assert lib.any (check:
     check.message
     == "forgejoEphemeral: every inventory entry must use the same dispatcher machine."
@@ -258,5 +377,6 @@ in
   assert builtins.attrNames trustedSlotctlSlots == configuredSlots;
   assert lib.all uniqueBy ["StateDirectory" "RuntimeDirectory" "Slice" "User"]; {
     hostDrv = c.system.build.toplevel.drvPath;
+    pools = multiPools;
     slots = results;
   }

@@ -48,7 +48,7 @@ RESULTS = ("success", "timeout", "exit-code", "signal", "core-dump", "resources"
 STATES_IDLE = ("inactive", "failed")
 STATES_BUSY = ("active", "activating", "deactivating", "reloading", "refreshing")
 IMAGES = ("nix-store-overlay.img", "var.img")
-CREDENTIALS = ("runner-uuid", "runner-token", "job-handle")
+CREDENTIALS = ("runner-uuid", "runner-token", "job-handle", "forgejo-url", "runner-label")
 TRUST_FILES = ("ncps-netrc", "ci-signing-key")  # Write order: the guest hook needs both.
 TRUST_NAMES = TRUST_FILES + tuple(f".{name}.tmp" for name in TRUST_FILES)
 TRUST_SHAPES = {
@@ -59,6 +59,8 @@ DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 SLOT_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
 TOKEN = re.compile(r"[!-~]{1,4096}")
 UUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+FORGE_URLS = ("https://forge.ugalabugala.org", "https://forge.noosphere.uk")
+LABEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 MAX_INPUT = 64 * 1024
 VERBS = ("observe", "check-space", "start", "stop", "reset-failed", "stop-support", "stage", "scrub", "deliver", "withdraw")
 RUN_VERBS = ("stage", "start", "stop", "scrub", "deliver", "withdraw")
@@ -212,7 +214,7 @@ def unlink_files(directory, names, *, remove_dir=False):
 
 
 class SlotFiles:
-    def __init__(self, vm_dir, credentials, uid, gid, trust_dir, deliver):
+    def __init__(self, vm_dir, credentials, uid, gid, trust_dir, deliver, *, fixed_pilot=False):
         self.vm_dir = vm_dir
         self.credentials = credentials
         self.staging = credentials.with_name(f".{credentials.name}.staging")
@@ -222,6 +224,7 @@ class SlotFiles:
         self.trust_dir = trust_dir
         # Whether this slot's guest has the trust share: then stage creates it and deliver may fill it.
         self.deliver_enabled = deliver
+        self.fixed_pilot = fixed_pilot
 
     def require_free_space(self, min_free_bytes):
         try:
@@ -285,7 +288,7 @@ class SlotFiles:
         finally:
             os.close(fd)
 
-    def stage(self, runner_uuid, token, handle):
+    def stage(self, runner_uuid, token, handle, url, label):
         if self.deliver_enabled:
             try:
                 # Fresh and empty for every boot: virtiofsd needs it to exist when the slot starts.
@@ -294,7 +297,10 @@ class SlotFiles:
                 raise SlotError("trust-dir-create-failed") from None
         try:
             self.staging.mkdir(mode=0o700)
-            for name, value in zip(CREDENTIALS, (runner_uuid, token, handle), strict=True):
+            values = (runner_uuid, token, handle)
+            if not self.fixed_pilot:
+                values += (url, label)
+            for name, value in zip(CREDENTIALS[:len(values)], values, strict=True):
                 fd = os.open(self.staging / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
                 with os.fdopen(fd, "wb") as file:
                     os.fchown(file.fileno(), self.uid, self.gid)
@@ -328,14 +334,17 @@ class Slot:
     def stage(self, payload, save_run):
         if (
             not isinstance(payload, dict)
-            or payload.keys() != {"uuid", "token", "handle"}
+            or payload.keys() != {"uuid", "token", "handle", "url", "label"}
             or not matches(UUID, payload["uuid"])
             or not matches(TOKEN, payload["token"])
             or not handle_ok(payload["handle"])
+            or payload["url"] not in FORGE_URLS
+            or not matches(LABEL_NAME, payload["label"])
+            or (self.files.fixed_pilot and (payload["url"], payload["label"]) != (FORGE_URLS[0], "nix-eph"))
         ):
             raise UsageError
         save_run()
-        self.files.stage(payload["uuid"], payload["token"], payload["handle"])
+        self.files.stage(payload["uuid"], payload["token"], payload["handle"], payload["url"], payload["label"])
 
     def scrub(self):
         # The caller checked too, but the images and credentials go only once the VM is down.
@@ -395,6 +404,7 @@ def load_config(path, slot):
         "credential_dir",
         "trust_dir",
         "deliver",
+        "fixed_pilot",
         "user",
         "group",
         "min_free_bytes",
@@ -403,7 +413,9 @@ def load_config(path, slot):
     paths = (entry["vm_dir"], entry["credential_dir"], entry["trust_dir"])
     if not all(isinstance(p, str) and p.startswith("/") and "\0" not in p for p in paths):
         raise UsageError
-    if type(entry["deliver"]) is not bool or not matches(SLOT_NAME, entry["user"]) or not matches(SLOT_NAME, entry["group"]):
+    if type(entry["deliver"]) is not bool or type(entry["fixed_pilot"]) is not bool:
+        raise UsageError
+    if not matches(SLOT_NAME, entry["user"]) or not matches(SLOT_NAME, entry["group"]):
         raise UsageError
     if type(entry["min_free_bytes"]) is not int or entry["min_free_bytes"] <= 0:
         raise UsageError
@@ -590,7 +602,8 @@ def main(
         slot = Slot(
             Systemctl(args.slot, run, systemctl_path, lock_fds),
             SlotFiles(
-                Path(entry["vm_dir"]), Path(entry["credential_dir"]), uid, gid, Path(entry["trust_dir"]), entry["deliver"]
+                Path(entry["vm_dir"]), Path(entry["credential_dir"]), uid, gid, Path(entry["trust_dir"]), entry["deliver"],
+                fixed_pilot=entry["fixed_pilot"],
             ),
         )
         if args.verb in RUN_VERBS or args.verb == "observe":
