@@ -13,7 +13,9 @@
   lib,
   config,
   ...
-}: {
+}: let
+  inherit (config.services.imperium.forgejoEphemeral) egressAddress enable;
+in {
   networking.networkmanager.enable = lib.mkForce false;
   networking.useDHCP = lib.mkForce false;
   networking.useNetworkd = true;
@@ -25,7 +27,7 @@
     address =
       ["${self.lib.hosts.ryza}/24"]
       # The slots' dedicated SNAT source (modules/rites/_ci-slots.nix).
-      ++ lib.optional config.services.imperium.forgejoEphemeral.enable "${config.services.imperium.forgejoEphemeral.egressAddress}/32";
+      ++ lib.optional (enable && egressAddress != null) "${egressAddress}/32";
     gateway = [self.lib.lan.gateway];
     # The LAN's Blocky resolvers, the only ones that know the split-horizon
     # names (ncps.noosphere.uk must resolve to the LAN for substitution).
