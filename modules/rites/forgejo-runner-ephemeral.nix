@@ -72,13 +72,13 @@
       -A ${outChain} ! -s ${address} -j DROP
       -A ${outChain} ! -o ${uplink} -j DROP
       -A ${outChain} -m conntrack --ctstate INVALID -j DROP
-      -A ${outChain} -d ${cerberus} -p udp --dport 53 -j RETURN
-      -A ${outChain} -d ${cerberus} -p tcp --dport 53 -j RETURN
-      -A ${outChain} -d ${cerberus} -p tcp --dport 443 -j RETURN
+      -A ${outChain} -d ${cerberus} -p udp --dport 53 -j ACCEPT
+      -A ${outChain} -d ${cerberus} -p tcp --dport 53 -j ACCEPT
+      -A ${outChain} -d ${cerberus} -p tcp --dport 443 -j ACCEPT
       ${lib.concatMapStringsSep "\n" (net: "-A ${outChain} -d ${net} -j DROP") nonPublic}
-      -A ${outChain} -p tcp --dport 443 -j RETURN
+      -A ${outChain} -p tcp --dport 443 -j ACCEPT
       -A ${outChain} -j DROP
-      -A ${inChain} -i ${uplink} -d ${address} -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+      -A ${inChain} -i ${uplink} -d ${address} -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
       -A ${inChain} -j DROP
       RULES
           fi
@@ -372,7 +372,8 @@
         };
         linkConfig.RequiredForOnline = "no";
       };
-      networking.nat.internalInterfaces = [tap];
+      # The guard owns forwarding and SNAT for this tap. Do not add it to
+      # stock NAT: egress must not fall back to Ryza's normal source address.
       systemd.slices.forgejo-ephemeral.sliceConfig = {
         CPUQuota = "200%";
         MemoryMax = "5G";
@@ -436,6 +437,9 @@
             ReadWritePaths = [vmDir "-${credDir}"];
             ProtectHome = true;
             PrivateTmp = true;
+            # The pre-created TAP carries frames via /dev/net/tun, not IP sockets.
+            RestrictAddressFamilies = ["AF_UNIX"];
+            IPAddressDeny = "any";
             InaccessiblePaths = persistentPaths;
             NoNewPrivileges = true;
             Restart = "no";
@@ -454,7 +458,11 @@
             Group = "root";
           };
         };
-        "microvm-virtiofsd@${slot}".serviceConfig.Slice = slice;
+        "microvm-virtiofsd@${slot}".serviceConfig = {
+          Slice = slice;
+          RestrictAddressFamilies = ["AF_UNIX"];
+          IPAddressDeny = "any";
+        };
       };
     };
   };

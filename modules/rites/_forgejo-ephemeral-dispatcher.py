@@ -32,9 +32,13 @@ RUNNERS = "/user/actions/runners"
 LOGIN = "manjo"
 LABEL = "nix-eph"
 POLL = 7
+BUSY_POLL_FAST = 15
+BUSY_FAST_WINDOW = 5 * 60
 BUSY_POLL = 60
 INVENTORY_POLL = 5 * 60
 INTENT_EXPIRY = 24 * 60 * 60
+REFUSAL_LIMIT = 3
+REFUSAL_SPAN = 60 * 60
 PAUSE_FILE = Path("/run/forgejo-ephemeral-dispatcher/pause")
 REQUEST_TIMEOUT = 10
 MAX_RESPONSE = 2 * 1024 * 1024
@@ -70,6 +74,10 @@ def positive(value):
 
 def nonnegative(value):
     return type(value) is int and value >= 0
+
+
+def timestamp(value):
+    return type(value) in (int, float) and 0 < value <= sys.float_info.max
 
 
 def matches(pattern, value):
@@ -225,34 +233,6 @@ class Forgejo:
             raise ApiError("Forgejo register runner: invalid ID or UUID; reconciling by name")
         return runner, result.get("token")
 
-    def runner_undeclared(self, active, owner):
-        runner = active["runner"]
-        try:
-            row, _ = self._request("get runner", "GET", f"{RUNNERS}/{runner['id']}", (200,))
-        except HttpError as error:
-            if error.status == 404:  # Forgejo can remove an ephemeral runner after a task.
-                return False
-            raise
-        # v15.0.12 Status() reports only recent RPC activity, not assignment.
-        # REST registration leaves version and agent labels empty, Declare writes
-        # both before one-job fetches, and CreateTaskForRunner requires matching labels.
-        return (
-            isinstance(row, dict)
-            and positive(row.get("id"))
-            and row["id"] == runner["id"]
-            and row.get("uuid") == runner["uuid"]
-            and row.get("name") == active["name"]
-            and row.get("ephemeral") is True
-            and positive(row.get("owner_id"))
-            and row["owner_id"] == owner
-            and nonnegative(row.get("repo_id"))
-            and row["repo_id"] == 0
-            and row.get("status") in ("idle", "offline")
-            and row.get("version") == ""
-            and "labels" in row
-            and row["labels"] in (None, [])
-        )
-
     def delete(self, runner):
         status, _ = self._request("delete runner", "DELETE", f"{RUNNERS}/{runner['id']}", (204, 404))
         log(f"runner {runner['id']} cleanup: HTTP {status}")
@@ -378,7 +358,10 @@ class Store:
             with (directory / "state.json").open("rb") as file:
                 self.data = json.load(file)
         except FileNotFoundError:
-            self.data = {"version": 1, "slot": SLOT, "owner_id": None, "active": None, "ambiguous": {}, "retired": []}
+            self.data = {
+                "version": 2, "slot": SLOT, "owner_id": None, "active": None,
+                "ambiguous": {}, "retired": [], "refusals": {},
+            }
             return
         except (OSError, ValueError, RecursionError):
             raise StateError("cannot read state.json; reconcile persisted state before restarting") from None
@@ -389,16 +372,27 @@ class Store:
     def _valid(data):
         if (
             not isinstance(data, dict)
-            or data.keys() != {"version", "slot", "owner_id", "active", "ambiguous", "retired"}
+            or data.keys() != {"version", "slot", "owner_id", "active", "ambiguous", "retired", "refusals"}
             or not positive(data["version"])
-            or data["version"] != 1
+            or data["version"] != 2
             or data["slot"] != SLOT
             or not positive(data["owner_id"])
             or not isinstance(data["retired"], list)
             or not all(handle_ok(handle) for handle in data["retired"])
             or not isinstance(data["ambiguous"], dict)
+            or not isinstance(data["refusals"], dict)
         ):
             return False
+        for handle, budget in data["refusals"].items():
+            if (
+                not handle_ok(handle)
+                or not isinstance(budget, dict)
+                or budget.keys() != {"count", "first_at"}
+                or not positive(budget["count"])
+                or budget["count"] > REFUSAL_LIMIT
+                or not timestamp(budget["first_at"])
+            ):
+                return False
         for handle, intent in data["ambiguous"].items():
             if (
                 not handle_ok(handle)
@@ -424,17 +418,16 @@ class Store:
             return True
         if (
             not isinstance(active, dict)
-            or active.keys() - {"assigned"} != {"handle", "name", "runner", "phase", "deadline"}
+            or active.keys() != {"handle", "name", "runner", "phase", "queued_at"}
             or not handle_ok(active["handle"])
             or not matches(NAME, active["name"])
             or active["phase"] not in ("intent", "registered", "start", "cleanup")
-            or ("assigned" in active and (active["phase"] != "start" or active["assigned"] is not True))
         ):
             return False
         if active["phase"] == "intent":
-            return active["runner"] is None and active["deadline"] is None
+            return active["runner"] is None and active["queued_at"] is None
         return runner_id_ok(active["runner"]) and (
-            positive(active["deadline"]) if active["phase"] == "start" else active["deadline"] is None
+            timestamp(active["queued_at"]) if active["phase"] == "start" else active["queued_at"] is None
         )
 
     def save(self, **changes):
@@ -465,18 +458,26 @@ class Dispatcher:
         self.pause = pause
         self.api_after = self.api_delay = 0
         self.inventory_after = self.busy_after = 0
+        self.busy_misses = 0
         self.observed = None
         self.identity_verified = False
         self.deadline_logged = False
 
     def tick(self):
+        idle = True
         try:
             idle = self._local()
             now = self.monotonic()
             if not idle:
                 if now >= self.busy_after:
-                    self.busy_after = now + BUSY_POLL
-                    self._remote(False)
+                    queued_at = self.store.data["active"]["queued_at"]
+                    interval = BUSY_POLL_FAST if self.wall() - queued_at < BUSY_FAST_WINDOW else BUSY_POLL
+                    self.busy_after = now + interval
+                    try:
+                        self._remote(False)
+                    except ApiError:
+                        self.busy_misses = 0
+                        raise
             elif now >= self.api_after:
                 try:
                     self._remote(True)
@@ -488,6 +489,7 @@ class Dispatcher:
                     self.api_after = self.api_delay = 0
         except (ApiError, SlotError) as error:
             log(error)
+        return POLL if idle else max(0, min(POLL, self.busy_after - self.monotonic()))
 
     def _local(self):
         active = self.store.data["active"]
@@ -498,8 +500,9 @@ class Dispatcher:
                 self.observed = active["name"]
                 self.deadline_logged = False
                 self.busy_after = 0
+                self.busy_misses = 0
                 log(f"monitoring VM for runner {active['runner']['id']}; systemd owns its deadline")
-            if self.wall() >= active["deadline"] and not self.deadline_logged:
+            if self.wall() >= active["queued_at"] + VM_DEADLINE and not self.deadline_logged:
                 self.deadline_logged = True
                 log("VM is still busy past its recorded deadline estimate; inspect the systemd unit")
             return False
@@ -520,8 +523,7 @@ class Dispatcher:
             self.store.save(active=None, ambiguous=ambiguous)
             log(f"registration outcome unresolved for {active['name']}; searching owned runners by exact name")
         else:
-            cleanup = active | {"phase": "cleanup", "deadline": None}
-            cleanup.pop("assigned", None)
+            cleanup = active | {"phase": "cleanup", "queued_at": None}
             self.store.save(active=cleanup)
             log(f"VM idle ({result}); local files scrubbed for runner {active['runner']['id']}")
         return True
@@ -561,7 +563,7 @@ class Dispatcher:
         seen = {job["handle"] for job in jobs}
         self._observe_queue(seen, inventory_ok)
         if not idle:
-            self._check_cancelled(jobs, seen, owner)
+            self._check_cancelled(seen)
             return
         data = self.store.data
         blocked = set(data["retired"]) | data["ambiguous"].keys()
@@ -577,20 +579,15 @@ class Dispatcher:
         if job is not None and not self._paused():
             self._dispatch(job)
 
-    def _check_cancelled(self, jobs, seen, owner):
+    def _check_cancelled(self, seen):
         active = self.store.data["active"]
-        if active.get("assigned"):
-            return
-        handle = active["handle"]
-        if handle in seen:
-            if any(job["handle"] == handle and (job["status"] == "running" or job["task_id"]) for job in jobs):
-                self.store.save(active=active | {"assigned": True})
-            return
-        # Check detail *after* the job list. Never stop a declared runner based on
-        # inactivity or a 404: an assigned task could have finished between polls.
-        if self.api.runner_undeclared(active, owner) and not self.system.idle(VM):
-            self.system.stop()
-            log(f"queued VM stop: target handle vanished before runner {active['runner']['id']} declared")
+        if active["handle"] in seen:
+            self.busy_misses = 0
+        else:
+            self.busy_misses += 1
+            if self.busy_misses >= 2 and not self.system.idle(VM):
+                self.system.stop()
+                log(f"queued VM stop: runner {active['runner']['id']} target absent from consecutive job polls")
 
     def _observe_queue(self, seen, inventory_ok):
         data = self.store.data
@@ -598,6 +595,9 @@ class Dispatcher:
         retired = [handle for handle in data["retired"] if handle in seen]
         if retired != data["retired"]:
             changes["retired"] = retired
+        refusals = data["refusals"]
+        if any(handle not in seen for handle in refusals):
+            changes["refusals"] = {handle: budget for handle, budget in refusals.items() if handle in seen}
         # A complete inventory plus a fresh jobs response brackets the window;
         # observed reappearance invalidates earlier evidence.
         now = int(self.wall())
@@ -646,9 +646,11 @@ class Dispatcher:
                 found.setdefault(row["name"], []).append({"id": row["id"], "uuid": row["uuid"]})
         if found:
             # Save recovered IDs before DELETE so a crash can replay cleanup by ID.
-            self.store.save(ambiguous=ambiguous | {
+            recovered = {
                 unresolved[name]: {"name": name, "runners": runners} for name, runners in found.items()
-            })
+            }
+            refusals = {handle: budget for handle, budget in self.store.data["refusals"].items() if handle not in recovered}
+            self.store.save(ambiguous=ambiguous | recovered, refusals=refusals)
         unmatched = [name for name in unresolved if name not in found]
         if unmatched:
             log(f"{len(unmatched)} unresolved registration(s); no exact runner match for {', '.join(unmatched[:3])}")
@@ -675,27 +677,47 @@ class Dispatcher:
     def _dispatch(self, job):
         handle = job["handle"]
         digest = hashlib.sha256(handle.encode()).hexdigest()[:12]
-        active = dict(handle=handle, name=f"eph-{digest}-ryza-{secrets.token_hex(16)}", runner=None, phase="intent", deadline=None)
+        active = dict(handle=handle, name=f"eph-{digest}-ryza-{secrets.token_hex(16)}", runner=None, phase="intent", queued_at=None)
         self.store.save(active=active)
         log(f"registering runner for job {job['id']} attempt {job['attempt']} ({digest})")
         try:
             runner, token = self.api.register(active["name"])
         except HttpError as error:
-            # An explicit refusal is not a lost result. HTTP 408, transport
-            # failures, 5xx and unreadable success replies may hide a new runner.
-            if 300 <= error.status < 500 and error.status != 408:
-                self.store.save(active=None, retired=[*self.store.data["retired"], handle])
+            # An explicit refusal is not a lost result. Transport failures,
+            # 5xx and unreadable success replies may hide a new runner.
+            if 300 <= error.status < 500:
+                self._record_refusal(handle)
             raise
         active = active | {"runner": runner, "phase": "registered"}
-        self.store.save(active=active)
+        refusals = self.store.data["refusals"].copy()
+        refusals.pop(handle, None)
+        self.store.save(active=active, refusals=refusals)
         if any(not self.system.idle(unit) for unit in SUPPORT) or not self.system.idle(VM):
             raise SlotError("slot changed during registration; refusing to stage or start")
         self.files.stage(runner["uuid"], token, handle)
         # Queuing is one-way. Even if the client dies or loses the systemd reply,
         # recovery only monitors this intent and never issues its start a second time.
-        self.store.save(active=active | {"phase": "start", "deadline": int(self.wall()) + VM_DEADLINE})
+        self.store.save(active=active | {"phase": "start", "queued_at": self.wall()})
         self.system.start()
         log(f"queued VM start for runner {runner['id']}")
+
+    def _record_refusal(self, handle):
+        data = self.store.data
+        refusals = data["refusals"].copy()
+        retired = data["retired"]
+        now = self.wall()
+        previous = refusals.get(handle)
+        count = 1 if previous is None else min(previous["count"] + 1, REFUSAL_LIMIT)
+        first_at = now if previous is None else previous["first_at"]
+        retire = count == REFUSAL_LIMIT and now - first_at >= REFUSAL_SPAN
+        if retire:
+            del refusals[handle]
+            retired = [*retired, handle]
+        else:
+            refusals[handle] = {"count": count, "first_at": first_at}
+        self.store.save(active=None, retired=retired, refusals=refusals)
+        if retire:
+            log("retiring handle after repeated registration refusals spanning at least one hour")
 
 
 def main():
@@ -731,8 +753,7 @@ def main():
                 Store(args.state_dir),
             )
             while True:
-                dispatcher.tick()
-                time.sleep(POLL)
+                time.sleep(dispatcher.tick())
     except StateError as error:
         log(error)
     except Exception:

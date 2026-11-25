@@ -24,7 +24,7 @@
     matchConfig.MACAddress = "bc:24:11:5a:6e:01";
     address =
       ["${self.lib.hosts.ryza}/24"]
-      ++ lib.optional config.services.imperium.forgejoEphemeral.enable "${self.lib.lan.ryza-eph}/24";
+      ++ lib.optional config.services.imperium.forgejoEphemeral.enable "${self.lib.lan.ryza-eph}/32";
     gateway = [self.lib.lan.gateway];
     # The LAN's Blocky resolvers, the only ones that know the split-horizon
     # names (ncps.noosphere.uk must resolve to the LAN for substitution).

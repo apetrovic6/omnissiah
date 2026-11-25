@@ -807,11 +807,18 @@ a fork run; do not open up fork scheduling more broadly.
    Traefik VIP access or guest access to Ryza's control plane or other CI
    guests. Confirm the resolved addresses and dependency endpoints before
    rollout; don't broaden ACLs or PAT scopes to make a failing check pass.
-4. From the **same pilot-enabled deployment flake**, deploy Cerberus first
-   (`clan machines update cerberus`) and confirm its Caddy guard is active
-   before deploying Ryza (`clan machines update ryza`). If the guard fails
-   to load, do not deploy the slot. On Ryza, check
-   `journalctl -u forgejo-ephemeral-dispatcher` for auth errors and verify
+   Check that the router has no TCP 443 hairpin port-forward to Cerberus:
+   a hairpin could hide the slot's dedicated source address from Caddy.
+4. Cerberus's guard is unconditional; deploy it at any time
+   (`clan machines update cerberus`), even with the pilot off. Before enabling
+   Ryza, check that `caddy.service` is active and its latest config load
+   succeeded. In `/etc/caddy/caddy_config`, confirm that the vhosts invoke
+   `stygies-access` and that `@blockedEphemeral` matches `192.168.1.249` and
+   allows only Forgejo and NCPS. Check again before rolling Cerberus back
+   while the pilot is enabled. Do not enable the slot without the guard.
+   Once verified, deploy Ryza
+   (`clan machines update ryza`), check
+   `journalctl -u forgejo-ephemeral-dispatcher` for auth errors, and verify
    `microvm@ryza-eph-1.service` stays stopped without demand. No persistent
    runner registration command is needed.
 
@@ -933,13 +940,14 @@ Run `sudo systemctl daemon-reload`. The delay counts against the unit's
 90-second `TimeoutStartSec`; leave time for normal preflight. Queue the
 reviewed pilot job, wait for registration and the startup delay, then
 cancel in the UI during the delay, before any task is assigned or steps
-run. Without a job in the queue, the dispatcher can stop the slot early
-if the runner has not yet declared itself. The runner API has no task
-history; after declaration an idle status is not proof that no task ran,
-so ambiguous cases retain the hard timeout. Verify the same local and
-remote cleanup. Remove only the test drop-in,
-`/run/systemd/system/microvm@ryza-eph-1.service.d/pilot-cancellation.conf`,
-and run `sudo systemctl daemon-reload` again.
+run. The dispatcher stops the slot after two consecutive successful job
+polls no longer list its handle. It polls every 15 seconds during the
+first five minutes, then every minute. Verify local and remote cleanup,
+remove only the test drop-in
+(`/run/systemd/system/microvm@ryza-eph-1.service.d/pilot-cancellation.conf`),
+and run `sudo systemctl daemon-reload` again. Also test cancelling with a
+reviewed job already running; verify the same cleanup without the delay
+override.
 
 **Compare performance.** Benchmark a trusted revision on the persistent
 `nix-vm` runner, then the same checkout, steps, dependencies and inputs
@@ -977,9 +985,9 @@ not write scope. Remove the pause file only after verifying the rotation.
 
 **Disable the pilot.** Pause, cancel any queued `nix-eph` runs you do not
 intend to leave waiting, and wait for local and remote cleanup as above.
-Deploy `enable = false` to Ryza first, then Cerberus from that same flake
-so the guard remains in place until the slot is down. Revoke the dedicated
-PAT only after cleanup; do not erase pending reconciliation state.
+Deploy `enable = false` to Ryza; the Cerberus guard stays in place.
+Revoke the dedicated PAT only after cleanup; do not erase pending
+reconciliation state.
 
 ### Hermes on Cerberus Forgejo
 

@@ -119,9 +119,6 @@ class FakeForge:
             "owner_id": OWNER,
             "repo_id": 0,
             "ephemeral": True,
-            "status": "offline",
-            "version": "",
-            "labels": None,
         } | fields
         return runner_id
 
@@ -150,10 +147,6 @@ class FakeForge:
                 return 400, {"error": "unexpected registration payload"}, {}
             runner_id = self.add_runner(payload["name"])
             return 201, {"id": runner_id, "uuid": uuid_for(runner_id), "token": TOKEN}, {}
-        if method == "GET" and path.startswith(RUNNERS + "/"):
-            runner_id = int(path.rsplit("/", 1)[1])
-            runner = self.runners.get(runner_id)
-            return (200 if runner is not None else 404), runner, {}
         if method == "DELETE" and path.startswith(RUNNERS + "/"):
             runner_id = int(path.rsplit("/", 1)[1])
             return (204 if self.runners.pop(runner_id, None) is not None else 404), None, {}
@@ -265,7 +258,7 @@ class DispatcherTests(unittest.TestCase):
 
     def tick(self, advance=0):
         self.clock.now += advance
-        self.dispatcher.tick()
+        return self.dispatcher.tick()
 
     def state(self):
         return json.loads((self.state_dir / "state.json").read_text())
@@ -309,7 +302,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(active, started[0]["active"])
         self.assertEqual("start", active["phase"])
         self.assertEqual({"id": 100, "uuid": uuid_for(100)}, active["runner"])
-        self.assertEqual(self.clock.wall() + D.VM_DEADLINE, active["deadline"])
+        self.assertEqual(self.clock.wall(), active["queued_at"])
         self.assertEqual(0o600, stat.S_IMODE((self.state_dir / "state.json").stat().st_mode))
         self.assertEqual(0o700, stat.S_IMODE(self.credential_dir.stat().st_mode))
         self.assertEqual({"runner-uuid", "runner-token", "job-handle"}, {path.name for path in self.credential_dir.iterdir()})
@@ -342,19 +335,19 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([], self.forge.paths("POST"))
         self.assertEqual([], self.system.mutations())
 
-    def test_declared_runner_without_assignment_data_keeps_systemd_timeout(self):
+    def test_unavailable_api_leaves_hard_timeout_to_systemd(self):
         self.forge.jobs = [job()]
         self.tick()
         self.system.set(active="active")
-        self.forge.runners[100].update(status="idle", version="13.2.1", labels=["nix-eph"])
-        self.forge.jobs = None
+        self.forge.reply_once("GET", JOBS, 503)
         self.leave_images()
         self.restart()
         self.tick(D.VM_DEADLINE + 1)
         self.assertTrue(self.credential_dir.exists())
         self.assertTrue((self.vm_dir / "var.img").exists())
         self.assertEqual([], self.forge.paths("DELETE"))
-        self.assertEqual(1, len(self.system.mutations()))
+        self.assertEqual([], self.system.mutations("stop"))
+        self.assertIn("past its recorded deadline", self.logs.getvalue())
         self.system.set(active="deactivating", pending="8", result="timeout")
         self.tick(7)
         self.assertTrue(self.credential_dir.exists())
@@ -373,13 +366,16 @@ class DispatcherTests(unittest.TestCase):
         self.tick(7)
         self.forge.jobs = None
         calls = self.forge.paths()
-        self.tick(D.BUSY_POLL - 1)
+        self.tick(D.BUSY_POLL_FAST - 1)
         self.assertEqual(calls, self.forge.paths())
         self.tick(1)
-        self.assertEqual(calls + [USER, JOBS, RUNNERS + "/100"], self.forge.paths())
+        self.assertEqual(calls + [USER, JOBS], self.forge.paths())
+        self.assertEqual([], self.system.mutations("stop"))
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual(calls + [USER, JOBS, USER, JOBS], self.forge.paths())
         [stop] = self.system.mutations("stop")
         self.assertEqual(("stop", VM), stop[-2:])
-        self.assertIn("vanished before runner 100 declared", self.logs.getvalue())
+        self.assertIn("target absent from consecutive job polls", self.logs.getvalue())
         self.tick(7)
         self.assertTrue((self.vm_dir / "var.img").exists())
         self.assertTrue(self.credential_dir.exists())
@@ -390,60 +386,89 @@ class DispatcherTests(unittest.TestCase):
         self.assertIsNone(self.state()["active"])
         self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
 
-    def test_missing_job_and_unusable_runner_detail_do_not_stop_vm(self):
-        self.forge.jobs = [job()]
+    def test_cancelled_after_declare_frees_slot_for_waiting_job(self):
+        self.forge.jobs = [job(), job(2, "other")]
         self.tick()
         self.system.set(active="active")
-        self.forge.jobs = None
-        endpoint = RUNNERS + "/100"
-        undeclared = self.forge.runners.pop(100)
-        # A fast job may finish and its runner may disappear between observations.
-        for status, fields in (
-            (404, {}),
-            (503, {}),
-            (200, {"status": "active"}),
-            (200, {"status": "offline", "labels": ["nix-eph"]}),
-            (200, {"status": "idle", "version": "13.2.1"}),
-            (200, {"uuid": uuid_for(999)}),
-            (200, {"owner_id": OWNER + 1}),
-            (200, {"status": None}),
-            (200, {"version": None}),
-        ):
-            with self.subTest(status=status, fields=fields):
-                self.forge.reply_once("GET", endpoint, status, undeclared | fields)
-                self.tick(D.BUSY_POLL)
-                self.assertEqual(endpoint, self.forge.paths()[-1])
-                self.assertEqual([], self.system.mutations("stop"))
-                self.assertEqual([], self.forge.paths("DELETE"))
-        del undeclared["labels"]
-        self.forge.reply_once("GET", endpoint, 200, undeclared)
-        self.tick(D.BUSY_POLL)
-        self.assertEqual([], self.system.mutations("stop"))
-
-    def test_running_evidence_survives_restart_and_prevents_cancellation(self):
-        self.forge.jobs = [job()]
-        self.tick()
-        self.system.set(active="active")
-        self.forge.jobs = [job(status="running", task_id=71)]
+        self.forge.runners[100].update(status="idle", version="13.2.1", labels=["nix-eph"])
+        self.forge.jobs = [job(2, "other")]
         self.tick(7)
-        self.assertTrue(self.state()["active"]["assigned"])
-        self.forge.jobs = None
-        self.restart()
-        self.tick(7)
-        self.assertEqual([USER, JOBS], self.forge.paths()[-2:])
         self.assertEqual([], self.system.mutations("stop"))
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual(1, len(self.system.mutations("stop")))
         self.assertEqual([], self.forge.paths("DELETE"))
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.assertNotIn(RUNNERS + "/100", self.forge.paths("GET"))
+        self.system.set()
+        self.tick(7)
+        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
+        self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
+        self.assertEqual("other", self.state()["active"]["handle"])
+
+    def test_running_exact_handle_resets_absence_streak(self):
+        first = job()
+        self.forge.jobs = [first]
+        self.tick()
+        self.system.set(active="active")
+        similar = job(handle=first["handle"] + "0")
+        self.forge.jobs = [similar]
+        self.tick(7)
+        self.forge.jobs = [first | {"status": "running", "task_id": 71}]
+        self.tick(D.BUSY_POLL_FAST)
+        self.forge.jobs = [similar]
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual([], self.system.mutations("stop"))
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+
+    def test_busy_poll_cadence_uses_queued_start_even_across_restart(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="active")
+        delay = self.tick(7)
+        count = self.forge.paths("GET").count(JOBS)
+        self.assertEqual(7, delay)
+        delay = self.tick(delay)
+        self.assertEqual(7, delay)
+        delay = self.tick(delay)
+        self.assertEqual(1, delay)
+        self.assertEqual(count, self.forge.paths("GET").count(JOBS))
+        self.tick(delay)
+        self.assertEqual(count + 1, self.forge.paths("GET").count(JOBS))
+
+        self.restart()
+        self.tick(280 - self.clock.now)
+        count = self.forge.paths("GET").count(JOBS)
+        self.tick(14)
+        self.assertEqual(count, self.forge.paths("GET").count(JOBS))
+        self.tick(1)
+        self.assertEqual(count + 1, self.forge.paths("GET").count(JOBS))
+
+        self.restart()
+        self.tick(5)
+        count = self.forge.paths("GET").count(JOBS)
+        self.assertEqual(2, self.tick(58))
+        self.assertEqual(count, self.forge.paths("GET").count(JOBS))
+        self.tick(2)
+        self.assertEqual(count + 1, self.forge.paths("GET").count(JOBS))
 
     def test_unavailable_or_malformed_jobs_are_not_cancellation_evidence(self):
         self.forge.jobs = [job()]
         self.tick()
         self.system.set(active="active")
-        self.forge.reply_once("GET", JOBS, 503)
+        self.forge.jobs = None
         self.tick(7)
-        self.forge.jobs = [job(repo_id=None)]
-        self.tick(D.BUSY_POLL)
-        self.assertNotIn(RUNNERS + "/100", self.forge.paths("GET"))
-        self.assertEqual([], self.system.mutations("stop"))
+        for endpoint, status, body in (
+            (JOBS, 503, None),
+            (JOBS, 200, b"{"),
+            (JOBS, 200, [job(repo_id=None)]),
+            (USER, 401, None),
+        ):
+            with self.subTest(endpoint=endpoint, status=status, body=body):
+                self.forge.reply_once("GET", endpoint, status, body)
+                self.tick(D.BUSY_POLL_FAST)
+                self.tick(D.BUSY_POLL_FAST)
+                self.assertEqual([], self.system.mutations("stop"))
         self.system.set()
         self.tick()
         self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
@@ -453,14 +478,14 @@ class DispatcherTests(unittest.TestCase):
         self.forge.jobs = [job(), job(2, "other")]
         self.system.start_mode = "uncertain"
         self.tick()
-        deadline = self.state()["active"]["deadline"]
+        queued_at = self.state()["active"]["queued_at"]
         self.restart()
         self.tick(7)  # ActiveState=inactive with a queued start is not idle.
         self.system.set(active="activating", pending="71")
         self.tick(7)
         self.system.set(active="active")
         self.tick(7)
-        self.assertEqual(deadline, self.state()["active"]["deadline"])
+        self.assertEqual(queued_at, self.state()["active"]["queued_at"])
         self.assertEqual(1, len(self.system.mutations("start")))
         self.assertEqual([RUNNERS], self.forge.paths("POST"))
         self.assertEqual([], self.forge.paths("DELETE"))
@@ -666,22 +691,26 @@ class DispatcherTests(unittest.TestCase):
 
     def test_recovered_ids_are_durable_before_delete_and_replayed_on_404(self):
         self.forge.jobs = [job()]
-        self.forge.reply_once("POST", RUNNERS, 201, b"{broken JSON " + TOKEN.encode())
+        self.forge.reply_once("POST", RUNNERS, 403)
         self.tick()
+        self.forge.reply_once("POST", RUNNERS, 201, b"{broken JSON " + TOKEN.encode())
+        self.tick(7)
         entry = self.state()["active"]
+        self.assertIn(entry["handle"], self.state()["refusals"])
         runner_id = self.forge.add_runner(entry["name"])
         with patch.object(self.dispatcher.api, "delete", side_effect=Crash), self.assertRaises(Crash):
             self.tick(D.INVENTORY_POLL)
         self.assertEqual(
             [{"id": runner_id, "uuid": uuid_for(runner_id)}], self.state()["ambiguous"][entry["handle"]]["runners"]
         )
+        self.assertEqual({}, self.state()["refusals"])
         del self.forge.runners[runner_id]  # DELETE succeeded remotely, but the client never got the reply.
         self.restart()
         self.tick()
         self.assertEqual([RUNNERS + f"/{runner_id}"], self.forge.paths("DELETE"))
         self.assertIn("HTTP 404", self.logs.getvalue())
         self.assertEqual({}, self.state()["ambiguous"])
-        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
 
     def test_delete_errors_back_off_after_local_teardown_and_keep_slot_reserved(self):
         self.forge.jobs = [job(), job(2, "other")]
@@ -734,6 +763,7 @@ class DispatcherTests(unittest.TestCase):
             release.set()
         self.assertIn("connection failed or timed out", self.logs.getvalue())
         self.assertEqual("intent", self.state()["active"]["phase"])
+        self.assertEqual({}, self.state()["refusals"])
         self.tick(7)
         self.assertEqual([RUNNERS], self.forge.paths("POST"))
         self.assertEqual([], self.system.mutations())
@@ -749,41 +779,112 @@ class DispatcherTests(unittest.TestCase):
         self.assertIn("HTTP 307", self.logs.getvalue())
         self.assertEqual([], self.system.mutations())
         self.assertIsNone(self.state()["active"])
-        self.assertEqual([job()["handle"]], self.state()["retired"])
+        self.assertEqual([], self.state()["retired"])
         self.assertEqual({}, self.state()["ambiguous"])
+        self.assertEqual(1, self.state()["refusals"][job()["handle"]]["count"])
 
-    def test_explicit_post_rejections_retire_each_handle_without_inventory(self):
-        self.forge.jobs = []
-        retired = []
-        for index, status in enumerate((400, 401, 403, 404, 422, 429), start=1):
-            with self.subTest(status=status):
-                queued = job(index, f"rejected-{status}")
-                self.forge.jobs.append(queued)
-                retired.append(queued["handle"])
-                self.forge.reply_once("POST", RUNNERS, status, {"error": TOKEN})
-                self.tick(60)
-                self.assertIsNone(self.state()["active"])
-                self.assertEqual({}, self.state()["ambiguous"])
-                self.assertEqual(retired, self.state()["retired"])
-                self.assertEqual([RUNNERS] * index, self.forge.paths("POST"))
-                self.assertIn(f"register runner: HTTP {status}", self.logs.getvalue())
+    def test_scope_recovery_resends_same_handle_after_restart(self):
+        queued = job()
+        self.forge.jobs = [queued]
+        self.forge.reply_once("POST", RUNNERS, 403, {"error": TOKEN})
+        self.tick()
+        self.assertIn("register runner: HTTP 403", self.logs.getvalue())
+        self.assertIsNone(self.state()["active"])
+        self.assertEqual({}, self.state()["ambiguous"])
+        self.assertEqual([], self.state()["retired"])
+        self.assertEqual(1, self.state()["refusals"][queued["handle"]]["count"])
+        self.restart()
+        self.tick()
+        self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
+        self.assertEqual(queued["handle"], self.state()["active"]["handle"])
+        self.assertEqual({}, self.state()["refusals"])
+        self.assertEqual(1, self.forge.paths("GET").count(LIST.format(1)))
+
+    def test_rate_limit_and_http_408_retry_with_global_backoff(self):
+        queued = job()
+        self.forge.jobs = [queued, job(2, "other")]
+        self.forge.reply_once("POST", RUNNERS, 429)
+        self.forge.reply_once("POST", RUNNERS, 408)
+        for count, advance, delay in ((1, 0, 7), (2, 1, 14)):
+            self.tick(advance)
+            self.assertIsNone(self.state()["active"])
+            self.assertEqual({}, self.state()["ambiguous"])
+            self.assertEqual([], self.state()["retired"])
+            self.assertEqual(count, self.state()["refusals"][queued["handle"]]["count"])
+            paths = self.forge.paths()
+            self.tick(delay - 1)
+            self.assertEqual(paths, self.forge.paths())
+        self.tick(1)
+        self.assertEqual([RUNNERS] * 3, self.forge.paths("POST"))
+        self.assertEqual(queued["handle"], self.state()["active"]["handle"])
+        self.assertEqual({}, self.state()["refusals"])
+        self.assertEqual(1, self.forge.paths("GET").count(LIST.format(1)))
+
+    def test_refusal_budget_requires_three_refusals_even_after_an_hour(self):
+        handle = job()["handle"]
+        self.forge.jobs = [job()]
+        for _ in range(3):
+            self.forge.reply_once("POST", RUNNERS, 403)
+        self.tick()
+        self.restart()
+        self.tick(3600)
+        self.assertEqual([], self.state()["retired"])
+        self.assertEqual(2, self.state()["refusals"][handle]["count"])
         self.restart()
         self.tick(7)
-        self.assertEqual([RUNNERS] * len(retired), self.forge.paths("POST"))
-        self.assertEqual(1, self.forge.paths("GET").count(LIST.format(1)))
-        self.assertEqual([], self.system.mutations())
-        self.forge.jobs = [job(20, "unrelated")]
-        self.tick(7)
-        self.assertEqual("unrelated", self.state()["active"]["handle"])
+        self.assertEqual([handle], self.state()["retired"])
+        self.assertEqual({}, self.state()["refusals"])
 
-    def test_http_request_timeout_is_ambiguous(self):
+    def test_three_early_refusals_do_not_retire_handle_until_full_hour(self):
+        handle = job()["handle"]
         self.forge.jobs = [job()]
-        self.forge.reply_once("POST", RUNNERS, 408, {"error": TOKEN})
+        for _ in range(4):
+            self.forge.reply_once("POST", RUNNERS, 429)
         self.tick()
-        self.assertEqual("intent", self.state()["active"]["phase"])
+        first_at = self.clock.wall()
         self.tick(7)
-        self.assertEqual([RUNNERS], self.forge.paths("POST"))
-        self.assertIn(job()["handle"], self.state()["ambiguous"])
+        self.restart()
+        self.tick(3592)
+        self.assertEqual([], self.state()["retired"])
+        self.assertEqual({"count": 3, "first_at": first_at}, self.state()["refusals"][handle])
+        self.restart()
+        self.tick(1)
+        self.assertEqual([handle], self.state()["retired"])
+        self.assertIsNone(self.state()["active"])
+        self.assertEqual({}, self.state()["refusals"])
+        self.restart()
+        self.tick()
+        self.assertEqual([RUNNERS] * 4, self.forge.paths("POST"))
+        self.assertEqual(1, self.forge.paths("GET").count(LIST.format(1)))
+
+    def test_refusal_budget_is_per_handle_and_cleared_only_by_valid_absence(self):
+        first, second = job(), job(2, "other")
+        self.forge.jobs = [first, second]
+        self.forge.reply_once("POST", RUNNERS, 403)
+        self.tick()
+        self.forge.jobs = [first | {"status": "running", "task_id": 71}, second]
+        self.forge.reply_once("POST", RUNNERS, 429)
+        self.tick(7)
+        budget = self.state()["refusals"]
+        self.assertEqual({first["handle"], second["handle"]}, budget.keys())
+        self.assertEqual([1, 1], [item["count"] for item in budget.values()])
+
+        self.pause.touch()
+        self.forge.jobs = [second]
+        self.forge.reply_once("GET", JOBS, 200, {"invalid": True})
+        self.tick(14)
+        self.assertEqual(budget, self.state()["refusals"])
+        self.tick(28)
+        self.assertEqual({second["handle"]: budget[second["handle"]]}, self.state()["refusals"])
+        self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
+
+        self.restart()
+        self.pause.unlink()
+        self.forge.jobs = [first, second]
+        self.forge.reply_once("POST", RUNNERS, 403)
+        self.tick(3600)
+        self.assertEqual({"count": 1, "first_at": self.clock.wall()}, self.state()["refusals"][first["handle"]])
+        self.assertEqual(budget[second["handle"]], self.state()["refusals"][second["handle"]])
         self.assertEqual([], self.state()["retired"])
 
     def test_inventory_is_throttled_and_never_runs_while_busy(self):
@@ -917,6 +1018,21 @@ class DispatcherTests(unittest.TestCase):
         (self.state_dir / "state.json").write_text('{"version":999}')
         with self.assertRaises(D.StateError):
             self.restart()
+
+    def test_invalid_current_state_fields_fail_closed(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        data = self.state()
+        for invalid in (
+            data | {"active": data["active"] | {"assigned": True}},
+            data | {"active": data["active"] | {"queued_at": None}},
+            data | {"refusals": {job()["handle"]: {"count": True, "first_at": self.clock.wall()}}},
+            data | {"refusals": {job()["handle"]: {"count": 1, "first_at": float("nan")}}},
+        ):
+            with self.subTest(invalid=invalid):
+                (self.state_dir / "state.json").write_text(json.dumps(invalid))
+                with self.assertRaises(D.StateError):
+                    self.restart()
 
 
 if __name__ == "__main__":
