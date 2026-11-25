@@ -26,7 +26,11 @@
     };
     microvm.uplink = "ens18";
   };
+
   # Enroll the dedicated PAT before enabling the one-job pilot (see README).
-  services.imperium.forgejoEphemeral.enable = false;
+  services.imperium.forgejoEphemeral={ enable = true;
+    repoId = 9;
+  };
+
   services.imperium.sccache.enable = true;
 }
