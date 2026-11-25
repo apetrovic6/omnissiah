@@ -2,20 +2,25 @@
 """slotctl: do one validated thing to one nix-eph slot on this host (HOM-32).
 
 The dispatcher decides and slotctl acts. slotctl is the only code that touches a slot's systemd units, its
-staged runner credentials, its disk images and its trust share. A call names a slot from the host's config
-(--config, generated from modules/rites/_ci-slots.nix) and one fixed verb. Secrets arrive as JSON on stdin,
-never in argv. Output is fixed-shape JSON (observe) or nothing, and every diagnostic is a fixed string.
+staged runner credentials, its disk images and its trust share. A call names a slot and one fixed verb. The
+slot must be in this host's config, whose path is compiled in (CONFIG, set by replaceVars from
+modules/rites/_ci-slots.nix), so a caller picks a slot and a verb, never a path. Secrets arrive as JSON on stdin,
+never in argv. Output is fixed-shape JSON (observe) or nothing.
 
   observe               the VM, each support unit, then the VM again, in that order
   start, stop, reset-failed
   stop-support UNIT...  only this slot's support units
   stage                 stdin {"uuid", "token", "handle"}: the slot's one-job runner credentials
-  scrub                 refused unless the VM is stopped
-  deliver               stdin {"ncps-netrc": base64, "ci-signing-key": base64}; refused unless the VM runs
+  scrub                 refused unless the VM is stopped; also clears the trust share
+  deliver               stdin {"ncps-netrc": base64, "ci-signing-key": base64}; only into a slot that delivers,
+                        and only while its VM is active with no job queued
   withdraw              remove delivered CI credentials, keep the trust directory
 
-Exit status: 0 done; 1 refused, with one diagnostic line on stderr that is safe to log; 2 bad command
-line, config or input; 3 unexpected failure (a generic line, never a traceback).
+Exit status and stderr carry fixed codes only, nothing derived from input:
+  0  done
+  1  refused: one code from CODES; the dispatcher logs its own words for it
+  2  invalid-request: bad command line, config or input
+  3  unexpected-failure
 """
 
 import argparse
@@ -31,8 +36,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# This host's slot config, compiled in by replaceVars (forgejo-runner-ephemeral.nix). Never a caller's choice.
+CONFIG = "@config@"
 SUPPORT_UNITS = ("tap-interfaces", "macvtap-interfaces", "pci-devices", "virtiofsd", "set-booted")
 RESULTS = ("success", "timeout", "exit-code", "signal", "core-dump", "resources", "start-limit-hit")
+STATES_IDLE = ("inactive", "failed")
+STATES_BUSY = ("active", "activating", "deactivating", "reloading", "refreshing")
 IMAGES = ("nix-store-overlay.img", "var.img")
 CREDENTIALS = ("runner-uuid", "runner-token", "job-handle")
 TRUST_FILES = ("ncps-netrc", "ci-signing-key")  # Write order: the guest hook needs both.
@@ -47,10 +56,31 @@ TOKEN = re.compile(r"[!-~]{1,4096}")
 UUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 MAX_INPUT = 64 * 1024
 VERBS = ("observe", "start", "stop", "reset-failed", "stop-support", "stage", "scrub", "deliver", "withdraw")
+CODES = (
+    "systemctl-failed",
+    "vm-not-stopped",
+    "vm-not-running",
+    "no-trust-share",
+    "scrub-failed",
+    "withdraw-failed",
+    "trust-dir-missing",
+    "trust-dir-unsafe",
+    "deliver-failed",
+    "trust-dir-create-failed",
+    "stage-failed",
+    "slot-user-missing",
+    *(f"unknown-state-{kind}" for kind in ("vm", *SUPPORT_UNITS)),
+)
 
 
 class SlotError(Exception):
-    """A safe diagnostic for a slot that cannot be used or reused yet."""
+    """A refusal, reported as one fixed code from CODES."""
+
+    def __init__(self, code):
+        if code not in CODES:
+            raise ValueError("unknown refusal code")
+        super().__init__(code)
+        self.code = code
 
 
 class UsageError(Exception):
@@ -70,6 +100,7 @@ class Systemctl:
         self.slot = slot
         self.vm = f"microvm@{slot}.service"
         self.support = tuple(f"microvm-{name}@{slot}.service" for name in SUPPORT_UNITS)
+        self.kinds = {self.vm: "vm", **dict(zip(self.support, SUPPORT_UNITS, strict=True))}
         self.run = run
         self.lock_fds = () if lock_fd is None else (lock_fd,)
 
@@ -87,10 +118,11 @@ class Systemctl:
                 check=True,
             )
         except (OSError, subprocess.SubprocessError):
-            raise SlotError(f"systemctl {action} failed or timed out for {self.slot}; reconciling unit state") from None
+            raise SlotError("systemctl-failed") from None
         return result.stdout
 
-    def observe(self, unit):
+    def state(self, unit):
+        """(ActiveState, a job is queued, Result) of one of this slot's units."""
         # One GetAll via systemctl show: checking ActiveState and list-jobs separately
         # permits an already-queued start to run between the two queries.
         output = self._call("show", unit, options=("--all", "--property=LoadState,ActiveState,Job,Result"))
@@ -101,16 +133,24 @@ class Systemctl:
                 raise ValueError
             if result not in RESULTS:
                 result = "other result"
-            if active in ("inactive", "failed"):
-                return (not job or int(job) == 0), result
-            if active in ("active", "activating", "deactivating", "reloading", "refreshing"):
-                return False, result
+            if active in STATES_IDLE or active in STATES_BUSY:
+                return active, bool(job) and int(job) != 0, result
         except (KeyError, ValueError):
             pass
-        raise SlotError(f"unknown systemd state for {unit}; refusing slot reuse")
+        raise SlotError(f"unknown-state-{self.kinds[unit]}")
+
+    def observe(self, unit):
+        """(idle, Result): idle is stopped (inactive or failed) with no job queued."""
+        active, queued, result = self.state(unit)
+        return active in STATES_IDLE and not queued, result
 
     def idle(self, unit):
         return self.observe(unit)[0]
+
+    def running(self, unit):
+        """Up and settled: ActiveState=active with no job queued (not starting, stopping or queued to start)."""
+        active, queued, _ = self.state(unit)
+        return active == "active" and not queued
 
     def start(self):
         self._call("start", self.vm, options=("--no-block", "--job-mode=fail"))
@@ -148,48 +188,49 @@ def unlink_files(directory, names, *, remove_dir=False):
 
 
 class SlotFiles:
-    def __init__(self, vm_dir, credentials, uid, gid, trust_dir=None):
+    def __init__(self, vm_dir, credentials, uid, gid, trust_dir, deliver):
         self.vm_dir = vm_dir
         self.credentials = credentials
         self.staging = credentials.with_name(f".{credentials.name}.staging")
         self.uid, self.gid = uid, gid
         # Root-only (0700 root, files 0400 root): virtiofsd (root) serves it; QEMU's user never reads it.
+        # Always cleaned (scrub, withdraw), so turning delivery off never strands delivered keys.
         self.trust_dir = trust_dir
+        # Whether this slot's guest has the trust share: then stage creates it and deliver may fill it.
+        self.deliver_enabled = deliver
 
     def scrub(self):
         failed = False
-        trust = () if self.trust_dir is None else ((self.trust_dir, TRUST_NAMES, True),)
         for directory, names, remove in (
             (self.vm_dir, IMAGES, False),
             (self.credentials, CREDENTIALS, True),
             (self.staging, CREDENTIALS, True),
-            *trust,
+            (self.trust_dir, TRUST_NAMES, True),
         ):
             try:
                 unlink_files(directory, names, remove_dir=remove)
             except OSError:
                 failed = True
         if failed:
-            raise SlotError("cannot scrub exact slot images or credentials; check slot paths for unexpected files")
+            raise SlotError("scrub-failed")
 
     def withdraw(self):
         """Remove delivered credentials, keeping the directory a running slot may still be serving."""
-        if self.trust_dir is not None:
-            try:
-                unlink_files(self.trust_dir, TRUST_NAMES)
-            except OSError:
-                raise SlotError("cannot remove delivered CI credentials; check the trust directory") from None
+        try:
+            unlink_files(self.trust_dir, TRUST_NAMES)
+        except OSError:
+            raise SlotError("withdraw-failed") from None
 
     def deliver(self, secrets):
         """Atomically place each credential (0400, owned by slotctl: root) in the existing trust dir."""
         try:
             fd = os.open(self.trust_dir, DIR_FLAGS)
         except OSError:
-            raise SlotError("trust directory is missing; refusing to deliver CI credentials") from None
+            raise SlotError("trust-dir-missing") from None
         try:
             info = os.fstat(fd)
             if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
-                raise SlotError("trust directory has unexpected ownership or mode; refusing to deliver")
+                raise SlotError("trust-dir-unsafe")
             for name in TRUST_FILES:
                 temporary = f".{name}.tmp"
                 try:
@@ -204,17 +245,17 @@ class SlotFiles:
                 os.rename(temporary, name, src_dir_fd=fd, dst_dir_fd=fd)
             os.fsync(fd)
         except OSError:
-            raise SlotError("cannot deliver CI credentials; check the trust directory") from None
+            raise SlotError("deliver-failed") from None
         finally:
             os.close(fd)
 
     def stage(self, runner_uuid, token, handle):
-        if self.trust_dir is not None:
+        if self.deliver_enabled:
             try:
                 # Fresh and empty for every boot: virtiofsd needs it to exist when the slot starts.
                 self.trust_dir.mkdir(mode=0o700)
             except OSError:
-                raise SlotError("cannot create the empty trust directory; check the credential parent") from None
+                raise SlotError("trust-dir-create-failed") from None
         try:
             self.staging.mkdir(mode=0o700)
             for name, value in zip(CREDENTIALS, (runner_uuid, token, handle), strict=True):
@@ -225,7 +266,7 @@ class SlotFiles:
             os.chown(self.staging, self.uid, self.gid)
             self.staging.rename(self.credentials)
         except OSError:
-            raise SlotError("cannot stage runner credentials; check ownership and permissions of the credential parent") from None
+            raise SlotError("stage-failed") from None
 
 
 class Slot:
@@ -260,7 +301,7 @@ class Slot:
     def scrub(self):
         # The caller checked too, but the images and credentials go only once the VM is down.
         if not self.systemctl.idle(self.systemctl.vm):
-            raise SlotError("VM state changed during reconciliation; waiting before slot cleanup")
+            raise SlotError("vm-not-stopped")
         self.files.scrub()
 
     def deliver(self, payload):
@@ -275,15 +316,25 @@ class Slot:
             if not TRUST_SHAPES[name].fullmatch(value):
                 raise UsageError
             secrets[name] = value
-        if self.files.trust_dir is None:
-            raise SlotError("this slot has no trust share; refusing to deliver CI credentials")
-        # Only into a running slot: never into a directory a stopped slot's scrub is removing.
-        if self.systemctl.idle(self.systemctl.vm):
-            raise SlotError("slot is not running; not delivering CI credentials")
+        if not self.files.deliver_enabled:
+            raise SlotError("no-trust-share")
+        # Only into a slot that is up: never before its trust preflight (which needs the share empty) and
+        # never into one stopping, whose stop hook and the next scrub are removing the share.
+        if not self.systemctl.running(self.systemctl.vm):
+            raise SlotError("vm-not-running")
         self.files.deliver(secrets)
 
     def withdraw(self):
         self.files.withdraw()
+
+
+class Once(argparse.Action):
+    """An option that may appear once: a repeat could otherwise override what came first."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if getattr(namespace, self.dest) is not None:
+            raise UsageError
+        setattr(namespace, self.dest, values)
 
 
 class Parser(argparse.ArgumentParser):
@@ -291,20 +342,31 @@ class Parser(argparse.ArgumentParser):
         raise UsageError
 
 
+def parser():
+    # No abbreviations (`--sl`), no help, no config option: only these two options and the verb.
+    result = Parser(prog="slotctl", add_help=False, allow_abbrev=False)
+    result.add_argument("--slot", action=Once, required=True)
+    result.add_argument("--hold-fd", action=Once, type=int)
+    result.add_argument("verb", choices=VERBS)
+    result.add_argument("units", nargs="*")
+    return result
+
+
 def load_config(path, slot):
-    """This host's entry for the slot: absolute directories, the trust share (or null) and QEMU's user."""
+    """This host's entry for the slot: absolute directories, whether it delivers, and QEMU's user."""
+    if not isinstance(path, str) or not path.startswith("/"):
+        raise UsageError  # An unsubstituted placeholder (a copy the module did not build) must never run.
     try:
         with open(path, "rb") as file:
             data = json.loads(file.read(MAX_INPUT + 1))
     except (OSError, ValueError, RecursionError):
         raise UsageError from None
     entry = data.get("slots", {}).get(slot) if isinstance(data, dict) and isinstance(data.get("slots"), dict) else None
-    if not isinstance(entry, dict) or entry.keys() != {"vm_dir", "credential_dir", "trust_dir", "user", "group"}:
+    if not isinstance(entry, dict) or entry.keys() != {"vm_dir", "credential_dir", "trust_dir", "deliver", "user", "group"}:
         raise UsageError
-    paths = [entry["vm_dir"], entry["credential_dir"]] + ([] if entry["trust_dir"] is None else [entry["trust_dir"]])
-    if not all(isinstance(p, str) and p.startswith("/") and "\0" not in p for p in paths):
+    if not all(isinstance(p, str) and p.startswith("/") and "\0" not in p for p in (entry["vm_dir"], entry["credential_dir"], entry["trust_dir"])):
         raise UsageError
-    if not matches(SLOT_NAME, entry["user"]) or not matches(SLOT_NAME, entry["group"]):
+    if type(entry["deliver"]) is not bool or not matches(SLOT_NAME, entry["user"]) or not matches(SLOT_NAME, entry["group"]):
         raise UsageError
     return entry
 
@@ -319,18 +381,13 @@ def read_input(stdin):
         raise UsageError from None
 
 
-def main(argv=None, stdin=None, stdout=None, stderr=None, run=subprocess.run):
+def main(argv=None, stdin=None, stdout=None, stderr=None, run=subprocess.run, config=None):
+    """`config` is for the tests only; the command line can never set it."""
     stdin = sys.stdin.buffer if stdin is None else stdin
     stdout = sys.stdout.buffer if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
     try:
-        parser = Parser(prog="slotctl", add_help=False)
-        parser.add_argument("--config", required=True)
-        parser.add_argument("--slot", required=True)
-        parser.add_argument("--hold-fd", type=int)
-        parser.add_argument("verb", choices=VERBS)
-        parser.add_argument("units", nargs="*")
-        args = parser.parse_args(argv)
+        args = parser().parse_args(sys.argv[1:] if argv is None else argv)
         if not matches(SLOT_NAME, args.slot) or (args.units and args.verb != "stop-support"):
             raise UsageError
         if args.hold_fd is not None:
@@ -341,15 +398,16 @@ def main(argv=None, stdin=None, stdout=None, stderr=None, run=subprocess.run):
                 os.fstat(args.hold_fd)
             except OSError:
                 raise UsageError from None
-        entry = load_config(args.config, args.slot)
+        entry = load_config(CONFIG if config is None else config, args.slot)
         try:
             uid, gid = pwd.getpwnam(entry["user"]).pw_uid, grp.getgrnam(entry["group"]).gr_gid
         except KeyError:
-            raise SlotError("slot user or group is missing; check the slot host configuration") from None
-        trust_dir = None if entry["trust_dir"] is None else Path(entry["trust_dir"])
+            raise SlotError("slot-user-missing") from None
         slot = Slot(
             Systemctl(args.slot, run, args.hold_fd),
-            SlotFiles(Path(entry["vm_dir"]), Path(entry["credential_dir"]), uid, gid, trust_dir),
+            SlotFiles(
+                Path(entry["vm_dir"]), Path(entry["credential_dir"]), uid, gid, Path(entry["trust_dir"]), entry["deliver"]
+            ),
         )
         if args.verb == "observe":
             stdout.write(json.dumps(slot.observe(), separators=(",", ":")).encode())
@@ -372,13 +430,13 @@ def main(argv=None, stdin=None, stdout=None, stderr=None, run=subprocess.run):
         stdout.flush()
         return 0
     except UsageError:
-        print("slotctl: invalid command line, config or input", file=stderr, flush=True)
+        print("invalid-request", file=stderr, flush=True)
         return 2
     except SlotError as error:
-        print(error, file=stderr, flush=True)
+        print(error.code, file=stderr, flush=True)
         return 1
     except Exception:
-        print("slotctl: failed unexpectedly; check the slot host configuration", file=stderr, flush=True)
+        print("unexpected-failure", file=stderr, flush=True)
         return 3
 
 

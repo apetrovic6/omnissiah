@@ -448,10 +448,31 @@ class CommandSlot:
     """The slot host side. Every slot side effect goes through slotctl (_forgejo-slotctl.py), one verb per call.
 
     Secrets go to slotctl on stdin, never in argv. Its answers are checked as strictly as Forgejo's: anything
-    unexpected is a SlotError, which refuses slot reuse until the next tick.
+    unexpected is a SlotError, which refuses slot reuse until the next tick. A refusal arrives as one of
+    slotctl's fixed codes and is logged in this dispatcher's own words (REFUSALS); slotctl's text never is.
+    Everything slotctl returns is read in _call, the one place a bounded reader can replace subprocess.run.
     """
 
     TIMEOUTS = {"observe": 80}  # Seven systemctl calls of at most 10 s each.
+    MAX_CODE = 64
+    # The systemctl action behind each verb, for the "systemctl-failed" message.
+    ACTIONS = {
+        "observe": "show", "start": "start", "stop": "stop", "reset-failed": "reset-failed",
+        "stop-support": "stop", "scrub": "show", "deliver": "show",
+    }
+    REFUSALS = {
+        "vm-not-stopped": "VM state changed during reconciliation; waiting before slot cleanup",
+        "vm-not-running": "slot is not running; not delivering CI credentials",
+        "no-trust-share": "this slot does not deliver CI credentials; its trust share is off on the slot host",
+        "scrub-failed": "cannot scrub exact slot images or credentials; check slot paths for unexpected files",
+        "withdraw-failed": "cannot remove delivered CI credentials; check the trust directory",
+        "trust-dir-missing": "trust directory is missing; refusing to deliver CI credentials",
+        "trust-dir-unsafe": "trust directory has unexpected ownership or mode; refusing to deliver",
+        "deliver-failed": "cannot deliver CI credentials; check the trust directory",
+        "trust-dir-create-failed": "cannot create the empty trust directory; check the credential parent",
+        "stage-failed": "cannot stage runner credentials; check ownership and permissions of the credential parent",
+        "slot-user-missing": "slot user or group is missing; check the slot host configuration",
+    }
 
     def __init__(self, command, run=subprocess.run, lock_fd=None):
         self.command = tuple(command)
@@ -475,17 +496,23 @@ class CommandSlot:
             raise SlotError(f"slotctl {verb} failed or timed out for {SLOT}; reconciling unit state") from None
         if result.returncode == 0:
             return result.stdout
-        message = self._diagnostic(result.stderr) if result.returncode == 1 else None
-        raise SlotError(message or f"slotctl {verb} failed (exit {result.returncode}) for {SLOT}; reconciling unit state")
+        if result.returncode == 1:
+            raise SlotError(self._refusal(verb, result.stderr) or f"slotctl {verb} refused for {SLOT}; reconciling unit state")
+        raise SlotError(f"slotctl {verb} failed (exit {result.returncode}) for {SLOT}; reconciling unit state")
 
-    @staticmethod
-    def _diagnostic(stderr):
-        """slotctl's one fixed line for a refusal, or None if the output does not look like one."""
+    def _refusal(self, verb, stderr):
+        """Our words for slotctl's refusal code, or None for anything that is not exactly a known code."""
         try:
-            line = stderr[:513].decode("ascii").strip()
-        except (AttributeError, UnicodeDecodeError):
+            code = stderr[: self.MAX_CODE + 1].decode("ascii").strip() if len(stderr) <= self.MAX_CODE else ""
+        except (AttributeError, TypeError, UnicodeDecodeError):
             return None
-        return line if 0 < len(line) <= 512 and line.isprintable() else None
+        if code == "systemctl-failed":
+            return f"systemctl {self.ACTIONS.get(verb, verb)} failed or timed out for {SLOT}; reconciling unit state"
+        if code.startswith("unknown-state-"):
+            kind = code.removeprefix("unknown-state-")
+            unit = VM if kind == "vm" else (f"microvm-{kind}@{SLOT}.service" if kind in SUPPORT_UNITS else None)
+            return None if unit is None else f"unknown systemd state for {unit}; refusing slot reuse"
+        return self.REFUSALS.get(code)
 
     def observe(self):
         output = self._call("observe")
@@ -532,6 +559,7 @@ class CommandSlot:
 
     def withdraw(self):
         self._call("withdraw")
+
 
 class Store:
     def __init__(self, directory):
@@ -1120,15 +1148,14 @@ def main():
             except BlockingIOError:
                 raise StateError("another dispatcher holds the state lock") from None
             slot = CommandSlot((str(args.slotctl),), lock_fd=lock.fileno())
-            trust = None
-            if args.trusted_jobs:
-                trust = Trust(args.repo, Path(directory) if directory else None)
-                # A previous dispatcher's delivery is not this one's verdict: withdraw it and re-resolve.
-                try:
-                    slot.withdraw()
-                except SlotError as error:
-                    log(error)
-                    return 1
+            # A previous dispatcher's delivery is not this one's verdict, and with trust now off nothing may
+            # stay delivered at all: withdraw either way (a trusted run is then re-resolved).
+            try:
+                slot.withdraw()
+            except SlotError as error:
+                log(error)
+                return 1
+            trust = Trust(args.repo, Path(directory) if directory else None) if args.trusted_jobs else None
             dispatcher = Dispatcher(
                 args.repo_id,
                 Forgejo(Path(directory) / "forgejo-pat" if directory else None),

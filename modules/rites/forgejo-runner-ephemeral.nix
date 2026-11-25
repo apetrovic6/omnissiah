@@ -194,24 +194,28 @@
       ${lib.concatMapStringsSep "\n" installLine slotDirs}
     '';
     # The slot host agent (_forgejo-slotctl.py): every slot side effect the
-    # dispatcher wants goes through it, one validated verb per call. Its
-    # config names this host's slot and paths, so a caller can only pick a
-    # slot and a verb, never a path.
+    # dispatcher wants goes through it, one validated verb per call. The
+    # config naming this host's slot and paths is compiled into slotctl
+    # (replaceVars), and slotctl takes no option to point it elsewhere, so a
+    # caller can only pick a declared slot and a verb, never a path.
     slotctlSlots = {
       ${slot} = {
         vm_dir = vmDir;
         credential_dir = credDir;
-        trust_dir =
-          if cfg.trustedJobs.enable
-          then trustDir
-          else null;
+        # Always set, so scrub and withdraw clean it even with delivery off
+        # (keys left from before trust was switched off never stay).
+        trust_dir = trustDir;
+        # Whether the guest has the trust share (_forgejo-ephemeral-trusted.nix),
+        # so that stage creates it and deliver may fill it.
+        deliver = cfg.trustedJobs.enable;
         user = slotUser;
         group = slotUser;
       };
     };
     slotctlConfig = pkgs.writeText "${hostName}-slotctl.json" (builtins.toJSON {slots = slotctlSlots;});
+    slotctlScript = pkgs.replaceVars ./_forgejo-slotctl.py {config = slotctlConfig;};
     slotctl = pkgs.writeShellScript "forgejo-slotctl" ''
-      exec ${lib.getExe pkgs.python3} -I -B ${./_forgejo-slotctl.py} --config ${slotctlConfig} "$@"
+      exec ${lib.getExe pkgs.python3} -I -B ${slotctlScript} "$@"
     '';
     preflight = pkgs.writeShellScript "${slot}-preflight" ''
       set -eu
