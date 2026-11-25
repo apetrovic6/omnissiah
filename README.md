@@ -232,10 +232,23 @@ same profile if the gateway's Webapp listener is enabled. Interactive config
 changes outside Nix-managed settings survive activation.
 The coder's `SOUL.md` is managed by Nix; a switch or gateway restart
 overwrites edits to that file. **Deploy stygies before ryza.** On stygies as
-`hermes`, first check that `task-status -- '!x:y' '$z'` succeeds. After deploying
-the updated SOUL, run `hermes -p coder sessions refresh-prompts` on ryza as
-`hermes` so existing chats and threads refresh on their next turn without losing
-history. Don't reset an active or queued chat to pick up the prompt.
+`hermes`, first check that `task-status -- '!x:y' '$z'` succeeds. Existing chats
+and threads pick up a changed SOUL or profile setting on their next turn,
+history kept: the `hermes-refresh-prompts` unit runs
+`hermes -p <profile> sessions refresh-prompts` once for each managed profile
+(`coder`, `work`) whose SOUL or Nix settings changed, after the new file is in
+place. A failure doesn't fail the deploy; it is logged
+(`journalctl -u hermes-refresh-prompts`) and retried on the next switch or
+gateway start. Don't reset an active or queued chat to pick up the prompt.
+
+**App projects** need stygies paths: create them in the app with an absolute
+`/home/hermes/work/<repo>` path. Hermes resolves `~` and relative paths on ryza
+(`~/work/x` becomes `/var/lib/hermes/work/x`), which doesn't exist on stygies.
+A patched Hermes (`services.imperium.hermes.sshHostOnlyPaths`, default
+`/var/lib/hermes`) runs such a project's commands in the profile's
+`terminal.cwd` (`~/work`) instead of failing every one, and logs
+`ssh working directory … exists only on the Hermes host` in `agent.log`. Fix the
+project's path rather than relying on that.
 
 Before rolling stygies back, stop submitting new app tasks and use
 `task-status --queue` on stygies to check both the active slot and the queue.
@@ -296,6 +309,10 @@ Claude Code login; its coding tasks use per-company slots (see
 pin; without it the terminal, file and code tools are disabled
 (`agent.disabled_toolsets`, which always includes `cronjob`), because a room
 without a route would be answered by `default` on the personal login.
+Prompt refreshes after a SOUL change and app project paths work as for `coder`
+(see [Hermes coder profile](#hermes-coder-profile-ryza--stygies)); work's
+fallback directory is `~/work-devzero`, and app projects use
+`/home/hermes/work-devzero/<company>/<repo key>`.
 
 1. On your PC, confirm the DevZero account and run
    `claude-as devzero setup-token`. Run

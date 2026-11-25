@@ -55,6 +55,12 @@
     # With sysusers/userborn SOPS installs service secrets as a unit, after activation.
     sopsUnitInstallsSecrets = hasClaudeTokenFiles && (config.sops.useSystemdActivation or false);
     retireUnit = "hermes-retire-profiles";
+    refreshUnit = "hermes-refresh-prompts";
+    # Profiles whose system prompt Nix shapes (SOUL.md, settings): the refresh unit's candidates.
+    refreshProfiles = lib.attrNames enabledProfiles;
+    # Switch: true also refreshes every profile's sessions on each Hermes package change (built-in
+    # guidance text), at one prompt-cache miss per continuing session per upgrade. Off for now.
+    refreshOnPackageChange = false;
     # Hermes 0.23.0: hermes_constants.py PROFILE_ID_RE and
     # hermes_cli/profiles.py _RESERVED_NAMES (default is not a named profile).
     profileIdPattern = "^[a-z0-9][a-z0-9_-]{0,63}$";
@@ -80,6 +86,11 @@
           });
         }
       ]
+      # Mixed into every profile's prompt fingerprint (_hermes-merge-config.py, PROMPT_EXTRA).
+      ++ lib.optional refreshOnPackageChange {
+        name = "prompt-sources-extra";
+        path = pkgs.writeText "hermes-prompt-sources-extra" "${cfg.package}";
+      }
       ++ lib.concatLists (lib.mapAttrsToList (name: profile:
         [
           {
@@ -169,14 +180,19 @@
       ])
       ++ cfg.extraPackages;
     # The environment and sandbox both of its services run in.
-    sessionEnv = {
-      HOME = home;
-      USER = user;
-      LOGNAME = user;
-      # For `systemd-run --user` from the gateway.
-      XDG_RUNTIME_DIR = "/run/user/${toString cfg.uid}";
-      DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/${toString cfg.uid}/bus";
-    };
+    sessionEnv =
+      {
+        HOME = home;
+        USER = user;
+        LOGNAME = user;
+        # For `systemd-run --user` from the gateway.
+        XDG_RUNTIME_DIR = "/run/user/${toString cfg.uid}";
+        DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/${toString cfg.uid}/bus";
+      }
+      // lib.optionalAttrs (cfg.sshHostOnlyPaths != []) {
+        # Read by the patched coerce_ssh_remote_cwd (_hermes-ssh-host-cwd.py).
+        HERMES_SSH_HOST_ONLY_PREFIXES = lib.concatStringsSep ":" cfg.sshHostOnlyPaths;
+      };
     hardening = {
       User = user;
       Group = user;
@@ -203,7 +219,43 @@
       enable = mkEnableOption "the Hermes Agent gateway";
       package = mkOption {
         type = types.package;
-        default = llm.hermes-agent;
+        # Upstream's ssh guard (coerce_ssh_remote_cwd) maps only a container's subprocess home onto
+        # the remote, so a project path Hermes normalised on this host (/var/lib/hermes/...) reached
+        # the remote `cd` verbatim and every command exited 126. The patch redirects paths under
+        # `sshHostOnlyPaths` to the profile's terminal.cwd; an agent's explicit workdir is left alone.
+        # --replace-fail: an llm-agents bump that moves these lines fails the build, not the runtime.
+        default = llm.hermes-agent.overrideAttrs (old: {
+          postPatch =
+            (old.postPatch or "")
+            + ''
+              cp ${./_hermes-ssh-host-cwd.py} tools/nixos_ssh_host_cwd.py
+              substituteInPlace tools/terminal_tool_config.py \
+                --replace-fail 'def coerce_ssh_remote_cwd(cwd: str | None, env_type: str | None) -> str | None:' \
+                  'def coerce_ssh_remote_cwd(cwd: str | None, env_type: str | None, *, host_guard: bool = True) -> str | None:' \
+                --replace-fail '        return text or "~"
+              ' \
+                  '        return text or "~"
+                  if host_guard:
+                      from tools.nixos_ssh_host_cwd import host_only_fallback
+                      if (fallback := host_only_fallback(text)) is not None:
+                          return fallback
+              '
+              substituteInPlace tools/terminal_tool.py \
+                --replace-fail 'return coerce_ssh_remote_cwd(_container_visible_cwd(workdir, env_type, env), env_type)' \
+                  'return coerce_ssh_remote_cwd(_container_visible_cwd(workdir, env_type, env), env_type, host_guard=False)'
+            '';
+          postInstall =
+            (old.postInstall or "")
+            + ''
+              PYTHONPATH="$(echo $out/lib/python3*/site-packages)''${PYTHONPATH:+:$PYTHONPATH}" \
+                HERMES_SSH_HOST_ONLY_PREFIXES=/var/lib/hermes TERMINAL_CWD='~/work' \
+                python3 -B -c 'from tools.terminal_tool_config import coerce_ssh_remote_cwd as c
+              assert c("/var/lib/hermes/projects/rat", "ssh") == "~/work", c("/var/lib/hermes/projects/rat", "ssh")
+              assert c("/home/hermes/work/rat", "ssh") == "/home/hermes/work/rat"
+              assert c("/var/lib/hermes/x", "ssh", host_guard=False) == "/var/lib/hermes/x"
+              assert c("/var/lib/hermes/x", "local") == "/var/lib/hermes/x"'
+            '';
+        });
       };
       uid = mkOption {
         type = types.int;
@@ -218,6 +270,16 @@
       extraPackages = mkOption {
         type = types.listOf types.package;
         default = [];
+      };
+
+      sshHostOnlyPaths = mkOption {
+        type = types.listOf (types.strMatching "/.*[^/]");
+        default = [home];
+        description = ''
+          Absolute paths that exist only on this host. An ssh profile's terminal and file tools
+          never `cd` into them on the remote: such a cwd (a desktop project Hermes normalised
+          here) falls back to the profile's terminal.cwd. Must not contain the remote user's home.
+        '';
       };
 
       profiles = mkOption {
@@ -423,6 +485,10 @@
             then applyProfileConfigWithoutTokens
             else applyProfileConfig
           }
+          # SOUL.md is in place now; the unit only records a refresh for profiles whose
+          # prompt inputs changed. It does not exist yet on a first deploy; the
+          # gateway pulls it in then (hermes-gateway wants it).
+          ${lib.getExe' pkgs.systemd "systemctl"} start --no-block ${refreshUnit}.service || true
           ${lib.optionalString hasClaudeTokenFiles ''
             # Re-check the token on every switch. The unit may not exist yet
             # (first deploy); the boot/timer runs cover that.
@@ -476,6 +542,30 @@
           };
       };
 
+      # `hermes -p <profile> sessions refresh-prompts` once per prompt change (pending markers
+      # from the merge's apply). The request is a row in the profile's state.db that sessions
+      # adopt on their next turn, so the gateway may be up or down; it only has to follow the
+      # SOUL.md write. Never wanted by a target and never waited on: its problems are journal
+      # lines (`journalctl -u hermes-refresh-prompts`), not a failed unit, which would fail the
+      # switch. A failed refresh stays pending and is retried on the next activation or start.
+      systemd.services.${refreshUnit} = mkIf hasEnabledProfiles {
+        description = "Refresh Hermes session prompts after a SOUL or settings change";
+        # Ordering only: when both are queued, run after the gateway's preStart apply.
+        after = ["hermes-gateway.service"];
+        unitConfig.RequiresMountsFor = [home];
+        environment = sessionEnv;
+        serviceConfig =
+          builtins.removeAttrs hardening ["Restart" "RestartSec"]
+          // {
+            Type = "oneshot";
+            # "-": a non-zero exit, even a crash, is not a unit failure. 90 s per profile in the
+            # script; the start timeout stays above their sum, so it never fires first.
+            ExecStart = "-${profileConfigCommand "refresh"} ${lib.escapeShellArgs (["${cfg.package}/bin/hermes"] ++ refreshProfiles)}";
+            TimeoutStartSec = 90 * lib.length refreshProfiles + 60;
+            UnsetEnvironment = claudeTokenKey;
+          };
+      };
+
       systemd.services.hermes-gateway = {
         description = "Hermes Agent gateway";
         wantedBy = ["multi-user.target"];
@@ -486,7 +576,10 @@
         requires = lib.optional (disabledProfiles != []) "${retireUnit}.service";
         wants =
           ["network-online.target" "user@${toString cfg.uid}.service"]
-          ++ lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service";
+          ++ lib.optional sopsUnitInstallsSecrets "sops-install-secrets.service"
+          # Every prompt change changes preStart, so a switch restarts the gateway and this
+          # runs the refresh; weak, so a refresh problem never touches the gateway.
+          ++ lib.optional hasEnabledProfiles "${refreshUnit}.service";
         path = tools;
         # Boot activation precedes local mounts, so also merge before the
         # gateway starts, once the persistent Hermes home is mounted.

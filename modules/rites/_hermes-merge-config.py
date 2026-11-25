@@ -2,9 +2,11 @@
 
 import codecs
 import fcntl
+import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 from collections.abc import MutableMapping
 from contextlib import contextmanager
@@ -299,6 +301,8 @@ def apply(home, overlay, *claude_token_files):
             # Fail closed rather than start the gateway without the managed prompt.
             with soul.open("rb") as src, atomic_write(home / soul.relative_to(overlay), mode="wb") as dst:
                 copyfileobj(src, dst)
+        # Only after SOUL.md is in place: a refresh recorded earlier could rebuild from the old one.
+        mark_prompt_refresh(provisioned, name, prompt_fingerprint(overlay, source))
         (provisioned / name).touch(exist_ok=True)
         marker = tombstones / name
         try:
@@ -310,6 +314,97 @@ def apply(home, overlay, *claude_token_files):
 
 
 DISABLED_BY_NIX = b"disabled by NixOS\n"
+
+# Optional overlay file whose bytes join every profile's fingerprint (hermes.nix, refreshOnPackageChange).
+PROMPT_EXTRA = "prompt-sources-extra"
+# Per call; the unit's TimeoutStartSec covers every profile (hermes.nix).
+REFRESH_TIMEOUT = 90
+
+
+def prompt_fingerprint(overlay, config):
+    """sha256 of the Nix inputs that reach a profile's system prompt: its SOUL.md and declared settings.
+
+    The overlay copies, not the live files: Hermes rewrites config.yaml, which must not re-trigger.
+    """
+    digest = hashlib.sha256()
+    for path in (config.with_name("SOUL.md"), config, overlay / PROMPT_EXTRA):
+        digest.update(path.name.encode() + b"\0")
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            data = b""
+        digest.update(len(data).to_bytes(8, "big") + data)
+    return digest.hexdigest()
+
+
+def mark_prompt_refresh(provisioned, name, fingerprint):
+    """Leave a pending refresh for `name` when its prompt inputs differ from the last applied ones.
+
+    Profile ids cannot contain '.', so these files never collide with the .nixos-managed/<name> markers.
+    The pending marker holds the fingerprint it was raised for (see refresh); it is written before the
+    applied fingerprint, so a crash between the two re-marks on the next apply.
+    """
+    applied = provisioned / f"{name}.prompt-sources"
+    try:
+        if applied.read_text(encoding="ascii").strip() == fingerprint:
+            return
+    except (FileNotFoundError, UnicodeDecodeError):
+        pass
+    for path in (provisioned / f"{name}.refresh-prompts", applied):
+        with atomic_write(path, mode="w", encoding="ascii") as stream:
+            stream.write(fingerprint + "\n")
+
+
+def read_marker(path):
+    try:
+        return path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def refresh_profile(home, hermes, name):
+    """Run `hermes -p <name> sessions refresh-prompts` for a pending marker. Never raises."""
+    pending = home / "profiles/.nixos-managed" / f"{name}.refresh-prompts"
+    token = read_marker(pending)
+    if token is None:
+        return
+    retry = "kept pending; retried on the next activation or gateway start"
+    try:
+        result = subprocess.run(
+            [hermes, "-p", name, "sessions", "refresh-prompts", "--json"],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=REFRESH_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        warn(f"profile {name}: refresh-prompts timed out after {REFRESH_TIMEOUT}s; {retry}")
+        return
+    except OSError as error:
+        warn(f"profile {name}: cannot run refresh-prompts ({error}); {retry}")
+        return
+    if result.returncode != 0:
+        output = (result.stderr.strip() or result.stdout.strip()).splitlines()[-5:]
+        warn(f"profile {name}: refresh-prompts exited {result.returncode}; {retry}")
+        for line in output:
+            warn(f"profile {name}:   {line}")
+        return
+    try:
+        info = json.loads(result.stdout.strip().splitlines()[-1])
+        detail = f"epoch {info['epoch']}, {info['sessions']} session(s) with a stored prompt"
+    except (IndexError, KeyError, TypeError, ValueError):
+        detail = "no JSON summary"
+    print(f"hermes: profile {name}: requested a system prompt refresh ({detail})", flush=True)
+    # An apply that raised a newer marker meanwhile may have changed SOUL.md after this epoch: keep it.
+    if read_marker(pending) == token:
+        pending.unlink(missing_ok=True)
+
+
+def refresh(home, overlay, hermes, *profiles):
+    """The hermes-refresh-prompts unit: one refresh per pending profile. Problems go to the journal only;
+    the unit must never fail (a failed unit fails the switch, and the gateway never waits on it)."""
+    for name in profiles:
+        try:
+            refresh_profile(home, hermes, name)
+        except Exception as error:  # noqa: BLE001 - report and carry on with the next profile
+            warn(f"profile {name}: refresh-prompts failed ({type(error).__name__}: {error})")
 
 
 def retire(home, overlay, *disabled_profiles):
@@ -360,4 +455,4 @@ def retire(home, overlay, *disabled_profiles):
 if __name__ == "__main__":
     action, home, overlay, *profiles = sys.argv[1:]
     os.umask(0o077)
-    {"apply": apply, "retire": retire, "check": check}[action](Path(home), Path(overlay), *profiles)
+    {"apply": apply, "retire": retire, "check": check, "refresh": refresh}[action](Path(home), Path(overlay), *profiles)

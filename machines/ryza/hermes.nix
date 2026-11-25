@@ -134,6 +134,14 @@ in {
         assertion = !hasHostPin || hostKeyAlgorithm == "ssh-ed25519";
         message = "services.imperium.hermes.stygies.knownHosts must be an ssh-ed25519 host key.";
       }
+      {
+        # The guard redirects any ssh cwd under these paths; the remote home must stay outside them.
+        assertion = let
+          remoteHome = self.nixosConfigurations.stygies.config.users.users.hermes.home;
+        in
+          !lib.any (path: remoteHome == path || lib.hasPrefix "${path}/" remoteHome) config.services.imperium.hermes.sshHostOnlyPaths;
+        message = "services.imperium.hermes.sshHostOnlyPaths must not contain stygies's hermes home, or every coder and work command would leave its workspace.";
+      }
     ];
 
     # Keep the identity unavailable to the default profile's local terminal
