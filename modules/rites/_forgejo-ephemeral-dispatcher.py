@@ -6,17 +6,19 @@ dispatcher maps it exactly: the job's task_id gives the task (GET /repos/manjo/<
 task's run_number gives the run (GET .../actions/runs?run_number=N). A run is trusted only if trusted_run()
 returns None. Only then are the CI signing key and the ncps upload netrc written to the slot's root-only trust
 directory, which the guest sees as a read-only virtiofs share. Any doubt means nothing is delivered.
+
+The dispatcher only decides. Every slot side effect (systemd units, staged credentials, disk images, the trust
+share) goes through slotctl (--slotctl, _forgejo-slotctl.py), one validated verb per call.
 """
 
 import argparse
+import base64
 from contextlib import closing
 import fcntl
-import grp
 import hashlib
 import http.client
 import json
 import os
-import pwd
 import re
 import secrets
 import signal
@@ -33,8 +35,6 @@ MACHINE = "ryza"
 VM = f"microvm@{SLOT}.service"
 SUPPORT_UNITS = ("tap-interfaces", "macvtap-interfaces", "pci-devices", "virtiofsd", "set-booted")
 SUPPORT = tuple(f"microvm-{name}@{SLOT}.service" for name in SUPPORT_UNITS)
-IMAGES = ("nix-store-overlay.img", "var.img")
-CREDENTIALS = ("runner-uuid", "runner-token", "job-handle")
 HOST = "forge.ugalabugala.org"
 RUNNERS = "/user/actions/runners"
 LOGIN = "manjo"
@@ -61,6 +61,8 @@ ACTIONS_USER = -2  # Forgejo's "forgejo-actions" user, the trigger user of every
 REPO_NAME = re.compile(r"[A-Za-z0-9._-]{1,100}")
 TRUST_FILES = ("ncps-netrc", "ci-signing-key")  # Write order: the guest hook needs both.
 TRUST_SOURCES = {"ncps-netrc": "trusted-ncps-netrc", "ci-signing-key": "trusted-ci-signing-key"}
+# What slotctl observe may report as a unit's last result (slotctl folds anything else into "other result").
+RESULTS = ("success", "timeout", "exit-code", "signal", "core-dump", "resources", "start-limit-hit", "other result")
 TRUST_SHAPES = {
     "ci-signing-key": re.compile(rb"[A-Za-z0-9._-]{1,255}:[A-Za-z0-9+/]{20,400}={0,2}\n?"),
     "ncps-netrc": re.compile(rb"machine ncps\.noosphere\.uk\nlogin [!-~]{1,255}\npassword [!-~]{1,4096}\n?"),
@@ -431,169 +433,132 @@ def trusted_run(run, repo_id, owner):
     return "event is not push, schedule or workflow_dispatch"
 
 
-class Systemctl:
-    def __init__(self, run=subprocess.run, lock_fd=None):
-        self.run = run
-        self.lock_fds = () if lock_fd is None else (lock_fd,)
+class Snapshot:
+    """What slotctl observe saw, in order: the VM, each support unit, then the VM again."""
 
-    def _call(self, action, *units, options=()):
+    def __init__(self, vm, support, again):
+        (self.vm_idle, self.vm_result), self.support, (self.again_idle, self.again_result) = vm, support, again
+
+    @property
+    def residual(self):
+        return [unit for unit, idle in self.support if not idle]
+
+
+class CommandSlot:
+    """The slot host side. Every slot side effect goes through slotctl (_forgejo-slotctl.py), one verb per call.
+
+    Secrets go to slotctl on stdin, never in argv. Its answers are checked as strictly as Forgejo's: anything
+    unexpected is a SlotError, which refuses slot reuse until the next tick. A refusal arrives as one of
+    slotctl's fixed codes and is logged in this dispatcher's own words (REFUSALS); slotctl's text never is.
+    Everything slotctl returns is read in _call, the one place a bounded reader can replace subprocess.run.
+    """
+
+    TIMEOUTS = {"observe": 80}  # Seven systemctl calls of at most 10 s each.
+    MAX_CODE = 64
+    # The systemctl action behind each verb, for the "systemctl-failed" message.
+    ACTIONS = {
+        "observe": "show", "start": "start", "stop": "stop", "reset-failed": "reset-failed",
+        "stop-support": "stop", "scrub": "show", "deliver": "show",
+    }
+    REFUSALS = {
+        "vm-not-stopped": "VM state changed during reconciliation; waiting before slot cleanup",
+        "vm-not-running": "slot is not running; not delivering CI credentials",
+        "no-trust-share": "this slot does not deliver CI credentials; its trust share is off on the slot host",
+        "scrub-failed": "cannot scrub exact slot images or credentials; check slot paths for unexpected files",
+        "withdraw-failed": "cannot remove delivered CI credentials; check the trust directory",
+        "trust-dir-missing": "trust directory is missing; refusing to deliver CI credentials",
+        "trust-dir-unsafe": "trust directory has unexpected ownership or mode; refusing to deliver",
+        "deliver-failed": "cannot deliver CI credentials; check the trust directory",
+        "trust-dir-create-failed": "cannot create the empty trust directory; check the credential parent",
+        "stage-failed": "cannot stage runner credentials; check ownership and permissions of the credential parent",
+        "slot-user-missing": "slot user or group is missing; check the slot host configuration",
+    }
+
+    def __init__(self, command, run=subprocess.run, lock_fd=None):
+        self.command = tuple(command)
+        self.run = run
+        self.lock_fd = lock_fd
+
+    def _call(self, verb, *args, payload=None):
+        hold = () if self.lock_fd is None else ("--hold-fd", str(self.lock_fd))
         try:
             result = self.run(
-                ("systemctl", "--system", "--no-pager", *options, action, *units),
-                stdin=subprocess.DEVNULL,
+                (*self.command, "--slot", SLOT, *hold, verb, *args),
+                input=b"" if payload is None else json.dumps(payload).encode(),
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                # If we die while systemctl is still alive, its copy keeps the lock
-                # held until the next dispatcher can safely reconcile.
-                pass_fds=self.lock_fds,
-                timeout=10,
-                check=True,
+                stderr=subprocess.PIPE,
+                # slotctl hands the state lock on to the systemctl calls it makes (see Systemctl there).
+                pass_fds=() if self.lock_fd is None else (self.lock_fd,),
+                timeout=self.TIMEOUTS.get(verb, 30),
+                check=False,
             )
         except (OSError, subprocess.SubprocessError):
-            raise SlotError(f"systemctl {action} failed or timed out for {SLOT}; reconciling unit state") from None
-        return result.stdout
+            raise SlotError(f"slotctl {verb} failed or timed out for {SLOT}; reconciling unit state") from None
+        if result.returncode == 0:
+            return result.stdout
+        if result.returncode == 1:
+            raise SlotError(self._refusal(verb, result.stderr) or f"slotctl {verb} refused for {SLOT}; reconciling unit state")
+        raise SlotError(f"slotctl {verb} failed (exit {result.returncode}) for {SLOT}; reconciling unit state")
 
-    def observe(self, unit):
-        # One GetAll via systemctl show: checking ActiveState and list-jobs separately
-        # permits an already-queued start to run between the two queries.
-        output = self._call("show", unit, options=("--all", "--property=LoadState,ActiveState,Job,Result"))
+    def _refusal(self, verb, stderr):
+        """Our words for slotctl's refusal code, or None for anything that is not exactly a known code."""
         try:
-            props = dict(line.split("=", 1) for line in output.decode("ascii").splitlines())
-            active, job, result = props["ActiveState"], props["Job"], props["Result"]
-            if props["LoadState"] != "loaded" or (job and not re.fullmatch(r"[0-9]{1,10}", job)):
-                raise ValueError
-            if result not in ("success", "timeout", "exit-code", "signal", "core-dump", "resources", "start-limit-hit"):
-                result = "other result"
-            if active in ("inactive", "failed"):
-                return (not job or int(job) == 0), result
-            if active in ("active", "activating", "deactivating", "reloading", "refreshing"):
-                return False, result
-        except (KeyError, ValueError):
-            pass
-        raise SlotError(f"unknown systemd state for {unit}; refusing slot reuse")
+            code = stderr[: self.MAX_CODE + 1].decode("ascii").strip() if len(stderr) <= self.MAX_CODE else ""
+        except (AttributeError, TypeError, UnicodeDecodeError):
+            return None
+        if code == "systemctl-failed":
+            return f"systemctl {self.ACTIONS.get(verb, verb)} failed or timed out for {SLOT}; reconciling unit state"
+        if code.startswith("unknown-state-"):
+            kind = code.removeprefix("unknown-state-")
+            unit = VM if kind == "vm" else (f"microvm-{kind}@{SLOT}.service" if kind in SUPPORT_UNITS else None)
+            return None if unit is None else f"unknown systemd state for {unit}; refusing slot reuse"
+        return self.REFUSALS.get(code)
 
-    def idle(self, unit):
-        return self.observe(unit)[0]
+    def observe(self):
+        output = self._call("observe")
+        try:
+            data = json.loads(output[: MAX_RESPONSE + 1]) if len(output) <= MAX_RESPONSE else None
+            vm, support, again = data["vm"], data["support"], data["again"]
+            if (
+                data.keys() == {"vm", "support", "again"}
+                and all(
+                    isinstance(state, list) and len(state) == 2 and type(state[0]) is bool and state[1] in RESULTS
+                    for state in (vm, again)
+                )
+                and isinstance(support, list)
+                and [entry[0] if isinstance(entry, list) and len(entry) == 2 else None for entry in support] == list(SUPPORT)
+                and all(type(entry[1]) is bool for entry in support)
+            ):
+                return Snapshot(tuple(vm), tuple((unit, idle) for unit, idle in support), tuple(again))
+        except (ValueError, RecursionError, TypeError, KeyError, AttributeError):
+            pass
+        raise SlotError(f"slotctl observe answered unexpectedly for {SLOT}; refusing slot reuse")
 
     def start(self):
-        self._call("start", VM, options=("--no-block", "--job-mode=fail"))
+        self._call("start")
 
     def stop(self):
-        self._call("stop", VM, options=("--no-block",))
+        self._call("stop")
 
     def reset_failed(self):
-        self._call("reset-failed", VM)
+        self._call("reset-failed")
 
     def stop_support(self, units):
-        self._call("stop", *units, options=("--no-block",))
-
-
-def unlink_files(directory, names, *, remove_dir=False):
-    try:
-        fd = os.open(directory, DIR_FLAGS)
-    except FileNotFoundError:
-        return
-    failure = None
-    try:
-        for name in names:
-            try:
-                os.unlink(name, dir_fd=fd)
-            except FileNotFoundError:
-                pass
-            except OSError as error:
-                failure = error
-    finally:
-        os.close(fd)
-    if failure is not None:
-        raise failure
-    if remove_dir:
-        directory.rmdir()
-
-
-TRUST_NAMES = TRUST_FILES + tuple(f".{name}.tmp" for name in TRUST_FILES)
-
-
-class SlotFiles:
-    def __init__(self, vm_dir, credentials, uid, gid, trust_dir=None):
-        self.vm_dir = vm_dir
-        self.credentials = credentials
-        self.staging = credentials.with_name(f".{credentials.name}.staging")
-        self.uid, self.gid = uid, gid
-        # Root-only (0700 root, files 0400 root): virtiofsd (root) serves it; QEMU's user never reads it.
-        self.trust_dir = trust_dir
-
-    def scrub(self):
-        failed = False
-        trust = () if self.trust_dir is None else ((self.trust_dir, TRUST_NAMES, True),)
-        for directory, names, remove in (
-            (self.vm_dir, IMAGES, False),
-            (self.credentials, CREDENTIALS, True),
-            (self.staging, CREDENTIALS, True),
-            *trust,
-        ):
-            try:
-                unlink_files(directory, names, remove_dir=remove)
-            except OSError:
-                failed = True
-        if failed:
-            raise SlotError("cannot scrub exact slot images or credentials; check slot paths for unexpected files")
-
-    def withdraw(self):
-        """Remove delivered credentials, keeping the directory a running slot may still be serving."""
-        if self.trust_dir is not None:
-            try:
-                unlink_files(self.trust_dir, TRUST_NAMES)
-            except OSError:
-                raise SlotError("cannot remove delivered CI credentials; check the trust directory") from None
-
-    def deliver(self, secrets):
-        """Atomically place each credential (0400, owned by the dispatcher: root) in the existing trust dir."""
-        try:
-            fd = os.open(self.trust_dir, DIR_FLAGS)
-        except OSError:
-            raise SlotError("trust directory is missing; refusing to deliver CI credentials") from None
-        try:
-            info = os.fstat(fd)
-            if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
-                raise SlotError("trust directory has unexpected ownership or mode; refusing to deliver")
-            for name in TRUST_FILES:
-                temporary = f".{name}.tmp"
-                try:
-                    os.unlink(temporary, dir_fd=fd)
-                except FileNotFoundError:
-                    pass
-                out = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400, dir_fd=fd)
-                with os.fdopen(out, "wb") as file:
-                    file.write(secrets[name])
-                    file.flush()
-                    os.fsync(file.fileno())
-                os.rename(temporary, name, src_dir_fd=fd, dst_dir_fd=fd)
-            os.fsync(fd)
-        except OSError:
-            raise SlotError("cannot deliver CI credentials; check the trust directory") from None
-        finally:
-            os.close(fd)
+        self._call("stop-support", *units)
 
     def stage(self, runner_uuid, token, handle):
         if not matches(TOKEN, token):
             raise ApiError("Forgejo register runner: missing or invalid runner token")
-        if self.trust_dir is not None:
-            try:
-                # Fresh and empty for every boot: virtiofsd needs it to exist when the slot starts.
-                self.trust_dir.mkdir(mode=0o700)
-            except OSError:
-                raise SlotError("cannot create the empty trust directory; check the credential parent") from None
-        try:
-            self.staging.mkdir(mode=0o700)
-            for name, value in zip(CREDENTIALS, (runner_uuid, token, handle), strict=True):
-                fd = os.open(self.staging / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
-                with os.fdopen(fd, "wb") as file:
-                    os.fchown(file.fileno(), self.uid, self.gid)
-                    file.write(value.encode())
-            os.chown(self.staging, self.uid, self.gid)
-            self.staging.rename(self.credentials)
-        except OSError:
-            raise SlotError("cannot stage runner credentials; check ownership and permissions of the credential parent") from None
+        self._call("stage", payload={"uuid": runner_uuid, "token": token, "handle": handle})
+
+    def scrub(self):
+        self._call("scrub")
+
+    def deliver(self, secrets):
+        self._call("deliver", payload={name: base64.b64encode(secrets[name]).decode("ascii") for name in TRUST_FILES})
+
+    def withdraw(self):
+        self._call("withdraw")
 
 
 class Store:
@@ -719,9 +684,10 @@ class Trust:
 
 class Dispatcher:
     def __init__(
-        self, repo_id, api, system, files, store, monotonic=time.monotonic, wall=time.time, pause=PAUSE_FILE, trust=None
+        self, repo_id, api, slot, store, monotonic=time.monotonic, wall=time.time, pause=PAUSE_FILE, trust=None
     ):
-        self.repo_id, self.api, self.system, self.files, self.store = repo_id, api, system, files, store
+        # `slot` does every slot side effect (CommandSlot: slotctl); this class only decides.
+        self.repo_id, self.api, self.slot, self.store = repo_id, api, slot, store
         self.monotonic, self.wall = monotonic, wall
         self.pause = pause
         self.api_after = self.api_delay = 0
@@ -770,7 +736,9 @@ class Dispatcher:
 
     def _local(self):
         active = self.store.data["active"]
-        if not self.system.idle(VM):
+        # One slotctl call reads the VM, each support unit, then the VM again.
+        snapshot = self.slot.observe()
+        if not snapshot.vm_idle:
             if active is None or active["phase"] != "start":
                 raise SlotError("VM is live or has a pending job without a recorded start; refusing slot reuse")
             if self.observed != active["name"]:
@@ -783,16 +751,17 @@ class Dispatcher:
                 self.deadline_logged = True
                 log("VM is still busy past its recorded deadline estimate; inspect the systemd unit")
             return False
-        residual = [unit for unit in SUPPORT if not self.system.idle(unit)]
+        residual = snapshot.residual
         if residual:
-            if self.system.idle(VM):
-                self.system.stop_support(residual)
+            if snapshot.again_idle:
+                self.slot.stop_support(residual)
             raise SlotError("waiting for slot support units to stop")
-        # Re-observe after inspecting support units, also before any destructive cleanup.
-        idle, result = self.system.observe(VM)
+        # Re-observed after inspecting support units, also before any destructive cleanup
+        # (and slotctl's scrub checks the VM once more).
+        idle, result = snapshot.again_idle, snapshot.again_result
         if not idle:
             raise SlotError("VM state changed during reconciliation; waiting before slot cleanup")
-        self.files.scrub()
+        self.slot.scrub()
         self.verdict = None
         if result == "success":
             self.reset_pending = False
@@ -810,7 +779,7 @@ class Dispatcher:
             if self.reset_pending:
                 # Not fatal: retried on the next idle pass until Result is success again.
                 try:
-                    self.system.reset_failed()
+                    self.slot.reset_failed()
                 except SlotError as error:
                     log(error)
                 else:
@@ -901,8 +870,8 @@ class Dispatcher:
             stopped = self.stop_queued
             if stopped is not None and stopped[0] == active["name"] and self.monotonic() - stopped[1] < STOP_RETRY:
                 return
-            if self.busy_misses >= 2 and not self.system.idle(VM):
-                self.system.stop()
+            if self.busy_misses >= 2 and not self.slot.observe().vm_idle:
+                self.slot.stop()
                 self.stop_queued = (active["name"], self.monotonic())
                 log(f"queued VM stop: runner {active['runner']['id']} target absent from consecutive job polls")
 
@@ -958,9 +927,9 @@ class Dispatcher:
             log("untrusted: trusted-ci-signing-key or trusted-ncps-netrc credential missing or malformed; withheld")
             return
         try:
-            if self.system.idle(VM):
+            if self.slot.observe().vm_idle:
                 return  # The next tick reconciles the stopped slot; never write into a directory being scrubbed.
-            self.files.deliver(secrets)
+            self.slot.deliver(secrets)
         except SlotError as error:
             self._defer(verdict, f"delivery pending: {error}", error)
             return
@@ -1102,13 +1071,14 @@ class Dispatcher:
         refusals = self.store.data["refusals"].copy()
         refusals.pop(handle, None)
         self.store.save(active=active, refusals=refusals)
-        if any(not self.system.idle(unit) for unit in SUPPORT) or not self.system.idle(VM):
+        snapshot = self.slot.observe()
+        if not snapshot.vm_idle or snapshot.residual or not snapshot.again_idle:
             raise SlotError("slot changed during registration; refusing to stage or start")
-        self.files.stage(runner["uuid"], token, handle)
+        self.slot.stage(runner["uuid"], token, handle)
         # Queuing is one-way. Even if the client dies or loses the systemd reply,
         # recovery only monitors this intent and never issues its start a second time.
         self.store.save(active=active | {"phase": "start", "queued_at": self.wall()})
-        self.system.start()
+        self.slot.start()
         log(f"queued VM start for runner {runner['id']}")
 
     def _record_refusal(self, handle):
@@ -1136,23 +1106,21 @@ def parse_arguments(argv=None):
     # Every slot setting is required: a dispatcher must never fall back to another slot's identity.
     parser.add_argument("--slot", required=True, help="the slot's microVM name, e.g. ryza-eph-1")
     parser.add_argument("--machine", required=True, help="the host's name, part of every runner name")
-    parser.add_argument("--slot-user", required=True, help="the user and group QEMU runs as")
+    parser.add_argument("--slotctl", type=Path, required=True, help="the slot host agent, configured for this host's slots")
     parser.add_argument("--forge-host", required=True, help="the Forgejo host name, e.g. forge.ugalabugala.org")
     parser.add_argument("--login", required=True, help="the forge account whose runners this registers")
     parser.add_argument("--label", required=True, help="the one runs-on label this slot serves")
     parser.add_argument("--repo-id", type=int, required=True)
-    for name in ("--state-dir", "--vm-dir", "--credential-dir"):
-        parser.add_argument(name, type=Path, required=True)
+    parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--trusted-jobs", action="store_true", help="deliver CI upload credentials to trusted runs")
     parser.add_argument("--repo", help="name of the configured repository under --login (with --trusted-jobs)")
-    parser.add_argument("--trust-dir", type=Path, help="root-only directory the slot's trust share serves")
     args = parser.parse_args(argv)
-    if not matches(SLOT_NAME, args.slot_user):
-        parser.error("invalid slot user")
+    if not args.slotctl.is_absolute():
+        parser.error("--slotctl must be an absolute path")
     if not positive(args.repo_id):
         parser.error("--repo-id must be positive")
-    if args.trusted_jobs != (args.repo is not None) or args.trusted_jobs != (args.trust_dir is not None):
-        parser.error("--trusted-jobs needs --repo and --trust-dir, and they need it")
+    if args.trusted_jobs != (args.repo is not None):
+        parser.error("--trusted-jobs needs --repo, and --repo needs it")
     if args.trusted_jobs and not matches(REPO_NAME, args.repo):
         parser.error("--repo must be a plain repository name")
     # Last, so a refused command line never leaves the process half configured.
@@ -1179,27 +1147,19 @@ def main():
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 raise StateError("another dispatcher holds the state lock") from None
-            files = SlotFiles(
-                args.vm_dir,
-                args.credential_dir,
-                pwd.getpwnam(args.slot_user).pw_uid,
-                grp.getgrnam(args.slot_user).gr_gid,
-                args.trust_dir,
-            )
-            trust = None
-            if args.trusted_jobs:
-                trust = Trust(args.repo, Path(directory) if directory else None)
-                # A previous dispatcher's delivery is not this one's verdict: withdraw it and re-resolve.
-                try:
-                    files.withdraw()
-                except SlotError as error:
-                    log(error)
-                    return 1
+            slot = CommandSlot((str(args.slotctl),), lock_fd=lock.fileno())
+            # A previous dispatcher's delivery is not this one's verdict, and with trust now off nothing may
+            # stay delivered at all: withdraw either way (a trusted run is then re-resolved).
+            try:
+                slot.withdraw()
+            except SlotError as error:
+                log(error)
+                return 1
+            trust = Trust(args.repo, Path(directory) if directory else None) if args.trusted_jobs else None
             dispatcher = Dispatcher(
                 args.repo_id,
                 Forgejo(Path(directory) / "forgejo-pat" if directory else None),
-                Systemctl(lock_fd=lock.fileno()),
-                files,
+                slot,
                 Store(args.state_dir),
                 trust=trust,
             )

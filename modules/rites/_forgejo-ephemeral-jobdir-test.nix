@@ -77,6 +77,16 @@
   settings = c.systemd.tmpfiles.settings."10-microvm";
   guestFs = c.microvm.vms.${slot}.config.config.fileSystems."/nix/.ro-store";
   vmStop = services."microvm@".serviceConfig.ExecStopPost ++ vm.serviceConfig.ExecStopPost;
+  # slotctl (HOM-32): the dispatcher's child, so every path it acts on must be one
+  # of this slot's and inside the dispatcher's writable paths.
+  slotctl = internal.slotctlSlots.${slot};
+  trustDir = "${credParent}/${slot}-trust";
+  writable = path: lib.any (rw: path == rw || lib.hasPrefix "${rw}/" path) dispatcher.serviceConfig.ReadWritePaths;
+  trusted = enabled.extendModules {
+    modules = [{services.imperium.forgejoEphemeral.trustedJobs.enable = lib.mkForce true;}];
+  };
+  trustedSlotctl = trusted.config.services.imperium.forgejoEphemeral.internal.slotctlSlots.${slot};
+  trustShare = lib.findFirst (share: share.tag == "ci-trust") null trusted.config.microvm.vms.${slot}.config.config.microvm.shares;
 in
   assert lib.assertMsg (violations == {}) "mandatory namespace paths not created first: ${builtins.toJSON violations}";
   assert lib.assertMsg (dispatcherOptional == []) "dispatcher has optional writable paths: ${toString dispatcherOptional}";
@@ -104,7 +114,16 @@ in
   # tmpfiles: nothing under the microvm-owned state dir that changes owner.
   assert !((settings.${control} or {}) ? d) && !(builtins.hasAttr job settings);
   # Guest lower store is mounted ro, after "defaults".
-  assert lib.last guestFs.options == "ro"; {
+  assert lib.last guestFs.options == "ro";
+  # slotctl's config names exactly this slot's directories, all writable for the dispatcher's children.
+  assert builtins.attrNames internal.slotctlSlots == [slot];
+  assert slotctl.vm_dir == job && slotctl.credential_dir == "${credParent}/${slot}";
+  assert lib.all writable [slotctl.vm_dir slotctl.credential_dir slotctl.trust_dir];
+  # The trust path is always set, so cleanup never depends on the trust flag; delivery does.
+  assert slotctl.trust_dir == trustDir && slotctl.deliver == c.services.imperium.forgejoEphemeral.trustedJobs.enable;
+  assert !slotctl.deliver && trustedSlotctl.deliver && trustedSlotctl.trust_dir == trustDir;
+  # ...and it is the directory the trusted guest's share serves.
+  assert trustShare != null && trustShare.source == trustDir; {
     hostDrv = c.system.build.toplevel.drvPath;
     guestDrv = c.microvm.vms.${slot}.config.config.system.build.toplevel.drvPath;
     inherit prepare created installLines;
@@ -121,4 +140,5 @@ in
     roStoreOptions = guestFs.options;
     tmpfilesSlot = settings.${control} or null;
     tmpfilesRules = builtins.filter (lib.hasInfix "microvm-credentials") c.systemd.tmpfiles.rules;
+    inherit slotctl trustedSlotctl;
   }

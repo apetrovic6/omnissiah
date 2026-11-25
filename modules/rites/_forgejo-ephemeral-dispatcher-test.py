@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
-"""Loopback Forgejo contract and fixed-slot lifecycle tests (no real credentials or units)."""
+"""Loopback Forgejo contract and fixed-slot lifecycle tests (no real credentials or units).
 
+The dispatcher reaches the fake systemctl through its real transport: CommandSlot builds slotctl's argv and
+stdin, slotctl's CLI (run in this process by InProcessSlotctl) parses them and acts on real temporary files.
+SlotctlProcessTests also run slotctl as a real child process.
+"""
+
+import base64
 import contextlib
+import grp
 import http.client
 import importlib.util
 import io
 import json
 import os
+import pwd
 import stat
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -21,6 +30,10 @@ from urllib.parse import parse_qs, urlsplit
 spec = importlib.util.spec_from_file_location("dispatcher", Path(__file__).with_name("_forgejo-ephemeral-dispatcher.py"))
 D = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(D)
+SLOTCTL = Path(__file__).with_name("_forgejo-slotctl.py")
+spec = importlib.util.spec_from_file_location("slotctl", SLOTCTL)
+S = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(S)
 
 USER = "/api/v1/user"
 RUNNERS = USER + "/actions/runners"
@@ -84,6 +97,46 @@ def run(index=7, **fields):
         "status": "running",
         "event_payload": "{}",
     } | fields
+
+
+def write_slotctl_config(path, slot, vm_dir, credential_dir, trust_dir=None, deliver=False):
+    """What the slot module generates per host, pointed at temporary directories and the current user."""
+    entry = {
+        "vm_dir": str(vm_dir),
+        "credential_dir": str(credential_dir),
+        "trust_dir": str(trust_dir or credential_dir.with_name(f"{credential_dir.name}-trust")),
+        "deliver": deliver,
+        "user": pwd.getpwuid(os.getuid()).pw_name,
+        "group": grp.getgrgid(os.getgid()).gr_name,
+    }
+    path.write_text(json.dumps({"slots": {slot: entry}}))
+    return path
+
+
+class InProcessSlotctl:
+    """subprocess.run for CommandSlot: runs slotctl's CLI here, against the fake systemctl, without a fork.
+
+    The config path goes to slotctl the way the build compiles it in, never through argv.
+    """
+
+    def __init__(self, systemctl_run, config):
+        self.systemctl_run, self.config = systemctl_run, str(config)
+        self.calls = []
+
+    def __call__(self, argv, *, input, stdout, stderr, pass_fds, timeout, check):
+        assert stdout == subprocess.PIPE and stderr == subprocess.PIPE and not check and timeout > 0
+        assert argv[0] == "slotctl" and isinstance(input, bytes)
+        self.calls.append(tuple(argv))
+        out, err = io.BytesIO(), io.StringIO()
+        code = S.main(
+            list(argv[1:]), stdin=io.BytesIO(input), stdout=out, stderr=err, run=self.systemctl_run, config=self.config
+        )
+        return subprocess.CompletedProcess(argv, code, out.getvalue(), err.getvalue().encode())
+
+
+def command_slot(config, systemctl_run):
+    slotctl = InProcessSlotctl(systemctl_run, config)
+    return D.CommandSlot(("slotctl",), slotctl), slotctl
 
 
 class FakeForge:
@@ -305,24 +358,28 @@ class DispatcherTests(unittest.TestCase):
         self.forge = FakeForge()
         self.addCleanup(self.forge.close)
         self.system = FakeSystemctl()
-        self.files = D.SlotFiles(self.vm_dir, self.credential_dir, os.getuid(), os.getgid())
+        # For assertions on the slot's paths; the dispatcher itself goes through slotctl.
+        self.files = S.SlotFiles(
+            self.vm_dir, self.credential_dir, os.getuid(), os.getgid(), self.credential_dir.with_name("ryza-eph-1-trust"), False
+        )
+        self.config = write_slotctl_config(root / "slotctl.json", "ryza-eph-1", self.vm_dir, self.credential_dir)
         self.clock = FakeClock()
         self.logs = io.StringIO()
         self.enterContext(contextlib.redirect_stderr(self.logs))
         self.restart()
 
     def tearDown(self):
-        surface = self.logs.getvalue() + repr(self.system.calls)
+        surface = self.logs.getvalue() + repr(self.system.calls) + repr(self.slotctl.calls)
         for state_file in self.state_dir.glob("state.json*"):
             surface += state_file.read_text()
         self.assertFalse(PAT in surface or TOKEN in surface, "credential found outside the HTTP header or slot staging")
 
     def restart(self):
+        slot, self.slotctl = command_slot(self.config, self.system.run)
         self.dispatcher = D.Dispatcher(
             REPO,
             D.Forgejo(self.pat_file, self.forge.connect),
-            D.Systemctl(self.system.run),
-            self.files,
+            slot,
             D.Store(self.state_dir),
             self.clock.monotonic,
             self.clock.wall,
@@ -1252,30 +1309,33 @@ class TrustedJobTests(unittest.TestCase):
         self.forge.tasks = [task(70, 6), task()]
         self.forge.runs = [run(6, commit_sha="old"), run()]
         self.system = FakeSystemctl()
-        self.files = D.SlotFiles(
-            self.vm_dir, self.credential_dir, os.getuid(), os.getgid(), self.trust_dir if trusted else None
+        self.files = S.SlotFiles(self.vm_dir, self.credential_dir, os.getuid(), os.getgid(), self.trust_dir, trusted)
+        self.config = write_slotctl_config(
+            root / "slotctl.json", "ryza-eph-1", self.vm_dir, self.credential_dir, self.trust_dir, deliver=trusted
         )
+        self.slotctls = []
         self.clock = FakeClock()
         self.logs = io.StringIO()
         self.enterContext(contextlib.redirect_stderr(self.logs))
-        self.surfaces.append((self.logs, self.system, self.state_dir))
+        self.surfaces.append((self.logs, self.system, self.state_dir, self.slotctls))
         self.trusted = trusted
         self.restart()
 
     def tearDown(self):
-        for logs, system, state_dir in self.surfaces:
-            surface = logs.getvalue() + repr(system.calls)
+        for logs, system, state_dir, slotctls in self.surfaces:
+            surface = logs.getvalue() + repr(system.calls) + repr([slotctl.calls for slotctl in slotctls])
             for state_file in state_dir.glob("state.json*"):
                 surface += state_file.read_text()
             for secret in (PAT, TOKEN, SIGNING_SECRET, NETRC_PASSWORD):
                 self.assertNotIn(secret, surface)
 
     def restart(self):
+        slot, slotctl = command_slot(self.config, self.system.run)
+        self.slotctls.append(slotctl)
         self.dispatcher = D.Dispatcher(
             REPO,
             D.Forgejo(self.pat_file, self.forge.connect),
-            D.Systemctl(self.system.run),
-            self.files,
+            slot,
             D.Store(self.state_dir),
             self.clock.monotonic,
             self.clock.wall,
@@ -1529,13 +1589,13 @@ class TrustedJobTests(unittest.TestCase):
         self.boot()
         self.pick_up()
         self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
-        self.files.withdraw()  # What main() does before a new dispatcher runs.
+        self.dispatcher.slot.withdraw()  # What main() does before a new dispatcher runs.
         self.assertEqual({}, self.delivered())
         self.restart()
         self.tick(D.POLL)
         self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
         self.forge.runs = [run(is_fork_pull_request=True)]
-        self.files.withdraw()
+        self.dispatcher.slot.withdraw()
         self.restart()
         self.tick(D.POLL)
         self.assertEqual({}, self.delivered())
@@ -1645,9 +1705,9 @@ class SlotConfigurationTests(unittest.TestCase):
 
     def arguments(self, **changes):
         values = {
-            "slot": "terra-eph-1", "machine": "terra", "slot-user": "microvm-eph",
+            "slot": "terra-eph-1", "machine": "terra", "slotctl": "/nix/store/x-forgejo-slotctl",
             "forge-host": "forge.noosphere.uk", "login": "manjo", "label": "nix-eph",
-            "repo-id": "9", "state-dir": "/state", "vm-dir": "/vm", "credential-dir": "/credentials",
+            "repo-id": "9", "state-dir": "/state",
         } | changes
         argv = []
         for key, value in values.items():
@@ -1670,7 +1730,7 @@ class SlotConfigurationTests(unittest.TestCase):
 
     def test_arguments_configure_one_slot(self):
         args = D.parse_arguments(self.arguments())
-        self.assertEqual("microvm-eph", args.slot_user)
+        self.assertEqual(Path("/nix/store/x-forgejo-slotctl"), args.slotctl)
         self.assertEqual(("terra-eph-1", "terra", "forge.noosphere.uk"), (D.SLOT, D.MACHINE, D.HOST))
         self.assertEqual("microvm@terra-eph-1.service", D.VM)
         self.assertIn("microvm-virtiofsd@terra-eph-1.service", D.SUPPORT)
@@ -1699,11 +1759,12 @@ class SlotConfigurationTests(unittest.TestCase):
             (root / directory).mkdir(mode=0o700)
         pat = root / "forgejo-pat"
         pat.write_text(PAT + "\n")
+        config = write_slotctl_config(root / "slotctl.json", "terra-eph-1", root / "vm", root / "credentials" / "terra-eph-1")
+        slot, slotctl = command_slot(config, run)
         dispatcher = D.Dispatcher(
             REPO,
             D.Forgejo(pat, forge.connect),
-            D.Systemctl(run),
-            D.SlotFiles(root / "vm", root / "credentials" / "terra-eph-1", os.getuid(), os.getgid()),
+            slot,
             D.Store(root / "state"),
             FakeClock().monotonic,
             FakeClock().wall,
@@ -1719,19 +1780,470 @@ class SlotConfigurationTests(unittest.TestCase):
         shown = {argv[-1] for argv in calls if "show" in argv}
         self.assertEqual({"microvm@terra-eph-1.service", *D.SUPPORT}, shown)
         self.assertIn("terra-eph-1: queued VM start", self.logs.getvalue())
+        self.assertTrue(all(argv[argv.index("--slot") + 1] == "terra-eph-1" for argv in slotctl.calls))
+        self.assertEqual(TOKEN, (root / "credentials" / "terra-eph-1" / "runner-token").read_text())
 
     def test_rejects_separators_and_missing_settings(self):
         for changes in (
             {"slot": "ryza/eph-1"}, {"slot": "Ryza-eph-1"}, {"slot": "eph@1"}, {"machine": "ry za"},
             {"forge-host": "forge.example.org/x"}, {"forge-host": "localhost"}, {"forge-host": "forge.example.org:443"},
             {"login": "manjo/../x"}, {"login": "man jo"}, {"label": "nix,eph"}, {"label": "nix&eph"}, {"label": "nix-eph:host"},
-            {"slot-user": "microvm eph"}, {"slot": None}, {"machine": None}, {"forge-host": None}, {"login": None},
-            {"label": None}, {"slot-user": None},
+            {"slotctl": "relative/slotctl"}, {"slot": None}, {"machine": None}, {"forge-host": None}, {"login": None},
+            {"label": None}, {"slotctl": None}, {"vm-dir": "/vm"},
         ):
             with self.subTest(changes), self.assertRaises(SystemExit):
                 D.parse_arguments(self.arguments(**changes))
             # A refused command line leaves the process as it was.
             self.assert_pilot()
+
+
+class SlotctlTests(unittest.TestCase):
+    """HOM-32: slotctl, the slot host side. Every input is checked there; secrets never reach argv or stderr."""
+
+    SLOT = "ryza-eph-1"
+    STAGE = {"uuid": uuid_for(100), "token": TOKEN, "handle": "opaque/attempt-1"}
+    DELIVER = {"ci-signing-key": base64.b64encode(SIGNING_KEY).decode(), "ncps-netrc": base64.b64encode(NETRC).decode()}
+    REFUSED = (2, b"", "invalid-request\n")
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.vm_dir = self.root / "vm"
+        self.credential_dir = self.root / "credentials" / self.SLOT
+        self.trust_dir = self.root / "credentials" / f"{self.SLOT}-trust"
+        for directory in (self.vm_dir, self.credential_dir.parent):
+            directory.mkdir(mode=0o700)
+        self.config = write_slotctl_config(
+            self.root / "slotctl.json", self.SLOT, self.vm_dir, self.credential_dir, self.trust_dir, deliver=True
+        )
+        self.off = write_slotctl_config(
+            self.root / "off.json", self.SLOT, self.vm_dir, self.credential_dir, self.trust_dir, deliver=False
+        )
+        self.system = FakeSystemctl()
+        self.stderrs = []
+
+    def slotctl(self, *argv, payload=None, raw=None, config=None):
+        """slotctl as built, with `config` standing in for the path the build compiles in."""
+        out, err = io.BytesIO(), io.StringIO()
+        data = raw if raw is not None else (b"" if payload is None else json.dumps(payload).encode())
+        code = S.main(
+            list(argv), stdin=io.BytesIO(data), stdout=out, stderr=err, run=self.system.run, config=str(config or self.config)
+        )
+        self.stderrs.append(err.getvalue())
+        return code, out.getvalue(), err.getvalue()
+
+    def tearDown(self):
+        for secret in (TOKEN, SIGNING_SECRET, NETRC_PASSWORD):
+            self.assertNotIn(secret, "".join(self.stderrs) + repr(self.system.calls))
+
+    def test_observe_reads_vm_then_support_then_vm_again(self):
+        self.system.set(D.SUPPORT[1], active="active")
+        code, out, _ = self.slotctl("--slot", self.SLOT, "observe")
+        self.assertEqual(0, code)
+        shown = [argv[-1] for argv in self.system.calls]
+        self.assertEqual([VM, *D.SUPPORT, VM], shown)
+        answer = json.loads(out)
+        self.assertEqual([True, "success"], answer["vm"])
+        self.assertEqual([[unit, unit != D.SUPPORT[1]] for unit in D.SUPPORT], answer["support"])
+        self.assertEqual([True, "success"], answer["again"])
+
+    def test_refuses_bad_command_lines_and_configs(self):
+        garbage = self.root / "garbage.json"
+        garbage.write_text("{not json")
+        entry = json.loads(self.config.read_text())["slots"][self.SLOT]
+        shapes = {}
+        for name, change in (
+            ("relative", {"vm_dir": "vm"}),
+            ("no-trust", {"trust_dir": None}),
+            ("no-deliver", {"deliver": None}),
+            ("string-deliver", {"deliver": "true"}),
+            ("extra", {"extra": 1}),
+        ):
+            shapes[name] = self.root / f"{name}.json"
+            shapes[name].write_text(json.dumps({"slots": {self.SLOT: {k: v for k, v in (entry | change).items() if v is not None}}}))
+        closed = os.open(self.root / "fd", os.O_CREAT | os.O_RDWR)
+        os.close(closed)
+        for argv, config in (
+            (("--slot", "terra-eph-1", "observe"), None),
+            (("--slot", "Ryza", "observe"), None),
+            (("--slot", self.SLOT, "reboot"), None),
+            (("--slot", self.SLOT, "start", D.SUPPORT[0]), None),
+            (("--slot", self.SLOT, "--hold-fd", "1", "observe"), None),
+            (("--slot", self.SLOT, "--hold-fd", str(closed), "observe"), None),
+            (("--slot", self.SLOT, "--hold-fd", "x", "observe"), None),
+            (("observe",), None),
+            (("--slot", self.SLOT, "observe"), garbage),
+            (("--slot", self.SLOT, "observe"), self.root / "missing.json"),
+            (("--slot", self.SLOT, "observe"), "@config@"),
+            *((("--slot", self.SLOT, "observe"), path) for path in shapes.values()),
+        ):
+            with self.subTest(argv=argv, config=config):
+                self.assertEqual(self.REFUSED, self.slotctl(*argv, config=config))
+        self.assertEqual([], self.system.calls)
+
+    def test_the_caller_cannot_choose_the_config(self):
+        """The review's probe_argv.py: --config, repeated or abbreviated, used to win over the built-in one."""
+        victim = self.root / "victim"
+        victim.mkdir()
+        (victim / "var.img").write_text("precious")
+        evil = write_slotctl_config(self.root / "evil.json", self.SLOT, victim, self.root / "victim-cred" / "x")
+        for argv in (
+            ("--slot", self.SLOT, "--config", str(evil), "scrub"),
+            ("--slot", self.SLOT, f"--config={evil}", "scrub"),
+            ("--slot", self.SLOT, "--conf", str(evil), "scrub"),
+            ("--slot", self.SLOT, f"--c={evil}", "scrub"),
+            ("--config", str(evil), "--slot", self.SLOT, "scrub"),
+        ):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.REFUSED, self.slotctl(*argv))
+                self.assertTrue((victim / "var.img").exists())
+        self.assertEqual([], self.system.calls)
+
+    def test_each_option_once_and_spelled_out(self):
+        fd = os.open(self.root / "lock", os.O_CREAT | os.O_RDWR)
+        self.addCleanup(os.close, fd)
+        for argv in (
+            ("--slot", self.SLOT, "--slot", "terra-eph-1", "observe"),
+            (f"--slot={self.SLOT}", "--slot", self.SLOT, "observe"),
+            ("--slot", self.SLOT, f"--slot={self.SLOT}", "observe"),
+            ("--slot", self.SLOT, "--hold-fd", str(fd), "--hold-fd", str(fd), "observe"),
+            ("--slot", self.SLOT, f"--hold-fd={fd}", "--hold-fd", str(fd), "observe"),
+            ("--sl", self.SLOT, "observe"),
+            ("--slot", self.SLOT, "--hold", str(fd), "observe"),
+            ("--slot", self.SLOT, "-h"),
+            ("--slot", self.SLOT, "--help", "observe"),
+        ):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.REFUSED, self.slotctl(*argv))
+        self.assertEqual([], self.system.calls)
+        # The = form of a single option is that same option.
+        self.assertEqual(0, self.slotctl(f"--slot={self.SLOT}", f"--hold-fd={fd}", "observe")[0])
+
+    def test_a_staged_token_cannot_become_a_config(self):
+        """The review's probe_chain.py: stage a token that is a slotctl config, then point --config at it."""
+        other = self.root / "other-vm"
+        other.mkdir()
+        (other / "var.img").write_text("another VM's persistent disk")
+        evil = json.loads(write_slotctl_config(self.root / "e.json", "stygies", other, self.root / "anywhere" / "new").read_text())
+        token = json.dumps(evil, separators=(",", ":"))
+        self.assertTrue(S.matches(S.TOKEN, token))  # Still a valid runner token: the defence is the config.
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "stage", payload=self.STAGE | {"token": token})[0])
+        staged = self.credential_dir / "runner-token"
+        self.assertEqual(token, staged.read_text())
+        for argv in (
+            ("--slot", "stygies", "--config", str(staged), "stop"),
+            ("--slot", "stygies", f"--config={staged}", "scrub"),
+            ("--slot", "stygies", "stop"),
+            ("--slot", "stygies", "scrub"),
+        ):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.REFUSED, self.slotctl(*argv))
+        self.assertEqual([], self.system.mutations())
+        self.assertTrue((other / "var.img").exists())
+
+    def test_hold_fd_reaches_every_systemctl_call(self):
+        seen = []
+        run = self.system.run
+
+        def record(argv, **options):
+            seen.append(options["pass_fds"])
+            return run(argv, **options)
+
+        self.system.run = record
+        fd = os.open(self.root / "lock", os.O_CREAT | os.O_RDWR)
+        self.addCleanup(os.close, fd)
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "--hold-fd", str(fd), "observe")[0])
+        self.assertEqual([(fd,)] * 7, seen)
+
+    def test_stop_support_only_stops_this_slots_support_units(self):
+        for units in ((), ("microvm@ryza-eph-1.service",), ("microvm-virtiofsd@other.service",), (D.SUPPORT[0], D.SUPPORT[0])):
+            with self.subTest(units=units):
+                self.assertEqual(self.REFUSED, self.slotctl("--slot", self.SLOT, "stop-support", *units))
+        self.assertEqual([], self.system.mutations())
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "stop-support", D.SUPPORT[3], D.SUPPORT[0])[0])
+        self.assertEqual([("systemctl", "--system", "--no-pager", "--no-block", "stop", D.SUPPORT[3], D.SUPPORT[0])], self.system.mutations())
+
+    def test_stage_checks_every_field_before_writing(self):
+        for payload, raw in (
+            (None, b"{"),
+            (None, b"x" * (S.MAX_INPUT + 1)),
+            ([self.STAGE], None),
+            ({k: v for k, v in self.STAGE.items() if k != "handle"}, None),
+            (self.STAGE | {"extra": 1}, None),
+            (self.STAGE | {"uuid": "../../etc"}, None),
+            (self.STAGE | {"token": TOKEN + " with space"}, None),
+            (self.STAGE | {"token": ""}, None),
+            (self.STAGE | {"handle": "line\nbreak"}, None),
+            (self.STAGE | {"handle": 7}, None),
+        ):
+            with self.subTest(payload=payload, raw=raw and raw[:5]):
+                self.assertEqual(self.REFUSED, self.slotctl("--slot", self.SLOT, "stage", payload=payload, raw=raw))
+                self.assertFalse(self.credential_dir.exists())
+                self.assertFalse(self.trust_dir.exists())
+        self.assertEqual((0, b"", ""), self.slotctl("--slot", self.SLOT, "stage", payload=self.STAGE))
+        self.assertEqual(TOKEN, (self.credential_dir / "runner-token").read_text())
+        self.assertEqual(0o400, stat.S_IMODE((self.credential_dir / "runner-uuid").stat().st_mode))
+        self.assertEqual(0o700, stat.S_IMODE(self.trust_dir.stat().st_mode))
+        self.assertEqual([], list(self.trust_dir.iterdir()))
+
+    def test_scrub_waits_for_the_vm_and_refuses_a_symlinked_slot_dir(self):
+        for name in S.IMAGES:
+            (self.vm_dir / name).touch()
+        self.system.set(active="active")
+        self.assertEqual((1, b"", "vm-not-stopped\n"), self.slotctl("--slot", self.SLOT, "scrub"))
+        self.assertTrue((self.vm_dir / "var.img").exists())
+        self.system.set()
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "scrub")[0])
+        self.assertFalse((self.vm_dir / "var.img").exists())
+        # O_NOFOLLOW covers only the slot directory itself, the last path component. That suffices because
+        # its parents are root-owned on the host (controlDir root:microvm-eph 0750, credParent root 0755).
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "var.img").touch()
+        linked = write_slotctl_config(self.root / "linked.json", self.SLOT, self.root / "linked-vm", self.credential_dir)
+        (self.root / "linked-vm").symlink_to(elsewhere)
+        self.assertEqual((1, b"", "scrub-failed\n"), self.slotctl("--slot", self.SLOT, "scrub", config=linked))
+        self.assertTrue((elsewhere / "var.img").exists())
+
+    def test_cleanup_clears_the_trust_share_even_with_delivery_off(self):
+        def fill():
+            self.trust_dir.mkdir(mode=0o700, exist_ok=True)
+            for name in (*S.TRUST_FILES, ".ncps-netrc.tmp"):
+                (self.trust_dir / name).write_bytes(b"left over from when trust was on")
+
+        fill()
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "withdraw", config=self.off)[0])
+        self.assertEqual([], list(self.trust_dir.iterdir()))
+        fill()
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "scrub", config=self.off)[0])
+        self.assertFalse(self.trust_dir.exists())
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "stage", payload=self.STAGE, config=self.off)[0])
+        self.assertFalse(self.trust_dir.exists())
+        self.system.set(active="active")
+        self.assertEqual((1, b"", "no-trust-share\n"), self.slotctl("--slot", self.SLOT, "deliver", payload=self.DELIVER, config=self.off))
+        self.assertFalse(self.trust_dir.exists())
+
+    def test_deliver_checks_shapes_and_a_settled_running_vm(self):
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "stage", payload=self.STAGE)[0])
+        for payload in (
+            {"ci-signing-key": self.DELIVER["ci-signing-key"]},
+            self.DELIVER | {"extra": "eA=="},
+            self.DELIVER | {"ci-signing-key": "not base64!"},
+            self.DELIVER | {"ncps-netrc": base64.b64encode(b"machine evil.example\nlogin x\npassword y\n").decode()},
+            self.DELIVER | {"ci-signing-key": base64.b64encode(b"no-colon-here").decode()},
+        ):
+            with self.subTest(payload=sorted(payload)):
+                self.assertEqual(self.REFUSED, self.slotctl("--slot", self.SLOT, "deliver", payload=payload))
+        # Only ActiveState=active with no job queued: not before boot, not while starting or stopping.
+        for state in (
+            {}, {"active": "failed"}, {"active": "inactive", "pending": "71"}, {"active": "activating", "pending": "71"},
+            {"active": "activating"}, {"active": "deactivating", "pending": "72"}, {"active": "active", "pending": "73"},
+            {"active": "reloading"},
+        ):
+            with self.subTest(state=state):
+                self.system.set(**state)
+                self.assertEqual((1, b"", "vm-not-running\n"), self.slotctl("--slot", self.SLOT, "deliver", payload=self.DELIVER))
+                self.assertEqual([], list(self.trust_dir.iterdir()))
+        self.system.set(active="active")
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "deliver", payload=self.DELIVER)[0])
+        self.assertEqual(SIGNING_KEY, (self.trust_dir / "ci-signing-key").read_bytes())
+        self.assertEqual(0o400, stat.S_IMODE((self.trust_dir / "ncps-netrc").stat().st_mode))
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "withdraw")[0])
+        self.assertEqual([], list(self.trust_dir.iterdir()))
+        # A trust share that is a symlink is refused, and its target stays empty.
+        target = self.root / "target"
+        target.mkdir(mode=0o700)
+        self.trust_dir.rmdir()
+        self.trust_dir.symlink_to(target)
+        self.assertEqual((1, b"", "trust-dir-missing\n"), self.slotctl("--slot", self.SLOT, "deliver", payload=self.DELIVER))
+        self.assertEqual([], list(target.iterdir()))
+
+
+class CommandSlotTests(unittest.TestCase):
+    """HOM-32: the dispatcher's side of slotctl. Answers are checked as strictly as Forgejo's."""
+
+    def call(self, code=0, stdout=b"", stderr=b"", error=None):
+        calls = []
+
+        def run(argv, **options):
+            calls.append((argv, options))
+            if error is not None:
+                raise error
+            return subprocess.CompletedProcess(argv, code, stdout, stderr)
+
+        return D.CommandSlot(("/nix/store/x-slotctl",), run, lock_fd=9), calls
+
+    def snapshot(self, **changes):
+        answer = {"vm": [True, "success"], "support": [[unit, True] for unit in D.SUPPORT], "again": [False, "timeout"]} | changes
+        return json.dumps(answer).encode()
+
+    def test_observe_and_its_argv(self):
+        slot, calls = self.call(stdout=self.snapshot())
+        snapshot = slot.observe()
+        self.assertEqual((True, "success", False, "timeout", []), (
+            snapshot.vm_idle, snapshot.vm_result, snapshot.again_idle, snapshot.again_result, snapshot.residual,
+        ))
+        argv, options = calls[0]
+        self.assertEqual(("/nix/store/x-slotctl", "--slot", D.SLOT, "--hold-fd", "9", "observe"), argv)
+        self.assertEqual((9,), options["pass_fds"])
+        self.assertEqual(b"", options["input"])
+        self.assertFalse(options["check"])
+
+    def test_unexpected_observe_answers_refuse_slot_reuse(self):
+        support = [[unit, True] for unit in D.SUPPORT]
+        for stdout in (
+            b"", b"[]", b"{", b"x" * (D.MAX_RESPONSE + 1),
+            self.snapshot(extra=1),
+            self.snapshot(vm=[True]),
+            self.snapshot(vm=["yes", "success"]),
+            self.snapshot(again=[True, "rebooted"]),
+            self.snapshot(support=support[::-1]),
+            self.snapshot(support=support[:-1]),
+            self.snapshot(support=[[unit, 1] for unit in D.SUPPORT]),
+            self.snapshot(support=[[unit, True, 0] for unit in D.SUPPORT]),
+        ):
+            with self.subTest(stdout=stdout[:60]):
+                slot, _ = self.call(stdout=stdout)
+                with self.assertRaisesRegex(D.SlotError, "answered unexpectedly"):
+                    slot.observe()
+
+    def test_refusal_codes_are_logged_in_the_dispatchers_own_words(self):
+        support = f"microvm-virtiofsd@{D.SLOT}.service"
+        for act, code, message in (
+            (lambda slot: slot.scrub(), "vm-not-stopped", "VM state changed during reconciliation; waiting before slot cleanup"),
+            (lambda slot: slot.start(), "systemctl-failed", f"systemctl start failed or timed out for {D.SLOT}; reconciling unit state"),
+            (lambda slot: slot.observe(), "systemctl-failed", f"systemctl show failed or timed out for {D.SLOT}; reconciling unit state"),
+            (lambda slot: slot.stop_support([support]), "systemctl-failed", f"systemctl stop failed or timed out for {D.SLOT}; reconciling unit state"),
+            (lambda slot: slot.observe(), "unknown-state-vm", f"unknown systemd state for {D.VM}; refusing slot reuse"),
+            (lambda slot: slot.observe(), "unknown-state-virtiofsd", f"unknown systemd state for {support}; refusing slot reuse"),
+            (lambda slot: slot.deliver({"ci-signing-key": SIGNING_KEY, "ncps-netrc": NETRC}), "trust-dir-unsafe",
+             "trust directory has unexpected ownership or mode; refusing to deliver"),
+        ):
+            with self.subTest(code=code):
+                slot, _ = self.call(code=1, stderr=code.encode() + b"\n")
+                with self.assertRaises(D.SlotError) as raised:
+                    act(slot)
+                self.assertEqual(message, str(raised.exception))
+
+    def test_anything_else_is_generic(self):
+        refused = f"slotctl scrub refused for {D.SLOT}; reconciling unit state"
+        for code, stderr, message in (
+            (1, b"", refused),
+            (1, b"vm-on-fire\n", refused),
+            (1, b"unknown-state-bogus\n", refused),
+            (1, b"trusted: run #12 (push); delivered CI upload credentials\n", refused),
+            (1, b"vm-not-stopped\nextra\n", refused),
+            (1, b"vm-not-stopped" + b" " * 64, refused),
+            (1, "vm-not-stoppéd".encode(), refused),
+            (2, b"vm-not-stopped\n", f"slotctl scrub failed (exit 2) for {D.SLOT}; reconciling unit state"),
+            (3, b"unexpected-failure\n", f"slotctl scrub failed (exit 3) for {D.SLOT}; reconciling unit state"),
+            (-9, b"", f"slotctl scrub failed (exit -9) for {D.SLOT}; reconciling unit state"),
+        ):
+            with self.subTest(code=code, stderr=stderr[:30]):
+                slot, _ = self.call(code=code, stderr=stderr)
+                with self.assertRaises(D.SlotError) as raised:
+                    slot.scrub()
+                self.assertEqual(message, str(raised.exception))
+        for error in (subprocess.TimeoutExpired("slotctl", 30), OSError("exec failed")):
+            slot, _ = self.call(error=error)
+            with self.assertRaisesRegex(D.SlotError, "slotctl start failed or timed out"):
+                slot.start()
+
+    def test_secrets_go_on_stdin_only(self):
+        slot, calls = self.call()
+        slot.stage(uuid_for(100), TOKEN, "opaque/attempt-1")
+        slot.deliver({"ci-signing-key": SIGNING_KEY, "ncps-netrc": NETRC})
+        (stage_argv, stage), (deliver_argv, deliver) = calls
+        self.assertEqual("stage", stage_argv[-1])
+        self.assertEqual("deliver", deliver_argv[-1])
+        self.assertNotIn(TOKEN, repr(stage_argv) + repr(deliver_argv))
+        self.assertEqual({"uuid": uuid_for(100), "token": TOKEN, "handle": "opaque/attempt-1"}, json.loads(stage["input"]))
+        self.assertEqual(NETRC, base64.b64decode(json.loads(deliver["input"])["ncps-netrc"]))
+        slot, calls = self.call()
+        with self.assertRaisesRegex(D.ApiError, "invalid runner token"):
+            slot.stage(uuid_for(100), "bad token", "opaque/attempt-1")
+        self.assertEqual([], calls)
+
+
+class SharedConstantsTests(unittest.TestCase):
+    """HOM-32: what the dispatcher and slotctl both define must agree; drift would fail closed, but quietly."""
+
+    def test_dispatcher_and_slotctl_agree(self):
+        self.assertEqual(D.SUPPORT_UNITS, S.SUPPORT_UNITS)
+        self.assertEqual(D.RESULTS, (*S.RESULTS, "other result"))
+        self.assertEqual(D.TRUST_FILES, S.TRUST_FILES)
+        self.assertEqual({k: v.pattern for k, v in D.TRUST_SHAPES.items()}, {k: v.pattern for k, v in S.TRUST_SHAPES.items()})
+        for name in ("TOKEN", "UUID", "SLOT_NAME"):
+            self.assertEqual(getattr(D, name).pattern, getattr(S, name).pattern, name)
+        for value in ("opaque/attempt-1", "", "x" * 1024, "x" * 1025, "line\nbreak", "\ud800", 7, None):
+            self.assertEqual(D.handle_ok(value), S.handle_ok(value), repr(value)[:20])
+
+    def test_every_refusal_code_has_the_dispatchers_words(self):
+        slot = D.CommandSlot(("slotctl",))
+        for code in S.CODES:
+            with self.subTest(code=code):
+                self.assertIsNotNone(slot._refusal("scrub", code.encode() + b"\n"))
+        unknown_state = {code for code in S.CODES if code.startswith("unknown-state-")}
+        self.assertEqual(set(D.CommandSlot.REFUSALS), set(S.CODES) - unknown_state - {"systemctl-failed"})
+        self.assertEqual(set(D.CommandSlot.ACTIONS), set(S.VERBS) - {"stage", "withdraw"})
+
+
+class SlotctlProcessTests(unittest.TestCase):
+    """HOM-32: slotctl as the real child process the dispatcher runs, with a stand-in systemctl on PATH."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        systemctl = bin_dir / "systemctl"
+        systemctl.write_text(
+            "#!/bin/sh\n"
+            'case " $* " in *" show "*) printf "LoadState=loaded\\nActiveState=inactive\\nJob=\\nResult=success\\n" ;; esac\n'
+        )
+        systemctl.chmod(0o755)
+        self.enterContext(patch.dict(os.environ, {"PATH": f"{bin_dir}:{os.environ.get('PATH', '/usr/bin:/bin')}"}))
+        self.vm_dir, self.credential_dir = root / "vm", root / "credentials" / D.SLOT
+        for directory in (self.vm_dir, self.credential_dir.parent):
+            directory.mkdir(mode=0o700)
+        self.config = write_slotctl_config(root / "slotctl.json", D.SLOT, self.vm_dir, self.credential_dir)
+        # What replaceVars builds: the same file with the config path compiled in.
+        source = SLOTCTL.read_text()
+        self.assertEqual(1, source.count("@config@"))
+        self.script = root / "_forgejo-slotctl.py"
+        self.script.write_text(source.replace("@config@", str(self.config)))
+        self.lock = os.open(root / "lock", os.O_CREAT | os.O_RDWR)
+        self.addCleanup(os.close, self.lock)
+        self.slot = D.CommandSlot((sys.executable, "-I", "-B", str(self.script)), lock_fd=self.lock)
+
+    def test_round_trip(self):
+        snapshot = self.slot.observe()
+        self.assertTrue(snapshot.vm_idle and snapshot.again_idle)
+        self.assertEqual([], snapshot.residual)
+        self.slot.stage(uuid_for(100), TOKEN, "opaque/attempt-1")
+        self.assertEqual(TOKEN, (self.credential_dir / "runner-token").read_text())
+        (self.vm_dir / "var.img").touch()
+        self.slot.scrub()
+        self.assertFalse(self.credential_dir.exists())
+        self.assertFalse((self.vm_dir / "var.img").exists())
+        self.slot.start()
+        self.slot.withdraw()
+
+    def test_a_refusal_and_a_forged_command_line(self):
+        with self.assertRaisesRegex(D.SlotError, "^this slot does not deliver CI credentials"):
+            self.slot.deliver({"ci-signing-key": SIGNING_KEY, "ncps-netrc": NETRC})
+        forged = subprocess.run(
+            (sys.executable, "-I", "-B", str(self.script), "--config", str(self.config), "--slot", D.SLOT, "observe"),
+            stdin=subprocess.DEVNULL, capture_output=True, timeout=30, check=False,
+        )
+        self.assertEqual((2, b"", b"invalid-request\n"), (forged.returncode, forged.stdout, forged.stderr))
+
+    def test_an_unbuilt_slotctl_never_runs(self):
+        unbuilt = D.CommandSlot((sys.executable, "-I", "-B", str(SLOTCTL)))
+        with self.assertRaisesRegex(D.SlotError, "^slotctl observe failed \\(exit 2\\)"):
+            unbuilt.observe()
 
 
 if __name__ == "__main__":

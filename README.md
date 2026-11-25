@@ -1015,6 +1015,25 @@ for exactly-resolved manjo runs). It shares the host Nix store read-only and can
 with public verification keys; writable store and `/var` images are disposable.
 Treat all host store contents as visible to the job; do not put plaintext
 secrets in store paths.
+
+The dispatcher only decides: Forgejo API calls, durable state, the trust
+verdict. Every slot side effect goes through `slotctl`
+(`modules/rites/_forgejo-slotctl.py`), which the dispatcher runs as a child in
+its own sandbox: systemd units, staged runner credentials, disk images and
+the trust share. Each call names the slot and one verb (`observe`, `start`,
+`stop`, `reset-failed`, `stop-support`, `stage`, `scrub`, `deliver`,
+`withdraw`). The module compiles the per-host config, which holds the paths,
+into slotctl. slotctl has no option to point elsewhere, and repeated or
+abbreviated options are refused, so a caller can only pick a declared slot
+and a verb. Secrets travel on stdin.
+- `scrub` refuses unless the VM is stopped, and it also clears the trust
+  share.
+- `deliver` refuses unless the slot delivers and its VM is `active` with no
+  job queued.
+- A refusal is one fixed code (for example `vm-not-running`). The dispatcher
+  logs its own message for it, the same text as before; slotctl's output is
+  never logged.
+
 Existing persistent runners, registrations, labels (including `nix-vm`), state
 and resource limits are unchanged. They are **not** safe for arbitrary
 untrusted workflows: this pilot does not prevent rogue jobs from requesting

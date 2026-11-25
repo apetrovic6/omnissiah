@@ -29,6 +29,19 @@
           builtins.unsafeDiscardStringContext (builtins.toJSON
             (import ../rites/_hermes-delegation-tiers-test.nix {inherit (self.nixosConfigurations) ryza;}))
         );
+        # The nix-eph dispatcher and slotctl tests (HOM-30..32): a loopback
+        # Forgejo, a fake systemctl, slotctl in-process and as a real child.
+        # Run with the python3 the slots' host deploys, not a newer one.
+        forgejo-ephemeral-dispatcher-tests =
+          pkgs.runCommand "forgejo-ephemeral-dispatcher-tests" {
+            nativeBuildInputs = [self.nixosConfigurations.ryza.pkgs.python3];
+          } ''
+            cp ${../rites/_forgejo-ephemeral-dispatcher.py} _forgejo-ephemeral-dispatcher.py
+            cp ${../rites/_forgejo-slotctl.py} _forgejo-slotctl.py
+            cp ${../rites/_forgejo-ephemeral-dispatcher-test.py} test.py
+            python3 -B test.py
+            touch "$out"
+          '';
       };
 
     # One derivation that links every check, for building them all at once.

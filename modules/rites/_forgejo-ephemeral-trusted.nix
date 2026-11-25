@@ -49,8 +49,9 @@
 #   a missing one means it was never generated or deployed.
 #
 # CHANNEL: a second virtiofs share, not fw_cfg, because fw_cfg is fixed at boot.
-#   Host: `trustDir`, root:root 0700. The dispatcher creates it empty before
-#     each boot and writes 0400 root files into it on a trusted verdict.
+#   Host: `trustDir`, root:root 0700. The dispatcher, through slotctl (its
+#     root child in the same unit), creates it empty before each boot and
+#     writes 0400 root files into it on a trusted verdict.
 #     Readers: root, which means the dispatcher, PID 1 and virtiofsd (root,
 #     supervisord). QEMU's user (microvm-eph) cannot open it.
 #   Guest: mounted read-only (virtiofsd --readonly, cache=never, no ACLs/xattrs,
