@@ -134,6 +134,14 @@ in {
         assertion = !hasHostPin || hostKeyAlgorithm == "ssh-ed25519";
         message = "services.imperium.hermes.stygies.knownHosts must be an ssh-ed25519 host key.";
       }
+      {
+        # The guard redirects any ssh cwd under these paths; the remote home must stay outside them.
+        assertion = let
+          remoteHome = self.nixosConfigurations.stygies.config.users.users.hermes.home;
+        in
+          !lib.any (path: remoteHome == path || lib.hasPrefix "${path}/" remoteHome) config.services.imperium.hermes.sshHostOnlyPaths;
+        message = "services.imperium.hermes.sshHostOnlyPaths must not contain stygies's hermes home, or every coder and work command would leave its workspace.";
+      }
     ];
 
     # Keep the identity unavailable to the default profile's local terminal
@@ -189,7 +197,7 @@ in {
         # One Matrix room per project. Add the room's Internal room ID to
         # _coder-projects.nix after inviting @hermes.
         rooms = lib.mapAttrs (_: project: project.room) projects;
-        settings.terminal = sshTerminal // {cwd = "~/work";};
+        settings.terminal = sshTerminal // {cwd = "~/personal";};
         # Kaneo uses browser PKCE. Port 28431 is outside both hosts' ephemeral
         # ranges; keep it fixed for the phalanx-to-ryza SSH tunnel.
         settings.mcp_servers.kaneo = {
@@ -228,7 +236,7 @@ in {
           agent.disabled_toolsets =
             ["cronjob"]
             ++ lib.optionals (!hasHostPin) ["terminal" "file" "code_execution"];
-          terminal = sshTerminal // {cwd = "~/work-devzero";};
+          terminal = sshTerminal // {cwd = "~/work";};
           # Remote MCP servers with browser OAuth (dynamic client
           # registration), like coder's Kaneo: nothing secret in Nix, tokens
           # land in the work profile's mcp-tokens/. Fixed redirect ports, next

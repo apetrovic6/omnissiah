@@ -24,7 +24,7 @@ def row(timestamp, room, thread, project="tally", branch="pending", summary="Old
 class TaskTools(unittest.TestCase):
     def setUp(self):
         home = Path(self.enterContext(TemporaryDirectory()))
-        self.work = home / "work"
+        self.work = home / "personal"
         self.work.mkdir()
         self.current = self.work / ".current-task"
         self.queue = self.work / ".task-queue"
@@ -442,8 +442,8 @@ class CompanySlots(unittest.TestCase):
     def setUp(self):
         self.home = Path(self.enterContext(TemporaryDirectory()))
         self.slots = {
-            "devzero": (self.home / "work-devzero/.tasks/devzero", DEVZERO_ROOM, ("api", "web")),
-            "codilas": (self.home / "work-devzero/.tasks/codilas", CODILAS_ROOM, ("backend",)),
+            "devzero": (self.home / "work/.tasks/devzero", DEVZERO_ROOM, ("api", "web")),
+            "codilas": (self.home / "work/.tasks/codilas", CODILAS_ROOM, ("backend",)),
         }
         for state, _, _ in self.slots.values():
             state.mkdir(parents=True)
@@ -476,11 +476,11 @@ class CompanySlots(unittest.TestCase):
         state = self.slots[company][0]
         return {path.name: path.read_bytes() for path in state.iterdir()}
 
-    def test_state_lives_in_the_company_dir_never_in_work(self):
+    def test_state_lives_in_the_company_dir_never_in_personal(self):
         claim = self.task("devzero", "task-claim", "--", DEVZERO_ROOM, "$t1", "api", "-", summary="DEV-1 task")
         self.assertEqual(claim["result"], "claimed")
         self.assertEqual(set(self.state("devzero")), {".current-task"})
-        self.assertFalse((self.home / "work").exists())
+        self.assertFalse((self.home / "personal").exists())
         self.assertEqual(self.state("codilas"), {})
 
     def test_company_slots_are_independent(self):
@@ -558,7 +558,7 @@ class CompanySlots(unittest.TestCase):
                                      summary="x", code=2, env=env)
                 self.assertEqual(result.stderr, message)
         self.assertEqual(self.state("devzero"), {})
-        self.assertFalse((self.home / "work").exists())
+        self.assertFalse((self.home / "personal").exists())
 
 
 if __name__ == "__main__":

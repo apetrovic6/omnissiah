@@ -72,11 +72,21 @@
       + config.services.imperium.hermesGit.extraConfig);
 
     appProjects = lib.attrNames projects;
-    taskCommand = pkgs.writeShellScript "hermes-task" ''
+    taskCommandText = ''
       umask 077
       export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON appProjects)}
-      ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME/work" || exit $?
-      ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/work/.task-lock" \
+      # Until stygies's activation has moved the old slot out of ~/work
+      # (_hermes-workspace-migrate.py), a fresh slot here would hide its task.
+      for old in .current-task .task-queue .task-lock; do
+        if [ -e "$HOME/work/$old" ]; then
+          printf '%s\n' "workspace migration pending: ~/work/$old is a personal task slot file in the company tree." \
+            "If the migration has not run, see README, Hermes workspaces on stygies. If it has (~/personal holds the slot)," \
+            "it is a stray. Don't touch it: stop and ask manjo to check it for a live task and remove it." >&2
+          exit 2
+        fi
+      done
+      ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME/personal" || exit $?
+      ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/personal/.task-lock" \
         ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "''${0##*/}" "$@"
       status=$?
       if [ "$status" -eq 75 ]; then
@@ -84,12 +94,17 @@
       fi
       exit "$status"
     '';
-    taskTools = pkgs.runCommand "hermes-task-tools" {} ''
-      mkdir -p "$out/bin"
-      for command in task-status task-claim task-branch task-done task-clear task-drop; do
-        ln -s ${taskCommand} "$out/bin/$command"
-      done
-    '';
+    taskCommand = pkgs.writeShellScript "hermes-task" taskCommandText;
+    taskTools =
+      pkgs.runCommand "hermes-task-tools" {
+        # The rendered launcher, for tests/test_hermes_work_launchers.py.
+        passthru.launcherText = taskCommandText;
+      } ''
+        mkdir -p "$out/bin"
+        for command in task-status task-claim task-branch task-done task-clear task-drop; do
+          ln -s ${taskCommand} "$out/bin/$command"
+        done
+      '';
   in {
     # Further sections for the same read-only file, e.g. the work coder's
     # (hermes-work-coder.nix). Empty keeps the file as it was.

@@ -88,10 +88,10 @@ def env_list(parser, name):
 
 
 def state_dir(parser):
-    """The personal coder keeps ~/work; the company wrappers set their own slot."""
+    """The personal coder keeps ~/personal; the company wrappers set their own slot."""
     raw = os.environ.get("HERMES_TASK_STATE_DIR")
     if raw is None:
-        return Path.home() / "work"
+        return Path.home() / "personal"
     path = Path(raw)
     if not path.is_absolute():
         parser.exit(2, "HERMES_TASK_STATE_DIR must be an absolute path.\n")
