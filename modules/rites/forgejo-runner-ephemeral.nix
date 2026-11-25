@@ -193,6 +193,26 @@
       install=${lib.getExe' pkgs.coreutils "install"}
       ${lib.concatMapStringsSep "\n" installLine slotDirs}
     '';
+    # The slot host agent (_forgejo-slotctl.py): every slot side effect the
+    # dispatcher wants goes through it, one validated verb per call. Its
+    # config names this host's slot and paths, so a caller can only pick a
+    # slot and a verb, never a path.
+    slotctlSlots = {
+      ${slot} = {
+        vm_dir = vmDir;
+        credential_dir = credDir;
+        trust_dir =
+          if cfg.trustedJobs.enable
+          then trustDir
+          else null;
+        user = slotUser;
+        group = slotUser;
+      };
+    };
+    slotctlConfig = pkgs.writeText "${hostName}-slotctl.json" (builtins.toJSON {slots = slotctlSlots;});
+    slotctl = pkgs.writeShellScript "forgejo-slotctl" ''
+      exec ${lib.getExe pkgs.python3} -I -B ${./_forgejo-slotctl.py} --config ${slotctlConfig} "$@"
+    '';
     preflight = pkgs.writeShellScript "${slot}-preflight" ''
       set -eu
       # WorkingDirectory is optional so privileged stop hooks can clean a failed start.
@@ -389,8 +409,8 @@
         internal = true;
         readOnly = true;
         type = lib.types.attrs;
-        default = {inherit slot slotDirs prepareDirs;};
-        description = "The slot, its directories and the script that creates them, for the eval check.";
+        default = {inherit slot slotDirs prepareDirs slotctlSlots;};
+        description = "The slot, its directories, the script that creates them and slotctl's view of it, for eval checks.";
       };
     };
 
@@ -544,15 +564,16 @@
           path = [pkgs.systemd];
           serviceConfig = {
             Type = "exec";
+            # It decides; slotctl, its child in this same sandbox, does every slot side effect.
             ExecStart = lib.concatStringsSep " " ([
                 (lib.getExe pkgs.python3)
                 "-I -B ${./_forgejo-ephemeral-dispatcher.py}"
-                "--slot ${slot} --machine ${hostName} --slot-user ${slotUser}"
+                "--slot ${slot} --machine ${hostName} --slotctl ${slotctl}"
                 "--forge-host ${forgeHost} --login ${login} --label ${label}"
                 "--repo-id ${toString cfg.repoId}"
-                "--state-dir /var/lib/${dispatch} --vm-dir ${vmDir} --credential-dir ${credDir}"
+                "--state-dir /var/lib/${dispatch}"
               ]
-              ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs --repo ${repoName} --trust-dir ${trustDir}");
+              ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs --repo ${repoName}");
             LoadCredential = ["forgejo-pat:${config.clan.core.vars.generators.${generator}.files.token.path}"];
             StateDirectory = dispatch;
             StateDirectoryMode = "0700";
