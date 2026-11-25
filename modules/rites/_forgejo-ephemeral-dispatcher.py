@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dispatch one targeted Forgejo job at a time to Ryza's fixed disposable slot.
+"""Dispatch one targeted Forgejo job at a time to one fixed disposable slot (--slot).
 
 With --trusted-jobs (HOM-31), every job still boots untrusted. Once the slot's runner has taken the job, the
 dispatcher maps it exactly: the job's task_id gives the task (GET /repos/manjo/<repo>/actions/tasks), the
@@ -26,12 +26,13 @@ import sys
 import time
 from pathlib import Path
 
+# One process serves one slot. configure() sets these from the command line before anything runs. The
+# defaults are the HOM-30 pilot's (and the tests').
 SLOT = "ryza-eph-1"
+MACHINE = "ryza"
 VM = f"microvm@{SLOT}.service"
-SUPPORT = tuple(
-    f"microvm-{name}@{SLOT}.service"
-    for name in ("tap-interfaces", "macvtap-interfaces", "pci-devices", "virtiofsd", "set-booted")
-)
+SUPPORT_UNITS = ("tap-interfaces", "macvtap-interfaces", "pci-devices", "virtiofsd", "set-booted")
+SUPPORT = tuple(f"microvm-{name}@{SLOT}.service" for name in SUPPORT_UNITS)
 IMAGES = ("nix-store-overlay.img", "var.img")
 CREDENTIALS = ("runner-uuid", "runner-token", "job-handle")
 HOST = "forge.ugalabugala.org"
@@ -52,7 +53,7 @@ REQUEST_TIMEOUT = 10
 MAX_RESPONSE = 2 * 1024 * 1024
 VM_DEADLINE = 90 + 75 * 60 + 30  # Informational only; systemd enforces the actual deadlines.
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-NAME = re.compile(r"eph-[0-9a-f]{12}-ryza-[0-9a-f]{32}")
+NAME = re.compile(rf"eph-[0-9a-f]{{12}}-{MACHINE}-[0-9a-f]{{32}}")
 TOKEN = re.compile(r"[!-~]{1,4096}")
 UUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 # Trusted-job credential delivery (HOM-31).
@@ -67,6 +68,30 @@ TRUST_SHAPES = {
 TRUST_DEADLINE = 10 * 60
 TASK_PAGES = 5
 MAX_RUN_RESPONSE = 8 * 1024 * 1024  # One run, but its event_payload carries PR bodies and commit lists.
+# What configure() accepts. Each value ends up in a unit name, a runner name, a URL path or the jobs query,
+# so none may carry a separator: no "/", "?", "&", ",", "@" or whitespace.
+SLOT_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
+HOST_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+")
+LOGIN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")
+LABEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def configure(slot, machine, forge_host, login, label):
+    """Point this process at one slot on one machine, one forge account and one label."""
+    for name, pattern, value in (
+        ("slot", SLOT_NAME, slot),
+        ("machine", SLOT_NAME, machine),
+        ("forge host", HOST_NAME, forge_host),
+        ("login", LOGIN_NAME, login),
+        ("label", LABEL_NAME, label),
+    ):
+        if not isinstance(value, str) or pattern.fullmatch(value) is None:
+            raise ValueError(f"invalid {name}")
+    global SLOT, MACHINE, VM, SUPPORT, HOST, LOGIN, LABEL, NAME
+    SLOT, MACHINE, HOST, LOGIN, LABEL = slot, machine, forge_host, login, label
+    VM = f"microvm@{SLOT}.service"
+    SUPPORT = tuple(f"microvm-{name}@{SLOT}.service" for name in SUPPORT_UNITS)
+    NAME = re.compile(rf"eph-[0-9a-f]{{12}}-{re.escape(MACHINE)}-[0-9a-f]{{32}}")
 
 
 class ApiError(Exception):
@@ -76,7 +101,7 @@ class ApiError(Exception):
 class HttpError(ApiError):
     def __init__(self, operation, status):
         self.status = status
-        hint = "; verify the manjo PAT and its write:user (and, for trust, read:repository) scope" if status in (401, 403) else ""
+        hint = f"; verify the {LOGIN} PAT and its write:user (and, for trust, read:repository) scope" if status in (401, 403) else ""
         super().__init__(f"Forgejo {operation}: HTTP {status}{hint}")
 
 
@@ -177,9 +202,9 @@ class Forgejo:
     def identify(self, expected):
         user, _ = self._request("identity", "GET", "/user", (200,))
         if not isinstance(user, dict) or user.get("login") != LOGIN or not positive(user.get("id")):
-            raise ApiError("Forgejo identity is not the expected manjo account; check the PAT")
+            raise ApiError(f"Forgejo identity is not the expected {LOGIN} account; check the PAT")
         if expected is not None and user["id"] != expected:
-            raise ApiError("Forgejo manjo account ID changed; reconcile ownership before restarting")
+            raise ApiError(f"Forgejo {LOGIN} account ID changed; reconcile ownership before restarting")
         return user["id"]
 
     def jobs(self, repo_id, owner):
@@ -807,7 +832,7 @@ class Dispatcher:
         data = self.store.data
         owner = self.api.identify(data["owner_id"])
         if not self.identity_verified:
-            log("Forgejo PAT identity verified as manjo")
+            log(f"Forgejo PAT identity verified as {LOGIN}")
             self.identity_verified = True
         if self.trust is not None and not self.repository_verified and self.monotonic() >= self.repository_after:
             # Up front, so a PAT without read:repository shows before the pause is lifted. Not fatal:
@@ -1062,7 +1087,7 @@ class Dispatcher:
     def _dispatch(self, job):
         handle = job["handle"]
         digest = hashlib.sha256(handle.encode()).hexdigest()[:12]
-        active = dict(handle=handle, name=f"eph-{digest}-ryza-{secrets.token_hex(16)}", runner=None, phase="intent", queued_at=None)
+        active = dict(handle=handle, name=f"eph-{digest}-{MACHINE}-{secrets.token_hex(16)}", runner=None, phase="intent", queued_at=None)
         self.store.save(active=active)
         log(f"registering runner for job {job['id']} attempt {job['attempt']} ({digest})")
         try:
@@ -1105,21 +1130,41 @@ class Dispatcher:
             log("retiring handle after repeated registration refusals spanning at least one hour")
 
 
-def main():
+def parse_arguments(argv=None):
+    """The command line, validated; also configures the slot, forge account and label this process serves."""
     parser = argparse.ArgumentParser(description=__doc__)
+    # Every slot setting is required: a dispatcher must never fall back to another slot's identity.
+    parser.add_argument("--slot", required=True, help="the slot's microVM name, e.g. ryza-eph-1")
+    parser.add_argument("--machine", required=True, help="the host's name, part of every runner name")
+    parser.add_argument("--slot-user", required=True, help="the user and group QEMU runs as")
+    parser.add_argument("--forge-host", required=True, help="the Forgejo host name, e.g. forge.ugalabugala.org")
+    parser.add_argument("--login", required=True, help="the forge account whose runners this registers")
+    parser.add_argument("--label", required=True, help="the one runs-on label this slot serves")
     parser.add_argument("--repo-id", type=int, required=True)
     for name in ("--state-dir", "--vm-dir", "--credential-dir"):
         parser.add_argument(name, type=Path, required=True)
     parser.add_argument("--trusted-jobs", action="store_true", help="deliver CI upload credentials to trusted runs")
-    parser.add_argument("--repo", help="name of the configured repository under manjo (with --trusted-jobs)")
+    parser.add_argument("--repo", help="name of the configured repository under --login (with --trusted-jobs)")
     parser.add_argument("--trust-dir", type=Path, help="root-only directory the slot's trust share serves")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if not matches(SLOT_NAME, args.slot_user):
+        parser.error("invalid slot user")
     if not positive(args.repo_id):
         parser.error("--repo-id must be positive")
     if args.trusted_jobs != (args.repo is not None) or args.trusted_jobs != (args.trust_dir is not None):
         parser.error("--trusted-jobs needs --repo and --trust-dir, and they need it")
     if args.trusted_jobs and not matches(REPO_NAME, args.repo):
         parser.error("--repo must be a plain repository name")
+    # Last, so a refused command line never leaves the process half configured.
+    try:
+        configure(args.slot, args.machine, args.forge_host, args.login, args.label)
+    except ValueError as error:
+        parser.error(str(error))
+    return args
+
+
+def main():
+    args = parse_arguments()
     os.umask(0o077)
     directory = os.environ.get("CREDENTIALS_DIRECTORY")
     try:
@@ -1137,8 +1182,8 @@ def main():
             files = SlotFiles(
                 args.vm_dir,
                 args.credential_dir,
-                pwd.getpwnam("microvm-eph").pw_uid,
-                grp.getgrnam("microvm-eph").gr_gid,
+                pwd.getpwnam(args.slot_user).pw_uid,
+                grp.getgrnam(args.slot_user).gr_gid,
                 args.trust_dir,
             )
             trust = None

@@ -1632,5 +1632,107 @@ class TrustedJobTests(unittest.TestCase):
         self.assertFalse(self.trust_dir.exists())
 
 
+class SlotConfigurationTests(unittest.TestCase):
+    """HOM-32: the slot, machine, forge, account and label come from the command line, not constants."""
+
+    PILOT = ("ryza-eph-1", "ryza", "forge.ugalabugala.org", "manjo", "nix-eph")
+    INACTIVE = b"LoadState=loaded\nActiveState=inactive\nJob=\nResult=success\n"
+
+    def setUp(self):
+        self.addCleanup(D.configure, *self.PILOT)
+        self.logs = io.StringIO()
+        self.enterContext(contextlib.redirect_stderr(self.logs))
+
+    def arguments(self, **changes):
+        values = {
+            "slot": "terra-eph-1", "machine": "terra", "slot-user": "microvm-eph",
+            "forge-host": "forge.noosphere.uk", "login": "manjo", "label": "nix-eph",
+            "repo-id": "9", "state-dir": "/state", "vm-dir": "/vm", "credential-dir": "/credentials",
+        } | changes
+        argv = []
+        for key, value in values.items():
+            if value is not None:
+                argv += [f"--{key}", value]
+        return argv
+
+    def assert_pilot(self):
+        self.assertEqual(self.PILOT, (D.SLOT, D.MACHINE, D.HOST, D.LOGIN, D.LABEL))
+        self.assertEqual("microvm@ryza-eph-1.service", D.VM)
+        self.assertEqual(VM, D.VM)
+        self.assertEqual(
+            tuple(f"microvm-{unit}@ryza-eph-1.service" for unit in ("tap-interfaces", "macvtap-interfaces", "pci-devices", "virtiofsd", "set-booted")),
+            D.SUPPORT,
+        )
+        self.assertTrue(D.matches(D.NAME, f"eph-{'0' * 12}-ryza-{'f' * 32}"))
+
+    def test_defaults_are_the_pilot(self):
+        self.assert_pilot()
+
+    def test_arguments_configure_one_slot(self):
+        args = D.parse_arguments(self.arguments())
+        self.assertEqual("microvm-eph", args.slot_user)
+        self.assertEqual(("terra-eph-1", "terra", "forge.noosphere.uk"), (D.SLOT, D.MACHINE, D.HOST))
+        self.assertEqual("microvm@terra-eph-1.service", D.VM)
+        self.assertIn("microvm-virtiofsd@terra-eph-1.service", D.SUPPORT)
+        self.assertFalse(any("ryza" in unit for unit in D.SUPPORT))
+        name = f"eph-{'a' * 12}-terra-{'b' * 32}"
+        self.assertTrue(D.matches(D.NAME, name))
+        self.assertFalse(D.matches(D.NAME, name.replace("terra", "ryza")))
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual("terra-eph-1", D.Store(Path(directory)).data["slot"])
+
+    def test_dispatch_names_units_and_runner_after_the_slot(self):
+        D.configure("terra-eph-1", "terra", "forge.ugalabugala.org", "manjo", "nix-eph")
+        forge = FakeForge()
+        self.addCleanup(forge.close)
+        forge.jobs = [job(14)]
+        calls = []
+
+        def run(argv, **_options):
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout=self.INACTIVE if "show" in argv else b"")
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        for directory in ("state", "vm", "credentials"):
+            (root / directory).mkdir(mode=0o700)
+        pat = root / "forgejo-pat"
+        pat.write_text(PAT + "\n")
+        dispatcher = D.Dispatcher(
+            REPO,
+            D.Forgejo(pat, forge.connect),
+            D.Systemctl(run),
+            D.SlotFiles(root / "vm", root / "credentials" / "terra-eph-1", os.getuid(), os.getgid()),
+            D.Store(root / "state"),
+            FakeClock().monotonic,
+            FakeClock().wall,
+            pause=root / "pause",
+        )
+        dispatcher.tick()
+        state = json.loads((root / "state" / "state.json").read_text())
+        self.assertEqual("terra-eph-1", state["slot"])
+        self.assertRegex(state["active"]["name"], r"^eph-[0-9a-f]{12}-terra-[0-9a-f]{32}$")
+        self.assertEqual({"name": state["active"]["name"], "ephemeral": True}, forge.calls[-1][3])
+        started = [argv for argv in calls if "start" in argv]
+        self.assertEqual([("systemctl", "--system", "--no-pager", "--no-block", "--job-mode=fail", "start", "microvm@terra-eph-1.service")], started)
+        shown = {argv[-1] for argv in calls if "show" in argv}
+        self.assertEqual({"microvm@terra-eph-1.service", *D.SUPPORT}, shown)
+        self.assertIn("terra-eph-1: queued VM start", self.logs.getvalue())
+
+    def test_rejects_separators_and_missing_settings(self):
+        for changes in (
+            {"slot": "ryza/eph-1"}, {"slot": "Ryza-eph-1"}, {"slot": "eph@1"}, {"machine": "ry za"},
+            {"forge-host": "forge.example.org/x"}, {"forge-host": "localhost"}, {"forge-host": "forge.example.org:443"},
+            {"login": "manjo/../x"}, {"login": "man jo"}, {"label": "nix,eph"}, {"label": "nix&eph"}, {"label": "nix-eph:host"},
+            {"slot-user": "microvm eph"}, {"slot": None}, {"machine": None}, {"forge-host": None}, {"login": None},
+            {"label": None}, {"slot-user": None},
+        ):
+            with self.subTest(changes), self.assertRaises(SystemExit):
+                D.parse_arguments(self.arguments(**changes))
+            # A refused command line leaves the process as it was.
+            self.assert_pilot()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -977,6 +977,9 @@ a fork run; do not open up fork scheduling more broadly.
    ACLs: public HTTPS and only Cerberus (`192.168.1.105`) on the LAN for
    DNS (TCP/UDP 53) and HTTPS (TCP 443). Ryza source-NATs the tap to the
    dedicated `ryza-eph` address in the [network chart](modules/cartographa/_chart.nix).
+   The slot's size, tap number and SNAT address are data in
+   [`modules/rites/_ci-slots.nix`](modules/rites/_ci-slots.nix), which
+   Cerberus's guard reads too.
    The guest pins `forge.ugalabugala.org` and `ncps.noosphere.uk` to Cerberus;
    Caddy allows only those HTTP hosts from the slot's source address and
    relays NCPS through its `*.noosphere.uk` proxy. There is no direct

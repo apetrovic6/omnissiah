@@ -2,16 +2,29 @@
   flake.nixosModules.forgejo-runner-ephemeral = {
     config,
     lib,
+    options,
     pkgs,
     ...
   }: let
     cfg = config.services.imperium.forgejoEphemeral;
+    inherit (config.networking) hostName;
+    # This machine's entry in the slot inventory (_ci-slots.nix), and its one slot.
+    host = self.lib.ciSlots.${hostName} or null;
+    slotNames = builtins.attrNames (host.slots or {});
+    slot =
+      if slotNames == []
+      then throw "forgejoEphemeral: ${hostName} has no slot in modules/rites/_ci-slots.nix."
+      else builtins.head slotNames;
+    spec = host.slots.${slot};
     generator = "forgejo-ephemeral-ugalabugala";
     dispatch = "forgejo-ephemeral-dispatcher";
     forgeHost = "forge.${self.lib.lab.domain}";
     cacheHost = "ncps.noosphere.uk";
+    # The forge account whose runners the dispatcher registers, and the one
+    # label it serves (pools and label sets: HOM-32 PR 5).
+    login = "manjo";
+    label = "nix-eph";
     slotUser = "microvm-eph";
-    slot = "ryza-eph-1";
     slice = "forgejo-ephemeral.slice";
     vm = "microvm@${slot}";
     installer = "install-microvm-${slot}";
@@ -27,21 +40,26 @@
     repoName = "rust-app-template";
     overlay = "/nix/.rw-store";
     images = ["nix-store-overlay.img" "var.img"];
-    tap = "vm-eph-1";
-    uplink = "ens18";
-    mac = "02:00:00:c1:00:03";
-    gateway = "10.99.2.1";
-    address = "10.99.2.2";
+    # The link to the guest, numbered by the slot's index (_ci-slots.nix).
+    tap = "vm-eph-${toString spec.index}";
+    inherit (host) uplink;
+    mac = "02:00:00:c1:00:${lib.fixedWidthString 2 "0" (lib.toLower (lib.toHexString (spec.index + 2)))}";
+    subnet = "10.99.${toString (spec.index + 1)}";
+    gateway = "${subnet}.1";
+    address = "${subnet}.2";
     inherit (self.lib.hosts) cerberus;
-    inherit (self.lib.lan) ryza-eph;
+    # Every untrusted boot of this host's slots leaves from this address.
+    egress = self.lib.lan.${host.egress.untrusted};
+    # Every other microVM's credentials and state, declared or left behind.
+    otherVMs = builtins.filter (name: name != slot) (builtins.attrNames config.microvm.vms) ++ host.legacyVMs;
     persistentPaths =
       ["-/persist"]
       ++ lib.concatMap
       (name: ["-${credParent}/${name}" "-${config.microvm.stateDir}/${name}"])
-      ["ryza-ci-noosphere" "ryza-ci-ugalabugala" "ryza-ci"];
+      otherVMs;
     guard = "forgejo-ephemeral-firewall";
-    outChain = "ryza-eph-out";
-    inChain = "ryza-eph-in";
+    outChain = "${hostName}-eph-out";
+    inChain = "${hostName}-eph-in";
     nonPublic = [
       "0.0.0.0/8"
       "10.0.0.0/8"
@@ -107,7 +125,7 @@
       }
       apply_rules() {
         local action="$1"
-        apply iptables nat 'POSTROUTING -s ${address}/32 -o ${uplink} -j SNAT --to-source ${ryza-eph}'
+        apply iptables nat 'POSTROUTING -s ${address}/32 -o ${uplink} -j SNAT --to-source ${egress}'
         apply ip6tables filter 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
           'FORWARD -i ${tap} -j DROP' 'FORWARD -o ${tap} -j DROP'
         apply iptables filter 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
@@ -214,7 +232,7 @@
           envs = {
             TMPDIR = "${stateDir}/tmp";
             CARGO_HOME = "${stateDir}/cargo";
-            CARGO_BUILD_JOBS = "2";
+            CARGO_BUILD_JOBS = toString spec.vcpu;
           };
         };
         cache.enabled = false;
@@ -237,8 +255,8 @@
       };
       microvm = {
         hypervisor = "qemu";
-        vcpu = 2;
-        mem = 4096;
+        inherit (spec) vcpu;
+        mem = spec.memory * 1024;
         balloon = true;
         virtiofsd.group = slotUser;
         # The upstream tap-up script hardcodes user microvm. Match its
@@ -266,12 +284,12 @@
           {
             image = builtins.elemAt images 0;
             mountPoint = overlay;
-            size = 50 * 1024;
+            size = spec.overlay * 1024;
           }
           {
             image = builtins.elemAt images 1;
             mountPoint = "/var";
-            size = 20 * 1024;
+            size = spec.var * 1024;
           }
         ];
         interfaces = [
@@ -289,9 +307,11 @@
         substituters = ["https://${cacheHost}"];
         trusted-public-keys = [(builtins.readFile (self.lib.vars.shared "ncps-signing-key" "ncps-signing-key.pub"))];
         max-jobs = 1;
-        cores = 2;
-        min-free = 10 * 1024 * 1024 * 1024;
-        max-free = 25 * 1024 * 1024 * 1024;
+        cores = spec.vcpu;
+        # Collect below a fifth of the overlay free, up to half, as the
+        # persistent CI guests do (forgejo-runner-microvm.nix).
+        min-free = spec.overlay / 5 * 1024 * 1024 * 1024;
+        max-free = spec.overlay / 2 * 1024 * 1024 * 1024;
       };
       users.groups.forgejo-one-job = {};
       users.users.forgejo-one-job = {
@@ -333,19 +353,22 @@
           test -n "$uuid" && test -n "$handle" && test -s "$CREDENTIALS_DIRECTORY/runner-token"
           exec ${lib.getExe pkgs.forgejo-runner} --config ${runnerConfig} one-job \
             --url https://${forgeHost} --uuid "$uuid" --token-url 'file:$CREDENTIALS_DIRECTORY/runner-token' \
-            --label nix-eph:host --handle "$handle" --wait
+            --label ${label}:host --handle "$handle" --wait
         '';
       };
     };
   in {
     imports = [
+      # A path module, so importing it here as well as in
+      # forgejo-runner-microvm.nix loads it once.
+      self.inputs.microvm.nixosModules.host
       # The CI credentials trusted jobs receive (_forgejo-ephemeral-trusted.nix enables them).
       self.nixosModules.ci-credentials
       (import ./_forgejo-ephemeral-trusted.nix {inherit cfg slot vm dispatch controlDir trustDir cacheHost;})
     ];
 
     options.services.imperium.forgejoEphemeral = {
-      enable = lib.mkEnableOption "the Ryza Forgejo one-job microVM pilot";
+      enable = lib.mkEnableOption "this machine's Forgejo one-job microVM slot from modules/rites/_ci-slots.nix";
       trustedJobs.enable = lib.mkEnableOption ''
         delivering the CI signing key and ncps upload netrc to jobs whose exact run is a manjo push,
         schedule or dispatch (HOM-31). The PAT then also needs read:repository.
@@ -355,12 +378,19 @@
         default = null;
         description = "Numeric Forgejo repository ID of manjo/rust-app-template, the only eligible repository.";
       };
+      egressAddress = lib.mkOption {
+        type = lib.types.str;
+        readOnly = true;
+        default = egress;
+        defaultText = lib.literalExpression "self.lib.lan.\${self.lib.ciSlots.\${hostName}.egress.untrusted}";
+        description = "The dedicated SNAT source of this host's slots. The host's uplink must carry it as a /32.";
+      };
       internal = lib.mkOption {
         internal = true;
         readOnly = true;
         type = lib.types.attrs;
-        default = {inherit slotDirs prepareDirs;};
-        description = "The slot directories and the script that creates them, for the eval check.";
+        default = {inherit slot slotDirs prepareDirs;};
+        description = "The slot, its directories and the script that creates them, for the eval check.";
       };
     };
 
@@ -371,14 +401,21 @@
           message = "forgejoEphemeral: set the numeric ID of manjo/rust-app-template.";
         }
         {
-          assertion =
-            config.networking.hostName
-            == "ryza"
-            && config.microvm.host.enable
-            && config.networking.firewall.enable
-            && !config.networking.nftables.enable
-            && config.networking.nat.externalInterface == uplink;
-          message = "forgejoEphemeral requires Ryza's microVM host and iptables NAT via ens18.";
+          # One dispatcher, one state file, one guard: a second slot would
+          # race the first for the same job until the dispatchers can share
+          # a queue (HOM-32 PR 4).
+          assertion = host != null && builtins.length slotNames == 1;
+          message = "forgejoEphemeral: give ${hostName} exactly one slot in modules/rites/_ci-slots.nix.";
+        }
+        {
+          # 0 would collide with the persistent CI guests' 10.99.1 and MAC :02.
+          assertion = host == null || slotNames == [] || (spec.index >= 1 && spec.index <= 253);
+          message = "forgejoEphemeral: a slot index in modules/rites/_ci-slots.nix must be between 1 and 253.";
+        }
+        {
+          # The guard installs iptables rules; it does not know nftables.
+          assertion = config.networking.firewall.enable && !config.networking.nftables.enable;
+          message = "forgejoEphemeral needs the iptables firewall (networking.firewall without nftables).";
         }
         {
           # Compared by outPath. The label rule (top of forgejo-runner.nix)
@@ -407,14 +444,18 @@
           cp "$prompts/token" "$out/token"
         '';
       };
-      services.imperium.impermanence.directories = [
-        {
-          directory = "/var/lib/${dispatch}";
-          user = "root";
-          group = "root";
-          mode = "0700";
-        }
-      ];
+      # Only hosts with an ephemeral root (ryza) have this option; elsewhere
+      # /var/lib persists by itself.
+      services = lib.optionalAttrs (options.services.imperium ? impermanence) {
+        imperium.impermanence.directories = [
+          {
+            directory = "/var/lib/${dispatch}";
+            user = "root";
+            group = "root";
+            mode = "0700";
+          }
+        ];
+      };
       users.groups.${slotUser} = {};
       users.users.${slotUser} = {
         isSystemUser = true;
@@ -451,10 +492,15 @@
         linkConfig.RequiredForOnline = "no";
       };
       # The guard owns forwarding and SNAT for this tap. Do not add it to
-      # stock NAT: egress must not fall back to Ryza's normal source address.
+      # stock NAT: egress must not fall back to the host's normal source
+      # address. Routing between the tap and the uplink still needs IPv4
+      # forwarding; stock NAT (the persistent CI guests') turns it on too.
+      boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = lib.mkDefault true;
+      microvm.host.enable = true;
+      # The guest's vCPUs, and its memory plus one GiB for QEMU and virtiofsd.
       systemd.slices.forgejo-ephemeral.sliceConfig = {
-        CPUQuota = "200%";
-        MemoryMax = "5G";
+        CPUQuota = "${toString (spec.vcpu * 100)}%";
+        MemoryMax = "${toString (spec.memory + 1)}G";
         MemorySwapMax = 0;
         IOWeight = 20;
       };
@@ -498,7 +544,15 @@
           path = [pkgs.systemd];
           serviceConfig = {
             Type = "exec";
-            ExecStart = "${lib.getExe pkgs.python3} -I -B ${./_forgejo-ephemeral-dispatcher.py} --repo-id ${toString cfg.repoId} --state-dir /var/lib/${dispatch} --vm-dir ${vmDir} --credential-dir ${credDir}${lib.optionalString cfg.trustedJobs.enable " --trusted-jobs --repo ${repoName} --trust-dir ${trustDir}"}";
+            ExecStart = lib.concatStringsSep " " ([
+                (lib.getExe pkgs.python3)
+                "-I -B ${./_forgejo-ephemeral-dispatcher.py}"
+                "--slot ${slot} --machine ${hostName} --slot-user ${slotUser}"
+                "--forge-host ${forgeHost} --login ${login} --label ${label}"
+                "--repo-id ${toString cfg.repoId}"
+                "--state-dir /var/lib/${dispatch} --vm-dir ${vmDir} --credential-dir ${credDir}"
+              ]
+              ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs --repo ${repoName} --trust-dir ${trustDir}");
             LoadCredential = ["forgejo-pat:${config.clan.core.vars.generators.${generator}.files.token.path}"];
             StateDirectory = dispatch;
             StateDirectoryMode = "0700";

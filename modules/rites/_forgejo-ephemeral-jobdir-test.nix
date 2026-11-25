@@ -25,7 +25,8 @@
   };
   c = enabled.config;
   services = c.systemd.services;
-  slot = "ryza-eph-1";
+  # The one slot ryza has in modules/rites/_ci-slots.nix.
+  inherit (c.services.imperium.forgejoEphemeral.internal) slot;
   vmName = "microvm@${slot}";
   install = "install-microvm-${slot}";
   installUnit = "${install}.service";
