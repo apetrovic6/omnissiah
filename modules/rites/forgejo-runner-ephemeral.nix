@@ -111,18 +111,42 @@
           'FORWARD -i ${tap} -j ${outChain}' 'FORWARD -o ${tap} -j ${inChain}'
       }
     '';
+    # Every directory a slot unit names as a mandatory namespace path, in
+    # creation order (parents first). The eval check
+    # (_forgejo-ephemeral-jobdir-test.nix) reads this list.
+    slotDirs = [
+      {
+        path = controlDir;
+        owner = "root";
+        group = slotUser;
+        mode = "0750";
+      }
+      {
+        path = vmDir;
+        owner = slotUser;
+        group = slotUser;
+        mode = "0700";
+      }
+      {
+        path = credParent;
+        owner = "root";
+        group = "root";
+        mode = "0755";
+      }
+    ];
+    installLine = dir: ''"$install" -d -o ${dir.owner} -g ${dir.group} -m ${dir.mode} -- ${lib.escapeShellArg dir.path}'';
+    # Refuses a pre-existing symlink. This is a check, not a race-free guard:
+    # it relies on the writers of the microvm-owned state dir being trusted.
     prepareDirs = pkgs.writeShellScript "${slot}-prepare-dirs" ''
       set -eu
-      for dir in ${lib.escapeShellArgs [controlDir vmDir credParent]}; do
+      for dir in ${lib.escapeShellArgs (map (dir: dir.path) slotDirs)}; do
         if [[ -L "$dir" ]]; then
-          printf 'Refusing symlink for slot directory: %s\n' "$dir" >&2
+          printf 'Refusing pre-existing symlink for slot directory: %s\n' "$dir" >&2
           exit 1
         fi
       done
       install=${lib.getExe' pkgs.coreutils "install"}
-      "$install" -d -o root -g ${slotUser} -m 0750 -- ${lib.escapeShellArg controlDir}
-      "$install" -d -o ${slotUser} -g ${slotUser} -m 0700 -- ${lib.escapeShellArg vmDir}
-      "$install" -d -o root -g root -m 0755 -- ${lib.escapeShellArg credParent}
+      ${lib.concatMapStringsSep "\n" installLine slotDirs}
     '';
     preflight = pkgs.writeShellScript "${slot}-preflight" ''
       set -eu
@@ -314,6 +338,13 @@
         default = null;
         description = "Numeric Forgejo repository ID of manjo/rust-app-template, the only eligible repository.";
       };
+      internal = lib.mkOption {
+        internal = true;
+        readOnly = true;
+        type = lib.types.attrs;
+        default = {inherit slotDirs prepareDirs;};
+        description = "The slot directories and the script that creates them, for the eval check.";
+      };
     };
 
     config = lib.mkIf cfg.enable {
@@ -362,7 +393,9 @@
       users.users.${slotUser} = {
         isSystemUser = true;
         group = slotUser;
-        extraGroups = ["kvm"];
+        # No kvm group: /dev/kvm, /dev/vhost-net and /dev/net/tun are 0666 on
+        # Ryza. Without it the slot can't write the microvm:kvm 0775 state
+        # dir or the persistent guests' dirs, even outside its sandbox.
       };
       # tmpfiles refuses the owner transition from the microvm-owned state
       # directory to this root-owned slot ("unsafe path transition"), so the
@@ -401,7 +434,12 @@
       };
       systemd.services = {
         ${installer} = {
-          unitConfig.RequiresMountsFor = [config.microvm.stateDir];
+          unitConfig = {
+            RequiresMountsFor = [config.microvm.stateDir];
+            # Re-run before every VM, dispatcher and support-unit start, so
+            # repeated manual restarts must not trip start-limit-hit.
+            StartLimitIntervalSec = 0;
+          };
           serviceConfig = {
             # Both the installer and its pre-start must be able to start with no slot directory.
             WorkingDirectory = lib.mkForce "/";

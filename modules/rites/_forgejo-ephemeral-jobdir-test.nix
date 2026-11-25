@@ -1,4 +1,5 @@
-# Eval check for the slot's directories (HOM-30 live fix). Run:
+# Eval check for the slot's directories (HOM-30 live fix). Runs as the flake
+# check checks.x86_64-linux.forgejo-ephemeral-jobdir; by hand:
 #   nix eval --impure --json .#nixosConfigurations.ryza --apply \
 #     'ryza: import ./modules/rites/_forgejo-ephemeral-jobdir-test.nix { inherit ryza; }'
 #
@@ -56,7 +57,14 @@
   namespacePaths = s:
     [(s.WorkingDirectory or "/")] ++ (s.ReadWritePaths or []) ++ (s.InaccessiblePaths or []);
   mandatory = paths: builtins.filter (path: !(lib.hasPrefix "-" path)) paths;
-  created = [control job credParent];
+  # What the installer really creates: the module's list, checked below
+  # against the script's install lines (an edit that drops one must fail).
+  internal = c.services.imperium.forgejoEphemeral.internal;
+  created = map (dir: dir.path) internal.slotDirs;
+  scriptLines = lib.splitString "\n" internal.prepareDirs.text;
+  installLines = builtins.filter (lib.hasPrefix ''"$install" -d'') scriptLines;
+  expectedLines = map (dir: ''"$install" -d -o ${dir.owner} -g ${dir.group} -m ${dir.mode} -- ${dir.path}'') internal.slotDirs;
+  symlinkCheck = "for dir in ${lib.concatStringsSep " " created}; do";
   orderedAfterInstaller = u:
     builtins.elem installUnit u.requires
     && (builtins.elem installUnit u.after || builtins.elem "${u.name}.service" installer.before);
@@ -73,7 +81,19 @@ in
   assert lib.assertMsg (dispatcherOptional == []) "dispatcher has optional writable paths: ${toString dispatcherOptional}";
   # The installer creates the directories with no slot directory present.
   assert installer.unitConfig.RequiresMountsFor == [c.microvm.stateDir];
-  assert lib.hasPrefix "+" prepare;
+  assert prepare == "+${internal.prepareDirs}";
+  assert lib.assertMsg (installLines == expectedLines) "prepare-dirs creates ${builtins.toJSON installLines}, expected ${builtins.toJSON expectedLines}";
+  assert builtins.elem symlinkCheck scriptLines;
+  # Parents first: each directory's parent exists or is created before it.
+  assert lib.all (i: let
+    parent = builtins.dirOf (builtins.elemAt created i);
+  in
+    !(builtins.elem parent created) || lib.lists.findFirstIndex (p: p == parent) null created < i)
+  (lib.range 0 (builtins.length created - 1));
+  # Manual restarts must not rate-limit the installer (start-limit-hit).
+  assert (installer.unitConfig.StartLimitIntervalSec or null) == 0;
+  # QEMU needs no kvm group (the devices are 0666); keep it out of 0775 microvm:kvm dirs.
+  assert !(builtins.elem "kvm" c.users.users.microvm-eph.extraGroups) && c.users.users.microvm-eph.group == "microvm-eph";
   # The slot unit also repairs them first, before its sandboxed preflight.
   assert builtins.head vm.serviceConfig.ExecStartPre == prepare;
   assert mandatory (namespacePaths vm.serviceConfig) == [];
@@ -86,7 +106,7 @@ in
   assert lib.last guestFs.options == "ro"; {
     hostDrv = c.system.build.toplevel.drvPath;
     guestDrv = c.microvm.vms.${slot}.config.config.system.build.toplevel.drvPath;
-    inherit prepare;
+    inherit prepare created installLines;
     prepareDrv = builtins.attrNames (builtins.getContext prepare);
     scrubDrv = builtins.attrNames (builtins.getContext (lib.last vmStop));
     vmExecStartPre = vm.serviceConfig.ExecStartPre;

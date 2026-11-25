@@ -13,7 +13,16 @@
       lib.mapAttrs (_: machine: machine.config.system.build.toplevel)
       (lib.filterAttrs
         (_: machine: machine.pkgs.stdenv.hostPlatform.system == system)
-        self.nixosConfigurations);
+        self.nixosConfigurations)
+      // lib.optionalAttrs (system == "x86_64-linux" && self.nixosConfigurations ? ryza) {
+        # Fails at eval if a Forgejo one-job slot unit names a mandatory
+        # path the installer doesn't create first (HOM-30). The context is
+        # discarded so the check never builds the test's enabled variant.
+        forgejo-ephemeral-jobdir = pkgs.writeText "forgejo-ephemeral-jobdir.json" (
+          builtins.unsafeDiscardStringContext (builtins.toJSON
+            (import ../rites/_forgejo-ephemeral-jobdir-test.nix {inherit (self.nixosConfigurations) ryza;}))
+        );
+      };
 
     # One derivation that links every check, for building them all at once.
     packages.ci =

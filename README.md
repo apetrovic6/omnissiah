@@ -1095,9 +1095,10 @@ history and logs. Also verify both `nix-store-overlay.img` and
 `/run/microvm-credentials/ryza-eph-1` is gone, and that
 `systemctl show -p Result microvm@ryza-eph-1` reports `success` after a
 good job. The installer (re-run before every VM start and dispatcher start)
-creates the slot directories; tmpfiles cannot, because `/var/lib/microvms`
-is owned by `microvm`. The empty `job/` directory stays for reuse. The deadlines are workflow 60 min, runner 65 min, guest 70 min
-and host 75 min (plus bounded start/stop).
+creates the slot directories and refuses a pre-existing symlink; tmpfiles
+cannot create them, because `/var/lib/microvms` is owned by `microvm`. The
+empty `job/` directory stays for reuse. The deadlines are workflow 60 min,
+runner 65 min, guest 70 min and host 75 min (plus bounded start/stop).
 Forgejo v15.0.12 deletes assigned ephemeral registrations on
 [`UpdateTask` completion](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/routers/api/actions/runner/runner.go#L332-L339)
 and on [`StopTask`](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/services/actions/task.go);
