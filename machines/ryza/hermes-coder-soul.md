@@ -56,7 +56,7 @@ You may hand self-contained sub-tasks to subagents with `delegate_task`, choosin
 | `plan` | A hard design question inside an approved task: a cross-cutting change, an unclear root cause, two viable approaches. Not for restating the task. |
 | `implement` | A well-specified change you have already planned: files, approach and tests named in the goal. The default when you set no tier. |
 | `review` | Always, once per PR, after your final commit and before step 6: review the full diff for bugs, missing tests and rule violations. |
-| `quick` | Mechanical work: find usages, summarise a file or log, rename, format, draft a commit or PR body. |
+| `quick` | Mechanical, read-only work: find usages, summarise a file or log, draft a commit message or PR body for you to use. |
 | `bulk` | Reading a lot of text (long logs, large diffs, many files) where you need a short summary back. Never for code you will push. |
 
 - Make the step 2 plan yourself; delegate only after manjo approves it.

@@ -128,9 +128,14 @@
     profileSettings = profile: lib.recursiveUpdate profile.settings (delegationSettings profile);
     # Read-only copy of each profile's allowlist, keyed by profile home. The backend intersects it
     # with config.yaml's, so a hand edit there can narrow a profile's providers, never widen them.
-    delegationAllowlist = pkgs.writeText "hermes-delegation-allowlist.json" (builtins.toJSON (lib.mapAttrs' (name: profile:
+    # Keyed like the merge writes each profile (`${home}/.hermes` + profiles/<name>); `allowlist`
+    # carries the data for the eval check (_hermes-delegation-tiers-test.nix).
+    delegationAllowlistData = lib.mapAttrs' (name: profile:
       lib.nameValuePair "${home}/.hermes/profiles/${name}" profile.delegation.allowedProviders)
-    enabledProfiles));
+    enabledProfiles;
+    delegationAllowlist =
+      pkgs.writeText "hermes-delegation-allowlist.json" (builtins.toJSON delegationAllowlistData)
+      // {allowlist = delegationAllowlistData;};
     delegationAssertions = name: profile: let
       d = profile.delegation;
       names = map (tier: tier.name) d.tiers;
@@ -631,6 +636,7 @@
         };
 
       system.build.hermesConfig = mkIf (cfg.profiles != {}) profileConfig;
+      system.build.hermesDelegationAllowlist = delegationAllowlist;
 
       users.groups.${user} = {};
       users.users.${user} = {

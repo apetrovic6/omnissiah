@@ -109,7 +109,7 @@
     }
     {
       name = "quick";
-      description = "Mechanical work: find usages, summarise a file or log, rename, format, draft a commit or PR body.";
+      description = "Mechanical, read-only work: find usages, summarise a file or log, draft a commit message or PR body for the parent to use.";
       provider = "anthropic";
       model = "claude-haiku-5-5";
       effort = "low";
@@ -165,7 +165,7 @@
     }
     {
       name = "quick";
-      description = "Mechanical work: find usages, summarise a file or log, rename, format, draft a commit or PR body.";
+      description = "Mechanical, read-only work: find usages, summarise a file or log, draft a commit message or PR body for the parent to use.";
       model = "claude-haiku-5-5";
       effort = "low";
     }

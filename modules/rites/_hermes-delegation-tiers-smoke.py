@@ -43,12 +43,13 @@ config = {
             {"name": "endpoint", "description": "x", "base_url": "http://127.0.0.1:1/v1", "model": "m"},
             {"name": "typo", "description": "x", "provider": "anthropic", "model": "m", "reasoning_effort": "hgh"},
             {"name": "meta", "description": "x", "provider": "auto", "model": "m"},
+            {"name": "custom", "description": "x", "provider": "custom", "model": "m"},
         ],
     }},
 }
 
 params, addendum = schema_extension(config)
-assert params["tier"]["enum"] == ["implement", "quick", "aliased", "other", "endpoint", "typo", "meta"], params
+assert params["tier"]["enum"] == ["implement", "quick", "aliased", "other", "endpoint", "typo", "meta", "custom"], params
 assert "SOUL.md" in addendum, addendum
 declared = _declared_parameters(provider, config)
 
@@ -79,6 +80,7 @@ refused("not allowed", tier="other")
 refused("base_url", tier="endpoint")
 refused("unknown reasoning_effort", tier="typo")  # core's effort check
 refused("meta id", tier="meta")  # `auto` has no provider profile in this core
+refused("meta id", tier="custom")  # `custom` has one in this core: only META_PROVIDERS refuses it
 refused("must be one of", tier="nope")  # core's enum check, before route_task
 refused("does not take", priority="high")  # a parameter no backend declares
 # A task-level model (a reserved, core-owned name) never overrides the tier's model.
@@ -91,6 +93,9 @@ with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as stream:
     json.dump({str(get_hermes_home()): ["anthropic"]}, stream)
 os.environ["HERMES_DELEGATION_TIERS_ALLOWLIST"] = stream.name
 refused("'openai-codex' is not allowed", tier="implement")  # the Codex fallback is no longer allowed
+assert "provider" not in route(tier="quick")
+os.environ["HERMES_DELEGATION_TIERS_ALLOWLIST"] = " "
+refused("set but blank", tier="implement")  # present but blank: fail closed for provider tiers
 assert "provider" not in route(tier="quick")
 del os.environ["HERMES_DELEGATION_TIERS_ALLOWLIST"]
 os.unlink(stream.name)

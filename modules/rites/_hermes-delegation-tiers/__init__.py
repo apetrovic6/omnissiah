@@ -34,6 +34,8 @@ The allowlist in config.yaml can be edited by hand until the next activation res
 writes each managed profile's allowlist to a read-only store file named by ``HERMES_DELEGATION_TIERS_ALLOWLIST``
 (``{profile home: [providers]}``). The effective allowlist is the intersection: a hand edit can narrow a
 profile's providers, never widen them. A profile the file does not list (``default``) uses config.yaml alone.
+The variable set but blank, or the file unreadable, refuses every tier that names a provider (fail closed);
+tiers on the parent's credentials never read it.
 """
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from agent.delegation_provider import DelegationProvider, DelegationRouteError
 
@@ -80,11 +82,16 @@ def _canonical(provider: str) -> Optional[str]:
 
 
 def _store_allowed() -> Optional[frozenset[str]]:
-    """This profile's allowlist from the Nix store file, or None when no file is set or it does not list this
-    profile. A file that is set but unreadable refuses the task (fail closed)."""
-    path = os.environ.get(ALLOWLIST_ENV, "").strip()
-    if not path:
+    """This profile's allowlist from the Nix store file, or None when the variable is unset or the file does not
+    list this profile. The variable set but blank, or a file that is unreadable, refuses the task (fail closed)."""
+    raw = os.environ.get(ALLOWLIST_ENV)
+    if raw is None:
         return None
+    path = raw.strip()
+    if not path:
+        raise DelegationRouteError(
+            f"{ALLOWLIST_ENV} is set but blank, so this profile's provider allowlist cannot be checked; no "
+            f"subagent was started. Use a tier without a provider, or ask the user to fix the environment.")
     try:
         with open(path, encoding="utf-8") as stream:
             data = json.load(stream)
@@ -139,8 +146,9 @@ def options(settings: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return [entry for entry in raw if isinstance(entry, Mapping) and NAME_RE.match(_text(entry.get("name")))]
 
 
-def build_route(entry: Mapping[str, Any], allowed: frozenset[str]) -> dict[str, Any]:
-    """The core route for one tier entry, or :class:`DelegationRouteError` naming what is wrong with it."""
+def build_route(entry: Mapping[str, Any], allowed_fn: Callable[[], frozenset[str]]) -> dict[str, Any]:
+    """The core route for one tier entry, or :class:`DelegationRouteError` naming what is wrong with it.
+    ``allowed_fn`` gives the effective allowlist; it is only called when the tier names a provider."""
     tier = _text(entry.get("name"))
     extra = sorted(str(key) for key in entry if key not in ENTRY_KEYS)
     if extra:
@@ -164,13 +172,13 @@ def build_route(entry: Mapping[str, Any], allowed: frozenset[str]) -> dict[str, 
             raise DelegationRouteError(
                 f"Tier {tier!r} uses the parent's credentials and cannot have a fallback; the tier is disabled.")
     else:
-        route["provider"] = _check_provider(tier, provider, allowed, "the tier")
+        route["provider"] = _check_provider(tier, provider, allowed_fn(), "the tier")
     chain = []
     for i, step in enumerate(fallback):
         if not isinstance(step, Mapping) or set(step) != FALLBACK_KEYS or not _text(step.get("model")):
             raise DelegationRouteError(
                 f"Tier {tier!r}: fallback[{i}] must be exactly {{provider, model}}; the tier is disabled.")
-        chain.append({"provider": _check_provider(tier, step["provider"], allowed, f"fallback[{i}]"),
+        chain.append({"provider": _check_provider(tier, step["provider"], allowed_fn(), f"fallback[{i}]"),
                       "model": _text(step["model"])})
     route["fallback_providers"] = chain  # explicit, so the child never inherits delegation.fallback_providers
     route["label"] = f"{tier} · {model}"
@@ -225,7 +233,7 @@ class TiersDelegationProvider(DelegationProvider):
                 f"started). Use a listed tier, or ask the user to start a new session with /new.")
         if len(matches) > 1:
             raise DelegationRouteError(f"Tier {chosen!r} is configured twice; the tier is disabled.")
-        return build_route(matches[0], _allowed(settings))
+        return build_route(matches[0], lambda: _allowed(settings))
 
 
 def register(ctx) -> None:

@@ -174,6 +174,14 @@ class Tiers(unittest.TestCase):
     def test_unreadable_store_allowlist_refused(self):
         self.enterContext(unittest.mock.patch.dict(os.environ, {tiers.ALLOWLIST_ENV: "/nonexistent/allow.json"}))
         self.refused(config([IMPLEMENT]), "unreadable", tier="implement")
+        # A parent-credentials tier never reads the allowlist.
+        self.assertNotIn("provider", self.route(config([QUICK]), tier="quick"))
+
+    def test_blank_store_allowlist_variable_refuses_provider_tiers(self):
+        for blank in ("", "   "):
+            self.enterContext(unittest.mock.patch.dict(os.environ, {tiers.ALLOWLIST_ENV: blank}))
+            self.refused(config([IMPLEMENT]), "set but blank", tier="implement")
+            self.assertNotIn("provider", self.route(config([QUICK]), tier="quick"))
 
     def test_forbidden_entry_keys_refused(self):
         for key, value in (("base_url", "http://x/v1"), ("api_key", "k"), ("api_mode", "chat_completions"),

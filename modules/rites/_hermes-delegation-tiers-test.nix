@@ -75,9 +75,19 @@
   };
   results = lib.mapAttrs (_: case: delegationFailures case.module) cases;
   baseline = delegationFailures {};
+  # The store allowlist is keyed by the profile homes the merge writes into (`<home>/.hermes` +
+  # profiles/<name>/config.yaml from hermesConfig); a drift would silently turn that layer off.
+  hermesHome = "${ryza.config.users.users.hermes.home}/.hermes";
+  allowlistKeys = lib.attrNames ryza.config.system.build.hermesDelegationAllowlist.allowlist;
+  profileHomes =
+    map (entry: "${hermesHome}/${dirOf entry}") (lib.filter (entry: builtins.match "profiles/[^/]+/config.yaml" entry != null)
+      (lib.attrNames ryza.config.system.build.hermesConfig.entries));
+  allowlistPath = ryza.config.systemd.services.hermes-gateway.environment.HERMES_DELEGATION_TIERS_ALLOWLIST;
   missed = lib.filterAttrs (name: messages: !lib.any (lib.hasInfix cases.${name}.expect) messages) results;
 in
   assert lib.assertMsg (baseline == []) "ryza fails delegation assertions: ${lib.concatStringsSep "; " baseline}";
-  assert lib.assertMsg (missed == {}) "delegation guard not enforced for: ${lib.concatStringsSep ", " (lib.attrNames missed)}"; {
-    inherit baseline results;
+  assert lib.assertMsg (missed == {}) "delegation guard not enforced for: ${lib.concatStringsSep ", " (lib.attrNames missed)}";
+  assert lib.assertMsg (allowlistKeys == lib.sort lib.lessThan profileHomes) "delegation allowlist keys ${toString allowlistKeys} differ from the profile homes ${toString profileHomes}";
+  assert lib.assertMsg (allowlistPath == "${ryza.config.system.build.hermesDelegationAllowlist}") "the gateway's HERMES_DELEGATION_TIERS_ALLOWLIST is not the delegation allowlist file"; {
+    inherit baseline results allowlistKeys profileHomes;
   }
