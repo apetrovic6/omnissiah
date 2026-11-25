@@ -96,7 +96,7 @@
     }
     {
       name = "review";
-      description = "Independent review of the finished diff before the PR: bugs, missing tests, rule violations. Once per PR.";
+      description = "Adversarial review of the finished diff before the PR: try to break it (bugs, edge cases, security, missing tests, rule violations); concrete failure scenarios with file:line. Once per PR.";
       provider = "anthropic";
       model = "claude-opus-5-5";
       effort = "high";
@@ -159,7 +159,7 @@
     }
     {
       name = "review";
-      description = "Independent review of the finished diff before the PR: bugs, missing tests, rule violations. Once per PR.";
+      description = "Adversarial review of the finished diff before the PR: try to break it (bugs, edge cases, security, missing tests, rule violations); concrete failure scenarios with file:line. Once per PR.";
       model = "claude-opus-5-5";
       effort = "high";
     }
