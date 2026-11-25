@@ -10,6 +10,7 @@
 {self, ...}: {
   imports = [
     self.nixosModules.forgejo-runner-microvm
+    self.nixosModules.forgejo-runner-ephemeral
     self.nixosModules.sccache
   ];
 
@@ -25,5 +26,7 @@
     };
     microvm.uplink = "ens18";
   };
+  # Enroll the dedicated PAT before enabling the one-job pilot (see README).
+  services.imperium.forgejoEphemeral.enable = false;
   services.imperium.sccache.enable = true;
 }
