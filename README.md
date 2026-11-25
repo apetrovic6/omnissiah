@@ -1227,8 +1227,9 @@ Otherwise require approvals and dismiss stale approvals on `master`.
 
    Paste the PAT only at the hidden prompt. The prompt text names both
    scopes once the flag is on. Commit the flag and the var together.
-   Ryza must still have the persistent runner's `nix-ci-signing-key` and
-   `ncps-upload-auth` vars; an assertion checks this.
+   The flag declares the shared `nix-ci-signing-key` and `ncps-upload-auth`
+   vars on Ryza itself (`modules/rites/ci-credentials.nix`), with or without
+   the persistent runner.
 4. `clan machines update ryza`, then
    `sudo systemctl restart forgejo-ephemeral-dispatcher`. Require both
    `Forgejo PAT identity verified as manjo` and
@@ -1257,7 +1258,7 @@ But a trusted job can get anything it builds signed, so treat the key as
 exposed to trusted code. The persistent runners still hand the same key,
 netrc and the sccache RW key to every job they run, approved fork PRs
 included. So rotate `ci.noosphere.uk-1` → `-2` (`ciKeyName` in
-`forgejo-runner.nix`), `ncps-upload-auth` and `sccache-garage-key` when
+`modules/rites/ci-credentials.nix`), `ncps-upload-auth` and `sccache-garage-key` when
 HOM-32 retires them, not before. If a dispatcher log ever shows a delivery
 you did not expect: pause, rotate the CI key and the netrc, and audit recent
 ncps uploads.

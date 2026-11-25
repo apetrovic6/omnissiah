@@ -45,7 +45,8 @@
 #   credentials are withheld. The reason is logged.
 #   The two credential sources are mandatory LoadCredential entries: if either
 #   var is missing, systemd refuses to start the dispatcher, which stops
-#   untrusted dispatch too. The assertion below catches that at eval time.
+#   untrusted dispatch too. This module declares both (ci-credentials.nix), so
+#   a missing one means it was never generated or deployed.
 #
 # CHANNEL: a second virtiofs share, not fw_cfg, because fw_cfg is fixed at boot.
 #   Host: `trustDir`, root:root 0700. The dispatcher creates it empty before
@@ -81,8 +82,8 @@
 #
 # NOT HERE (HOM-32): sccache on nix-eph (Garage is unreachable from the slot's
 # source address; a read-only key on the shared bucket would expose every
-# object), and the generators for these two credentials, which still come
-# from the persistent runner module on this machine (asserted below).
+# object). The two credentials come from ci-credentials.nix, which this
+# module enables, so they no longer depend on the persistent runner.
 {
   cfg,
   slot,
@@ -97,7 +98,7 @@
   pkgs,
   ...
 }: let
-  gens = config.clan.core.vars.generators;
+  ccfg = config.services.imperium.ciCredentials;
   guestTrustDir = "/run/ci-trust";
   names = ["ci-signing-key" "ncps-netrc" ".ci-signing-key.tmp" ".ncps-netrc.tmp"];
   # Same pattern and caveat as the slot scrub (forgejo-runner-ephemeral.nix):
@@ -168,19 +169,12 @@
   };
 in {
   config = lib.mkIf (cfg.enable && cfg.trustedJobs.enable) {
-    assertions = [
-      {
-        assertion = gens ? nix-ci-signing-key && gens ? ncps-upload-auth;
-        message = ''
-          forgejoEphemeral.trustedJobs needs the nix-ci-signing-key and ncps-upload-auth vars on this
-          machine (today they come with services.imperium.forgejoRunner.enable).
-        '';
-      }
-    ];
+    services.imperium.ciCredentials.enable = true;
     # List options: these merge with the definitions in forgejo-runner-ephemeral.nix.
-    systemd.services.${dispatch}.serviceConfig.LoadCredential =
-      lib.optional (gens ? nix-ci-signing-key) "trusted-ci-signing-key:${gens.nix-ci-signing-key.files.key.path}"
-      ++ lib.optional (gens ? ncps-upload-auth) "trusted-ncps-netrc:${gens.ncps-upload-auth.files.netrc.path}";
+    systemd.services.${dispatch}.serviceConfig.LoadCredential = [
+      "trusted-ci-signing-key:${ccfg.signingKey}"
+      "trusted-ncps-netrc:${ccfg.ncpsNetrc}"
+    ];
     systemd.services.${vm}.serviceConfig = {
       ExecStartPre = lib.mkBefore ["+${trustPreflight}"];
       # First: the base scrub is `set -eu`, and a failure there would skip later ExecStopPost lines.

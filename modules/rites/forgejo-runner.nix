@@ -18,7 +18,8 @@
 # EVERY RUNNER CARRYING A LABEL MUST BE ABLE TO RUN EVERY JOB ON IT. Forgejo
 # hands a `runs-on: nix` job to whichever runner with that label asks first,
 # so a tool on one machine's hostPackages but not another's fails at random.
-# That is why the toolset below is shared and per-machine extras are rare.
+# That is why the toolset (_ci-toolset.nix) is shared and per-machine extras
+# are rare.
 {self, ...}: let
   # Every Forgejo a runner can register with.
   #   url      what runners connect to
@@ -61,19 +62,14 @@
 
   generatorName = forge: "forgejo-runner-${forge}";
 
-  # Binary cache the runners push their builds to. apps/scriptorium/ncps reads the public
-  # key straight from vars/shared/${ciKeyGenerator}, so renaming the generator
-  # means updating that path too.
+  # Binary cache the runners push their builds to, signed with the CI key and
+  # authenticated with the netrc from ci-credentials.nix.
   # ncps serves uploads under /upload only; a PUT to the root path is a 405
   # before the signature is even checked.
   ncpsUploadUrl = "https://ncps.noosphere.uk/upload";
-  # Basic auth on /upload. The generator lives with the Traefik side in
-  # taghmata/reliquary/ncps (nixosModules.reliquary-ncps), which this module
-  # imports. Only the push hook gets the netrc, not nix as a whole.
-  ncpsUploadAuth = "ncps-upload-auth";
-  ciKeyGenerator = "nix-ci-signing-key";
-  # `<name>-<n>`: bump the suffix to rotate while the old key is still trusted.
-  ciKeyName = "ci.noosphere.uk-1";
+
+  # The PATH of host-executed jobs, shared with the nix-eph slots.
+  ciToolset = import ./_ci-toolset.nix;
 
   # Same age as the shared nix.gc (`--delete-older-than 10d`, stc/base.nix),
   # which `storeCache` replaces.
@@ -257,37 +253,11 @@
               else forges.${forge}.url;
           };
           secrets.server.connections.${forge}.token_url = paths.forgeSecret forge;
-          # PATH available to host-executed jobs: node (for actions/checkout),
-          # devenv (the build), nix (devenv shells out to it), the usual
-          # coreutils/git/tar, and a Rust toolchain for steps that run cargo
-          # outside a devenv shell.
+          # PATH available to host-executed jobs: nix (devenv shells out to
+          # it), then the shared CI toolset (_ci-toolset.nix).
           hostPackages =
             [config.nix.package]
-            ++ (with pkgs; [
-              bash
-              coreutils
-              gnutar
-              gzip
-              git
-              # Host steps outside a devenv shell had no `diff` (fishing's
-              # and rust-app-template's reported `diff: command not found`),
-              # and rust-app-template ended up parsing JSON with grep. Shared
-              # list, not extraHostPackages: every runner carries `nix:host`,
-              # so a tool on one machine alone fails those jobs at random.
-              diffutils
-              jq
-              nodejs
-              devenv
-              cacert
-              mold
-              cargo
-              rustc
-              gawk
-              # cargo needs a linker for build scripts (proc-macro2, libc,
-              # ...). Without it every build script fails with
-              # `linker 'cc' not found`. This wrapper provides cc/gcc/ld.
-              stdenv.cc
-            ])
+            ++ ciToolset pkgs
             ++ cfg.extraHostPackages;
           # DynamicUser gives the service a private /tmp and /var/tmp, and
           # they are a tmpfs sized at a fraction of RAM (1.5 GiB on sol), not
@@ -389,6 +359,7 @@ in {
   }: let
     inherit (lib) mkIf mkMerge mkOption mkEnableOption types listToAttrs nameValuePair;
     cfg = config.services.imperium.forgejoRunner;
+    ccfg = config.services.imperium.ciCredentials;
     scfg = config.services.imperium.sccache;
     sccacheOn = config.services.imperium.sccache.enable or false;
     hostName = config.networking.hostName;
@@ -400,8 +371,8 @@ in {
     credentialSources = forge:
       {
         ${generatorName forge} = gens.${generatorName forge}.files."secret".path;
-        ci-signing-key = gens.${ciKeyGenerator}.files."key".path;
-        ncps-netrc = gens.${ncpsUploadAuth}.files.netrc.path;
+        ci-signing-key = ccfg.signingKey;
+        ncps-netrc = ccfg.ncpsNetrc;
       }
       // lib.optionalAttrs sccacheOn {
         sccache-credentials = gens.sccache-garage-key.files.credentials.path;
@@ -412,8 +383,8 @@ in {
       then {inherit (scfg) wrapper bucket endpoint region;}
       else null;
   in {
-    # The ncps signing key and upload credentials the post-build hook uses.
-    imports = [self.nixosModules.reliquary-ncps];
+    # The CI signing key and ncps upload credentials the post-build hook uses.
+    imports = [self.nixosModules.ci-credentials];
 
     options.services.imperium.forgejoRunner = {
       enable = mkEnableOption "one Forgejo Actions runner per forge in `forges`";
@@ -580,22 +551,10 @@ in {
       }))
 
       # The runner's identity: on the clan machine whatever the isolation,
-      # since the clan vars and `forgejo-runner-register` live here.
+      # since the clan vars and `forgejo-runner-register` live here. Every
+      # runner signs and uploads, so it needs the CI credentials.
       (mkIf cfg.enable {
-        # CI signing key, shared by every runner. ncps
-        # (taghmata nixidy apps/scriptorium/ncps) accepts a PUT only when the narinfo
-        # carries this key's signature, so it doubles as the upload credential.
-        # Separate from ncps' own serving key: a leaked runner can push into
-        # the cache, but cannot forge ncps' signature on upstream paths.
-        clan.core.vars.generators.${ciKeyGenerator} = {
-          share = true;
-          files."key".secret = true;
-          files."key.pub".secret = false;
-          runtimeInputs = [pkgs.nix];
-          script = ''
-            nix-store --generate-binary-cache-key ${ciKeyName} "$out/key" "$out/key.pub"
-          '';
-        };
+        services.imperium.ciCredentials.enable = true;
       })
 
       (mkIf cfg.enable {
@@ -629,8 +588,8 @@ in {
         paths = {
           forgeSecret = forge: gens.${generatorName forge}.files."secret".path;
           forgeUuid = forge: gens.${generatorName forge}.files."uuid".value;
-          ciKey = gens.${ciKeyGenerator}.files."key".path;
-          ncpsNetrc = gens.${ncpsUploadAuth}.files.netrc.path;
+          ciKey = ccfg.signingKey;
+          ncpsNetrc = ccfg.ncpsNetrc;
           sccacheCredentials = gens.sccache-garage-key.files.credentials.path;
         };
       }))
