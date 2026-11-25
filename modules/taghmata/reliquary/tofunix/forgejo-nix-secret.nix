@@ -17,6 +17,10 @@
         random.password = "-hex 16";
         data.password = "$password";
       };
+      tofunix-hermes-noosphere-forks = {
+        prompts.forgejo-token.description = "Operator-only noosphere PAT belonging to hermes (all repositories, write:repository, read:organization, read:user)";
+        data.forgejo_token = "$forgejo_token";
+      };
     };
   };
 }

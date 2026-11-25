@@ -13,8 +13,22 @@
   bot = "hermes";
   passwordCredential = "tofunix-hermes-noosphere-password";
   manageBot = builtins.pathExists (vars.shared passwordCredential passwordCredential);
-  # Explicit upstream read grants, one repo name per fork the operator enrolls.
-  hermesRepos = [];
+  # Explicit upstream read grants, one repo name each. Once the fork token
+  # exists, each also gets its hermes/<repo> fork.
+  hermesRepos = [
+    "auspex"
+    "inanna"
+    "tally"
+  ];
+  forkCredential = "tofunix-hermes-noosphere-forks";
+  manageForks = manageBot && builtins.pathExists (vars.shared forkCredential forkCredential);
+  # The upstream owner: the repo's org (scriptorium.repos.<repo>.org) or manjo.
+  upstreamOwner = repo: let
+    org = (config.scriptorium.repos.${repo} or {}).org or null;
+  in
+    if org != null
+    then org
+    else owner;
 in {
   reliquary.hermes_noosphere_password = lib.mkIf manageBot {
     generator = passwordCredential;
@@ -43,9 +57,31 @@ in {
   resource.gitea_repository_collaborator = lib.optionalAttrs manageBot (builtins.listToAttrs (map (repo:
     lib.nameValuePair "${repo}-hermes-noosphere" {
       provider = "gitea.noosphere";
-      inherit owner repo;
+      owner = upstreamOwner repo;
+      inherit repo;
+      # A repo declared here must exist before it can be granted.
+      depends_on = lib.optional (config.scriptorium.repos ? ${repo}) "forgejo_repository.${repo}";
       inherit (ref.gitea_user.hermes_noosphere) username;
       permission = "read";
+    })
+  hermesRepos));
+
+  # Forks are created as hermes, with an operator-only hermes PAT that never
+  # reaches Stygies. Omit the alias and the forks together until it exists.
+  reliquary.hermes_noosphere_fork_secrets = lib.mkIf manageForks {
+    generator = forkCredential;
+  };
+  provider.gitea.hermes-noosphere = lib.mkIf manageForks {
+    inherit (config.provider.gitea.noosphere) base_url;
+    token = relic "hermes_noosphere_fork_secrets" "forgejo_token";
+  };
+  resource.gitea_fork = lib.optionalAttrs manageForks (builtins.listToAttrs (map (repo:
+    lib.nameValuePair "${repo}-noosphere" {
+      provider = "gitea.hermes-noosphere";
+      depends_on = ["gitea_repository_collaborator.${repo}-hermes-noosphere"];
+      owner = upstreamOwner repo;
+      inherit repo;
+      lifecycle.prevent_destroy = true;
     })
   hermesRepos));
 
@@ -55,6 +91,16 @@ in {
   };
 
   scriptorium.repos = {
+    inanna = {
+      org = ref.forgejo_organization.monolith-softworks.name;
+      description = "portfolio tracker";
+    };
+
+    tally = {
+      org = ref.forgejo_organization.monolith-softworks.name;
+      description = "tally";
+    };
+
     nvf.description = "Neovim NVF";
     chirp-backend.description = "Chirp backend";
     chirp-client = {

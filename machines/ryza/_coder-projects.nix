@@ -29,6 +29,11 @@ let
       owner = "monolith-softworks";
       room = "!vR9D2BaWBsjdrDlBt6Vb7_iEKpj4iEny5tRPOnzVUv0";
     };
+    inanna = {
+      forge = "noosphere";
+      owner = "monolith-softworks";
+      room = "!7QOQWeDhddbtgBqxsYPhfNj2rsUePiB2iTeWEiYe010";
+    };
     rust-app-template = {
       forge = "cerberus";
       room = "!qfeHKyEuU37YpF4mms2eyiISUIbyx8ajidvKeQn3b-c";

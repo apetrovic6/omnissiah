@@ -16,8 +16,17 @@
   # Keep the grant explicit; a new product must not inherit Hermes access.
   # Adding a repo here is all it takes: a read grant, its branch rule, a fork
   # under hermes, and one more allowed repo for the bot. Its runtime token
-  # (All repositories) reaches the new pair without changes.
+  # (All repositories) reaches the new pair without changes. Set
+  # `protect = false` to skip the branch rule; `branch`, `directPush` and
+  # `checks` are then unused.
   repos = {
+    # omnissiah = {
+    #   name = "omnissiah";
+    #   # No branch rule: manjo and the scheduled flake.lock job push master
+    #   # directly, and no workflow runs on pull_request. Hermes only reads it
+    #   # and pushes to its fork.
+    #   protect = false;
+    # };
     rust-app-template = {
       name = "rust-app-template";
       branch = "master";
@@ -128,7 +137,7 @@ in {
       lib.nameValuePair "${name}-hermes" {
         provider = "gitea.cerberus";
         # Keep the default branch protected before admitting the bot.
-        depends_on = ["gitea_repository_branch_protection.${name}"];
+        depends_on = lib.optional (repo.protect or true) "gitea_repository_branch_protection.${name}";
         inherit owner;
         repo = repo.name;
         inherit (ref.gitea_user.hermes) username;
@@ -165,5 +174,5 @@ in {
       required_approvals = 0;
       status_check_patterns = repo.checks;
     })
-    repos;
+    (lib.filterAttrs (_: repo: repo.protect or true) repos);
 }

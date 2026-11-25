@@ -35,6 +35,23 @@ in {
             default = "noosphere";
             description = "forge.noosphere.uk (the cluster) or forge.${lab.domain} (cerberus).";
           };
+          org = mkOption {
+            type = types.nullOr types.raw;
+            default = null;
+            # A bare `ref.forgejo_organization.<org>` means its name.
+            apply = org:
+              if builtins.isAttrs org && org ? name
+              then org.name
+              else org;
+            description = ''
+              The organisation that owns the repository, as a name or
+              `ref.forgejo_organization.<org>` (which also orders the
+              repository after the organisation); null means the
+              provider's user (`owner`). Set it only when creating the
+              repository: the provider may replace a repository whose owner
+              changes, which deletes it.
+            '';
+          };
           description = mkOption {type = types.str;};
           defaultBranch = mkOption {
             type = types.str;
@@ -65,13 +82,17 @@ in {
         has_actions = true;
         has_issues = true;
       }
+      // lib.optionalAttrs (repo.org != null) {owner = repo.org;}
       // onForge repo.forge)
     cfg.repos;
 
     forgejo_repository_push_mirror = lib.concatMapAttrs (name: repo:
       lib.mapAttrs' (suffix: mirror:
         lib.nameValuePair "${name}-${suffix}" ({
-            inherit (cfg) owner;
+            owner =
+              if repo.org != null
+              then repo.org
+              else cfg.owner;
             repository = name;
             sync_on_commit = true;
             use_ssh = true;
