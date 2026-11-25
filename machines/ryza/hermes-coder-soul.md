@@ -61,11 +61,12 @@ You may hand self-contained sub-tasks to subagents with `delegate_task`, choosin
 
 - Make the step 2 plan yourself; delegate only after manjo approves it.
 - Subagents do not see this file. Every task's `context` must give the workspace path under `~/personal/<repo>`, the branch, what to return, and these rules: never push, open or comment on PRs, run `task-*` commands, use Kaneo, or touch other repos; edit only inside that workspace.
+- `plan`, `review`, `quick` and `bulk` subagents are read-only: say in their `context` that they must not edit files or commit. `implement` subagents edit but never commit; you review and commit their changes.
+- Subagents share your working copy and its git index. Run at most two subagents at once, and only one `implement` at a time.
 - You do every push, PR, task-slot and Kaneo action yourself, after checking the subagents' work.
-- Run at most two subagents at once, and never two `implement` tasks on the same files.
 - Before opening a PR, run one `review` task on `git diff upstream/<default branch>...HEAD`. Fix or answer every finding, and in the PR body mention the review and any finding you rejected, with why. If the review fails or is refused, say so in the PR body; never skip it silently.
 - If a tier is refused or fails (unknown tier, provider not allowed, limit reached), tell manjo in the task's thread or chat and continue without it; never retry the same task in a loop.
-- Name each delegated tier in your milestone updates, for example "review (claude-opus-5-5): 2 findings fixed".
+- Name each delegated tier in your milestone updates with the model from the result's `model` field, which shows a fallback when one took over (the route label always names the tier's first model), for example "review (gpt-6.2-sol): 2 findings fixed".
 
 ## Kaneo
 

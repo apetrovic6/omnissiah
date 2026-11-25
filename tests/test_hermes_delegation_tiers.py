@@ -6,10 +6,13 @@ Hermes core (the smoke test in modules/rites/hermes.nix).
 
 import importlib.util
 import json
+import os
 import sys
 import types
 import unittest
+import unittest.mock
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 PLUGIN = Path(__file__).resolve().parents[1] / "modules/rites/_hermes-delegation-tiers/__init__.py"
 
@@ -17,6 +20,7 @@ PLUGIN = Path(__file__).resolve().parents[1] / "modules/rites/_hermes-delegation
 PROFILE_ALIASES = {"codex": "openai-codex", "openai_codex": "openai-codex", "dashscope-token-plan": "alibaba-token-plan"}
 MODEL_ALIASES = {"claude": "anthropic", "claude-code": "anthropic"}
 KNOWN = {"anthropic", "openai-codex", "deepseek", "alibaba-token-plan"}
+HOME = {"path": "/var/lib/hermes/.hermes/profiles/coder"}  # the active profile home (hermes_constants stub)
 
 
 class RouteError(ValueError):
@@ -31,7 +35,10 @@ class Provider:
 
 def load_plugin():
     stubs = {name: types.ModuleType(name) for name in (
-        "agent", "agent.delegation_provider", "hermes_cli", "hermes_cli.models", "hermes_cli.providers", "providers")}
+        "agent", "agent.delegation_provider", "hermes_cli", "hermes_cli.models", "hermes_cli.providers", "providers",
+        "hermes_constants")}
+    stubs["hermes_constants"].get_hermes_home = lambda: Path(HOME["path"])
+    stubs["hermes_constants"].hermes_home_key = lambda path: os.path.normpath(str(path))
     stubs["agent.delegation_provider"].DelegationProvider = Provider
     stubs["agent.delegation_provider"].DelegationRouteError = RouteError
     stubs["hermes_cli.models"].normalize_provider = lambda name: MODEL_ALIASES.get(name.strip().lower(), name.strip().lower())
@@ -80,12 +87,12 @@ class Tiers(unittest.TestCase):
         self.assertIn(needle, str(caught.exception))
 
     def test_schema_lists_names_and_descriptions_in_order(self):
-        params = self.backend.task_parameters(config([IMPLEMENT, QUICK]))
+        params = self.backend.task_parameters(config([QUICK, IMPLEMENT]))
         self.assertEqual(list(params), ["tier"])
-        self.assertEqual(params["tier"]["enum"], ["implement", "quick"])
+        self.assertEqual(params["tier"]["enum"], ["quick", "implement"])  # config order, not sorted
         self.assertIn("quick: Mechanical work.", params["tier"]["description"])
         self.assertNotIn("claude", params["tier"]["description"])  # models never reach the model
-        again = self.backend.task_parameters(config([IMPLEMENT, QUICK]))
+        again = self.backend.task_parameters(config([QUICK, IMPLEMENT]))
         self.assertEqual(json.dumps(params, sort_keys=True), json.dumps(again, sort_keys=True))
 
     def test_no_options_no_parameter_and_no_description(self):
@@ -128,6 +135,45 @@ class Tiers(unittest.TestCase):
             self.refused(config([entry], allowed=["anthropic", "openai-codex"]), "alias", tier="implement")
         bad_fallback = dict(IMPLEMENT, fallback=[{"provider": "codex", "model": "gpt-6.2-sol"}])
         self.refused(config([bad_fallback]), "alias", tier="implement")
+
+    def test_padded_provider_routes_as_canonical(self):
+        entry = dict(IMPLEMENT, provider="  anthropic ", fallback=[{"provider": " openai-codex", "model": "gpt-6.2-sol"}])
+        route = self.route(config([entry]), tier="implement")
+        self.assertEqual(route["provider"], "anthropic")
+        self.assertEqual(route["fallback_providers"], [{"provider": "openai-codex", "model": "gpt-6.2-sol"}])
+
+    def test_meta_and_unknown_providers_refused(self):
+        for provider in ("auto", "custom", "openai-api", "nonsense"):
+            entry = dict(IMPLEMENT, provider=provider, fallback=[])
+            self.refused(config([entry], allowed=[provider]), "meta id or unknown", tier="implement")
+
+    def test_non_mapping_settings_refused(self):
+        self.refused({"backend": "tiers", "backends": {"tiers": "x"}}, "not a mapping", tier="implement")
+        self.refused({"backend": "tiers", "backends": {"tiers": ["x"]}}, "not a mapping")
+
+    def test_store_allowlist_narrows_never_widens(self):
+        directory = Path(self.enterContext(TemporaryDirectory()))
+        store = directory / "allowlists.json"
+        store.write_text(json.dumps({"/var/lib/hermes/.hermes/profiles/coder": ["anthropic"],
+                                     "/var/lib/hermes/.hermes/profiles/work": []}))
+        self.enterContext(unittest.mock.patch.dict(os.environ, {tiers.ALLOWLIST_ENV: str(store)}))
+        wide = config([IMPLEMENT, QUICK], allowed=["anthropic", "openai-codex", "deepseek"])
+        # coder: config allows Codex, the store does not, so the fallback is refused.
+        self.refused(wide, "'openai-codex' is not allowed", tier="implement")
+        self.assertEqual(self.route(config([dict(IMPLEMENT, fallback=[])], allowed=["anthropic"]),
+                                    tier="implement")["provider"], "anthropic")
+        # work: the store pins [], so a hand-widened config.yaml still routes nothing but the parent.
+        self.enterContext(unittest.mock.patch.dict(HOME, {"path": "/var/lib/hermes/.hermes/profiles/work"}))
+        self.refused(config([dict(IMPLEMENT, fallback=[])], allowed=["anthropic"]), "'anthropic' is not allowed",
+                     tier="implement")
+        self.assertNotIn("provider", self.route(wide, tier="quick"))
+        # A profile the store does not list (default) uses config.yaml alone.
+        self.enterContext(unittest.mock.patch.dict(HOME, {"path": "/var/lib/hermes/.hermes"}))
+        self.assertEqual(self.route(wide, tier="implement")["provider"], "anthropic")
+
+    def test_unreadable_store_allowlist_refused(self):
+        self.enterContext(unittest.mock.patch.dict(os.environ, {tiers.ALLOWLIST_ENV: "/nonexistent/allow.json"}))
+        self.refused(config([IMPLEMENT]), "unreadable", tier="implement")
 
     def test_forbidden_entry_keys_refused(self):
         for key, value in (("base_url", "http://x/v1"), ("api_key", "k"), ("api_mode", "chat_completions"),

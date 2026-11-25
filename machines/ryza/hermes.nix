@@ -262,10 +262,14 @@ in {
         # Any provider here could resolve to a personal login (the root Codex grant, the shared
         # DeepSeek and Qwen keys in the wrapper's environment).
         assertion = let
-          d = config.services.imperium.hermes.profiles.work.delegation;
+          work = config.services.imperium.hermes.profiles.work;
+          d = work.delegation;
         in
-          d.allowedProviders == [] && lib.all (tier: tier.provider == null && tier.fallback == []) d.tiers;
-        message = "services.imperium.hermes.profiles.work.delegation: tiers must not name a provider or fallback, and allowedProviders must stay empty (work bills only the DevZero token).";
+          d.allowedProviders
+          == []
+          && lib.all (tier: tier.provider == null && tier.fallback == []) d.tiers
+          && !(work.settings ? delegation);
+        message = "services.imperium.hermes.profiles.work: delegation tiers must not name a provider or fallback, allowedProviders must stay empty, and settings.delegation must not be set (work bills only the DevZero token).";
       }
     ];
 
@@ -327,10 +331,16 @@ in {
           tiers = coderTiers;
           default = "implement";
           allowedProviders = ["anthropic" "openai-codex" "deepseek" qwenTokenPlanProvider];
-          # The SOUL asks for at most two at once; this is the hard cap.
-          maxConcurrentChildren = 3;
+          # Per call and per background pool, not overall (see the option); the SOUL also says two.
+          maxConcurrentChildren = 2;
         };
         settings.terminal = sshTerminal // {cwd = "~/personal";};
+        # Core /review runs through the delegation backend unless this slot is set, which would
+        # put it on the `implement` tier (Sonnet). Keep it on Opus, like the coder itself.
+        settings.auxiliary.review = {
+          provider = "anthropic";
+          model = "claude-opus-5-5";
+        };
         # Kaneo uses browser PKCE. Port 28431 is outside both hosts' ephemeral
         # ranges; keep it fixed for the phalanx-to-ryza SSH tunnel.
         settings.mcp_servers.kaneo = {
@@ -354,7 +364,7 @@ in {
           default = lib.mkIf workTiersEnabled "implement";
           # Parent credentials only; asserted below.
           allowedProviders = [];
-          maxConcurrentChildren = 3;
+          maxConcurrentChildren = 2;
         };
         settings = {
           auth.adopt_external_logins = false;

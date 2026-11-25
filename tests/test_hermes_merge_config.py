@@ -227,5 +227,24 @@ class PromptRefresh(unittest.TestCase):
         self.assertIn("profile coder: refresh-prompts failed (RuntimeError: boom)", err)
 
 
+class Merge(unittest.TestCase):
+    def test_mappings_deep_merge_and_scalars_lists_replace(self):
+        config = {"delegation": {"provider": "openai-codex", "max_iterations": 9, "keep": 1, "fallback_providers": [1]}}
+        changed = merge.merge(config, {"delegation": {"provider": "", "fallback_providers": []}})
+        self.assertTrue(changed)
+        self.assertEqual(config, {"delegation": {"provider": "", "max_iterations": 9, "keep": 1, "fallback_providers": []}})
+
+    def test_empty_mapping_replaces_a_stale_one(self):
+        config = {"delegation": {"request_overrides": {"extra_body": {"x": 1}}}}
+        self.assertTrue(merge.merge(config, {"delegation": {"request_overrides": {}}}))
+        self.assertEqual(config, {"delegation": {"request_overrides": {}}})
+        self.assertFalse(merge.merge(config, {"delegation": {"request_overrides": {}}}))
+
+    def test_missing_key_is_added(self):
+        config = {}
+        self.assertTrue(merge.merge(config, {"delegation": {"profile": ""}}))
+        self.assertEqual(config, {"delegation": {"profile": ""}})
+
+
 if __name__ == "__main__":
     unittest.main()

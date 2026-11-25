@@ -69,50 +69,75 @@
     reservedProfileNames = ["hermes" "default" "test" "tmp" "root" "sudo"];
     yaml = pkgs.formats.yaml {};
     # profiles.<name>.delegation -> settings.delegation for the bundled `tiers` backend
-    # (_hermes-delegation-tiers). backend and backends.tiers are always written: the merge never
-    # deletes keys, so emptying the tiers or dropping the default only takes effect this way.
+    # (_hermes-delegation-tiers). Everything below is written on every activation, tiers on or off:
+    # the merge never deletes keys, so emptying the tiers, dropping the default or clearing a stale
+    # route key only takes effect this way. Turning tiers off leaves the lifecycle knobs pinned
+    # (max_spawn_depth, max_iterations, ...); their values are the safe ones either way.
     renderTier = tier:
       {inherit (tier) name description model;}
       // lib.optionalAttrs (tier.provider != null) {inherit (tier) provider;}
       // lib.optionalAttrs (tier.effort != null) {reasoning_effort = tier.effort;}
       // lib.optionalAttrs (tier.fallback != []) {fallback = map (step: {inherit (step) provider model;}) tier.fallback;};
+    # Hermes 0.23.0 agent/delegation_provider.py ROUTE_KEYS plus the backend selection: the keys
+    # that decide where a child runs. The default backend routes every child by these
+    # (delegation.provider/base_url/api_key/profile), so they are pinned to "inherit the parent"
+    # and may not come from `settings.delegation`.
+    delegationRouteKeys = ["backend" "backends" "model" "provider" "base_url" "api_key" "api_mode" "request_overrides" "reasoning_effort" "service_tier" "fallback_providers" "profile" "label"];
+    # Ids that name no single account: `auto` picks whichever login is present, `custom` any endpoint.
+    metaProviders = ["auto" "custom"];
     delegationSettings = profile: let
       d = profile.delegation;
       on = d.tiers != [];
+      # An empty allowlist (work) always runs the tiers backend: with no tiers it routes every child
+      # on the parent's route and ignores the core route keys entirely.
+      inheritOnly = d.allowedProviders == [];
     in {
-      delegation =
-        {
-          backend =
-            if on
-            then "tiers"
-            else "default";
-          backends.tiers = {
-            allowed_providers = lib.optionals on d.allowedProviders;
-            default =
-              if on && d.default != null
-              then d.default
-              else "";
-            options = map renderTier d.tiers;
-          };
-        }
-        // lib.optionalAttrs on {
-          # Flat delegation: children never delegate, run nothing unapproved, and fall back
-          # only along their tier's own (allowlisted) chain.
-          max_spawn_depth = 1;
-          orchestrator_enabled = false;
-          subagent_auto_approve = false;
-          fallback_providers = [];
-          max_concurrent_children = d.maxConcurrentChildren;
-          child_timeout_seconds = d.childTimeoutSeconds;
-          max_iterations = d.maxIterations;
+      delegation = {
+        backend =
+          if on || inheritOnly
+          then "tiers"
+          else "default";
+        backends.tiers = {
+          allowed_providers = d.allowedProviders;
+          default =
+            if d.default != null
+            then d.default
+            else "";
+          options = map renderTier d.tiers;
         };
+        # Empty = inherit the parent's provider, endpoint, key and effort (the default backend's route).
+        provider = "";
+        model = "";
+        base_url = "";
+        api_key = "";
+        api_mode = "";
+        profile = "";
+        reasoning_effort = "";
+        request_overrides = {};
+        # Flat delegation: children never delegate, run nothing unapproved, and fall back only
+        # along their tier's own (allowlisted) chain.
+        fallback_providers = [];
+        max_spawn_depth = 1;
+        orchestrator_enabled = false;
+        subagent_auto_approve = false;
+        max_concurrent_children = d.maxConcurrentChildren;
+        child_timeout_seconds = d.childTimeoutSeconds;
+        max_iterations = d.maxIterations;
+      };
     };
     profileSettings = profile: lib.recursiveUpdate profile.settings (delegationSettings profile);
+    # Read-only copy of each profile's allowlist, keyed by profile home. The backend intersects it
+    # with config.yaml's, so a hand edit there can narrow a profile's providers, never widen them.
+    delegationAllowlist = pkgs.writeText "hermes-delegation-allowlist.json" (builtins.toJSON (lib.mapAttrs' (name: profile:
+      lib.nameValuePair "${home}/.hermes/profiles/${name}" profile.delegation.allowedProviders)
+    enabledProfiles));
     delegationAssertions = name: profile: let
       d = profile.delegation;
       names = map (tier: tier.name) d.tiers;
       where = "services.imperium.hermes.profiles.${name}.delegation";
       providers = lib.concatMap (tier: lib.optional (tier.provider != null) tier.provider ++ map (step: step.provider) tier.fallback) d.tiers;
+      settingsKeys = lib.attrNames (profile.settings.delegation or {});
+      routeKeysSet = lib.filter (key: lib.elem key delegationRouteKeys) settingsKeys;
     in [
       {
         assertion = lib.length names == lib.length (lib.unique names);
@@ -127,8 +152,16 @@
         message = "${where}: every tier and fallback provider must be in allowedProviders (${lib.concatStringsSep ", " d.allowedProviders}); found ${lib.concatStringsSep ", " (lib.unique providers)}.";
       }
       {
+        assertion = !lib.any (provider: lib.elem provider metaProviders) (d.allowedProviders ++ providers);
+        message = "${where}: ${lib.concatStringsSep " and " metaProviders} are not providers (they pick whatever login or endpoint is present); name a real provider id.";
+      }
+      {
         assertion = lib.all (tier: tier.provider != null || tier.fallback == []) d.tiers;
         message = "${where}.tiers: a tier on the parent's credentials (provider = null) cannot have a fallback.";
+      }
+      {
+        assertion = routeKeysSet == [];
+        message = "services.imperium.hermes.profiles.${name}.settings.delegation sets ${lib.concatStringsSep ", " routeKeysSet}, which decide where subagents run; use ${where} instead (only lifecycle knobs belong in settings).";
       }
     ];
     # One route per room. Hermes keys a conversation on the room (and thread),
@@ -220,6 +253,8 @@
           fi
         '')
         allKeys)}
+      # The delegation tiers backend's read-only allowlist (delegationAllowlist).
+      export HERMES_DELEGATION_TIERS_ALLOWLIST=${delegationAllowlist}
       exec ${cfg.package}/bin/hermes "$@"
     '';
 
@@ -250,6 +285,8 @@
         HOME = home;
         USER = user;
         LOGNAME = user;
+        # Read by the delegation tiers backend (delegationAllowlist).
+        HERMES_DELEGATION_TIERS_ALLOWLIST = "${delegationAllowlist}";
         # For `systemd-run --user` from the gateway.
         XDG_RUNTIME_DIR = "/run/user/${toString cfg.uid}";
         DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/${toString cfg.uid}/bus";
@@ -412,7 +449,7 @@
                       description = "One line the agent reads to choose the tier. Never names the model.";
                     };
                     provider = mkOption {
-                      type = types.nullOr types.str;
+                      type = types.nullOr (types.strMatching "[a-z0-9][a-z0-9-]*");
                       default = null;
                       description = "Canonical Hermes provider id, from allowedProviders. Null: the parent's own credentials, only the model changes.";
                     };
@@ -425,7 +462,7 @@
                     fallback = mkOption {
                       type = types.listOf (types.submodule {
                         options = {
-                          provider = mkOption {type = types.str;};
+                          provider = mkOption {type = types.strMatching "[a-z0-9][a-z0-9-]*";};
                           model = mkOption {type = types.str;};
                         };
                       });
@@ -443,14 +480,26 @@
                 description = "Tier for a delegated task that names none. Null: the parent's own route.";
               };
               allowedProviders = mkOption {
-                type = types.listOf types.str;
+                type = types.listOf (types.strMatching "[a-z0-9][a-z0-9-]*");
                 default = [];
-                description = "The only providers a tier or fallback may name, checked at eval time and again by the backend on every task. Empty: parent credentials only.";
+                description = ''
+                  The only providers a tier or fallback may name: canonical Hermes provider ids, never
+                  `auto` or `custom`. Checked at eval time and by the backend on every task, against
+                  both config.yaml and a read-only copy in the store (their intersection). Empty: parent
+                  credentials only, and the profile always runs the tiers backend, so no `delegation.*`
+                  key can move a child to another account.
+                '';
               };
               maxConcurrentChildren = mkOption {
                 type = types.ints.between 1 10;
-                default = 3;
-                description = "Hard cap on parallel subagents (and concurrent background units).";
+                default = 2;
+                description = ''
+                  Hermes `delegation.max_concurrent_children`. Not a cap on subagents overall: it limits
+                  the children of one delegate_task call, and separately the background calls running at
+                  once. That background pool is shared by every profile in the gateway process, and a call
+                  that finds it full runs synchronously instead of being refused. So one profile can have
+                  about (N background calls + 1 inline call) x N children at once.
+                '';
               };
               childTimeoutSeconds = mkOption {
                 type = types.ints.unsigned;

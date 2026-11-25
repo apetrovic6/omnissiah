@@ -22,6 +22,13 @@
           builtins.unsafeDiscardStringContext (builtins.toJSON
             (import ../rites/_forgejo-ephemeral-jobdir-test.nix {inherit (self.nixosConfigurations) ryza;}))
         );
+        # Fails at eval if a Hermes delegation guard rail stops firing: a work
+        # subagent able to reach a personal provider, a meta provider id, a
+        # tier outside its allowlist (README "Hermes delegation tiers").
+        hermes-delegation-tiers = pkgs.writeText "hermes-delegation-tiers.json" (
+          builtins.unsafeDiscardStringContext (builtins.toJSON
+            (import ../rites/_hermes-delegation-tiers-test.nix {inherit (self.nixosConfigurations) ryza;}))
+        );
       };
 
     # One derivation that links every check, for building them all at once.

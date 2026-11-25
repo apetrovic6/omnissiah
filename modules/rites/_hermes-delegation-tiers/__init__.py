@@ -29,10 +29,17 @@ Same contract and config shape as NousResearch's ``advanced-delegation`` ``model
 * every route carries an explicit fallback chain (``[]`` by default), so a child never inherits one.
 
 Only tier names and descriptions reach the model. No slash command or CLI: Nix owns these settings.
+
+The allowlist in config.yaml can be edited by hand until the next activation resets it, so Nix also
+writes each managed profile's allowlist to a read-only store file named by ``HERMES_DELEGATION_TIERS_ALLOWLIST``
+(``{profile home: [providers]}``). The effective allowlist is the intersection: a hand edit can narrow a
+profile's providers, never widen them. A profile the file does not list (``default``) uses config.yaml alone.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from typing import Any, Mapping, Optional
 
@@ -46,6 +53,9 @@ NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 #: request_overrides, daybreak, ...) refuses the tier: those would leave the allowlist's reach.
 ENTRY_KEYS = frozenset({"name", "description", "provider", "model", "reasoning_effort", "fallback"})
 FALLBACK_KEYS = frozenset({"provider", "model"})
+#: Ids that name no single account: ``auto`` picks whichever login is present, ``custom`` any endpoint.
+META_PROVIDERS = frozenset({"auto", "custom"})
+ALLOWLIST_ENV = "HERMES_DELEGATION_TIERS_ALLOWLIST"
 
 
 def _text(value: Any) -> str:
@@ -53,26 +63,56 @@ def _text(value: Any) -> str:
 
 
 def _canonical(provider: str) -> Optional[str]:
-    """The canonical id every Hermes normaliser agrees on, or None when one of them maps ``provider`` to
-    another id (an alias such as ``codex`` or ``claude``). Config must name the canonical id itself."""
+    """The canonical id every Hermes normaliser agrees on, or None for an alias (``codex``, ``claude``: every
+    normaliser must map the id to itself) and for an id with no provider profile (``auto``, ``custom``,
+    a typo). Config must name the canonical id of a real provider."""
     from hermes_cli.models import normalize_provider as models_normalize
     from hermes_cli.providers import normalize_provider as providers_normalize
     from providers import get_provider_profile
     key = provider.strip()
+    if key in META_PROVIDERS:
+        return None
     profile = get_provider_profile(key)
-    seen = {key, models_normalize(key), providers_normalize(key)}
-    if profile is not None:
-        seen.add(profile.name)
+    if profile is None:
+        return None
+    seen = {key, models_normalize(key), providers_normalize(key), profile.name}
     return key if seen == {key} else None
+
+
+def _store_allowed() -> Optional[frozenset[str]]:
+    """This profile's allowlist from the Nix store file, or None when no file is set or it does not list this
+    profile. A file that is set but unreadable refuses the task (fail closed)."""
+    path = os.environ.get(ALLOWLIST_ENV, "").strip()
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as stream:
+            data = json.load(stream)
+        if not isinstance(data, dict):
+            raise ValueError("not a JSON object")
+    except (OSError, ValueError) as exc:
+        raise DelegationRouteError(
+            f"The delegation allowlist {path} ({ALLOWLIST_ENV}) is unreadable ({exc}); no subagent was started.") from exc
+    from hermes_constants import get_hermes_home, hermes_home_key
+    here = hermes_home_key(get_hermes_home())
+    for home, providers in data.items():
+        if hermes_home_key(home) == here:
+            if not isinstance(providers, list) or not all(isinstance(p, str) for p in providers):
+                raise DelegationRouteError(f"The delegation allowlist {path} is malformed for {home}.")
+            return frozenset(p.strip() for p in providers)
+    return None
 
 
 def _allowed(settings: Mapping[str, Any]) -> frozenset[str]:
     raw = settings.get("allowed_providers")
     if raw is None:
-        return frozenset()
-    if not isinstance(raw, list) or not all(isinstance(p, str) and p.strip() for p in raw):
+        allowed = frozenset()
+    elif not isinstance(raw, list) or not all(isinstance(p, str) and p.strip() for p in raw):
         raise DelegationRouteError(f"{SETTINGS_PATH}.allowed_providers must be a list of provider ids.")
-    return frozenset(p.strip() for p in raw)
+    else:
+        allowed = frozenset(p.strip() for p in raw)
+    pinned = _store_allowed()
+    return allowed if pinned is None else allowed & pinned
 
 
 def _check_provider(tier: str, provider: Any, allowed: frozenset[str], where: str) -> str:
@@ -81,8 +121,8 @@ def _check_provider(tier: str, provider: Any, allowed: frozenset[str], where: st
     canonical = _canonical(provider)
     if canonical is None:
         raise DelegationRouteError(
-            f"Tier {tier!r}: {where} names provider {provider!r} by an alias; {SETTINGS_PATH} must use the "
-            f"canonical provider id.")
+            f"Tier {tier!r}: {where} names provider {provider!r}, which is an alias, a meta id or unknown; "
+            f"{SETTINGS_PATH} must use the canonical id of a real provider.")
     if canonical not in allowed:
         listed = ", ".join(sorted(allowed)) or "none (parent credentials only)"
         raise DelegationRouteError(
@@ -171,6 +211,9 @@ class TiersDelegationProvider(DelegationProvider):
                 "must follow in each task's `context`.")
 
     def route_task(self, task: Mapping[str, Any], config: Mapping[str, Any]) -> dict[str, Any]:
+        raw = (config.get("backends") or {}).get(BACKEND) if isinstance(config.get("backends"), Mapping) else None
+        if raw is not None and not isinstance(raw, Mapping):
+            raise DelegationRouteError(f"{SETTINGS_PATH} is not a mapping; no subagent was started.")
         settings = self.settings(config)
         chosen = _text(task.get(PARAMETER)) or _text(settings.get("default"))
         if not chosen:
