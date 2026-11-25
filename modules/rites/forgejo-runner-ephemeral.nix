@@ -22,6 +22,9 @@
     credParent = "/run/microvm-credentials";
     credDir = "${credParent}/${slot}";
     credIds = ["runner-token" "runner-uuid" "job-handle"];
+    # Trusted jobs (HOM-31): root-only host dir behind a second virtiofs share; see _forgejo-ephemeral-trusted.nix.
+    trustDir = "${credParent}/${slot}-trust";
+    repoName = "rust-app-template";
     overlay = "/nix/.rw-store";
     images = ["nix-store-overlay.img" "var.img"];
     tap = "vm-eph-1";
@@ -331,8 +334,14 @@
       };
     };
   in {
+    imports = [(import ./_forgejo-ephemeral-trusted.nix {inherit cfg slot vm dispatch controlDir trustDir cacheHost;})];
+
     options.services.imperium.forgejoEphemeral = {
       enable = lib.mkEnableOption "the Ryza Forgejo one-job microVM pilot";
+      trustedJobs.enable = lib.mkEnableOption ''
+        delivering the CI signing key and ncps upload netrc to jobs whose exact run is a manjo push,
+        schedule or dispatch (HOM-31). The PAT then also needs read:repository.
+        See _forgejo-ephemeral-trusted.nix for the rule and who can read what'';
       repoId = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.positive;
         default = null;
@@ -367,7 +376,10 @@
       clan.core.vars.generators.${generator} = {
         share = false;
         prompts.token = {
-          description = "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user only)";
+          description =
+            if cfg.trustedJobs.enable
+            then "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user and read:repository)"
+            else "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user only)";
           type = "hidden";
         };
         files.token = {
@@ -472,7 +484,7 @@
           path = [pkgs.systemd];
           serviceConfig = {
             Type = "exec";
-            ExecStart = "${lib.getExe pkgs.python3} -I -B ${./_forgejo-ephemeral-dispatcher.py} --repo-id ${toString cfg.repoId} --state-dir /var/lib/${dispatch} --vm-dir ${vmDir} --credential-dir ${credDir}";
+            ExecStart = "${lib.getExe pkgs.python3} -I -B ${./_forgejo-ephemeral-dispatcher.py} --repo-id ${toString cfg.repoId} --state-dir /var/lib/${dispatch} --vm-dir ${vmDir} --credential-dir ${credDir}${lib.optionalString cfg.trustedJobs.enable " --trusted-jobs --repo ${repoName} --trust-dir ${trustDir}"}";
             LoadCredential = ["forgejo-pat:${config.clan.core.vars.generators.${generator}.files.token.path}"];
             StateDirectory = dispatch;
             StateDirectoryMode = "0700";

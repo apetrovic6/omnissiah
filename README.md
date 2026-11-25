@@ -937,7 +937,8 @@ This opt-in pilot runs only `manjo/rust-app-template` jobs requesting exactly
 `ryza-eph-1`, for one job handle. The guest gets only that registration's
 single-use token, UUID and job handle; the job can read them. There is no
 dispatcher PAT, persistent runner secret, sccache key, ncps netrc or signing
-key in the guest. It shares the host Nix store read-only and can use ncps
+key in the guest (the opt-in trusted jobs below add the last two, root-only,
+for exactly-resolved manjo runs). It shares the host Nix store read-only and can use ncps
 with public verification keys; writable store and `/var` images are disposable.
 Treat all host store contents as visible to the job; do not put plaintext
 secrets in store paths.
@@ -1122,7 +1123,18 @@ reviewed pilot job, wait for registration and the startup delay, then
 cancel in the UI during the delay, before any task is assigned or steps
 run. The dispatcher stops the slot after two consecutive successful job
 polls no longer list its handle. It polls every 15 seconds during the
-first five minutes, then every minute. Verify local and remote cleanup,
+first five minutes, then every minute. It queues (and logs) that stop once
+per slot run, again only if the slot is still busy 90 seconds later. A guest
+cancelled mid-boot ignores the ACPI powerdown. The unit then ends
+`failed`/`timeout` after its 30-second `TimeoutStopSec`. That is expected
+for this one case. When a stop the dispatcher queued in this run ends in
+`timeout`, it runs `systemctl reset-failed` on the unit after scrubbing and
+logs `reset microvm@ryza-eph-1.service after its cancellation stop timed out`,
+so a later deploy doesn't report a failed unit. Any other failure (a
+preflight refusal, a signal, OOM, `RuntimeMaxSec`), or a timeout after a
+dispatcher restart, stays failed for inspection and logs
+`slot ended <result>; left failed for inspection`. Clear it with
+`systemctl reset-failed` once you've looked. Verify local and remote cleanup,
 remove only the test drop-in
 (`/run/systemd/system/microvm@ryza-eph-1.service.d/pilot-cancellation.conf`),
 and run `sudo systemctl daemon-reload` again. Also test cancelling with a
@@ -1168,6 +1180,93 @@ intend to leave waiting, and wait for local and remote cleanup as above.
 Deploy `enable = false` to Ryza; the Cerberus guard stays in place.
 Revoke the dedicated PAT only after cleanup; do not erase pending
 reconciliation state.
+
+#### Trusted `nix-eph` jobs (HOM-31, opt-in)
+
+Off by default (`services.imperium.forgejoEphemeral.trustedJobs.enable`).
+When it is off, the slot VM and its units are identical to the plain pilot.
+When it is on, every job still **boots untrusted**. After the slot's runner
+has taken the job, the dispatcher maps it exactly: job `task_id` → task →
+`run_number` → run. Only if that run is on the **default branch** (a manjo
+push, a schedule, or a manjo `workflow_dispatch`), and the repository has no
+write deploy key, does it write the CI signing key
+and the ncps upload netrc into
+`/run/microvm-credentials/ryza-eph-1-trust` (root `0700`, files `0400`). The
+guest sees that directory as a read-only virtiofs share at `/run/ci-trust`,
+readable only by guest root. The nix-daemon's post-build hook then uploads
+builds to ncps. Fork PRs, AGit PRs (Hermes's included), fork re-runs or
+approvals by manjo, every `pull_request*` event, lookup errors and 403s get
+nothing. The job still runs, uncached upstream, and the dispatcher logs the
+reason. Builds finished before delivery (seconds after pickup) are not
+uploaded. sccache stays off on `nix-eph`. The full rule, the API fields it
+reads and who can read what (host, guest, escaped QEMU/virtiofsd) are in
+`modules/rites/_forgejo-ephemeral-trusted.nix`.
+
+Know what "manjo" means here: any holder of a manjo write credential,
+including agents and tools with a manjo token that has repository write.
+Forgejo also attributes deploy-key pushes to the owner, so any write deploy
+key on the repository disables trust. It logs
+`untrusted: run #N (repository has a write deploy key)`. A dispatch on another
+branch, a tag, a commit SHA or `pull/N/head` is not trusted. With trust on,
+don't schedule auto-merges on fork PRs: the merge lands as a manjo push to
+the default branch, including any commits the fork pushed after you looked.
+Otherwise require approvals and dismiss stale approvals on `master`.
+
+**Opt in.**
+
+1. Pause and wait for cleanup (above).
+2. Create a replacement PAT as `manjo`: **Public only**, **`write:user`** and
+   **`read:repository`**. The run and task lookups live under
+   `/api/v1/repos/…` and need repository scope.
+3. Set `trustedJobs.enable = true` next to `repoId` in
+   `machines/ryza/forgejo-runner.nix`, then regenerate the PAT var:
+
+   ```sh
+   CLAN_NO_COMMIT=1 clan vars generate ryza --generator forgejo-ephemeral-ugalabugala --regenerate
+   ```
+
+   Paste the PAT only at the hidden prompt. The prompt text names both
+   scopes once the flag is on. Commit the flag and the var together.
+   Ryza must still have the persistent runner's `nix-ci-signing-key` and
+   `ncps-upload-auth` vars; an assertion checks this.
+4. `clan machines update ryza`, then
+   `sudo systemctl restart forgejo-ephemeral-dispatcher`. Require both
+   `Forgejo PAT identity verified as manjo` and
+   `repository manjo/rust-app-template verified as ID 9` in the journal; the
+   dispatcher checks the repository right away, even while paused. Then
+   remove the pause file and revoke the old PAT.
+
+**Verify.**
+
+- After the first job:
+  - a master merge logs `trusted: run #N (push); delivered CI upload credentials`,
+    and paths it built appear in ncps signed `ci.noosphere.uk-1`;
+  - a Hermes PR logs `untrusted: run #M (fork or AGit pull request); CI upload credentials withheld`,
+    and re-running it as manjo logs the same.
+- `cannot verify the trusted-job repository: … HTTP 403…` (retried every
+  5 minutes) or `trust lookup pending: … HTTP 403…` means the PAT lacks
+  `read:repository`. After 10 minutes the dispatcher gives up for that job.
+- The isolation probe above still passes unchanged: the job's
+  `$CREDENTIALS_DIRECTORY` holds only the three runner credentials. A
+  trusted job can still check that `/run/ci-trust` is unreadable to it
+  (`! ls /run/ci-trust`). Never print the files.
+- After the VM stops, `/run/microvm-credentials/ryza-eph-1-trust` is gone.
+
+**Rotation.** Trusted jobs never see the key bytes, only the hook does.
+But a trusted job can get anything it builds signed, so treat the key as
+exposed to trusted code. The persistent runners still hand the same key,
+netrc and the sccache RW key to every job they run, approved fork PRs
+included. So rotate `ci.noosphere.uk-1` → `-2` (`ciKeyName` in
+`forgejo-runner.nix`), `ncps-upload-auth` and `sccache-garage-key` when
+HOM-32 retires them, not before. If a dispatcher log ever shows a delivery
+you did not expect: pause, rotate the CI key and the netrc, and audit recent
+ncps uploads.
+
+**Disable.** Pause and wait until the slot is idle and
+`/run/microvm-credentials/ryza-eph-1-trust` is gone. With the flag off,
+nothing scrubs that directory any more. Then set the flag to false, deploy
+and unpause. The PAT's extra scope is harmless; rotate it back to
+`write:user` only if you prefer.
 
 ### Hermes on Cerberus Forgejo
 
