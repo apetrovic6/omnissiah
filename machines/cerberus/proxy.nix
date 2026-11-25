@@ -39,6 +39,8 @@ in {
   services.caddy = {
     # Check the socket peer before any site handler can proxy or respond.
     globalConfig = "order invoke first";
+    # @blockedEphemeral matches every nix-eph slot host's untrusted source
+    # address (modules/rites/_ci-slots.nix).
     extraConfig = ''
       &(stygies-access) {
         @blocked {
@@ -49,7 +51,7 @@ in {
 
         # Protect the slot source even if Ryza is on a different generation.
         @blockedEphemeral {
-          remote_ip ${self.lib.lan.ryza-eph}
+          remote_ip ${lib.concatMapStringsSep " " (host: self.lib.lan.${host.egress.untrusted}) (builtins.attrValues self.lib.ciSlots)}
           not host ${mkDomain "forge"} ncps.${config.noosphere.domain}
         }
         respond @blockedEphemeral 403
