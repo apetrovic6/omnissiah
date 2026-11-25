@@ -30,6 +30,16 @@ VM = "microvm@ryza-eph-1.service"
 REPO, OWNER = 17, 42
 PAT = "synthetic-dispatcher-pat-not-a-secret"
 TOKEN = "synthetic-ephemeral-runner-token-not-a-secret"
+REPO_NAME = "rust-app-template"
+REPOSITORY = f"/api/v1/repos/manjo/{REPO_NAME}"
+TASKS = REPOSITORY + "/actions/tasks?page={}&limit=50"
+RUN = REPOSITORY + "/actions/runs?run_number={}&limit=50"
+HERMES = 77
+# Synthetic, shaped like the real files (nix-store --generate-binary-cache-key; reliquary-ncps netrc).
+SIGNING_SECRET = "c3ludGhldGljLXNpZ25pbmcta2V5LW5vdC1hLXNlY3JldC1ub3QtYS1zZWNyZXQtcGFkZGluZy1wYWRkaW5nLXg="
+SIGNING_KEY = f"ci.noosphere.uk-1:{SIGNING_SECRET}".encode()
+NETRC_PASSWORD = "0123456789abcdef-synthetic-netrc-password-not-a-secret"
+NETRC = f"machine ncps.noosphere.uk\nlogin forgejo-runner\npassword {NETRC_PASSWORD}\n".encode()
 
 
 def job(job_id=1, handle="opaque/attempt-1", **fields):
@@ -49,6 +59,32 @@ def uuid_for(number):
     return f"00000000-0000-4000-a000-{number:012x}"
 
 
+def task(task_id=71, run_number=7, **fields):
+    return {"id": task_id, "run_number": run_number, "head_sha": "c0ffee", "workflow_id": "ci.yml", "status": "running"} | fields
+
+
+def run(index=7, **fields):
+    """A master push merged by manjo, as Forgejo v15.0.12 serializes it (services/convert/action.go)."""
+    return {
+        "id": 500 + index,
+        "index_in_repo": index,
+        "title": TOKEN,  # Job-controlled text must never reach the logs.
+        "repository": {"id": REPO, "name": REPO_NAME, "owner": {"id": OWNER, "login": "manjo"}},
+        "trigger_user": {"id": OWNER, "login": "manjo"},
+        "is_fork_pull_request": False,
+        "need_approval": False,
+        "approved_by": 0,
+        "event": "push",
+        "trigger_event": "push",
+        "ScheduleID": 0,
+        "prettyref": "master",
+        "commit_sha": "c0ffee",
+        "workflow_id": "ci.yml",
+        "status": "running",
+        "event_payload": "{}",
+    } | fields
+
+
 class FakeForge:
     def __init__(self):
         self.calls = []
@@ -60,6 +96,9 @@ class FakeForge:
         self.page_size = 50
         self.next_link = None
         self.observe_post = None
+        self.repository = {"id": REPO, "name": REPO_NAME, "owner": {"id": OWNER, "login": "manjo"}}
+        self.tasks = []
+        self.runs = []
 
         class Handler(BaseHTTPRequestHandler):
             def respond(handler):
@@ -150,6 +189,21 @@ class FakeForge:
         if method == "DELETE" and path.startswith(RUNNERS + "/"):
             runner_id = int(path.rsplit("/", 1)[1])
             return (204 if self.runners.pop(runner_id, None) is not None else 404), None, {}
+        if method == "GET" and path == REPOSITORY:
+            return 200, self.repository, {}
+        if method == "GET" and path.startswith(REPOSITORY + "/actions/tasks?"):
+            query = parse_qs(urlsplit(path).query)
+            if query.get("limit") != ["50"]:
+                return 400, {"error": "unexpected task query"}, {}
+            page = int(query["page"][0])
+            rows = sorted(self.tasks, key=lambda row: -row["id"])
+            return 200, {"total_count": len(rows), "workflow_runs": rows[(page - 1) * 50 : page * 50]}, {}
+        if method == "GET" and path.startswith(REPOSITORY + "/actions/runs?"):
+            query = parse_qs(urlsplit(path).query)
+            if query.get("limit") != ["50"] or "status" in query:
+                return 400, {"error": "unexpected run query"}, {}
+            rows = [row for row in self.runs if row["index_in_repo"] == int(query["run_number"][0])]
+            return 200, {"total_count": len(rows), "workflow_runs": rows}, {}
         return 404, {"error": "unexpected request"}, {}
 
     def paths(self, method=None):
@@ -1033,6 +1087,345 @@ class DispatcherTests(unittest.TestCase):
                 (self.state_dir / "state.json").write_text(json.dumps(invalid))
                 with self.assertRaises(D.StateError):
                     self.restart()
+
+
+class TrustedJobTests(unittest.TestCase):
+    """HOM-31: every slot boots untrusted; CI upload credentials only follow an exact, trusted run."""
+
+    def setUp(self):
+        self.surfaces = []
+        self.build()
+
+    def build(self, trusted=True):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        self.state_dir, self.vm_dir = root / "state", root / "vm"
+        self.credential_dir = root / "credentials" / "ryza-eph-1"
+        self.trust_dir = root / "credentials" / "ryza-eph-1-trust"
+        self.sources = root / "sources"
+        for directory in (self.state_dir, self.vm_dir, self.credential_dir.parent, self.sources):
+            directory.mkdir(mode=0o700)
+        (self.sources / "trusted-ci-signing-key").write_bytes(SIGNING_KEY)
+        (self.sources / "trusted-ncps-netrc").write_bytes(NETRC)
+        self.pat_file = root / "forgejo-pat"
+        self.pat_file.write_text(PAT)
+        self.pause = root / "pause"
+        self.forge = FakeForge()
+        self.addCleanup(self.forge.close)
+        self.forge.tasks = [task(70, 6), task()]
+        self.forge.runs = [run(6, commit_sha="old"), run()]
+        self.system = FakeSystemctl()
+        self.files = D.SlotFiles(
+            self.vm_dir, self.credential_dir, os.getuid(), os.getgid(), self.trust_dir if trusted else None
+        )
+        self.clock = FakeClock()
+        self.logs = io.StringIO()
+        self.enterContext(contextlib.redirect_stderr(self.logs))
+        self.surfaces.append((self.logs, self.system, self.state_dir))
+        self.trusted = trusted
+        self.restart()
+
+    def tearDown(self):
+        for logs, system, state_dir in self.surfaces:
+            surface = logs.getvalue() + repr(system.calls)
+            for state_file in state_dir.glob("state.json*"):
+                surface += state_file.read_text()
+            for secret in (PAT, TOKEN, SIGNING_SECRET, NETRC_PASSWORD):
+                self.assertNotIn(secret, surface)
+
+    def restart(self):
+        self.dispatcher = D.Dispatcher(
+            REPO,
+            D.Forgejo(self.pat_file, self.forge.connect),
+            D.Systemctl(self.system.run),
+            self.files,
+            D.Store(self.state_dir),
+            self.clock.monotonic,
+            self.clock.wall,
+            pause=self.pause,
+            trust=D.Trust(REPO_NAME, self.sources) if self.trusted else None,
+        )
+
+    def tick(self, advance=0):
+        self.clock.now += advance
+        return self.dispatcher.tick()
+
+    def boot(self):
+        """Dispatch job 1 and let the VM come up with the job still unassigned."""
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="active")
+
+    def pick_up(self, task_id=71, advance=D.POLL):
+        self.forge.jobs = [job(status="running", task_id=task_id)]
+        return self.tick(advance)
+
+    def delivered(self):
+        return {path.name: path.read_bytes() for path in self.trust_dir.iterdir()} if self.trust_dir.exists() else None
+
+    def polls(self):
+        return self.forge.paths("GET").count(JOBS)
+
+    def assert_settled_cadence(self):
+        self.tick(D.POLL)  # The poll scheduled while resolving; it picks the normal busy interval.
+        polls = self.polls()
+        self.tick(D.POLL)
+        self.assertEqual(polls, self.polls())
+
+    def lookups(self):
+        return [path for path in self.forge.paths("GET") if path.startswith(REPOSITORY)]
+
+    def test_boots_untrusted_and_delivers_after_exact_trusted_pickup(self):
+        self.boot()
+        self.assertEqual({}, self.delivered())
+        self.assertEqual(0o700, stat.S_IMODE(self.trust_dir.stat().st_mode))
+        self.assertEqual({"runner-uuid", "runner-token", "job-handle"}, {p.name for p in self.credential_dir.iterdir()})
+        polls = self.polls()
+        self.tick(D.POLL)  # Not picked up yet: fast polls, no repository lookups.
+        self.assertEqual(polls + 1, self.polls())
+        self.assertEqual([], self.lookups())
+        polls = self.forge.paths("GET").count(JOBS)
+        self.pick_up()
+        self.assertEqual({"ncps-netrc": NETRC, "ci-signing-key": SIGNING_KEY}, self.delivered())
+        for path in self.trust_dir.iterdir():
+            info = path.stat()
+            self.assertEqual((0o400, os.getuid()), (stat.S_IMODE(info.st_mode), info.st_uid))
+        self.assertEqual([REPOSITORY, TASKS.format(1), RUN.format(7), RUN.format(7)], self.lookups())
+        self.assertEqual(polls + 2, self.forge.paths("GET").count(JOBS))  # The poll plus the pre-delivery recheck.
+        self.assertIn("trusted: run #7 (push); delivered CI upload credentials", self.logs.getvalue())
+        self.assert_settled_cadence()
+        self.assertEqual(4, len(self.lookups()))
+        self.assertEqual([], self.system.mutations("stop"))
+        self.system.set()
+        self.tick(D.POLL)
+        self.assertFalse(self.trust_dir.exists())
+        self.assertFalse(self.credential_dir.exists())
+
+    def test_trusted_schedules_and_manual_dispatches(self):
+        for fields in (
+            {"trigger_event": "schedule", "ScheduleID": 3, "trigger_user": {"id": D.ACTIONS_USER}},
+            {"event": "schedule", "trigger_event": "schedule", "ScheduleID": 3, "trigger_user": {"id": -2}},
+            {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "prettyref": "release"},
+        ):
+            with self.subTest(fields=fields):
+                self.build()
+                self.forge.runs = [run(**fields)]
+                self.boot()
+                self.pick_up()
+                self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+
+    def test_untrusted_runs_get_nothing_and_keep_running(self):
+        fork = {"is_fork_pull_request": True, "event": "pull_request", "trigger_event": "pull_request"}
+        for reason, fields in (
+            ("fork or AGit pull request", fork | {"trigger_user": {"id": HERMES}}),
+            ("fork or AGit pull request", fork | {"trigger_user": {"id": OWNER}}),  # AGit by manjo is still a fork.
+            ("fork or AGit pull request", fork | {"trigger_user": {"id": HERMES}, "approved_by": OWNER}),
+            ("awaiting approval", {"need_approval": True}),
+            ("push not by manjo", {"trigger_user": {"id": HERMES}}),
+            ("event is not push", {"event": "pull_request", "trigger_event": "pull_request"}),
+            ("event is not push", {"event": "pull_request", "trigger_event": "pull_request_target"}),
+            ("event is not push", {"event": "issue_comment", "trigger_event": "issue_comment"}),
+            ("dispatch on a pull request ref", {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "prettyref": "#12"}),
+            ("dispatch not by manjo", {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "trigger_user": {"id": HERMES}}),
+            ("push run carries a schedule", {"ScheduleID": 4}),
+            ("schedule run without a schedule", {"trigger_event": "schedule", "trigger_user": {"id": -2}}),
+            ("schedule not triggered by forgejo-actions", {"trigger_event": "schedule", "ScheduleID": 4}),
+            ("repository mismatch", {"repository": {"id": REPO + 1, "owner": {"id": OWNER, "login": "manjo"}}}),
+            ("repository mismatch", {"repository": {"id": REPO, "owner": {"id": OWNER, "login": "hermes"}}}),
+            ("invalid run metadata", {"is_fork_pull_request": None}),
+            ("invalid run metadata", {"ScheduleID": "0"}),
+            ("invalid run metadata", {"trigger_user": None}),
+            ("task and run disagree", {"commit_sha": "other"}),
+            ("task and run disagree", {"workflow_id": "other.yml"}),
+        ):
+            with self.subTest(reason=reason, fields=fields):
+                self.build()
+                self.forge.runs = [run(**fields)]
+                self.boot()
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertIn(f"untrusted: run #7 ({reason}", self.logs.getvalue())
+                lookups = len(self.lookups())
+                self.tick(D.BUSY_POLL_FAST)
+                self.assertEqual(lookups, len(self.lookups()))
+                self.assertEqual([], self.system.mutations("stop"))
+
+    def test_missing_fields_are_untrusted(self):
+        for missing in ("ScheduleID", "event", "trigger_event", "need_approval", "prettyref", "repository"):
+            with self.subTest(missing=missing):
+                self.build()
+                entry = run()
+                del entry[missing]
+                self.forge.runs = [entry]
+                self.boot()
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertIn("untrusted: run #7 (invalid run metadata)", self.logs.getvalue())
+
+    def test_lookup_failures_withhold_then_give_up_at_deadline(self):
+        for endpoint, status, body in (
+            (REPOSITORY, 403, {"message": PAT}),
+            (TASKS.format(1), 500, None),
+            (TASKS.format(1), 200, {"total_count": 0, "workflow_runs": []}),
+            (TASKS.format(1), 200, b"{" + TOKEN.encode()),
+            (TASKS.format(1), 200, {"total_count": 1, "workflow_runs": [task(run_number="7")]}),
+            (RUN.format(7), 200, {"total_count": 2, "workflow_runs": [run(), run()]}),
+            (RUN.format(7), 200, {"total_count": 1, "workflow_runs": [run(8)]}),
+            (RUN.format(7), 404, None),
+        ):
+            with self.subTest(endpoint=endpoint, status=status):
+                self.build()
+                self.boot()
+                for _ in range(200):
+                    self.forge.reply_once("GET", endpoint, status, body)
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertIn("trust lookup pending", self.logs.getvalue())
+                if status == 403:
+                    self.assertIn("read:repository", self.logs.getvalue())
+                polls = self.polls()
+                self.tick(D.POLL)  # Pending: keep polling fast.
+                self.assertEqual(polls + 1, self.polls())
+                self.tick(D.TRUST_DEADLINE - 2 * D.POLL)
+                self.assertNotIn("gave up", self.logs.getvalue())
+                self.tick(D.POLL)
+                self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
+                self.assert_settled_cadence()
+                self.assertEqual({}, self.delivered())
+                lookups = len(self.lookups())
+                self.forge.faults.clear()
+                self.tick(D.BUSY_POLL)
+                self.assertEqual(lookups, len(self.lookups()))
+                self.assertEqual([], self.system.mutations("stop"))
+
+    def test_recovers_from_a_transient_lookup_error_before_the_deadline(self):
+        self.boot()
+        self.forge.reply_once("GET", TASKS.format(1), 503)
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.tick(D.POLL)
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+
+    def test_task_lookup_pages_and_stops_at_older_tasks(self):
+        self.forge.tasks = [task(1000 + n, 900 + n) for n in range(60)] + [task()]
+        self.forge.runs = [run()]
+        self.boot()
+        self.pick_up()
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.assertIn(TASKS.format(2), self.lookups())
+        self.build()
+        self.forge.tasks = [task(10)]
+        self.boot()
+        self.pick_up()
+        self.assertEqual([REPOSITORY, TASKS.format(1)], self.lookups())
+        self.assertIn("job's task is not listed", self.logs.getvalue())
+
+    def test_recheck_catches_a_changed_job_or_run_before_delivery(self):
+        self.boot()
+        self.forge.reply_once("GET", JOBS, 200, [job(status="running", task_id=71)])
+        self.forge.reply_once("GET", JOBS, 200, [job(status="running", task_id=72)])
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.assertIn("job changed before delivery", self.logs.getvalue())
+
+        self.build()
+        self.boot()
+        self.forge.reply_once("GET", RUN.format(7), 200, {"total_count": 1, "workflow_runs": [run()]})
+        self.forge.reply_once(
+            "GET", RUN.format(7), 200, {"total_count": 1, "workflow_runs": [run(is_fork_pull_request=True)]}
+        )
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.assertIn("untrusted: run #7 (fork or AGit pull request)", self.logs.getvalue())
+
+        self.build()
+        self.boot()
+        self.forge.reply_once("GET", RUN.format(7), 200, {"total_count": 1, "workflow_runs": [run()]})
+        self.forge.reply_once("GET", RUN.format(7), 200, {"total_count": 1, "workflow_runs": [run(id=999)]})
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.assertIn("run changed before delivery", self.logs.getvalue())
+
+    def test_job_finishing_before_pickup_is_seen_delivers_nothing(self):
+        self.boot()
+        self.forge.jobs = [job()]
+        self.tick(D.POLL)
+        self.system.set()
+        self.tick(D.POLL)
+        self.assertFalse(self.trust_dir.exists())
+        self.assertEqual([], self.lookups())
+
+    def test_bad_credential_sources_withhold(self):
+        for name, value in (
+            ("trusted-ci-signing-key", b""),
+            ("trusted-ci-signing-key", b"no-colon-here"),
+            ("trusted-ncps-netrc", b"machine evil.example\nlogin x\npassword y\n"),
+            ("trusted-ncps-netrc", None),
+        ):
+            with self.subTest(name=name, value=value):
+                self.build()
+                if value is None:
+                    (self.sources / name).unlink()
+                else:
+                    (self.sources / name).write_bytes(value)
+                self.boot()
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertIn("credential missing or malformed; withheld", self.logs.getvalue())
+
+    def test_restart_withdraws_and_re_resolves(self):
+        self.boot()
+        self.pick_up()
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.files.withdraw()  # What main() does before a new dispatcher runs.
+        self.assertEqual({}, self.delivered())
+        self.restart()
+        self.tick(D.POLL)
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.forge.runs = [run(is_fork_pull_request=True)]
+        self.files.withdraw()
+        self.restart()
+        self.tick(D.POLL)
+        self.assertEqual({}, self.delivered())
+
+    def test_trust_dir_is_fresh_for_every_boot(self):
+        self.trust_dir.mkdir()
+        (self.trust_dir / "ci-signing-key").write_bytes(SIGNING_KEY)
+        (self.trust_dir / ".ncps-netrc.tmp").write_bytes(NETRC)
+        self.boot()
+        self.assertEqual({}, self.delivered())
+        self.build()
+        self.trust_dir.mkdir()
+        (self.trust_dir / "unexpected").touch()
+        self.forge.jobs = [job()]
+        self.tick()
+        self.assertIn("cannot scrub", self.logs.getvalue())
+        self.assertEqual([], self.forge.paths("POST"))
+        self.assertEqual([], self.system.mutations())
+
+    def test_delivery_refuses_a_trust_dir_with_the_wrong_mode(self):
+        self.boot()
+        self.trust_dir.chmod(0o755)
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.assertIn("unexpected ownership or mode", self.logs.getvalue())
+
+    def test_stopped_slot_gets_nothing_even_if_trusted(self):
+        self.boot()
+        self.system.on_show = lambda unit: self.system.set() if self.lookups() else None
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.tick(D.POLL)
+        self.assertIsNone(self.delivered())  # Scrubbed by the local pass, never written.
+
+    def test_gate_off_never_looks_up_or_delivers(self):
+        self.build(trusted=False)
+        self.boot()
+        self.pick_up()
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual([], self.lookups())
+        self.assertFalse(self.trust_dir.exists())
 
 
 if __name__ == "__main__":
