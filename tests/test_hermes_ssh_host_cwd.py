@@ -1,5 +1,6 @@
 """The ssh host-path guard patched into Hermes (modules/rites/_hermes-ssh-host-cwd.py), without Hermes."""
 
+import contextvars
 import importlib.util
 import os
 import sys
@@ -26,7 +27,15 @@ class HostOnlyFallback(unittest.TestCase):
         runtime_cwd.scope_terminal_cwd = lambda: self.scoped() if callable(self.scoped) else self.scoped
         agent = types.ModuleType("agent")
         agent.runtime_cwd = runtime_cwd
-        self.enterContext(mock.patch.dict(sys.modules, {"agent": agent, "agent.runtime_cwd": runtime_cwd}))
+        # A bound profile terminal scope, as inside a turn (tools/terminal_scope.py).
+        self.scope_var = contextvars.ContextVar("scope", default=None)
+        self.scope_var.set({"TERMINAL_CWD": "unused: the stub above answers"})
+        terminal_scope = types.ModuleType("tools.terminal_scope")
+        terminal_scope._terminal_scope_var = self.scope_var
+        tools = types.ModuleType("tools")
+        tools.terminal_scope = terminal_scope
+        self.enterContext(mock.patch.dict(sys.modules, {
+            "agent": agent, "agent.runtime_cwd": runtime_cwd, "tools": tools, "tools.terminal_scope": terminal_scope}))
         self.enterContext(mock.patch.dict(os.environ, {self.guard.ENV: "/var/lib/hermes"}))
 
     def test_host_paths_fall_back_to_scoped_cwd(self):
@@ -68,6 +77,18 @@ class HostOnlyFallback(unittest.TestCase):
             raise RuntimeError("terminal policy unavailable")
         self.scoped = refuse
         with self.assertLogs("tools.terminal_tool", "WARNING"):
+            self.assertEqual(self.guard.host_only_fallback("/var/lib/hermes/x"), "~")
+
+    def test_unbound_scope_falls_back_to_home_not_the_process_cwd(self):
+        # Outside a turn the process-global TERMINAL_CWD may be another profile's: never use it.
+        self.scope_var.set(None)
+        with self.assertLogs("tools.terminal_tool", "WARNING") as logs:
+            self.assertEqual(self.guard.host_only_fallback("/var/lib/hermes/projects/rat"), "~")
+        self.assertIn("using ~ on the remote", logs.output[0])
+
+    def test_missing_scope_module_falls_back_to_home(self):
+        with mock.patch.dict(sys.modules, {"tools.terminal_scope": None}), \
+                self.assertLogs("tools.terminal_tool", "WARNING"):
             self.assertEqual(self.guard.host_only_fallback("/var/lib/hermes/x"), "~")
 
     def test_warns_once_per_path(self):

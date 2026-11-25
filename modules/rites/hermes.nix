@@ -248,9 +248,14 @@
             (old.postInstall or "")
             + ''
               PYTHONPATH="$(echo $out/lib/python3*/site-packages)''${PYTHONPATH:+:$PYTHONPATH}" \
-                HERMES_SSH_HOST_ONLY_PREFIXES=/var/lib/hermes TERMINAL_CWD='~/personal' \
+                HERMES_SSH_HOST_ONLY_PREFIXES=/var/lib/hermes TERMINAL_CWD='~/launch-profile' \
                 python3 -B -c 'from tools.terminal_tool_config import coerce_ssh_remote_cwd as c
+              from tools.terminal_scope import _terminal_scope_var as scope
+              # Unscoped, the process TERMINAL_CWD may be another profile`s: home instead.
+              assert c("/var/lib/hermes/projects/rat", "ssh") == "~", c("/var/lib/hermes/projects/rat", "ssh")
+              token = scope.set({"TERMINAL_CWD": "~/personal", "TERMINAL_ENV": "ssh"})
               assert c("/var/lib/hermes/projects/rat", "ssh") == "~/personal", c("/var/lib/hermes/projects/rat", "ssh")
+              scope.reset(token)
               assert c("/home/hermes/personal/rat", "ssh") == "/home/hermes/personal/rat"
               assert c("/var/lib/hermes/x", "ssh", host_guard=False) == "/var/lib/hermes/x"
               assert c("/var/lib/hermes/x", "local") == "/var/lib/hermes/x"'

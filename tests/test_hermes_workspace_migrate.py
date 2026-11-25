@@ -28,10 +28,12 @@ migrate = load()
 
 
 def snapshot(root):
-    """Every path below root: directories, file bytes and symlink targets."""
+    """Every path below root but the done-stamp's ~/.local: directories, file bytes, symlink targets."""
     tree = {}
     for path in sorted(root.rglob("*")):
         key = str(path.relative_to(root))
+        if key == ".local" or key.startswith(".local/"):
+            continue
         if path.is_symlink():
             tree[key] = ("link", os.readlink(path))
         elif path.is_dir():
@@ -68,6 +70,9 @@ class WorkspaceMigration(unittest.TestCase):
         """What the new tmpfiles rules create when activation did not move anything."""
         for path in ("personal", "work/.tasks", "work/devzero", "work/codilas"):
             (self.home / path).mkdir(parents=True, exist_ok=True)
+
+    def stamped(self):
+        return (self.home / migrate.STAMP).is_file()
 
     def run_migration(self, lock_wait=None):
         stderr = io.StringIO()
@@ -113,6 +118,7 @@ class WorkspaceMigration(unittest.TestCase):
         self.assert_new_layout(before)
         self.assertIn(f"moved {self.home}/work -> {self.home}/personal", log)
         self.assertIn(f"moved {self.home}/work-devzero -> {self.home}/work", log)
+        self.assertTrue(self.stamped())
 
     def test_already_migrated_is_a_silent_no_op(self):
         self.old_layout()
@@ -206,12 +212,147 @@ class WorkspaceMigration(unittest.TestCase):
         self.assertFalse((self.home / "work").exists())
         self.assertFalse((self.home / "work-devzero").exists())
 
-    def test_fresh_home_does_nothing(self):
-        self.assertEqual(self.run_migration(), (0, ""))
+    def test_fresh_home_does_nothing_but_stamp(self):
         self.tmpfiles_skeleton()
         before = snapshot(self.home)
         self.assertEqual(self.run_migration(), (0, ""))
         self.assertEqual(snapshot(self.home), before)
+        self.assertTrue(self.stamped())
+
+    # --- fix round 1: the review's scenarios ------------------------------------------------
+
+    def new_layout_scenario(self, name):
+        """The review's scenarios 1, 1b, 1c: the new layout on a rebuilt VM, before any task command."""
+        self.tmpfiles_skeleton()
+        if name == "1":
+            write(self.home / "work/notes.md", "work notes")
+        elif name == "1b":
+            write(self.home / "work/notes.md", "work notes")
+            write(self.home / "work/.tasks/devzero/.task-lock")
+        elif name == "1c":
+            write(self.home / "work/nautili/.git/HEAD", "ref: refs/heads/main\n")
+
+    def test_new_layout_without_old_evidence_is_never_moved(self):
+        for name in ("1", "1b", "1c"):
+            with self.subTest(scenario=name):
+                shutil.rmtree(self.home)
+                self.home.mkdir()
+                self.new_layout_scenario(name)
+                before = snapshot(self.home)
+                for _ in range(2):
+                    self.assertEqual(self.run_migration(), (0, ""))
+                self.assertEqual(snapshot(self.home), before)
+                self.assertTrue(self.stamped())
+
+    def test_stamp_ends_it_for_good(self):
+        self.old_layout()
+        self.assertEqual(self.run_migration()[0], 0)
+        # A rollback's old generation recreates ~/work-devzero and writes a personal slot into ~/work.
+        write(self.home / "work-devzero/.tasks/devzero/.task-lock")
+        write(self.home / "work/.task-lock")
+        before = snapshot(self.home)
+        self.assertEqual(self.run_migration(), (0, ""))
+        self.assertEqual(snapshot(self.home), before)
+
+    def test_roll_forward_without_stamp_refuses_the_mixed_tree(self):
+        # The review's scenario 2 with the stamp removed: ~/work mixes a stray personal slot and the company tree.
+        write(self.home / "personal/tally/README.md", "x")
+        write(self.home / "work/devzero/nautili/.git/HEAD", "x")
+        write(self.home / "work/.tasks/devzero/.task-lock")
+        write(self.home / "work/.task-lock")
+        (self.home / "work-devzero/.tasks/devzero").mkdir(parents=True)
+        before = snapshot(self.home)
+        status, log = self.run_migration()
+        self.assertEqual(status, migrate.REFUSED, log)
+        self.assertEqual(snapshot(self.home), before)
+        self.assertFalse(self.stamped())
+
+    def test_stray_slot_file_next_to_populated_personal_refuses(self):
+        # The review's scenario 7.
+        write(self.home / "work/.task-lock")
+        write(self.home / "personal/tally/x", "x")
+        write(self.home / "work-devzero/devzero/nautili/.git/HEAD", "x")
+        before = snapshot(self.home)
+        self.assertEqual(self.run_migration()[0], migrate.REFUSED)
+        self.assertEqual(snapshot(self.home), before)
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads everything")
+    def test_unreadable_directory_refuses_before_any_move(self):
+        # The review's scenarios 3 and 4: planning sees every directory, so nothing moves half-rewritten.
+        self.old_layout()
+        write(self.home / "work/tally/wt/.git", f"gitdir: {self.home}/work/tally/.git/worktrees/wt\n")
+        write(self.home / "work/tally/.git/worktrees/wt/gitdir", f"{self.home}/work/tally/wt/.git\n")
+        locked = self.home / "work/zzz-locked"
+        write(locked / "f", "x")
+        locked.chmod(0)
+        try:
+            status, log = self.run_migration()
+        finally:
+            locked.chmod(0o755)
+        self.assertEqual(status, migrate.REFUSED, log)
+        self.assertIn("cannot read the workspace", log)
+        self.assertTrue((self.home / "work/tally/wt/.git").is_file())
+        self.assertTrue((self.home / "work-devzero").is_dir())
+        self.assertFalse((self.home / "personal").exists())
+        # Readable again: the rerun moves and rewrites everything.
+        status, log = self.run_migration()
+        self.assertEqual(status, 0, log)
+        self.assertEqual((self.home / "personal/tally/wt/.git").read_text(),
+                         f"gitdir: {self.home}/personal/tally/.git/worktrees/wt\n")
+        self.assertEqual((self.home / "personal/tally/.git/worktrees/wt/gitdir").read_text(),
+                         f"{self.home}/personal/tally/wt/.git\n")
+
+    def test_linked_worktree_outside_the_trees_is_repointed(self):
+        # The review's scenario 5.
+        self.old_layout()
+        write(self.home / "wt/tally-fix/.git", f"gitdir: {self.home}/work/tally/.git/worktrees/tally-fix\n")
+        write(self.home / "work/tally/.git/worktrees/tally-fix/gitdir", f"{self.home}/wt/tally-fix/.git\n")
+        status, log = self.run_migration()
+        self.assertEqual(status, 0, log)
+        self.assertEqual((self.home / "wt/tally-fix/.git").read_text(),
+                         f"gitdir: {self.home}/personal/tally/.git/worktrees/tally-fix\n")
+        # The back-pointer names a path that did not move: unchanged.
+        self.assertEqual((self.home / "personal/tally/.git/worktrees/tally-fix/gitdir").read_text(),
+                         f"{self.home}/wt/tally-fix/.git\n")
+
+    def fake_proc(self, processes):
+        """A /proc tree: pid -> (cwd, parent pid). Every entry is owned by this user, like hermes's own."""
+        root = Path(self.enterContext(TemporaryDirectory()))
+        for pid, (cwd, parent) in processes.items():
+            entry = root / str(pid)
+            entry.mkdir()
+            (entry / "stat").write_text(f"{pid} (some (odd) name) S {parent} 1 1 0\n")
+            (entry / "cmdline").write_bytes(b"cargo\0build\0")
+            (entry / "cwd").symlink_to(cwd)
+        (root / "self").mkdir()  # not a pid: ignored
+        saved, migrate.PROC = migrate.PROC, root
+        self.addCleanup(setattr, migrate, "PROC", saved)
+        return root
+
+    def test_processes_with_their_cwd_in_a_moved_tree_refuse(self):
+        self.old_layout()
+        me, parent = os.getpid(), 4100
+        self.fake_proc({
+            4242: (str(self.home / "work/rust-app-template/src"), 1),       # a build in a personal repo
+            4243: (str(self.home / "work-devzero/devzero/nautili"), 1),     # a shell in a company repo
+            4244: (str(self.home / "elsewhere"), 1),                        # unrelated
+            me: (str(self.home / "work"), parent),                          # this process: ignored
+            parent: (str(self.home / "work-devzero"), 1),                   # its parent shell: ignored
+        })
+        before = snapshot(self.home)
+        status, log = self.run_migration()
+        self.assertEqual(status, migrate.REFUSED, log)
+        self.assertIn("4242 (cargo build) in", log)
+        self.assertIn("4243 (cargo build) in", log)
+        self.assertNotIn("4244", log)
+        self.assertNotIn(f"{me} (", log)
+        self.assertNotIn(f"{parent} (", log)
+        self.assertEqual(snapshot(self.home), before)
+        for pid in (4242, 4243):
+            shutil.rmtree(migrate.PROC / str(pid))
+        status, log = self.run_migration()
+        self.assertEqual(status, 0, log)
+        self.assertTrue((self.home / "personal/rust-app-template").is_dir())
 
     @unittest.skipIf(shutil.which("git") is None, "needs git")
     def test_linked_worktrees_follow_the_move(self):

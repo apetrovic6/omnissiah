@@ -6,12 +6,19 @@
 
 Usage: _hermes-workspace-migrate.py HOME COMPANY...  (COMPANY: every name in _work-projects.nix)
 
-Runs from stygies's activation, before tmpfiles creates the new directories, but tolerates the
-empty skeleton tmpfiles leaves after a refused run: a tree of empty directories is not state.
-It plans both moves before doing either, and refuses (changes nothing) when the state is
-ambiguous, a slot being moved has an active task, or a task command holds a slot lock.
-Exit status: 0 nothing to do or migrated, 3 refused, 1 unexpected error. The caller never
-fails the deploy on it.
+Runs from stygies's activation (and by hand as `hermes-workspace-migrate`), before tmpfiles
+creates the new directories, but tolerates the empty skeleton tmpfiles leaves after a refused
+run: a tree of empty directories is not state.
+
+It acts only on evidence of the old layout: ~/work-devzero, which every old generation created.
+Without it, or once ~/.local/state/hermes-workspace-migrate.done exists (written after a
+success, or on first sight of a home without the old layout), it does nothing. It plans both
+moves and every Git path rewrite before doing anything, and refuses (changes nothing) when the
+state is ambiguous or unreadable, a slot being moved has an active task, a task command holds a
+slot lock, or a hermes process has its cwd in a tree being moved.
+
+Exit status: 0 nothing to do or migrated, 3 refused, 1 unexpected error. The caller never fails
+the deploy on it.
 """
 
 import fcntl
@@ -25,6 +32,9 @@ from tempfile import NamedTemporaryFile
 TAG = "hermes-workspace-migrate"
 REFUSED = 3
 LOCK_WAIT = 10
+STAMP = ".local/state/hermes-workspace-migrate.done"
+# Injectable for tests (a fake /proc tree).
+PROC = Path("/proc")
 
 
 class Refused(Exception):
@@ -36,14 +46,13 @@ def log(message):
 
 
 def has_content(path):
-    """True when ``path`` is, or holds anywhere below it, anything but a directory (symlinks count)."""
-    try:
-        if path.is_symlink() or not path.is_dir():
-            return path.exists() or path.is_symlink()
-        with os.scandir(path) as entries:
-            return any(not entry.is_dir(follow_symlinks=False) or has_content(Path(entry.path)) for entry in entries)
-    except FileNotFoundError:
-        return False
+    """True when ``path`` is, or holds anywhere below it, anything but a directory (symlinks count).
+
+    Raises OSError for an unreadable directory: the caller refuses rather than guess."""
+    if path.is_symlink() or not path.is_dir():
+        return path.exists() or path.is_symlink()
+    with os.scandir(path) as entries:
+        return any(not entry.is_dir(follow_symlinks=False) or has_content(Path(entry.path)) for entry in entries)
 
 
 def prune_empty(path):
@@ -96,31 +105,78 @@ def lock_slots(stack, slots):
                 time.sleep(0.2)
 
 
+def under(path, root):
+    path, root = os.path.normpath(path), os.path.normpath(root)
+    return path == root or path.startswith(root + "/")
+
+
+def own_lineage():
+    """This process and its ancestors (read from PROC), which may legitimately sit in the trees."""
+    pids, pid = set(), os.getpid()
+    while pid > 1 and pid not in pids:
+        pids.add(pid)
+        try:
+            stat = (PROC / str(pid) / "stat").read_text()
+            pid = int(stat.rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+    return pids
+
+
+def processes_in(trees):
+    """`pid (command)` of every process of this user whose cwd is in one of ``trees``."""
+    found, uid, skip = [], os.getuid(), own_lineage()
+    try:
+        entries = list(PROC.iterdir())
+    except OSError:
+        return found
+    for entry in entries:
+        if not entry.name.isdigit() or int(entry.name) in skip:
+            continue
+        try:
+            if entry.stat().st_uid != uid:
+                continue
+            cwd = os.readlink(entry / "cwd")
+        except OSError:
+            continue  # gone, or not ours to read
+        if any(under(cwd, tree) for tree in trees):
+            try:
+                command = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+            except OSError:
+                command = ""
+            found.append(f"{entry.name} ({command[:60] or '?'}) in {cwd}")
+    return sorted(found)
+
+
 def plan(home, companies):
     old_personal = new_work = home / "work"
     new_personal = home / "personal"
     old_work = home / "work-devzero"
     for path in (new_work, new_personal, old_work):
         if path.is_symlink():
-            raise Refused(f"{path} is a symlink; resolve it by hand (README, manual fallback)")
+            raise Refused(f"{path} is a symlink; resolve it by hand (README, Hermes workspaces on stygies)")
     markers = set(companies) | {".tasks"}
     work_state = classify_work(new_work, markers)
     move_personal = work_state == "personal"
     move_work = has_content(old_work)
-    if work_state == "mixed" and (move_work or not has_content(new_personal)):
+    if work_state == "mixed":
         raise Refused(f"{new_work} holds both personal entries and company/.tasks entries")
     if move_personal and has_content(new_personal):
         raise Refused(f"{old_personal} still has the old personal layout but {new_personal} is not empty")
-    if move_work and work_state in ("work", "mixed"):
+    if move_work and work_state == "work":
         raise Refused(f"both {old_work} and {new_work} hold company state")
-    if work_state == "mixed":
-        log(f"warning: {new_work} holds personal entries next to company ones; nothing to migrate, check it by hand")
     slots = ([old_personal] if move_personal else []) + (company_slots(old_work) if move_work else [])
     return move_personal, move_work, slots
 
 
-def rewrite_gitdirs(tree, moves):
-    """Point absolute git paths (linked worktrees) from the moved locations at the new ones."""
+def gitdir_rewrites(trees, moves):
+    """Every absolute Git path (linked worktrees) that names a moved location, as (file, new text).
+
+    Collected before anything moves; the files are named by their current (old) paths. Covers
+    worktree ``.git`` files inside the trees, the repos' ``worktrees/*/gitdir`` back-pointers,
+    and a linked worktree's ``.git`` file outside the trees that a back-pointer names.
+    Raises OSError for an unreadable directory.
+    """
     def mapped(text):
         for old, new in moves:
             for prefix in (f"gitdir: {old}/", f"{old}/"):
@@ -128,19 +184,17 @@ def rewrite_gitdirs(tree, moves):
                     return text.replace(f"{old}/", f"{new}/", 1)
         return None
 
-    def rewrite(path):
+    found = {}
+
+    def consider(path):
         try:
             text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            return
+        except (FileNotFoundError, IsADirectoryError, NotADirectoryError, UnicodeDecodeError):
+            return None
         new = mapped(text)
-        if new is None:
-            return
-        with NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as stream:
-            stream.write(new)
-        os.chmod(stream.name, path.stat().st_mode & 0o7777)
-        os.replace(stream.name, path)
-        log(f"updated {path}")
+        if new is not None:
+            found[path] = new
+        return text
 
     def walk(directory):
         with os.scandir(directory) as entries:
@@ -148,20 +202,39 @@ def rewrite_gitdirs(tree, moves):
                 path = Path(entry.path)
                 if entry.name == ".git":
                     if entry.is_file(follow_symlinks=False):
-                        rewrite(path)  # a linked worktree: "gitdir: /abs/repo/.git/worktrees/<n>"
+                        consider(path)  # a linked worktree: "gitdir: /abs/repo/.git/worktrees/<n>"
                     elif entry.is_dir(follow_symlinks=False):
                         for gitdir in sorted(path.glob("worktrees/*/gitdir")):
-                            rewrite(gitdir)  # the repo's back-pointer to the worktree's .git file
+                            target = consider(gitdir)  # the back-pointer to the worktree's .git file
+                            target = Path(target.strip()) if target and target.strip().startswith("/") else None
+                            if target and not any(under(str(target), old) for old, _ in moves):
+                                consider(target)  # a worktree outside the trees: it stays put
                         config = path / "config"
-                        try:
-                            if any(old in config.read_text(encoding="utf-8", errors="replace") for old, _ in moves):
-                                log(f"warning: {config} names an old workspace path; fix it by hand")
-                        except OSError:
-                            pass
+                        if config.is_file() and any(old in config.read_text(encoding="utf-8", errors="replace")
+                                                    for old, _ in moves):
+                            log(f"warning: {config} names an old workspace path; fix it by hand")
                 elif entry.is_dir(follow_symlinks=False):
                     walk(path)
 
-    walk(tree)
+    for tree in trees:
+        walk(tree)
+    return found
+
+
+def relocate(path, moves):
+    """Where ``path`` is after the moves (a path outside them stays)."""
+    text = str(path)
+    for old, new in moves:
+        if under(text, old):
+            return Path(new + text[len(old):])
+    return path
+
+
+def write_text(path, text):
+    with NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as stream:
+        stream.write(text)
+    os.chmod(stream.name, path.stat().st_mode & 0o7777)
+    os.replace(stream.name, path)
 
 
 def prune_stale(home):
@@ -172,22 +245,50 @@ def prune_stale(home):
         log(f"removed the empty {stale}")
 
 
+def stamp(home):
+    path = home / STAMP
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("migrated to ~/personal and ~/work\n", encoding="utf-8")
+
+
 def migrate(home, companies):
+    if (home / STAMP).exists():
+        return 0
+    old_work = home / "work-devzero"
+    if not old_work.exists() and not old_work.is_symlink():
+        # No old generation ever ran here, or the move is done: never classify ~/work again.
+        stamp(home)
+        return 0
+    work, personal = home / "work", home / "personal"
     with ExitStack() as stack:
-        move_personal, move_work, slots = plan(home, companies)
+        try:
+            move_personal, move_work, slots = plan(home, companies)
+        except OSError as error:
+            raise Refused(f"cannot read the workspace ({error})") from None
         if not (move_personal or move_work):
             prune_stale(home)
+            if not old_work.exists():
+                stamp(home)
             return 0
         lock_slots(stack, slots)
         busy = [str(slot) for slot in slots if active(slot)]
         if busy:
-            raise Refused(f"active task in {', '.join(busy)}; finish or clear it, then deploy again")
-        # Re-plan under the locks: a task command may have run between the first look and the lock.
-        if plan(home, companies)[:2] != (move_personal, move_work):
-            raise Refused("the workspace changed while planning; deploy again")
+            raise Refused(f"active task in {', '.join(busy)}; finish or clear it, then run again")
+        moves = ([(str(work), str(personal))] if move_personal else []) + (
+            [(str(old_work), str(work))] if move_work else [])
+        trees = [Path(old) for old, _ in moves]
+        running = processes_in([work, old_work])
+        if running:
+            raise Refused("hermes processes have their working directory in a tree to move: "
+                          + "; ".join(running) + ". Stop them (README, deploy window), then run again")
+        try:
+            # Re-plan under the locks: a task command may have run between the first look and the lock.
+            if plan(home, companies)[:2] != (move_personal, move_work):
+                raise Refused("the workspace changed while planning; run again")
+            rewrites = gitdir_rewrites(trees, moves)
+        except OSError as error:
+            raise Refused(f"cannot read the workspace ({error})") from None
 
-        moves = []
-        work, personal, old_work = home / "work", home / "personal", home / "work-devzero"
         if move_personal:
             if personal.exists():
                 prune_empty(personal)
@@ -196,17 +297,25 @@ def migrate(home, companies):
                 if skeleton.is_dir() and not has_content(skeleton):
                     prune_empty(skeleton)
             work.rename(personal)
-            moves.append((str(work), str(personal)))
             log(f"moved {work} -> {personal}")
         if move_work:
             if work.exists():
                 prune_empty(work)
             old_work.rename(work)
-            moves.append((str(old_work), str(work)))
             log(f"moved {old_work} -> {work}")
-        for _, new in moves:
-            rewrite_gitdirs(Path(new), moves)
+        failed = []
+        # The moves are mapped in order: a file first moved with ~/work, never with ~/work-devzero.
+        for path, text in rewrites.items():
+            target = relocate(path, moves)
+            try:
+                write_text(target, text)
+                log(f"updated {target}")
+            except OSError as error:
+                failed.append(f"{target} ({error})")
+        for item in failed:
+            log(f"warning: could not update {item}; run `git worktree repair <worktree path>` in its repo")
         prune_stale(home)
+        stamp(home)
         return 0
 
 

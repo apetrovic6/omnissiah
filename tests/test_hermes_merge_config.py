@@ -59,8 +59,8 @@ class PromptRefresh(unittest.TestCase):
         (self.overlay / "profiles").mkdir(parents=True)
         (self.overlay / "config.yaml").write_text(json.dumps({"gateway": {"multiplex_profiles": True, "profile_routes": []}}))
         self.managed = self.home / "profiles/.nixos-managed"
-        self.write_profile("coder", soul="coder soul v1", settings={"terminal": {"cwd": "~/work"}})
-        self.write_profile("work", soul="work soul v1", settings={"terminal": {"cwd": "~/work-devzero"}})
+        self.write_profile("coder", soul="coder soul v1", settings={"terminal": {"cwd": "~/personal"}})
+        self.write_profile("work", soul="work soul v1", settings={"terminal": {"cwd": "~/work"}})
 
     def write_profile(self, name, *, soul=None, settings=None):
         directory = self.overlay / "profiles" / name

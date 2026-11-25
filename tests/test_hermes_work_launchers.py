@@ -155,13 +155,18 @@ class RenderedLaunchers(unittest.TestCase):
                 result = self.run_task("task-status", "--queue", code=2)
                 self.assertIn(f"workspace migration pending: ~/work/{name}", result.stderr)
                 old.unlink()
-        # ~/work-devzero still there: every company command refuses without touching state.
-        (self.home / "work-devzero").mkdir()
+        self.assertIn("remove it", result.stderr)  # the stray-file case says what to do
+        # An empty ~/work-devzero (a stray mkdir) is not old state: the company commands work.
+        (self.home / "work-devzero/.tasks/devzero").mkdir(parents=True)
+        for company in ("devzero", "codilas"):
+            self.run_task(f"{company}-task-status", "--queue")
+        # Old files left in ~/work-devzero: every company command refuses without touching state.
+        (self.home / "work-devzero/.tasks/devzero/.task-lock").write_text("")
         for company in ("devzero", "codilas"):
             with self.subTest(company=company):
                 before = self.state(company)
                 result = self.run_task(f"{company}-task-status", "--queue", code=2)
-                self.assertIn("workspace migration pending: ~/work-devzero still exists", result.stderr)
+                self.assertIn("workspace migration pending: ~/work-devzero still holds files", result.stderr)
                 self.assertEqual(self.state(company), before)
         self.assertEqual(self.sentinel.read_text(), "personal sentinel\n")
 

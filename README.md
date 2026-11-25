@@ -310,64 +310,122 @@ trees. Each SOUL forbids the other's tree.
 | `work` | `~/work` | `~/work/<company>/<repo key>` | `~/work/.tasks/<company>/` |
 
 Before 2026-11-25 the coder used `~/work` and the work profile `~/work-devzero`.
-Stygies's activation moves the old layout once
+Stygies's activation moves the old layout
 (`modules/rites/_hermes-workspace-migrate.py`, run as `hermes`, before
-tmpfiles): `~/work` → `~/personal`, then `~/work-devzero` → `~/work`. Absolute
-paths in linked Git worktrees are rewritten. Plain clones, remotes, the
-`includeIf` rules (URL-based) and the slot files hold no paths. It runs on
-every switch and boot and does nothing once the new layout exists. It **refuses
-and changes nothing** when:
+tmpfiles): `~/work` → `~/personal`, then `~/work-devzero` → `~/work`. It acts
+only on evidence of the old layout: `~/work-devzero`, which every old
+generation created. Without it, or once the done-stamp
+`~/.local/state/hermes-workspace-migrate.done` exists, it does nothing. The
+stamp is written after a success, or on first sight of a home without
+`~/work-devzero`. Linked Git worktrees are repointed: their `.git` files inside
+the moved trees, the repos' `worktrees/*/gitdir` back-pointers, and the `.git`
+file of a worktree outside the trees that a back-pointer names. A worktree
+outside the trees that no back-pointer names needs
+`git -C <repo> worktree repair <worktree path>`. Remotes, the `includeIf` rules
+(URL-based) and the slot files hold no paths. Python virtualenvs (absolute
+shebangs and `activate`) must be recreated, and each `.envrc` needs
+`direnv allow` again (direnv keys its allow list by path). Nix gcroots
+(`result`, `.direnv`, `.devenv`) dangle until rebuilt, so GC may collect their
+closures. None of this loses data.
+
+It **refuses and changes nothing** when:
 
 - a slot it would move has an active task, or a task command holds its lock;
+- a `hermes` process has its working directory in `~/work` or `~/work-devzero`
+  (it lists them);
 - old and new trees both hold content (an empty-directory skeleton left by
   tmpfiles doesn't count), or `~/work` mixes personal repos with company
   directories;
-- any of the three directories is a symlink.
+- any of the three directories is a symlink, or a directory can't be read.
 
 A refusal never fails the deploy. It is printed in the deploy output and
 logged: `journalctl -t hermes-workspace-migrate`. Until the move is done the
 task commands refuse with `workspace migration pending`, so a stale slot can't
 hide a task.
 
-**Deploy order (one time):** both slots idle (`task-status --queue` and
-`<company>-task-status --queue` on stygies, before this change), then `/pause`
-in the default bot DM. Deploy **stygies first** and check the output (or the
-journal) for `moved … -> …` and that `ls ~hermes` shows `personal` and `work`
-but no `work-devzero`. Then deploy **ryza right away**: until it switches, the
-old coder cwd `~/work` is the company tree and the old work cwd
-`~/work-devzero` is gone. Lift the pause after ryza.
+**Deploy window (one time).** `/pause` doesn't stop running work, so use the
+hard stop:
+
+1. Both slots idle. Before this change, run `task-status --queue` and
+   `<company>-task-status --queue` on stygies.
+2. On ryza: `sudo systemctl stop hermes-gateway hermes-dashboard`.
+3. On stygies: `pgrep -u hermes -a` shows nothing, or only `sshd` sessions.
+   Kill leftovers as in the emergency stop above.
+4. `clan machines update stygies` on its own. Check the output (or
+   `journalctl -t hermes-workspace-migrate`) for `moved … -> …`, and check
+   that `ls ~hermes` shows `personal` and `work` but no `work-devzero`.
+5. `clan machines update ryza`, as a separate run. Until ryza switches, its
+   old coder cwd `~/work` is the company tree and its old work cwd
+   `~/work-devzero` is gone. Never deploy ryza first: its new work cwd `~/work`
+   would be the personal tree.
+6. On ryza: `sudo systemctl start hermes-gateway hermes-dashboard`. The deploy
+   may already have started them.
 
 A task active during the switch makes the migration refuse, by design. Its
 agent may be mid-command in the repo, and its absolute paths would break
 underneath it. Either roll stygies back to the previous generation, finish or
-clear the task there, and deploy again, or follow the manual fallback once
-manjo has confirmed the task can be cleared.
+clear the task there, and deploy again, or clear it by hand once manjo has
+confirmed it can go.
 
-**Manual fallback** (on stygies as `hermes`, gateway paused, both slots
-confirmed idle with `cat ~/work/.current-task ~/work-devzero/.tasks/*/.current-task`
-printing nothing):
+**Manual fallback:** fix the cause the refusal names, then run the migration
+again by hand on stygies, with the gateway stopped:
 
 ```sh
-cd ~
-# Only empty directories: the skeleton tmpfiles made after a refused run.
-find personal work/.tasks work/devzero work/codilas -depth -type d -empty -delete 2>/dev/null
-mv work personal          # only if ~/personal is gone now
-mv work-devzero work      # only if ~/work is gone now
-for repo in personal/* work/*/*; do
-  [ -d "$repo/.git" ] && git -C "$repo" worktree repair
+sudo hermes-workspace-migrate
+```
+
+`hermes-workspace-migrate` is the exact script and arguments activation uses,
+run as `hermes`. It prints what it moved, or why it refuses again; exit 0 means
+done or nothing to do. To check that the slots are idle, this prints nothing
+when they are (an idle slot has no `.current-task`):
+
+```sh
+for f in ~hermes/work/.current-task ~hermes/work-devzero/.tasks/*/.current-task; do
+  [ -s "$f" ] && echo "active: $f"
 done
 ```
 
-Then deploy stygies again: the migration reports nothing to do.
+Don't move the trees with `mv` or prune them with `find … -delete`. `mv` into
+an existing directory nests the tree, and pruning empty directories can delete
+an empty `.git/refs` and break a repo.
 
-**After ryza is deployed:** app projects and app sessions that point at
-`/home/hermes/work/<repo>` (coder) or `/home/hermes/work-devzero/...` (work)
-fail their `cd` instead of reaching the other tree, because those paths no
-longer exist. On ryza as `hermes`, run `hermes -p coder projects list --all`,
-archive those, and recreate them with `/home/hermes/personal/<repo>`. Do the
-same for `work` with `/home/hermes/work/<company>/<repo key>`. The one path that
-would still `cd` is a coder project at `/home/hermes/work` itself, so check for
-it. Matrix threads start in the new cwd after the gateway restart.
+**Rollback past this change is one-way.** The old generation recreates
+`~/work-devzero` empty. Its personal launcher writes its slot into `~/work`
+(the company tree), and its company launchers see idle slots. So before rolling
+stygies back, with the gateway stopped and both slots idle, reverse the move by
+hand on stygies as `hermes`:
+
+```sh
+set -eu
+cd ~
+[ ! -e work-devzero ] || rmdir work-devzero   # fails, and stops, if not empty
+mv -T work work-devzero
+mv -T personal work
+rm -f ~/.local/state/hermes-workspace-migrate.done
+```
+
+Then run `git -C <repo> worktree repair <worktree paths>` for repos with linked
+worktrees. Rolling forward again migrates afresh. A stray old-slot file the new
+launchers report (`~/work/.task-lock`, or files under `~/work-devzero`) is named
+in the message: check it holds no live task, then remove it.
+
+**After ryza is deployed:**
+
+- App projects and sessions that point at `/home/hermes/work/<repo>` (coder) or
+  `/home/hermes/work-devzero/...` (work) fail their `cd` instead of reaching the
+  other tree, because those paths no longer exist. On ryza as `hermes`, run
+  `hermes -p coder projects list --all`, archive those, and recreate them with
+  `/home/hermes/personal/<repo>`. Do the same for `work` with
+  `/home/hermes/work/<company>/<repo key>`. The one path that would still `cd`
+  is a coder project at `/home/hermes/work` itself, so check for it.
+- Memories and the skills the agents wrote are part of their system prompts
+  and may still name the old paths:
+  `grep -rn 'work-devzero\|~/work\|/home/hermes/work' ~/.hermes/profiles/{coder,work}/{memories,skills}`.
+  Edit the hits: coder's `~/work` becomes `~/personal`, and work's
+  `~/work-devzero` becomes `~/work`.
+- A cron job's workdir becomes its session cwd. Check `hermes -p coder cron list`
+  for workdirs under `/home/hermes/work`. The cron tool is disabled for `work`.
+- Matrix threads start in the new cwd after the gateway restart.
 
 ### Hermes work profile (ryza → stygies)
 

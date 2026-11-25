@@ -9,9 +9,9 @@ the app hands a picked project's path to the remote verbatim, so every command's
 
 A cwd at or under one of ``HERMES_SSH_HOST_ONLY_PREFIXES`` (colon-separated, absolute; unset
 means off) exists only on the gateway host. It is replaced by the active profile's configured
-cwd (``terminal.cwd``, e.g. ``~/personal``), or ``~`` when that is unusable too. An explicit
-``workdir`` the agent passes is not redirected: running it somewhere else would be worse than
-the ``cd`` error.
+cwd (``terminal.cwd``, e.g. ``~/personal``), or ``~`` when that is unusable or no profile
+scope is bound. An explicit ``workdir`` the agent passes is not redirected: running it somewhere
+else would be worse than the ``cd`` error.
 """
 
 import logging
@@ -36,12 +36,21 @@ def _host_only(path: str, prefixes: list[str]) -> bool:
 
 
 def _configured_cwd() -> str:
-    """The active profile's ``TERMINAL_CWD`` (per-turn scope under gateway multiplexing)."""
+    """The active profile's ``TERMINAL_CWD`` (per-turn scope under gateway multiplexing), or "".
+
+    Without a bound profile scope (a session create/switch before its profile is bound),
+    ``scope_terminal_cwd`` would read the process-global ``TERMINAL_CWD``, which may be another
+    profile's (agent/runtime_cwd.py): "" then, so the caller falls back to ``~``.
+    """
     try:
+        from tools.terminal_scope import _terminal_scope_var
+
+        if _terminal_scope_var.get() is None:
+            return ""
         from agent.runtime_cwd import scope_terminal_cwd
 
         return str(scope_terminal_cwd() or "").strip()
-    except Exception:  # an unreadable profile scope: the terminal refuses the call anyway
+    except Exception:  # no scope module, or an unreadable profile scope: the terminal refuses anyway
         return ""
 
 

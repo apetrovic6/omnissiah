@@ -79,7 +79,9 @@
       # (_hermes-workspace-migrate.py), a fresh slot here would hide its task.
       for old in .current-task .task-queue .task-lock; do
         if [ -e "$HOME/work/$old" ]; then
-          printf '%s\n' "workspace migration pending: ~/work/$old is the old personal task slot (README, Hermes workspaces on stygies)" >&2
+          printf '%s\n' "workspace migration pending: ~/work/$old is a personal task slot file in the company tree." \
+            "If the migration has not run, see README, Hermes workspaces on stygies. If it has (~/personal holds the slot)," \
+            "it is a stray: check that ~/work/$old holds no live task, then remove it." >&2
           exit 2
         fi
       done

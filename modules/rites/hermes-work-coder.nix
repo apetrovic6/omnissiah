@@ -111,8 +111,11 @@
       export HERMES_TASK_BRANCH_PATTERN=${lib.escapeShellArg registry.branchPattern}
       # Until stygies's activation has moved ~/work-devzero to ~/work
       # (_hermes-workspace-migrate.py), a fresh slot here would hide its task.
-      if [ -e ${lib.escapeShellArg "${home}/work-devzero"} ]; then
-        printf '%s\n' 'workspace migration pending: ~/work-devzero still exists (README, Hermes workspaces on stygies)' >&2
+      # Only files count: a stray empty directory is not old state.
+      if [ -n "$(${lib.getExe' pkgs.findutils "find"} ${lib.escapeShellArg "${home}/work-devzero"} -mindepth 1 ! -type d -print -quit 2>/dev/null)" ]; then
+        printf '%s\n' 'workspace migration pending: ~/work-devzero still holds files.' \
+          'If the migration has not run, see README, Hermes workspaces on stygies. If it has (~/work holds the company' \
+          'tree), they are strays: check `find ~/work-devzero ! -type d` for anything live, then remove ~/work-devzero.' >&2
         exit 2
       fi
       ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HERMES_TASK_STATE_DIR" || exit $?
