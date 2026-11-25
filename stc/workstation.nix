@@ -339,6 +339,7 @@
       herdr-desktop
       (self.inputs.magos.packages.${system}.opencode)
       (self.inputs.magos.packages.${system}.nautili)
+      (self.inputs.magos.inputs.llm-agents.packages.${system}.hermes-desktop)
       # Not re-exported by magos (it only wraps the CLI), so straight from
       # magos's own nautili input, which keeps the two on the same rev.
       (self.inputs.magos.inputs.nautili.packages.${system}.nautili-desktop)
