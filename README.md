@@ -197,7 +197,8 @@ engine, change the Strata input and its matching llama.cpp pin together.
 ### Hermes coder profile (ryza → stygies)
 
 The ryza gateway serves `coder` only after a host key is pinned. Its terminal
-tools run over SSH as `hermes` in `~/work` on stygies.
+tools run over SSH as `hermes` in `~/personal` on stygies (layout and its
+one-time migration: [Hermes workspaces on stygies](#hermes-workspaces-on-stygies)).
 
 1. Generate `hermes-stygies-ssh` on ryza with
    `clan vars generate ryza --generator hermes-stygies-ssh`. Stygies needs only
@@ -242,11 +243,11 @@ place. A failure doesn't fail the deploy; it is logged
 gateway start. Don't reset an active or queued chat to pick up the prompt.
 
 **App projects** need stygies paths: create them in the app with an absolute
-`/home/hermes/work/<repo>` path. Hermes resolves `~` and relative paths on ryza
-(`~/work/x` becomes `/var/lib/hermes/work/x`), which doesn't exist on stygies.
+`/home/hermes/personal/<repo>` path. Hermes resolves `~` and relative paths on ryza
+(`~/personal/x` becomes `/var/lib/hermes/personal/x`), which doesn't exist on stygies.
 A patched Hermes (`services.imperium.hermes.sshHostOnlyPaths`, default
 `/var/lib/hermes`) runs such a project's commands in the profile's
-`terminal.cwd` (`~/work`) instead of failing every one, and logs
+`terminal.cwd` (`~/personal`) instead of failing every one, and logs
 `ssh working directory … exists only on the Hermes host` in `agent.log`. Fix the
 project's path rather than relying on that.
 
@@ -298,11 +299,81 @@ The hard stop affects every process owned by `hermes` on stygies; the SSH
 connection may drop. If SSH itself is unavailable, use the stygies console.
 Restart the gateway and lift the pause when ready.
 
+### Hermes workspaces on stygies
+
+Both profiles run as `hermes` on stygies (home `/home/hermes`), in separate
+trees. Each SOUL forbids the other's tree.
+
+| Profile | Terminal cwd | Repos | Task slot |
+| --- | --- | --- | --- |
+| `coder` | `~/personal` | `~/personal/<repo>` | `~/personal/.current-task`, `.task-queue`, `.task-lock` |
+| `work` | `~/work` | `~/work/<company>/<repo key>` | `~/work/.tasks/<company>/` |
+
+Before 2026-11-25 the coder used `~/work` and the work profile `~/work-devzero`.
+Stygies's activation moves the old layout once
+(`modules/rites/_hermes-workspace-migrate.py`, run as `hermes`, before
+tmpfiles): `~/work` → `~/personal`, then `~/work-devzero` → `~/work`. Absolute
+paths in linked Git worktrees are rewritten. Plain clones, remotes, the
+`includeIf` rules (URL-based) and the slot files hold no paths. It runs on
+every switch and boot and does nothing once the new layout exists. It **refuses
+and changes nothing** when:
+
+- a slot it would move has an active task, or a task command holds its lock;
+- old and new trees both hold content (an empty-directory skeleton left by
+  tmpfiles doesn't count), or `~/work` mixes personal repos with company
+  directories;
+- any of the three directories is a symlink.
+
+A refusal never fails the deploy. It is printed in the deploy output and
+logged: `journalctl -t hermes-workspace-migrate`. Until the move is done the
+task commands refuse with `workspace migration pending`, so a stale slot can't
+hide a task.
+
+**Deploy order (one time):** both slots idle (`task-status --queue` and
+`<company>-task-status --queue` on stygies, before this change), then `/pause`
+in the default bot DM. Deploy **stygies first** and check the output (or the
+journal) for `moved … -> …` and that `ls ~hermes` shows `personal` and `work`
+but no `work-devzero`. Then deploy **ryza right away**: until it switches, the
+old coder cwd `~/work` is the company tree and the old work cwd
+`~/work-devzero` is gone. Lift the pause after ryza.
+
+A task active during the switch makes the migration refuse, by design. Its
+agent may be mid-command in the repo, and its absolute paths would break
+underneath it. Either roll stygies back to the previous generation, finish or
+clear the task there, and deploy again, or follow the manual fallback once
+manjo has confirmed the task can be cleared.
+
+**Manual fallback** (on stygies as `hermes`, gateway paused, both slots
+confirmed idle with `cat ~/work/.current-task ~/work-devzero/.tasks/*/.current-task`
+printing nothing):
+
+```sh
+cd ~
+# Only empty directories: the skeleton tmpfiles made after a refused run.
+find personal work/.tasks work/devzero work/codilas -depth -type d -empty -delete 2>/dev/null
+mv work personal          # only if ~/personal is gone now
+mv work-devzero work      # only if ~/work is gone now
+for repo in personal/* work/*/*; do
+  [ -d "$repo/.git" ] && git -C "$repo" worktree repair
+done
+```
+
+Then deploy stygies again: the migration reports nothing to do.
+
+**After ryza is deployed:** app projects and app sessions that point at
+`/home/hermes/work/<repo>` (coder) or `/home/hermes/work-devzero/...` (work)
+fail their `cd` instead of reaching the other tree, because those paths no
+longer exist. On ryza as `hermes`, run `hermes -p coder projects list --all`,
+archive those, and recreate them with `/home/hermes/personal/<repo>`. Do the
+same for `work` with `/home/hermes/work/<company>/<repo key>`. The one path that
+would still `cd` is a coder project at `/home/hermes/work` itself, so check for
+it. Matrix threads start in the new cwd after the gateway restart.
+
 ### Hermes work profile (ryza → stygies)
 
 `work` uses Anthropic Claude Opus 5.5 with the DevZero account in both the
 DevZero and Codilas rooms, and in Hermes Mobile. Its terminal runs on stygies
-as `hermes` in `~/work-devzero`. It needs the same stygies host pin as `coder`
+as `hermes` in `~/work`. It needs the same stygies host pin as `coder`
 for that terminal, but does not use the personal task queue or the personal
 Claude Code login; its coding tasks use per-company slots (see
 [Hermes work coder](#hermes-work-coder-github--gitlab)). The profile and its room routes exist with or without the
@@ -311,8 +382,8 @@ pin; without it the terminal, file and code tools are disabled
 without a route would be answered by `default` on the personal login.
 Prompt refreshes after a SOUL change and app project paths work as for `coder`
 (see [Hermes coder profile](#hermes-coder-profile-ryza--stygies)); work's
-fallback directory is `~/work-devzero`, and app projects use
-`/home/hermes/work-devzero/<company>/<repo key>`.
+fallback directory is `~/work`, and app projects use
+`/home/hermes/work/<company>/<repo key>`.
 
 1. On your PC, confirm the DevZero account and run
    `claude-as devzero setup-token`. Run
@@ -335,7 +406,7 @@ fallback directory is `~/work-devzero`, and app projects use
      own, and would outrank its token. Repeat this check after any
      `hermes auth add`.
    - `-p coder` shows the personal Claude Code source, not the work token.
-   - `pwd` in the work terminal returns `/home/hermes/work-devzero`.
+   - `pwd` in the work terminal returns `/home/hermes/work`.
 4. Confirm Anthropic and DevZero permit this use. Compare account usage and
    extra usage in the DevZero and personal Claude accounts before and after
    timestamped Claude turns from the work app and both rooms, then from
@@ -434,7 +505,8 @@ issuing refresh tokens, its tools go missing until you repeat its login.
   /api/env/reveal?profile=work`) to any authenticated admin session.
 - The work terminal logs in to stygies as the same `hermes` user as `coder`.
   That user has the task tools, the `fj` login and the Forgejo key, and can
-  read `~/work`. The SOUL is the only guard; isolating them (a second user and
+  read `~/personal`, and coder can read `~/work`. The SOULs are the only guard
+  (each forbids the other's directory); isolating them (a second user and
   key) was explicitly not a goal.
 
 ### Hermes work coder (GitHub / GitLab)
@@ -461,7 +533,7 @@ repos fails evaluation.
     `user.email` as a Git config fragment. The values never appear in Nix.
 - Task commands `<company>-task-{status,claim,branch,done,clear,drop}`. They are
   the personal coder's script with its own slot in
-  `~/work-devzero/.tasks/<company>`, the company's room and repo keys as
+  `~/work/.tasks/<company>`, the company's room and repo keys as
   allowlists, and branch names checked by `<company>-task-branch`.
 - Branch names follow `<type>/<JIRA-KEY>-<slug>`, with `type` one of
   `feature`, `fix` or `chore`. Example: `feature/DEV-123-fix-login`.
@@ -608,7 +680,7 @@ PRs, and a GitLab `api` token can do anything your account can.
      - `git config --show-origin user.email` comes from the identity file.
      - `git push --dry-run origin HEAD:refs/heads/main` is refused by the
        Hermes push guard. `--dry-run` still runs pre-push.
-   - `devzero-task-status --` is idle, and `~/work/.current-task` is unchanged.
+   - `devzero-task-status --` is idle, and `~/personal/.current-task` is unchanged.
    - Trial run: in the company room, ask for a small Jira ticket, naming the
      repo key. You should
      see a claim, a plan, then a wait for your `go`. After that it records the

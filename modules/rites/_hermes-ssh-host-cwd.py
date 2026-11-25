@@ -3,13 +3,13 @@
 Copied into the Hermes package as ``tools/nixos_ssh_host_cwd.py`` and called from
 ``coerce_ssh_remote_cwd`` (modules/rites/hermes.nix, postPatch), the function every ssh
 terminal and file-tool cwd passes through. Hermes normalises project paths on the gateway
-host (``projects_db._normalize_path``: ``~/work/x`` becomes ``/var/lib/hermes/work/x``), and
+host (``projects_db._normalize_path``: ``~/personal/x`` becomes ``/var/lib/hermes/personal/x``), and
 the app hands a picked project's path to the remote verbatim, so every command's
 ``builtin cd -- <cwd> || exit 126`` failed on stygies before the command ran.
 
 A cwd at or under one of ``HERMES_SSH_HOST_ONLY_PREFIXES`` (colon-separated, absolute; unset
 means off) exists only on the gateway host. It is replaced by the active profile's configured
-cwd (``terminal.cwd``, e.g. ``~/work``), or ``~`` when that is unusable too. An explicit
+cwd (``terminal.cwd``, e.g. ``~/personal``), or ``~`` when that is unusable too. An explicit
 ``workdir`` the agent passes is not redirected: running it somewhere else would be worse than
 the ``cd`` error.
 """
@@ -58,5 +58,5 @@ def host_only_fallback(cwd: str) -> str | None:
     if cwd not in _warned:
         _warned.add(cwd)
         logger.warning("ssh working directory %s exists only on the Hermes host; using %s on the remote instead "
-                       "(give app projects remote paths, e.g. /home/hermes/work/<repo>)", cwd, fallback)
+                       "(give app projects remote paths, e.g. /home/hermes/personal/<repo>)", cwd, fallback)
     return fallback

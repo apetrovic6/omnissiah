@@ -248,10 +248,10 @@
             (old.postInstall or "")
             + ''
               PYTHONPATH="$(echo $out/lib/python3*/site-packages)''${PYTHONPATH:+:$PYTHONPATH}" \
-                HERMES_SSH_HOST_ONLY_PREFIXES=/var/lib/hermes TERMINAL_CWD='~/work' \
+                HERMES_SSH_HOST_ONLY_PREFIXES=/var/lib/hermes TERMINAL_CWD='~/personal' \
                 python3 -B -c 'from tools.terminal_tool_config import coerce_ssh_remote_cwd as c
-              assert c("/var/lib/hermes/projects/rat", "ssh") == "~/work", c("/var/lib/hermes/projects/rat", "ssh")
-              assert c("/home/hermes/work/rat", "ssh") == "/home/hermes/work/rat"
+              assert c("/var/lib/hermes/projects/rat", "ssh") == "~/personal", c("/var/lib/hermes/projects/rat", "ssh")
+              assert c("/home/hermes/personal/rat", "ssh") == "/home/hermes/personal/rat"
               assert c("/var/lib/hermes/x", "ssh", host_guard=False) == "/var/lib/hermes/x"
               assert c("/var/lib/hermes/x", "local") == "/var/lib/hermes/x"'
             '';

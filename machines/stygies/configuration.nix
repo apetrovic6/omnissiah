@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   self,
   ...
 }: let
@@ -41,11 +42,49 @@ in {
     '';
   };
 
+  # Hermes: the personal coder in ~/personal, the work profile in ~/work
+  # (<company>/<repo key>, .tasks/<company>).
   systemd.tmpfiles.rules = [
     "d /home/apetrovic/work 0750 apetrovic users -"
+    "d /home/hermes/personal 0750 hermes hermes -"
     "d /home/hermes/work 0750 hermes hermes -"
-    "d /home/hermes/work-devzero 0750 hermes hermes -"
   ];
+
+  # One-time move from the old layout (~/work personal, ~/work-devzero work),
+  # README "Hermes workspaces on stygies". Activation runs before tmpfiles on a
+  # switch and at boot (/home is on the root filesystem), and the script ignores
+  # the empty skeleton tmpfiles leaves after a refused run. It never fails the
+  # switch: a refusal is printed in the deploy output and logged to the journal
+  # (`journalctl -t hermes-workspace-migrate`); the task commands refuse until
+  # the move is done.
+  system.activationScripts.hermes-workspace-migrate = {
+    deps = ["users"];
+    text = let
+      companies = lib.attrNames (import ../ryza/_work-projects.nix).companies;
+      command = lib.escapeShellArgs ([
+          (lib.getExe' pkgs.util-linux "runuser")
+          "-u"
+          "hermes"
+          "--"
+          (lib.getExe pkgs.python3)
+          "-I"
+          "${../../modules/rites/_hermes-workspace-migrate.py}"
+          config.users.users.hermes.home
+        ]
+        ++ companies);
+    in ''
+      if [ -d ${lib.escapeShellArg config.users.users.hermes.home} ]; then
+        status=0
+        output=$(${command} 2>&1) || status=$?
+        if [ -n "$output" ]; then
+          printf '%s\n' "$output" >&2
+          priority=info
+          [ "$status" -eq 0 ] || priority=err
+          printf '%s\n' "$output" | ${lib.getExe' pkgs.systemd "systemd-cat"} -t hermes-workspace-migrate -p "$priority" 2>/dev/null || true
+        fi
+      fi
+    '';
+  };
 
   nix.settings = {
     extra-experimental-features = ["nix-command" "flakes"];

@@ -197,7 +197,7 @@ in {
         # One Matrix room per project. Add the room's Internal room ID to
         # _coder-projects.nix after inviting @hermes.
         rooms = lib.mapAttrs (_: project: project.room) projects;
-        settings.terminal = sshTerminal // {cwd = "~/work";};
+        settings.terminal = sshTerminal // {cwd = "~/personal";};
         # Kaneo uses browser PKCE. Port 28431 is outside both hosts' ephemeral
         # ranges; keep it fixed for the phalanx-to-ryza SSH tunnel.
         settings.mcp_servers.kaneo = {
@@ -236,7 +236,7 @@ in {
           agent.disabled_toolsets =
             ["cronjob"]
             ++ lib.optionals (!hasHostPin) ["terminal" "file" "code_execution"];
-          terminal = sshTerminal // {cwd = "~/work-devzero";};
+          terminal = sshTerminal // {cwd = "~/work";};
           # Remote MCP servers with browser OAuth (dynamic client
           # registration), like coder's Kaneo: nothing secret in Nix, tokens
           # land in the work profile's mcp-tokens/. Fixed redirect ports, next

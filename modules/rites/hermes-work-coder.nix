@@ -23,7 +23,7 @@
     vars = config.clan.core.vars.generators;
     tokenPath = company: vars.${company.tokenGenerator}.files.token.path;
     identityPath = company: vars.${company.identityGenerator}.files.gitconfig.path;
-    stateDir = name: "${home}/work-devzero/.tasks/${name}";
+    stateDir = name: "${home}/work/.tasks/${name}";
     cliPackage = company:
       if company.kind == "github"
       then pkgs.gh
@@ -109,6 +109,12 @@
       export HERMES_TASK_PROJECTS="$HERMES_TASK_APP_PROJECTS"
       export HERMES_TASK_ROOMS=${lib.escapeShellArg (builtins.toJSON [company.room])}
       export HERMES_TASK_BRANCH_PATTERN=${lib.escapeShellArg registry.branchPattern}
+      # Until stygies's activation has moved ~/work-devzero to ~/work
+      # (_hermes-workspace-migrate.py), a fresh slot here would hide its task.
+      if [ -e ${lib.escapeShellArg "${home}/work-devzero"} ]; then
+        printf '%s\n' 'workspace migration pending: ~/work-devzero still exists (README, Hermes workspaces on stygies)' >&2
+        exit 2
+      fi
       ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HERMES_TASK_STATE_DIR" || exit $?
       command=''${0##*/}
       ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HERMES_TASK_STATE_DIR/.task-lock" \
@@ -209,7 +215,7 @@
     config.users.users.hermes.packages = lib.optional anyEnabled workTools;
 
     config.systemd.tmpfiles.settings.hermes-work-coder = lib.mkIf anyEnabled ({
-        "${home}/work-devzero/.tasks".d = {
+        "${home}/work/.tasks".d = {
           user = "hermes";
           group = "hermes";
           mode = "0700";
@@ -221,7 +227,7 @@
         };
       }
       // lib.mapAttrs' (name: _:
-        lib.nameValuePair "${home}/work-devzero/${name}" {
+        lib.nameValuePair "${home}/work/${name}" {
           d = {
             user = "hermes";
             group = "hermes";

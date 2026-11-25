@@ -21,7 +21,7 @@ def load_helper():
 class HostOnlyFallback(unittest.TestCase):
     def setUp(self):
         self.guard = load_helper()
-        self.scoped = "~/work"
+        self.scoped = "~/personal"
         runtime_cwd = types.ModuleType("agent.runtime_cwd")
         runtime_cwd.scope_terminal_cwd = lambda: self.scoped() if callable(self.scoped) else self.scoped
         agent = types.ModuleType("agent")
@@ -33,11 +33,11 @@ class HostOnlyFallback(unittest.TestCase):
         for cwd in ("/var/lib/hermes", "/var/lib/hermes/projects/rat",
                     "/var/lib/hermes/.hermes/profiles/coder/projects-rust-app-template", "/var/lib/hermes/a/../b"):
             with self.subTest(cwd=cwd), self.assertLogs("tools.terminal_tool", "WARNING") as logs:
-                self.assertEqual(self.guard.host_only_fallback(cwd), "~/work")
+                self.assertEqual(self.guard.host_only_fallback(cwd), "~/personal")
             self.assertIn(cwd, logs.output[0])
 
     def test_remote_paths_pass_through(self):
-        for cwd in ("/home/hermes/work/rat", "/var/lib/hermes2/x", "/var/lib", "/tmp/x", "~/work", "~", "relative",
+        for cwd in ("/home/hermes/personal/rat", "/var/lib/hermes2/x", "/var/lib", "/tmp/x", "~/personal", "~", "relative",
                     "/var/lib/hermes/../other"):
             with self.subTest(cwd=cwd):
                 self.assertIsNone(self.guard.host_only_fallback(cwd))
@@ -52,13 +52,13 @@ class HostOnlyFallback(unittest.TestCase):
     def test_several_prefixes(self):
         with mock.patch.dict(os.environ, {self.guard.ENV: "/srv/a/:/var/lib/hermes"}), \
                 self.assertLogs("tools.terminal_tool", "WARNING"):
-            self.assertEqual(self.guard.host_only_fallback("/srv/a/b"), "~/work")
-            self.assertEqual(self.guard.host_only_fallback("/var/lib/hermes/c"), "~/work")
+            self.assertEqual(self.guard.host_only_fallback("/srv/a/b"), "~/personal")
+            self.assertEqual(self.guard.host_only_fallback("/var/lib/hermes/c"), "~/personal")
 
     def test_fallback_when_scoped_cwd_is_unusable(self):
-        for scoped, expected in (("", "~"), (".", "~"), ("/var/lib/hermes/w", "~"), ("/home/hermes/work-devzero",
-                                                                                      "/home/hermes/work-devzero"),
-                                 ("~/work-devzero", "~/work-devzero")):
+        for scoped, expected in (("", "~"), (".", "~"), ("/var/lib/hermes/w", "~"), ("/home/hermes/work",
+                                                                                      "/home/hermes/work"),
+                                 ("~/work", "~/work")):
             self.scoped = scoped
             with self.subTest(scoped=scoped), self.assertLogs("tools.terminal_tool", "WARNING"):
                 self.assertEqual(self.guard.host_only_fallback(f"/var/lib/hermes/{scoped or 'x'}-p"), expected)

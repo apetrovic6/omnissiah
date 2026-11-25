@@ -29,8 +29,10 @@ sys: let
   };
   c = (sys.extendModules { modules = [{ services.imperium.hermesWork.companies = on; }]; }).config;
   tools = builtins.head (builtins.filter (p: p.name == "hermes-work-tools") c.users.users.hermes.packages);
+  personal = builtins.head (builtins.filter (p: p.name == "hermes-task-tools") c.users.users.hermes.packages);
 in {
   launchers = tools.launcherTexts;
+  personal = personal.launcherText;
   rooms = builtins.mapAttrs (_: company: company.room) on;
   home = c.users.users.hermes.home;
 }
@@ -75,11 +77,15 @@ class RenderedLaunchers(unittest.TestCase):
         data = rendered()
         self.rooms = data["rooms"]
         self.home = Path(self.enterContext(TemporaryDirectory()))
-        (self.home / "work").mkdir()
-        self.sentinel = self.home / "work/.current-task"
+        (self.home / "personal").mkdir()
+        self.sentinel = self.home / "personal/.current-task"
         self.sentinel.write_text("personal sentinel\n")
         self.bin = self.home / "bin"
         self.bin.mkdir()
+        personal = self.home / "launcher-personal"
+        personal.write_text(localise(data["personal"], self.home, data["home"]))
+        for action in ("status", "claim", "branch", "done", "clear", "drop"):
+            (self.bin / f"task-{action}").symlink_to(personal)
         for company, text in data["launchers"].items():
             launcher = self.home / f"launcher-{company}"
             launcher.write_text(localise(text, self.home, data["home"]))
@@ -95,7 +101,7 @@ class RenderedLaunchers(unittest.TestCase):
         return result
 
     def state(self, company):
-        state = self.home / "work-devzero/.tasks" / company
+        state = self.home / "work/.tasks" / company
         # The launcher creates the lock file before the script runs; that's not task state.
         paths = state.iterdir() if state.exists() else ()
         return {path.name: path.read_bytes() for path in paths if path.name != ".task-lock"}
@@ -130,6 +136,33 @@ class RenderedLaunchers(unittest.TestCase):
         self.assertEqual(app["result"], "claimed")
         self.assertEqual(json.loads(self.run_task("devzero-task-done", *origin).stdout)["result"], "idle")
         self.assertIn(".current-task", self.state("codilas"))
+        self.assertEqual(self.sentinel.read_text(), "personal sentinel\n")
+
+    def test_personal_launcher_uses_personal_never_work(self):
+        self.sentinel.unlink()  # not a valid task row; the personal commands would refuse it
+        status = json.loads(self.run_task("task-status", "--queue").stdout)
+        self.assertEqual(status["queue"], [])
+        self.assertTrue((self.home / "personal/.task-lock").is_file())
+        self.assertFalse((self.home / "work").exists())
+
+    def test_launchers_refuse_until_the_workspace_migration_ran(self):
+        # The old personal slot still in ~/work: the personal commands refuse, company ones don't care.
+        (self.home / "work").mkdir()
+        for name in (".current-task", ".task-queue", ".task-lock"):
+            with self.subTest(old=name):
+                old = self.home / "work" / name
+                old.write_text("")
+                result = self.run_task("task-status", "--queue", code=2)
+                self.assertIn(f"workspace migration pending: ~/work/{name}", result.stderr)
+                old.unlink()
+        # ~/work-devzero still there: every company command refuses without touching state.
+        (self.home / "work-devzero").mkdir()
+        for company in ("devzero", "codilas"):
+            with self.subTest(company=company):
+                before = self.state(company)
+                result = self.run_task(f"{company}-task-status", "--queue", code=2)
+                self.assertIn("workspace migration pending: ~/work-devzero still exists", result.stderr)
+                self.assertEqual(self.state(company), before)
         self.assertEqual(self.sentinel.read_text(), "personal sentinel\n")
 
 
