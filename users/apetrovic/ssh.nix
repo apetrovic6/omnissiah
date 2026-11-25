@@ -23,77 +23,85 @@
   programs.ssh = {
     enable = true;
 
-    matchBlocks = {
-      "github.com" = {
-        hostname = "github.com";
-        user = "git";
-        identityFile = "~/.ssh/devzero.pub";
-        identitiesOnly = true;
-      };
+    # `ssh root@ryza` and friends: one alias per machine in the chart
+    # (modules/cartographa/_chart.nix), resolved here rather than in DNS.
+    # The `*.ugalabugala.org` wildcard would answer every name with cerberus,
+    # and SSH must keep working when Blocky is the thing being fixed. Only
+    # the address is set; keys come from the blocks below (ssh merges every
+    # matching Host block), and known_hosts stays keyed by the IP.
+    matchBlocks =
+      lib.mapAttrs (_: ip: {hostname = ip;}) self.lib.hosts
+      // {
+        "github.com" = {
+          hostname = "github.com";
+          user = "git";
+          identityFile = "~/.ssh/devzero.pub";
+          identitiesOnly = true;
+        };
 
-      # Codilas self-hosted GitLab (natl/monorepo). Only the codilas key is
-      # authorized there; unpinned, it can sort past MaxAuthTries in the agent.
-      "gitlab.codilas.com" = {
-        user = "git";
-        port = 8022;
-        identityFile = "~/.ssh/codilas.pub";
-        identitiesOnly = true;
-      };
+        # Codilas self-hosted GitLab (natl/monorepo). Only the codilas key is
+        # authorized there; unpinned, it can sort past MaxAuthTries in the agent.
+        "gitlab.codilas.com" = {
+          user = "git";
+          port = 8022;
+          identityFile = "~/.ssh/codilas.pub";
+          identitiesOnly = true;
+        };
 
-      "forge.${self.lib.lab.domain}" = {
-        hostname = self.lib.hosts.cerberus;
-        port = 2222;
-        # The wildcard *.ugalabugala.org record resolves to cerberus for every
-        # name, so the IP is pinned above and the host-IP check would fail.
-        checkHostIP = false;
-        identityFile = "~/.ssh/apetrovic.pub";
-        identitiesOnly = true;
-      };
+        "forge.${self.lib.lab.domain}" = {
+          hostname = self.lib.hosts.cerberus;
+          port = 2222;
+          # The wildcard *.ugalabugala.org record resolves to cerberus for every
+          # name, so the IP is pinned above and the host-IP check would fail.
+          checkHostIP = false;
+          identityFile = "~/.ssh/apetrovic.pub";
+          identitiesOnly = true;
+        };
 
-      # clan deploy targets (inventory/machines.nix). The Bitwarden agent holds
-      # more keys than sshd's MaxAuthTries (6) allows offers for, and the only
-      # key root accepts (clan.nix admin service) sorts 7th -- so without
-      # pinning it here the connection is cut with "Too many authentication
-      # failures" before that key is ever tried. clan overwrites NIX_SSHOPTS
-      # with its own options, so ssh_config is the only place this can be set
-      # for `clan machines update`.
-      #
-      # Keep the addresses in step with inventory/machines.nix: a target that
-      # is missing from this list silently reverts to the failure above.
-      "clan-targets" = {
-        host = lib.concatStringsSep " " [
-          "localhost"
-          "127.0.0.1"
-          "::1"
-          "phalanx"
-          "enginseer"
-          "genetor"
-          "cerberus"
-          "cypramundi"
-          "terra"
-          "luna"
-          "sol"
-          "servitor"
-          "ryza"
-          "stygies"
-          self.lib.hosts.phalanx # phalanx
-          self.lib.hosts.enginseer # enginseer
-          self.lib.hosts.servitor # servitor
-          self.lib.hosts.genetor
-          self.lib.hosts.cerberus # cerberus
-          self.lib.hosts.terra # terra
-          self.lib.hosts.luna
-          self.lib.hosts.sol
-          self.lib.hosts.mars # mars
-          self.lib.hosts.cypramundi # cypramundi
-          self.lib.hosts.alfrost # alfrost
-          self.lib.hosts.ryza
-          self.lib.hosts.stygies
-        ];
-        identityFile = "~/.ssh/apetrovic.pub";
-        identitiesOnly = true;
+        # clan deploy targets (inventory/machines.nix). The Bitwarden agent holds
+        # more keys than sshd's MaxAuthTries (6) allows offers for, and the only
+        # key root accepts (clan.nix admin service) sorts 7th -- so without
+        # pinning it here the connection is cut with "Too many authentication
+        # failures" before that key is ever tried. clan overwrites NIX_SSHOPTS
+        # with its own options, so ssh_config is the only place this can be set
+        # for `clan machines update`.
+        #
+        # Keep the addresses in step with inventory/machines.nix: a target that
+        # is missing from this list silently reverts to the failure above.
+        "clan-targets" = {
+          host = lib.concatStringsSep " " [
+            "localhost"
+            "127.0.0.1"
+            "::1"
+            "phalanx"
+            "enginseer"
+            "genetor"
+            "cerberus"
+            "cypramundi"
+            "terra"
+            "luna"
+            "sol"
+            "servitor"
+            "ryza"
+            "stygies"
+            self.lib.hosts.phalanx # phalanx
+            self.lib.hosts.enginseer # enginseer
+            self.lib.hosts.servitor # servitor
+            self.lib.hosts.genetor
+            self.lib.hosts.cerberus # cerberus
+            self.lib.hosts.terra # terra
+            self.lib.hosts.luna
+            self.lib.hosts.sol
+            self.lib.hosts.mars # mars
+            self.lib.hosts.cypramundi # cypramundi
+            self.lib.hosts.alfrost # alfrost
+            self.lib.hosts.ryza
+            self.lib.hosts.stygies
+          ];
+          identityFile = "~/.ssh/apetrovic.pub";
+          identitiesOnly = true;
+        };
       };
-    };
   };
 
   home.file = {
