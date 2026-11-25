@@ -14,19 +14,38 @@
 #   server-set run fields decide:
 #     repository.id/owner, is_fork_pull_request (true for forks AND every AGit
 #     PR), need_approval, event, trigger_event, ScheduleID, trigger_user.id,
-#     prettyref.
-#   Trusted means not a fork or AGit PR, not awaiting approval, and one of:
+#     prettyref, repository.default_branch.
+#   Trusted means not a fork or AGit PR, not awaiting approval, on the
+#   DEFAULT BRANCH ONLY (prettyref == repository.default_branch), and one of:
 #     a push by manjo; a schedule (trigger user forgejo-actions, -2); a
-#     workflow_dispatch by manjo whose ref is not a pull request ref.
+#     workflow_dispatch by manjo.
+#   A dispatch accepts any ref git resolves ("pull/5/head", a PR head SHA,
+#   another branch, a tag): none of those is the default branch, so none is
+#   trusted. Pushes to other branches aren't trusted either. Residual: a tag
+#   named exactly like the default branch looks identical; only writers can
+#   create one.
+#   "manjo" means any holder of a manjo write credential: the user, and any
+#   agent or tool holding a manjo token with repository write. Forgejo also
+#   attributes deploy-key pushes to the owner (routers/private/serv.go:266-270),
+#   so any write deploy key on the repository disables trust. The dispatcher
+#   lists them (GET /repos/manjo/<repo>/keys, all pages) for every resolution;
+#   an unreadable list means untrusted.
 #   approved_by never grants trust, and a fork PR re-run by manjo stays a
 #   fork PR. Every pull_request* event is untrusted, same-repo ones included.
+#   Forge policy matters too: an auto-merge lands as a manjo push to the
+#   default branch. Don't schedule auto-merges on fork PRs in a repository
+#   with trust on, or require approvals with dismiss-stale-approvals.
 #   Just before delivery the dispatcher rechecks that the job is still the
 #   same attempt, running on the same task, and that the run is unchanged and
 #   still trusted.
 #   Any error, a 403 (the PAT lacks read:repository), a timeout or a mismatch
 #   means nothing is delivered. Lookups retry for 10 minutes after pickup, then
-#   the dispatcher gives up. Untrusted jobs keep running; only the credentials
-#   are withheld. The reason is logged.
+#   the dispatcher gives up. Delivery errors (for example a missing trust dir)
+#   count against the same deadline. Untrusted jobs keep running; only the
+#   credentials are withheld. The reason is logged.
+#   The two credential sources are mandatory LoadCredential entries: if either
+#   var is missing, systemd refuses to start the dispatcher, which stops
+#   untrusted dispatch too. The assertion below catches that at eval time.
 #
 # CHANNEL: a second virtiofs share, not fw_cfg, because fw_cfg is fixed at boot.
 #   Host: `trustDir`, root:root 0700. The dispatcher creates it empty before
@@ -46,9 +65,10 @@
 #     point of "trusted", and equals manjo pushing to master.
 #   Untrusted jobs: the share stays empty for the whole boot. Not even guest
 #     root has anything to read.
-#   Removal: the slot's ExecStopPost scrub, the dispatcher's idle scrub (which
-#     also removes the directory), and at dispatcher start (files only; a
-#     still-running trusted job is then re-resolved and re-delivered).
+#   Removal: the slot's ExecStopPost trust scrub (ordered first, always
+#     exits 0), the dispatcher's idle scrub (which also removes the
+#     directory), and at dispatcher start (files only; a still-running
+#     trusted job is then re-resolved and re-delivered).
 #   Escapes:
 #     - QEMU (microvm-eph) can reach the virtiofsd sockets in the root:microvm-eph
 #       0750 slot directory. So it can read what virtiofsd serves: the host store,
@@ -125,11 +145,14 @@
       set -u
       key=${guestTrustDir}/ci-signing-key
       netrc=${guestTrustDir}/ncps-netrc
-      [[ -f $key && -f $netrc ]] || exit 0
-      ${lib.getExe' pkgs.gnugrep "grep"} -qxE '[A-Za-z0-9._-]+:[A-Za-z0-9+/]+={0,2}' "$key" || exit 0
-      ${lib.getExe' pkgs.gnugrep "grep"} -qx 'machine ${cacheHost}' "$netrc" || exit 0
+      # Bounded: a wedged share must not hang every build.
+      t=${lib.getExe' pkgs.coreutils "timeout"}
+      { "$t" 5 ${lib.getExe' pkgs.coreutils "test"} -f "$key" && "$t" 5 ${lib.getExe' pkgs.coreutils "test"} -f "$netrc"; } || exit 0
+      "$t" 5 ${lib.getExe' pkgs.gnugrep "grep"} -qxE '[A-Za-z0-9._-]+:[A-Za-z0-9+/]+={0,2}' "$key" || exit 0
+      "$t" 5 ${lib.getExe' pkgs.gnugrep "grep"} -qx 'machine ${cacheHost}' "$netrc" || exit 0
+      # 1800 s like the persistent runners' hook (forgejo-runner.nix), sized for large dependency closures.
       # shellcheck disable=SC2086 # OUT_PATHS is a space-separated list
-      ${lib.getExe' pkgs.coreutils "timeout"} 600 \
+      "$t" 1800 \
         ${config.nix.package}/bin/nix --extra-experimental-features nix-command \
         copy --option connect-timeout 5 --option netrc-file "$netrc" \
         --to "https://${cacheHost}/upload?compression=zstd&parallel-compression=true&secret-key=$key" $OUT_PATHS \
@@ -160,7 +183,8 @@ in {
       ++ lib.optional (gens ? ncps-upload-auth) "trusted-ncps-netrc:${gens.ncps-upload-auth.files.netrc.path}";
     systemd.services.${vm}.serviceConfig = {
       ExecStartPre = lib.mkBefore ["+${trustPreflight}"];
-      ExecStopPost = ["+${trustScrub}"];
+      # First: the base scrub is `set -eu`, and a failure there would skip later ExecStopPost lines.
+      ExecStopPost = lib.mkBefore ["+${trustScrub}"];
     };
     microvm.vms.${slot}.config = guest;
   };

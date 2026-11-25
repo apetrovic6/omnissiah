@@ -273,7 +273,7 @@ class Forgejo:
     def task(self, name, task_id):
         """The task a runner created for a job. Tasks are listed newest first (`id` DESC)."""
         for page in range(1, TASK_PAGES + 1):
-            body, _ = self._request("tasks", "GET", f"/repos/{LOGIN}/{name}/actions/tasks?page={page}&limit=50", (200,))
+            body, _ = self._request("tasks", "GET", f"/repos/{LOGIN}/{name}/actions/tasks?status=running&page={page}&limit=50", (200,))
             if not isinstance(body, dict) or not isinstance(body.get("workflow_runs"), list):
                 raise ApiError("Forgejo tasks: unexpected response")
             for row in body["workflow_runs"]:
@@ -290,6 +290,33 @@ class Forgejo:
             if not body["workflow_runs"] or any(row["id"] < task_id for row in body["workflow_runs"]):
                 break
         raise ApiError("Forgejo tasks: the job's task is not listed")
+
+    def deploy_keys_read_only(self, name):
+        """True only if every deploy key on the repository is read-only (GET /repos/{o}/{r}/keys, all pages).
+
+        Forgejo attributes a deploy-key push to the repository owner (routers/private/serv.go:266-270), so a
+        write deploy key could produce a "push by manjo". The route needs the owner's read:repository PAT.
+        """
+        seen, total = set(), None
+        for page in range(1, 21):
+            rows, headers = self._request("deploy keys", "GET", f"/repos/{LOGIN}/{name}/keys?page={page}&limit=50", (200,))
+            count = headers.get("X-Total-Count", "")
+            if not isinstance(rows, list) or not re.fullmatch(r"[0-9]{1,6}", count):
+                raise ApiError("Forgejo deploy keys: invalid list or pagination")
+            if total is not None and int(count) != total:
+                raise ApiError("Forgejo deploy keys: list changed during pagination")
+            total = int(count)
+            for row in rows:
+                if not isinstance(row, dict) or not positive(row.get("id")) or row["id"] in seen:
+                    raise ApiError("Forgejo deploy keys: unexpected key metadata")
+                seen.add(row["id"])
+                if row.get("read_only") is not True:
+                    return False
+            if len(seen) == total:
+                return True
+            if not rows:
+                raise ApiError("Forgejo deploy keys: inconsistent pagination")
+        raise ApiError("Forgejo deploy keys: too many keys to check")
 
     def run_by_number(self, name, number):
         """The run whose per-repository index is `number`: unique per repository."""
@@ -321,6 +348,14 @@ def trusted_run(run, repo_id, owner):
     - trigger_user is the event's doer (services/actions/notifier_helper.go:377), the dispatcher for
       workflow_dispatch (services/actions/workflows.go:146-152), and the forgejo-actions user (-2) for
       schedules, which always run the default branch (notifier_helper.go:610-623, schedule_tasks.go:134-143).
+      "manjo" therefore means any holder of a manjo write credential, agents with a manjo token included. Forgejo
+      also attributes deploy-key pushes to the repository owner (routers/private/serv.go:266-270), which is why
+      _resolve refuses trust while the repository has any write deploy key.
+    - Only the default branch is trusted. prettyref is the run's ref short name (models/actions/run.go:134-140): a
+      branch or tag push and a dispatch on a branch or tag resolve to refs/heads|tags/<name> and show <name>, but a
+      dispatch accepts any ref git resolves (routers/api/v1/repo/action.go DispatchWorkflow, modules/git/
+      repo_ref.go:69-82). "pull/5/head" or a commit SHA stays verbatim and never equals the default branch name.
+      Residual: a tag named exactly like the default branch looks the same; only a writer can create one.
     """
     try:
         repository, user = run["repository"], run["trigger_user"]
@@ -337,6 +372,9 @@ def trusted_run(run, repo_id, owner):
             and isinstance(trigger_event, str)
             and type(schedule) is int
             and isinstance(run["prettyref"], str)
+            and isinstance(repository["default_branch"], str)
+            and repository["default_branch"]
+            and run["prettyref"]
         ):
             return "invalid run metadata"
     except (KeyError, TypeError):
@@ -347,19 +385,24 @@ def trusted_run(run, repo_id, owner):
         return "fork or AGit pull request"
     if run["need_approval"]:
         return "awaiting approval"
+    on_default = run["prettyref"] == repository["default_branch"]
     if event == "push" and trigger_event == "push":
         if schedule != 0:
             return "push run carries a schedule"
-        return None if user["id"] == owner else "push not by manjo"
+        if user["id"] != owner:
+            return "push not by manjo"
+        return None if on_default else "push not on the default branch"
     if trigger_event == "schedule" and event in ("push", "schedule"):
         if schedule <= 0:
             return "schedule run without a schedule"
-        return None if user["id"] == ACTIONS_USER else "schedule not triggered by forgejo-actions"
+        if user["id"] != ACTIONS_USER:
+            return "schedule not triggered by forgejo-actions"
+        return None if on_default else "schedule not on the default branch"
     if event == "workflow_dispatch" and trigger_event == "workflow_dispatch":
         if user["id"] != owner:
             return "dispatch not by manjo"
-        # A dispatch can target refs/pull/N/head (workflows.go:198-207), shown as "#N" (models/actions/run.go:134-140).
-        return "dispatch on a pull request ref" if run["prettyref"].startswith("#") else None
+        # Any ref git resolves is accepted: refs/pull/N/head ("#N"), "pull/5/head", a SHA, another branch or a tag.
+        return None if on_default else "dispatch not on the default branch"
     return "event is not push, schedule or workflow_dispatch"
 
 
@@ -661,12 +704,14 @@ class Dispatcher:
         self.busy_misses = 0
         self.observed = None
         self.stop_queued = None  # (slot run name, monotonic time) of the last cancellation stop
+        self.reset_pending = False  # reset-failed still owed for a cancellation stop that timed out
         self.identity_verified = False
         self.deadline_logged = False
         self.trust = trust
         # In memory only: after a restart the delivered files are withdrawn (main) and the run is re-resolved.
         self.verdict = None  # {"name", "state": pending|delivered|untrusted, "since": pickup first seen}
         self.repository_verified = False
+        self.repository_after = 0
 
     def tick(self):
         idle = True
@@ -724,17 +769,28 @@ class Dispatcher:
             raise SlotError("VM state changed during reconciliation; waiting before slot cleanup")
         self.files.scrub()
         self.verdict = None
-        if result != "success":
-            # A cancelled slot whose guest was still booting ignores the ACPI powerdown and ends
-            # failed/timeout once TimeoutStopSec escalates. That's expected. Clear it after the scrub,
-            # so a deploy's switch-to-configuration doesn't report a failed unit. Not fatal: retried
-            # on the next idle pass while Result stays non-success.
-            try:
-                self.system.reset_failed()
-            except SlotError as error:
-                log(error)
-            else:
-                log(f"reset {VM} after it ended with result {result}")
+        if result == "success":
+            self.reset_pending = False
+        else:
+            if active is not None and active["phase"] == "start":
+                # First idle pass for this slot run. Only the expected outcome of OUR cancellation stop
+                # is cleared: a guest cancelled mid-boot ignores the ACPI powerdown and ends failed/timeout
+                # once TimeoutStopSec escalates. Anything else (preflight refusals, signals, OOM,
+                # RuntimeMaxSec), and anything after a dispatcher restart (stop_queued is in memory only),
+                # stays failed for inspection and alerting.
+                stopped = self.stop_queued
+                self.reset_pending = result == "timeout" and stopped is not None and stopped[0] == active["name"]
+                if not self.reset_pending:
+                    log(f"slot ended {result}; left failed for inspection")
+            if self.reset_pending:
+                # Not fatal: retried on the next idle pass until Result is success again.
+                try:
+                    self.system.reset_failed()
+                except SlotError as error:
+                    log(error)
+                else:
+                    self.reset_pending = False
+                    log(f"reset {VM} after its cancellation stop timed out")
         if active is None or active["phase"] == "cleanup":
             return True
         if active["phase"] == "intent":
@@ -753,6 +809,14 @@ class Dispatcher:
         if not self.identity_verified:
             log("Forgejo PAT identity verified as manjo")
             self.identity_verified = True
+        if self.trust is not None and not self.repository_verified and self.monotonic() >= self.repository_after:
+            # Up front, so a PAT without read:repository shows before the pause is lifted. Not fatal:
+            # untrusted dispatch goes on, and every resolution still requires the verification.
+            try:
+                self._verify_repository(owner)
+            except ApiError as error:
+                self.repository_after = self.monotonic() + INVENTORY_POLL
+                log(f"cannot verify the trusted-job repository: {error}")
         if data["owner_id"] is None:
             if self.monotonic() < self.inventory_after:
                 return
@@ -857,11 +921,7 @@ class Dispatcher:
                     raise ApiError("run changed before delivery")
                 reason = trusted_run(rerun, self.repo_id, owner)
         except ApiError as error:
-            if self.monotonic() - verdict["since"] >= TRUST_DEADLINE:
-                verdict["state"] = "untrusted"
-                log(f"untrusted: trust lookup gave up after {TRUST_DEADLINE // 60} min ({error}); CI upload credentials withheld")
-            else:
-                log(f"trust lookup pending: {error}")
+            self._defer(verdict, f"trust lookup pending: {error}", error)
             return
         if reason is not None:
             verdict["state"] = "untrusted"
@@ -872,11 +932,27 @@ class Dispatcher:
             verdict["state"] = "untrusted"
             log("untrusted: trusted-ci-signing-key or trusted-ncps-netrc credential missing or malformed; withheld")
             return
-        if self.system.idle(VM):
-            return  # The next tick reconciles the stopped slot; never write into a directory being scrubbed.
-        self.files.deliver(secrets)
+        try:
+            if self.system.idle(VM):
+                return  # The next tick reconciles the stopped slot; never write into a directory being scrubbed.
+            self.files.deliver(secrets)
+        except SlotError as error:
+            self._defer(verdict, f"delivery pending: {error}", error)
+            return
         verdict["state"] = "delivered"
         log(f"trusted: run #{run['index_in_repo']} ({run['trigger_event']}); delivered CI upload credentials")
+
+    def _defer(self, verdict, message, error):
+        if self.monotonic() - verdict["since"] >= TRUST_DEADLINE:
+            verdict["state"] = "untrusted"
+            log(f"untrusted: trust lookup gave up after {TRUST_DEADLINE // 60} min ({error}); CI upload credentials withheld")
+        else:
+            log(message)
+
+    def _verify_repository(self, owner):
+        self.api.repository(self.trust.repo, self.repo_id, owner)
+        self.repository_verified = True
+        log(f"repository {LOGIN}/{self.trust.repo} verified as ID {self.repo_id}")
 
     @staticmethod
     def _picked_up(jobs, handle):
@@ -888,14 +964,15 @@ class Dispatcher:
     def _resolve(self, job, owner):
         """(None, run) for a trusted run, else (reason, run). Lookup failures raise ApiError."""
         if not self.repository_verified:
-            self.api.repository(self.trust.repo, self.repo_id, owner)
-            self.repository_verified = True
-            log(f"repository {LOGIN}/{self.trust.repo} verified as ID {self.repo_id}")
+            self._verify_repository(owner)
         task = self.api.task(self.trust.repo, job["task_id"])
         run = self.api.run_by_number(self.trust.repo, task["run_number"])
         if run.get("commit_sha") != task["head_sha"] or run.get("workflow_id") != task["workflow_id"]:
             return "task and run disagree", run
-        return trusted_run(run, self.repo_id, owner), run
+        reason = trusted_run(run, self.repo_id, owner)
+        if reason is None and not self.api.deploy_keys_read_only(self.trust.repo):
+            return "repository has a write deploy key", run
+        return reason, run
 
     def _observe_queue(self, seen, inventory_ok):
         data = self.store.data

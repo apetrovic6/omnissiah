@@ -32,7 +32,8 @@ PAT = "synthetic-dispatcher-pat-not-a-secret"
 TOKEN = "synthetic-ephemeral-runner-token-not-a-secret"
 REPO_NAME = "rust-app-template"
 REPOSITORY = f"/api/v1/repos/manjo/{REPO_NAME}"
-TASKS = REPOSITORY + "/actions/tasks?page={}&limit=50"
+TASKS = REPOSITORY + "/actions/tasks?status=running&page={}&limit=50"
+KEYS = REPOSITORY + "/keys?page={}&limit=50"
 RUN = REPOSITORY + "/actions/runs?run_number={}&limit=50"
 HERMES = 77
 # Synthetic, shaped like the real files (nix-store --generate-binary-cache-key; reliquary-ncps netrc).
@@ -69,7 +70,7 @@ def run(index=7, **fields):
         "id": 500 + index,
         "index_in_repo": index,
         "title": TOKEN,  # Job-controlled text must never reach the logs.
-        "repository": {"id": REPO, "name": REPO_NAME, "owner": {"id": OWNER, "login": "manjo"}},
+        "repository": {"id": REPO, "name": REPO_NAME, "default_branch": "master", "owner": {"id": OWNER, "login": "manjo"}},
         "trigger_user": {"id": OWNER, "login": "manjo"},
         "is_fork_pull_request": False,
         "need_approval": False,
@@ -99,6 +100,7 @@ class FakeForge:
         self.repository = {"id": REPO, "name": REPO_NAME, "owner": {"id": OWNER, "login": "manjo"}}
         self.tasks = []
         self.runs = []
+        self.keys = [{"id": 3, "title": "read-only mirror", "read_only": True}]
 
         class Handler(BaseHTTPRequestHandler):
             def respond(handler):
@@ -193,11 +195,17 @@ class FakeForge:
             return 200, self.repository, {}
         if method == "GET" and path.startswith(REPOSITORY + "/actions/tasks?"):
             query = parse_qs(urlsplit(path).query)
-            if query.get("limit") != ["50"]:
+            if query.get("limit") != ["50"] or query.get("status") != ["running"]:
                 return 400, {"error": "unexpected task query"}, {}
             page = int(query["page"][0])
-            rows = sorted(self.tasks, key=lambda row: -row["id"])
+            rows = sorted((row for row in self.tasks if row["status"] == "running"), key=lambda row: -row["id"])
             return 200, {"total_count": len(rows), "workflow_runs": rows[(page - 1) * 50 : page * 50]}, {}
+        if method == "GET" and path.startswith(REPOSITORY + "/keys?"):
+            query = parse_qs(urlsplit(path).query)
+            if query.get("limit") != ["50"]:
+                return 400, {"error": "unexpected key query"}, {}
+            page = int(query["page"][0])
+            return 200, self.keys[(page - 1) * 50 : page * 50], {"X-Total-Count": str(len(self.keys))}
         if method == "GET" and path.startswith(REPOSITORY + "/actions/runs?"):
             query = parse_qs(urlsplit(path).query)
             if query.get("limit") != ["50"] or "status" in query:
@@ -498,7 +506,8 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(
             [("systemctl", "--system", "--no-pager", "reset-failed", VM)], self.system.mutations("reset-failed")
         )
-        self.assertIn(f"reset {VM} after it ended with result timeout", self.logs.getvalue())
+        self.assertIn(f"reset {VM} after its cancellation stop timed out", self.logs.getvalue())
+        self.assertNotIn("left failed", self.logs.getvalue())
         self.assert_scrubbed()
         self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
         self.assertIsNone(self.state()["active"])
@@ -524,11 +533,20 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(2, len(self.system.mutations("stop")))
         self.assertEqual(2, self.logs.getvalue().count("queued VM stop"))
 
-    def test_reset_failed_error_is_logged_and_retried_without_blocking_cleanup(self):
+    def cancel_until_stop(self):
         self.forge.jobs = [job()]
         self.tick()
+        self.system.set(active="activating", pending="71")
         self.leave_images()
-        self.system.set(active="failed", result="exit-code")
+        self.tick(7)
+        self.forge.jobs = None
+        self.tick(D.BUSY_POLL_FAST)
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+
+    def test_reset_failed_error_is_logged_and_retried_without_blocking_cleanup(self):
+        self.cancel_until_stop()
+        self.system.set(active="failed", result="timeout")
         self.system.reset_fails = 1
         self.tick(7)
         self.assert_scrubbed()
@@ -536,7 +554,35 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
         self.tick(7)
         self.assertEqual(2, len(self.system.mutations("reset-failed")))
-        self.assertIn(f"reset {VM} after it ended with result exit-code", self.logs.getvalue())
+        self.assertIn(f"reset {VM} after its cancellation stop timed out", self.logs.getvalue())
+        self.tick(7)
+        self.assertEqual(2, len(self.system.mutations("reset-failed")))
+
+    def test_failures_other_than_our_stop_timing_out_are_left_failed(self):
+        for result, cancelled in (("exit-code", False), ("timeout", False), ("signal", True), ("exit-code", True)):
+            with self.subTest(result=result, cancelled=cancelled):
+                self.setUp()
+                if cancelled:
+                    self.cancel_until_stop()
+                else:
+                    self.forge.jobs = [job()]
+                    self.tick()
+                    self.leave_images()
+                self.system.set(active="failed", result=result)
+                for _ in range(3):
+                    self.tick(7)
+                self.assert_scrubbed()
+                self.assertEqual([], self.system.mutations("reset-failed"))
+                self.assertEqual(1, self.logs.getvalue().count(f"slot ended {result}; left failed for inspection"))
+                self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
+
+    def test_timeout_after_a_dispatcher_restart_is_left_failed(self):
+        self.cancel_until_stop()
+        self.restart()  # stop_queued is in memory only: the restarted dispatcher can't vouch for the timeout.
+        self.system.set(active="failed", result="timeout")
+        self.tick(7)
+        self.assertEqual([], self.system.mutations("reset-failed"))
+        self.assertIn("slot ended timeout; left failed for inspection", self.logs.getvalue())
 
     def test_clean_exit_is_not_reset(self):
         self.forge.jobs = [job()]
@@ -1272,20 +1318,21 @@ class TrustedJobTests(unittest.TestCase):
         self.assertEqual(0o700, stat.S_IMODE(self.trust_dir.stat().st_mode))
         self.assertEqual({"runner-uuid", "runner-token", "job-handle"}, {p.name for p in self.credential_dir.iterdir()})
         polls = self.polls()
-        self.tick(D.POLL)  # Not picked up yet: fast polls, no repository lookups.
+        self.tick(D.POLL)  # Not picked up yet: fast polls; only the up-front repository check so far.
         self.assertEqual(polls + 1, self.polls())
-        self.assertEqual([], self.lookups())
+        self.assertEqual([REPOSITORY], self.lookups())
+        self.assertIn("repository manjo/rust-app-template verified as ID 17", self.logs.getvalue())
         polls = self.forge.paths("GET").count(JOBS)
         self.pick_up()
         self.assertEqual({"ncps-netrc": NETRC, "ci-signing-key": SIGNING_KEY}, self.delivered())
         for path in self.trust_dir.iterdir():
             info = path.stat()
             self.assertEqual((0o400, os.getuid()), (stat.S_IMODE(info.st_mode), info.st_uid))
-        self.assertEqual([REPOSITORY, TASKS.format(1), RUN.format(7), RUN.format(7)], self.lookups())
+        self.assertEqual([REPOSITORY, TASKS.format(1), RUN.format(7), KEYS.format(1), RUN.format(7)], self.lookups())
         self.assertEqual(polls + 2, self.forge.paths("GET").count(JOBS))  # The poll plus the pre-delivery recheck.
         self.assertIn("trusted: run #7 (push); delivered CI upload credentials", self.logs.getvalue())
         self.assert_settled_cadence()
-        self.assertEqual(4, len(self.lookups()))
+        self.assertEqual(5, len(self.lookups()))
         self.assertEqual([], self.system.mutations("stop"))
         self.system.set()
         self.tick(D.POLL)
@@ -1296,7 +1343,7 @@ class TrustedJobTests(unittest.TestCase):
         for fields in (
             {"trigger_event": "schedule", "ScheduleID": 3, "trigger_user": {"id": D.ACTIONS_USER}},
             {"event": "schedule", "trigger_event": "schedule", "ScheduleID": 3, "trigger_user": {"id": -2}},
-            {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "prettyref": "release"},
+            {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "prettyref": "master"},
         ):
             with self.subTest(fields=fields):
                 self.build()
@@ -1316,13 +1363,22 @@ class TrustedJobTests(unittest.TestCase):
             ("event is not push", {"event": "pull_request", "trigger_event": "pull_request"}),
             ("event is not push", {"event": "pull_request", "trigger_event": "pull_request_target"}),
             ("event is not push", {"event": "issue_comment", "trigger_event": "issue_comment"}),
-            ("dispatch on a pull request ref", {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "prettyref": "#12"}),
+            *(
+                ("dispatch not on the default branch", {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "prettyref": ref})
+                for ref in ("pull/5/head", "#12", "0123456789abcdef0123456789abcdef01234567", "v1.0", "feature", "Master")
+            ),
+            ("push not on the default branch", {"prettyref": "feature"}),
+            ("push not on the default branch", {"prettyref": "v1.0"}),
+            ("schedule not on the default branch", {"trigger_event": "schedule", "ScheduleID": 4, "trigger_user": {"id": -2}, "prettyref": "old"}),
+            ("invalid run metadata", {"repository": {"id": REPO, "default_branch": "", "owner": {"id": OWNER, "login": "manjo"}}}),
+            ("invalid run metadata", {"repository": {"id": REPO, "default_branch": None, "owner": {"id": OWNER, "login": "manjo"}}}),
+            ("invalid run metadata", {"prettyref": ""}),
             ("dispatch not by manjo", {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "trigger_user": {"id": HERMES}}),
             ("push run carries a schedule", {"ScheduleID": 4}),
             ("schedule run without a schedule", {"trigger_event": "schedule", "trigger_user": {"id": -2}}),
             ("schedule not triggered by forgejo-actions", {"trigger_event": "schedule", "ScheduleID": 4}),
-            ("repository mismatch", {"repository": {"id": REPO + 1, "owner": {"id": OWNER, "login": "manjo"}}}),
-            ("repository mismatch", {"repository": {"id": REPO, "owner": {"id": OWNER, "login": "hermes"}}}),
+            ("repository mismatch", {"repository": {"id": REPO + 1, "default_branch": "master", "owner": {"id": OWNER, "login": "manjo"}}}),
+            ("repository mismatch", {"repository": {"id": REPO, "default_branch": "master", "owner": {"id": OWNER, "login": "hermes"}}}),
             ("invalid run metadata", {"is_fork_pull_request": None}),
             ("invalid run metadata", {"ScheduleID": "0"}),
             ("invalid run metadata", {"trigger_user": None}),
@@ -1363,17 +1419,22 @@ class TrustedJobTests(unittest.TestCase):
             (RUN.format(7), 200, {"total_count": 2, "workflow_runs": [run(), run()]}),
             (RUN.format(7), 200, {"total_count": 1, "workflow_runs": [run(8)]}),
             (RUN.format(7), 404, None),
+            (KEYS.format(1), 403, None),
+            (KEYS.format(1), 200, [{"id": 3, "read_only": True}]),  # No X-Total-Count.
+            (KEYS.format(1), 200, {"keys": []}),
         ):
             with self.subTest(endpoint=endpoint, status=status):
                 self.build()
-                self.boot()
                 for _ in range(200):
                     self.forge.reply_once("GET", endpoint, status, body)
+                self.boot()
                 self.pick_up()
                 self.assertEqual({}, self.delivered())
                 self.assertIn("trust lookup pending", self.logs.getvalue())
                 if status == 403:
                     self.assertIn("read:repository", self.logs.getvalue())
+                if endpoint == REPOSITORY:
+                    self.assertIn("cannot verify the trusted-job repository", self.logs.getvalue())
                 polls = self.polls()
                 self.tick(D.POLL)  # Pending: keep polling fast.
                 self.assertEqual(polls + 1, self.polls())
@@ -1444,7 +1505,7 @@ class TrustedJobTests(unittest.TestCase):
         self.system.set()
         self.tick(D.POLL)
         self.assertFalse(self.trust_dir.exists())
-        self.assertEqual([], self.lookups())
+        self.assertEqual([REPOSITORY], self.lookups())
 
     def test_bad_credential_sources_withhold(self):
         for name, value in (
@@ -1503,11 +1564,64 @@ class TrustedJobTests(unittest.TestCase):
 
     def test_stopped_slot_gets_nothing_even_if_trusted(self):
         self.boot()
-        self.system.on_show = lambda unit: self.system.set() if self.lookups() else None
+        self.system.on_show = lambda unit: self.system.set() if TASKS.format(1) in self.lookups() else None
         self.pick_up()
         self.assertEqual({}, self.delivered())
         self.tick(D.POLL)
         self.assertIsNone(self.delivered())  # Scrubbed by the local pass, never written.
+
+    def test_write_deploy_keys_disable_trust(self):
+        for keys in (
+            [{"id": 3, "read_only": False}],
+            [{"id": 3, "read_only": True}, {"id": 4}],
+            [{"id": 3, "read_only": True}, {"id": 4, "read_only": "true"}],
+            [{"id": n, "read_only": True} for n in range(1, 60)] + [{"id": 99, "read_only": False}],
+        ):
+            with self.subTest(keys=len(keys)):
+                self.build()
+                self.forge.keys = keys
+                self.boot()
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertIn("untrusted: run #7 (repository has a write deploy key)", self.logs.getvalue())
+
+    def test_read_only_deploy_keys_across_pages_keep_trust(self):
+        for keys in ([], [{"id": n, "read_only": True} for n in range(1, 61)]):
+            with self.subTest(keys=len(keys)):
+                self.build()
+                self.forge.keys = keys
+                self.boot()
+                self.pick_up()
+                self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.assertIn(KEYS.format(2), self.lookups())
+
+    def test_deploy_key_list_changing_during_pagination_is_not_trusted_yet(self):
+        self.forge.keys = [{"id": n, "read_only": True} for n in range(1, 61)]
+        self.boot()
+        self.forge.reply_once("GET", KEYS.format(2), 200, [{"id": 60, "read_only": True}], **{"X-Total-Count": "61"})
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.assertIn("list changed during pagination", self.logs.getvalue())
+
+    def test_only_running_tasks_are_searched(self):
+        self.forge.tasks = [task(1000 + n, 900 + n, status="success") for n in range(80)] + [task()]
+        self.boot()
+        self.pick_up()
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.assertNotIn(TASKS.format(2), self.lookups())
+
+    def test_delivery_errors_give_up_at_the_deadline(self):
+        self.boot()
+        self.trust_dir.chmod(0o755)
+        self.pick_up()
+        self.assertIn("delivery pending: trust directory has unexpected ownership or mode", self.logs.getvalue())
+        self.tick(D.TRUST_DEADLINE)
+        self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
+        lookups = len(self.lookups())
+        self.tick(D.POLL)
+        self.tick(D.BUSY_POLL)
+        self.assertEqual(lookups, len(self.lookups()))
+        self.assertEqual({}, self.delivered())
 
     def test_gate_off_never_looks_up_or_delivers(self):
         self.build(trusted=False)
