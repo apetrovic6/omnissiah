@@ -231,6 +231,8 @@ class FakeSystemctl:
         self.start_mode = "queued"
         self.on_show = None
         self.on_start = None
+        self.on_reset = None
+        self.reset_fails = 0
 
     def set(self, unit=VM, *, active="inactive", pending="", result="success", loaded="loaded"):
         self.states[unit] = f"LoadState={loaded}\nActiveState={active}\nJob={pending}\nResult={result}\n".encode()
@@ -246,6 +248,15 @@ class FakeSystemctl:
                 self.on_show(unit)
             data = self.states.get(unit, b"LoadState=loaded\nActiveState=inactive\nJob=\nResult=success\n")
             return subprocess.CompletedProcess(argv, 0, stdout=data)
+        if "reset-failed" in argv:
+            assert argv == ("systemctl", "--system", "--no-pager", "reset-failed", VM), argv
+            if self.on_reset:
+                self.on_reset()
+            if self.reset_fails:
+                self.reset_fails -= 1
+                raise subprocess.CalledProcessError(1, argv)
+            self.set()
+            return subprocess.CompletedProcess(argv, 0, stdout=b"")
         assert "--no-block" in argv
         if "start" in argv:
             assert argv[-2:] == ("start", VM) and "--job-mode=fail" in argv
@@ -458,6 +469,85 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
         self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
         self.assertEqual("other", self.state()["active"]["handle"])
+
+    def test_cancel_during_boot_queues_one_stop_then_resets_the_timeout_failure(self):
+        # Live 2026-11-25: cancelled before pickup, the booting guest ignored the ACPI powerdown, the
+        # stop was logged on every poll while deactivating, and the unit ended failed/timeout.
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="activating", pending="71")
+        self.leave_images()
+        self.tick(7)
+        self.forge.jobs = None
+        self.tick(D.BUSY_POLL_FAST)
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        for _ in range(3):  # Deactivating for TimeoutStopSec: no second stop, no second log.
+            self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.assertEqual(1, self.logs.getvalue().count("queued VM stop"))
+        self.assertEqual([], self.system.mutations("reset-failed"))
+
+        scrubbed_first = []
+        self.system.on_reset = lambda: scrubbed_first.append(
+            not (self.vm_dir / "var.img").exists() and not self.credential_dir.exists()
+        )
+        self.system.set(active="failed", result="timeout")
+        self.tick(7)
+        self.assertEqual([True], scrubbed_first)
+        self.assertEqual(
+            [("systemctl", "--system", "--no-pager", "reset-failed", VM)], self.system.mutations("reset-failed")
+        )
+        self.assertIn(f"reset {VM} after it ended with result timeout", self.logs.getvalue())
+        self.assert_scrubbed()
+        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
+        self.assertIsNone(self.state()["active"])
+        self.tick(7)
+        self.assertEqual(1, len(self.system.mutations("reset-failed")))  # Result is success again.
+
+    def test_stop_is_requeued_only_if_the_slot_is_still_busy_after_the_retry_window(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="active")
+        self.tick(7)
+        self.forge.jobs = None
+        self.tick(D.BUSY_POLL_FAST)
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.system.set(active="active")  # The stop job was lost; the slot is still running.
+        elapsed = 0
+        while elapsed + D.BUSY_POLL_FAST < D.STOP_RETRY:
+            self.tick(D.BUSY_POLL_FAST)
+            elapsed += D.BUSY_POLL_FAST
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.tick(D.BUSY_POLL_FAST)
+        self.assertEqual(2, len(self.system.mutations("stop")))
+        self.assertEqual(2, self.logs.getvalue().count("queued VM stop"))
+
+    def test_reset_failed_error_is_logged_and_retried_without_blocking_cleanup(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        self.leave_images()
+        self.system.set(active="failed", result="exit-code")
+        self.system.reset_fails = 1
+        self.tick(7)
+        self.assert_scrubbed()
+        self.assertIn("systemctl reset-failed failed or timed out", self.logs.getvalue())
+        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
+        self.tick(7)
+        self.assertEqual(2, len(self.system.mutations("reset-failed")))
+        self.assertIn(f"reset {VM} after it ended with result exit-code", self.logs.getvalue())
+
+    def test_clean_exit_is_not_reset(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="active")
+        self.tick(7)
+        self.system.set()
+        self.tick(7)
+        self.tick(7)
+        self.assertEqual([], self.system.mutations("reset-failed"))
+        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
 
     def test_running_exact_handle_resets_absence_streak(self):
         first = job()

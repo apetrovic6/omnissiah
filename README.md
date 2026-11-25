@@ -1123,7 +1123,13 @@ reviewed pilot job, wait for registration and the startup delay, then
 cancel in the UI during the delay, before any task is assigned or steps
 run. The dispatcher stops the slot after two consecutive successful job
 polls no longer list its handle. It polls every 15 seconds during the
-first five minutes, then every minute. Verify local and remote cleanup,
+first five minutes, then every minute. It queues (and logs) that stop once
+per slot run, again only if the slot is still busy 90 seconds later. A guest
+cancelled mid-boot ignores the ACPI powerdown. The unit then ends
+`failed`/`timeout` after its 30-second `TimeoutStopSec`. That is expected:
+after scrubbing, the dispatcher runs `systemctl reset-failed` on it and logs
+`reset microvm@ryza-eph-1.service after it ended with result timeout`, so a
+later deploy doesn't report a failed unit. Verify local and remote cleanup,
 remove only the test drop-in
 (`/run/systemd/system/microvm@ryza-eph-1.service.d/pilot-cancellation.conf`),
 and run `sudo systemctl daemon-reload` again. Also test cancelling with a

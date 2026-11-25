@@ -42,6 +42,7 @@ POLL = 7
 BUSY_POLL_FAST = 15
 BUSY_FAST_WINDOW = 5 * 60
 BUSY_POLL = 60
+STOP_RETRY = 90  # Longer than the slot's TimeoutStopSec (30 s) plus SIGKILL.
 INVENTORY_POLL = 5 * 60
 INTENT_EXPIRY = 24 * 60 * 60
 REFUSAL_LIMIT = 3
@@ -412,6 +413,9 @@ class Systemctl:
     def stop(self):
         self._call("stop", VM, options=("--no-block",))
 
+    def reset_failed(self):
+        self._call("reset-failed", VM)
+
     def stop_support(self, units):
         self._call("stop", *units, options=("--no-block",))
 
@@ -656,6 +660,7 @@ class Dispatcher:
         self.inventory_after = self.busy_after = 0
         self.busy_misses = 0
         self.observed = None
+        self.stop_queued = None  # (slot run name, monotonic time) of the last cancellation stop
         self.identity_verified = False
         self.deadline_logged = False
         self.trust = trust
@@ -719,6 +724,17 @@ class Dispatcher:
             raise SlotError("VM state changed during reconciliation; waiting before slot cleanup")
         self.files.scrub()
         self.verdict = None
+        if result != "success":
+            # A cancelled slot whose guest was still booting ignores the ACPI powerdown and ends
+            # failed/timeout once TimeoutStopSec escalates. That's expected. Clear it after the scrub,
+            # so a deploy's switch-to-configuration doesn't report a failed unit. Not fatal: retried
+            # on the next idle pass while Result stays non-success.
+            try:
+                self.system.reset_failed()
+            except SlotError as error:
+                log(error)
+            else:
+                log(f"reset {VM} after it ended with result {result}")
         if active is None or active["phase"] == "cleanup":
             return True
         if active["phase"] == "intent":
@@ -790,8 +806,15 @@ class Dispatcher:
             self.busy_misses = 0
         else:
             self.busy_misses += 1
+            # Once per slot run: the unit stays deactivating for up to TimeoutStopSec, and every
+            # further poll would queue (and log) the same stop. Re-queue only if the slot is somehow
+            # still busy after STOP_RETRY, which outlasts the 30 s stop timeout and its SIGKILL.
+            stopped = self.stop_queued
+            if stopped is not None and stopped[0] == active["name"] and self.monotonic() - stopped[1] < STOP_RETRY:
+                return
             if self.busy_misses >= 2 and not self.system.idle(VM):
                 self.system.stop()
+                self.stop_queued = (active["name"], self.monotonic())
                 log(f"queued VM stop: runner {active['runner']['id']} target absent from consecutive job polls")
 
     def _resolving(self):
