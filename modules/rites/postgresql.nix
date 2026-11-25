@@ -288,24 +288,26 @@
                         u.extensions
                     )
                     u.databases);
-                  roCmds = mapAttrsToList (db: ro: ''
-                    echo "Granting '${userName}' read-only access to '${db}' (tables of '${ro.owner}')..."
-                    # A failing grant must not stop the users after this one: log it
-                    # loudly, carry on, and fail the unit at the end (see `failed`).
-                    {
-                      ${psql} -d postgres -v ON_ERROR_STOP=1 \
-                        -c "GRANT CONNECT ON DATABASE \"${db}\" TO \"${userName}\";" \
-                        -c "${
-                      if ro.revokePublicTemp
-                      then "REVOKE TEMP ON DATABASE \\\"${db}\\\" FROM PUBLIC;"
-                      else "SELECT 1;"
-                    }" > /dev/null &&
-                      ${psql} -d "${db}" -v ON_ERROR_STOP=1 \
-                        -c "GRANT USAGE ON SCHEMA public TO \"${userName}\";" \
-                        -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${userName}\";" \
-                        -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"${ro.owner}\" IN SCHEMA public GRANT SELECT ON TABLES TO \"${userName}\";"
-                    } || { echo "ERROR: read-only grant for '${userName}' on '${db}' FAILED" >&2; failed=1; }
-                  '') u.readOnlyAccess;
+                  roCmds =
+                    mapAttrsToList (db: ro: ''
+                      echo "Granting '${userName}' read-only access to '${db}' (tables of '${ro.owner}')..."
+                      # A failing grant must not stop the users after this one: log it
+                      # loudly, carry on, and fail the unit at the end (see `failed`).
+                      {
+                        ${psql} -d postgres -v ON_ERROR_STOP=1 \
+                          -c "GRANT CONNECT ON DATABASE \"${db}\" TO \"${userName}\";" \
+                          -c "${
+                        if ro.revokePublicTemp
+                        then "REVOKE TEMP ON DATABASE \\\"${db}\\\" FROM PUBLIC;"
+                        else "SELECT 1;"
+                      }" > /dev/null &&
+                        ${psql} -d "${db}" -v ON_ERROR_STOP=1 \
+                          -c "GRANT USAGE ON SCHEMA public TO \"${userName}\";" \
+                          -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"${userName}\";" \
+                          -c "ALTER DEFAULT PRIVILEGES FOR ROLE \"${ro.owner}\" IN SCHEMA public GRANT SELECT ON TABLES TO \"${userName}\";"
+                      } || { echo "ERROR: read-only grant for '${userName}' on '${db}' FAILED" >&2; failed=1; }
+                    '')
+                    u.readOnlyAccess;
                 in ''
                   echo "Setting password for user '${userName}'..."
                   PASSWORD=$(cat "${passwordFile}")

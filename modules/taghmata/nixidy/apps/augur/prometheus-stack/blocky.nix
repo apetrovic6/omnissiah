@@ -158,17 +158,18 @@
           }
         ])
         (ruleSet "blocky.health" ([
-          {
-            alert = "BlockyBlockingDisabled";
-            expr = ''blocky_blocking_enabled{${sel}} == 0'';
-            "for" = "30m";
-            labels = warn;
-            annotations = {
-              summary = "Blocking is disabled on Blocky {{ $labels.host }}";
-              description = "blocky_blocking_enabled has been 0 for 30 minutes: ads and newly registered domains are being answered normally on {{ $labels.host }}. Someone called /api/blocking/disable, which has a duration and re-enables by itself, so a long disable means it was given none or was re-sent. Re-enable on the host: `curl -X GET http://127.0.0.1:4000/api/blocking/enable` (the API listens on localhost only), or restart blocky.service.";
-            };
-          }
-        ] ++ denylistRules))
+            {
+              alert = "BlockyBlockingDisabled";
+              expr = ''blocky_blocking_enabled{${sel}} == 0'';
+              "for" = "30m";
+              labels = warn;
+              annotations = {
+                summary = "Blocking is disabled on Blocky {{ $labels.host }}";
+                description = "blocky_blocking_enabled has been 0 for 30 minutes: ads and newly registered domains are being answered normally on {{ $labels.host }}. Someone called /api/blocking/disable, which has a duration and re-enables by itself, so a long disable means it was given none or was re-sent. Re-enable on the host: `curl -X GET http://127.0.0.1:4000/api/blocking/enable` (the API listens on localhost only), or restart blocky.service.";
+              };
+            }
+          ]
+          ++ denylistRules))
         (ruleSet "blocky.units" [
           {
             # Per unit, so the alert says which. The node exporter's systemd

@@ -1,9 +1,6 @@
 # Harbor: the pull-through caches for Docker Hub and ghcr.io. Product projects
 # and their CI robots are declared by ../fabricata.nix.
-{
-  ref,
-  ...
-}: let
+{ref, ...}: let
   cache = registry: {
     name = "${registry}_cache";
     registry_id = ref.harbor_registry.${registry}.registry_id;

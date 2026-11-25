@@ -25,11 +25,11 @@ let
       # Required for Git over HTTPS but not used to authenticate (GitHub PAT docs).
       gitUsername = "x-access-token";
       # Jira project keys (e.g. "DEV") whose tickets belong to this company.
-      jiraProjects = [ "INF" ];
+      jiraProjects = ["INF"];
       repos = {
-        nautili = { path = "devzero-inc/nautili"; };
-        nautili-harness-flake = { path = "devzero-inc/nautili-harness-flake"; };
-        nautili-marketing-site= { path = "devzero-inc/nautili-marketing-site"; };
+        nautili = {path = "devzero-inc/nautili";};
+        nautili-harness-flake = {path = "devzero-inc/nautili-harness-flake";};
+        nautili-marketing-site = {path = "devzero-inc/nautili-marketing-site";};
         # api = { path = "devzero-inc/api"; };
       };
     };
@@ -46,7 +46,7 @@ let
       jiraProjects = [];
       repos = {
         # backend = { path = "codilas/platform/backend"; };
-        natl = { path = "natl/monorepo"; };
+        natl = {path = "natl/monorepo";};
       };
     };
   };
