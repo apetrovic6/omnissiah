@@ -119,6 +119,9 @@ class FakeForge:
             "owner_id": OWNER,
             "repo_id": 0,
             "ephemeral": True,
+            "status": "offline",
+            "version": "",
+            "labels": None,
         } | fields
         return runner_id
 
@@ -147,6 +150,10 @@ class FakeForge:
                 return 400, {"error": "unexpected registration payload"}, {}
             runner_id = self.add_runner(payload["name"])
             return 201, {"id": runner_id, "uuid": uuid_for(runner_id), "token": TOKEN}, {}
+        if method == "GET" and path.startswith(RUNNERS + "/"):
+            runner_id = int(path.rsplit("/", 1)[1])
+            runner = self.runners.get(runner_id)
+            return (200 if runner is not None else 404), runner, {}
         if method == "DELETE" and path.startswith(RUNNERS + "/"):
             runner_id = int(path.rsplit("/", 1)[1])
             return (204 if self.runners.pop(runner_id, None) is not None else 404), None, {}
@@ -207,7 +214,7 @@ class FakeSystemctl:
         else:
             assert "stop" in argv
             units = argv[argv.index("stop") + 1 :]
-            assert all(unit in D.SUPPORT for unit in units) and VM not in units
+            assert units == (VM,) or all(unit in D.SUPPORT for unit in units)
             for unit in units:
                 self.set(unit, active="deactivating", pending="72")
         return subprocess.CompletedProcess(argv, 0, stdout=b"")
@@ -227,6 +234,7 @@ class DispatcherTests(unittest.TestCase):
         for directory in (self.state_dir, self.vm_dir, self.credential_dir.parent):
             directory.mkdir(mode=0o700)
         self.pat_file = root / "forgejo-pat"
+        self.pause = root / "pause"
         self.pat_file.write_text(PAT + "\n")
         self.forge = FakeForge()
         self.addCleanup(self.forge.close)
@@ -252,6 +260,7 @@ class DispatcherTests(unittest.TestCase):
             D.Store(self.state_dir),
             self.clock.monotonic,
             self.clock.wall,
+            pause=self.pause,
         )
 
     def tick(self, advance=0):
@@ -333,10 +342,11 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([], self.forge.paths("POST"))
         self.assertEqual([], self.system.mutations())
 
-    def test_cancelled_before_pickup_preserves_vm_until_systemd_timeout(self):
+    def test_declared_runner_without_assignment_data_keeps_systemd_timeout(self):
         self.forge.jobs = [job()]
         self.tick()
         self.system.set(active="active")
+        self.forge.runners[100].update(status="idle", version="13.2.1", labels=["nix-eph"])
         self.forge.jobs = None
         self.leave_images()
         self.restart()
@@ -354,6 +364,90 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
         self.assertIn("VM idle (timeout)", self.logs.getvalue())
         self.assertIsNone(self.state()["active"])
+
+    def test_cancelled_before_declare_stops_vm_at_busy_poll_then_cleans(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="activating", pending="71")
+        self.leave_images()
+        self.tick(7)
+        self.forge.jobs = None
+        calls = self.forge.paths()
+        self.tick(D.BUSY_POLL - 1)
+        self.assertEqual(calls, self.forge.paths())
+        self.tick(1)
+        self.assertEqual(calls + [USER, JOBS, RUNNERS + "/100"], self.forge.paths())
+        [stop] = self.system.mutations("stop")
+        self.assertEqual(("stop", VM), stop[-2:])
+        self.assertIn("vanished before runner 100 declared", self.logs.getvalue())
+        self.tick(7)
+        self.assertTrue((self.vm_dir / "var.img").exists())
+        self.assertTrue(self.credential_dir.exists())
+        self.assertEqual([], self.forge.paths("DELETE"))
+        self.system.set()
+        self.tick(7)
+        self.assert_scrubbed()
+        self.assertIsNone(self.state()["active"])
+        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
+
+    def test_missing_job_and_unusable_runner_detail_do_not_stop_vm(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="active")
+        self.forge.jobs = None
+        endpoint = RUNNERS + "/100"
+        undeclared = self.forge.runners.pop(100)
+        # A fast job may finish and its runner may disappear between observations.
+        for status, fields in (
+            (404, {}),
+            (503, {}),
+            (200, {"status": "active"}),
+            (200, {"status": "offline", "labels": ["nix-eph"]}),
+            (200, {"status": "idle", "version": "13.2.1"}),
+            (200, {"uuid": uuid_for(999)}),
+            (200, {"owner_id": OWNER + 1}),
+            (200, {"status": None}),
+            (200, {"version": None}),
+        ):
+            with self.subTest(status=status, fields=fields):
+                self.forge.reply_once("GET", endpoint, status, undeclared | fields)
+                self.tick(D.BUSY_POLL)
+                self.assertEqual(endpoint, self.forge.paths()[-1])
+                self.assertEqual([], self.system.mutations("stop"))
+                self.assertEqual([], self.forge.paths("DELETE"))
+        del undeclared["labels"]
+        self.forge.reply_once("GET", endpoint, 200, undeclared)
+        self.tick(D.BUSY_POLL)
+        self.assertEqual([], self.system.mutations("stop"))
+
+    def test_running_evidence_survives_restart_and_prevents_cancellation(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="active")
+        self.forge.jobs = [job(status="running", task_id=71)]
+        self.tick(7)
+        self.assertTrue(self.state()["active"]["assigned"])
+        self.forge.jobs = None
+        self.restart()
+        self.tick(7)
+        self.assertEqual([USER, JOBS], self.forge.paths()[-2:])
+        self.assertEqual([], self.system.mutations("stop"))
+        self.assertEqual([], self.forge.paths("DELETE"))
+
+    def test_unavailable_or_malformed_jobs_are_not_cancellation_evidence(self):
+        self.forge.jobs = [job()]
+        self.tick()
+        self.system.set(active="active")
+        self.forge.reply_once("GET", JOBS, 503)
+        self.tick(7)
+        self.forge.jobs = [job(repo_id=None)]
+        self.tick(D.BUSY_POLL)
+        self.assertNotIn(RUNNERS + "/100", self.forge.paths("GET"))
+        self.assertEqual([], self.system.mutations("stop"))
+        self.system.set()
+        self.tick()
+        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
+        self.assert_scrubbed()
 
     def test_uncertain_start_and_pending_jobs_block_cleanup_and_second_start(self):
         self.forge.jobs = [job(), job(2, "other")]
@@ -529,10 +623,10 @@ class DispatcherTests(unittest.TestCase):
 
     def test_late_ambiguous_post_rescans_pages_and_deletes_only_exact_matches(self):
         self.forge.jobs = [job()]
-        self.forge.reply_once("POST", RUNNERS, 500, {"secret_echo": TOKEN})
+        self.forge.reply_once("POST", RUNNERS, 502, {"secret_echo": TOKEN})
         self.tick()
         original = self.state()["active"]
-        self.tick(7)
+        self.tick(D.INVENTORY_POLL)
         self.assertEqual({original["handle"]: {"name": original["name"], "runners": None}}, self.state()["ambiguous"])
         self.assertEqual([RUNNERS], self.forge.paths("POST"))
         self.assertEqual([], self.forge.paths("DELETE"))
@@ -549,7 +643,7 @@ class DispatcherTests(unittest.TestCase):
         self.forge.add_runner(name, repo_id=REPO)
         match2 = self.forge.add_runner(name)
         self.forge.jobs.append(job(2, "different-job"))
-        self.tick(7)
+        self.tick(D.INVENTORY_POLL)
         self.assertEqual([], sink.calls)
         self.assertIn(LIST.format(2), self.forge.paths("GET"))
         self.assertIn(LIST.format(3), self.forge.paths("GET"))
@@ -577,7 +671,7 @@ class DispatcherTests(unittest.TestCase):
         entry = self.state()["active"]
         runner_id = self.forge.add_runner(entry["name"])
         with patch.object(self.dispatcher.api, "delete", side_effect=Crash), self.assertRaises(Crash):
-            self.tick(7)
+            self.tick(D.INVENTORY_POLL)
         self.assertEqual(
             [{"id": runner_id, "uuid": uuid_for(runner_id)}], self.state()["ambiguous"][entry["handle"]]["runners"]
         )
@@ -654,7 +748,152 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([], sink.calls)
         self.assertIn("HTTP 307", self.logs.getvalue())
         self.assertEqual([], self.system.mutations())
+        self.assertIsNone(self.state()["active"])
+        self.assertEqual([job()["handle"]], self.state()["retired"])
+        self.assertEqual({}, self.state()["ambiguous"])
+
+    def test_explicit_post_rejections_retire_each_handle_without_inventory(self):
+        self.forge.jobs = []
+        retired = []
+        for index, status in enumerate((400, 401, 403, 404, 422, 429), start=1):
+            with self.subTest(status=status):
+                queued = job(index, f"rejected-{status}")
+                self.forge.jobs.append(queued)
+                retired.append(queued["handle"])
+                self.forge.reply_once("POST", RUNNERS, status, {"error": TOKEN})
+                self.tick(60)
+                self.assertIsNone(self.state()["active"])
+                self.assertEqual({}, self.state()["ambiguous"])
+                self.assertEqual(retired, self.state()["retired"])
+                self.assertEqual([RUNNERS] * index, self.forge.paths("POST"))
+                self.assertIn(f"register runner: HTTP {status}", self.logs.getvalue())
+        self.restart()
+        self.tick(7)
+        self.assertEqual([RUNNERS] * len(retired), self.forge.paths("POST"))
+        self.assertEqual(1, self.forge.paths("GET").count(LIST.format(1)))
+        self.assertEqual([], self.system.mutations())
+        self.forge.jobs = [job(20, "unrelated")]
+        self.tick(7)
+        self.assertEqual("unrelated", self.state()["active"]["handle"])
+
+    def test_http_request_timeout_is_ambiguous(self):
+        self.forge.jobs = [job()]
+        self.forge.reply_once("POST", RUNNERS, 408, {"error": TOKEN})
+        self.tick()
         self.assertEqual("intent", self.state()["active"]["phase"])
+        self.tick(7)
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.assertIn(job()["handle"], self.state()["ambiguous"])
+        self.assertEqual([], self.state()["retired"])
+
+    def test_inventory_is_throttled_and_never_runs_while_busy(self):
+        original = job()
+        self.forge.jobs = [original, job(2, "other")]
+        self.forge.reply_once("POST", RUNNERS, 502)
+        self.tick()
+        self.tick(7)
+        self.assertEqual("other", self.state()["active"]["handle"])
+        intent = self.state()["ambiguous"][original["handle"]]
+        later = self.forge.add_runner(intent["name"])
+        self.system.set(active="active")
+        self.tick(D.INVENTORY_POLL)
+        self.tick(D.BUSY_POLL)
+        self.assertEqual(1, self.forge.paths("GET").count(LIST.format(1)))
+        self.assertEqual([], self.forge.paths("DELETE"))
+        self.pause.touch()
+        self.system.set()
+        self.tick(7)
+        self.assertEqual([RUNNERS + "/100", RUNNERS + f"/{later}"], self.forge.paths("DELETE"))
+        self.assertEqual(2, self.forge.paths("GET").count(LIST.format(1)))
+        self.assertEqual({}, self.state()["ambiguous"])
+        self.assertIsNone(self.state()["active"])
+        self.assert_scrubbed()
+
+    def test_absent_handle_expiry_is_durable_and_reappearance_resets_it(self):
+        handle = job()["handle"]
+        self.forge.jobs = [job()]
+        self.forge.reply_once("POST", RUNNERS, 502)
+        self.tick()
+        self.forge.jobs = None
+        self.tick(D.INVENTORY_POLL)
+        started = self.state()["ambiguous"][handle]["absent_since"]
+        self.assertEqual(self.clock.wall(), started)
+        self.restart()
+        self.tick(D.INTENT_EXPIRY // 2)
+        self.assertEqual(started, self.state()["ambiguous"][handle]["absent_since"])
+        self.forge.jobs = [job()]
+        self.tick(D.POLL)
+        self.assertNotIn("absent_since", self.state()["ambiguous"][handle])
+        self.forge.jobs = None
+        self.tick(D.POLL)
+        self.assertNotIn("absent_since", self.state()["ambiguous"][handle])
+        self.tick(D.INVENTORY_POLL - 2 * D.POLL)
+        self.assertEqual(self.clock.wall(), self.state()["ambiguous"][handle]["absent_since"])
+        self.restart()
+        self.tick(D.INTENT_EXPIRY - 1)
+        self.assertIn(handle, self.state()["ambiguous"])
+        self.restart()
+        self.tick(1)
+        self.assertEqual({}, self.state()["ambiguous"])
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.assertIn("expired registration intent", self.logs.getvalue())
+
+    def test_expiry_requires_complete_successful_inventories_and_jobs(self):
+        handle = job()["handle"]
+        self.forge.jobs = [job()]
+        self.forge.reply_once("POST", RUNNERS, 502)
+        self.tick()
+        self.forge.jobs = None
+        self.forge.reply_once("GET", LIST.format(1), 502)
+        self.tick(D.INVENTORY_POLL)
+        self.assertNotIn("absent_since", self.state()["ambiguous"][handle])
+        for _ in range(5):
+            self.tick(D.POLL)
+        self.assertEqual(2, self.forge.paths("GET").count(LIST.format(1)))
+        self.assertEqual(0, self.logs.getvalue().count("unresolved registration(s)"))
+        self.tick(D.INVENTORY_POLL - 5 * D.POLL)
+        self.assertEqual(self.clock.wall(), self.state()["ambiguous"][handle]["absent_since"])
+        self.forge.reply_once(
+            "GET", LIST.format(1), 200, [], **{"X-Total-Count": "1", "Link": '<ignored>; rel="next"'}
+        )
+        self.tick(D.INTENT_EXPIRY)
+        self.assertIn(handle, self.state()["ambiguous"])
+        self.forge.reply_once("GET", JOBS, 503)
+        self.tick(D.INVENTORY_POLL)
+        self.assertIn(handle, self.state()["ambiguous"])
+        self.tick(D.POLL)
+        self.assertIn(handle, self.state()["ambiguous"])
+        self.tick(D.INVENTORY_POLL - D.POLL)
+        self.assertEqual({}, self.state()["ambiguous"])
+
+    def test_pause_persists_across_restart_and_does_not_block_known_cleanup(self):
+        self.forge.jobs = [job(), job(2, "other")]
+        self.pause.touch()
+        self.tick()
+        self.tick(7)
+        identity_message = "Forgejo PAT identity verified as manjo"
+        self.assertEqual(1, self.logs.getvalue().count(identity_message))
+        self.assertEqual([], self.forge.paths("POST"))
+        self.pause.unlink()
+        self.tick(7)
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.leave_images()
+        self.pause.touch()
+        self.system.set(active="active")
+        self.tick(7)
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.system.set()
+        self.restart()
+        self.tick(7)
+        self.assertEqual(2, self.logs.getvalue().count(identity_message))
+        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
+        self.assertEqual([RUNNERS], self.forge.paths("POST"))
+        self.assertIsNone(self.state()["active"])
+        self.assert_scrubbed()
+        self.pause.unlink()
+        self.tick(7)
+        self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
+        self.assertEqual("other", self.state()["active"]["handle"])
 
     def test_unknown_systemd_states_and_unowned_vm_fail_closed(self):
         self.forge.jobs = [job()]

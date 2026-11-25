@@ -8,6 +8,7 @@
   ...
 }: let
   inherit (self.lib) mkRevProxyVHost mkDomain;
+  ephemeral = self.nixosConfigurations.ryza.config.services.imperium.forgejoEphemeral.enable;
 in {
   # TODO: Setup services so that they listen on localhost
 
@@ -46,7 +47,13 @@ in {
           not host ${mkDomain "forge"} ncps.${config.noosphere.domain} harbor.${config.noosphere.domain} forge.${config.noosphere.domain}
         }
         respond @blocked 403
-      }
+      ${lib.optionalString ephemeral ''
+        @blockedEphemeral {
+          remote_ip ${self.lib.lan.ryza-eph}
+          not host ${mkDomain "forge"} ncps.${config.noosphere.domain}
+        }
+        respond @blockedEphemeral 403
+      ''}}
     '';
   };
 

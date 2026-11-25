@@ -8,11 +8,16 @@
     cfg = config.services.imperium.forgejoEphemeral;
     generator = "forgejo-ephemeral-ugalabugala";
     dispatch = "forgejo-ephemeral-dispatcher";
-    forge = "https://forge.ugalabugala.org";
+    forgeHost = "forge.${self.lib.lab.domain}";
+    cacheHost = "ncps.noosphere.uk";
+    slotUser = "microvm-eph";
     slot = "ryza-eph-1";
     slice = "forgejo-ephemeral.slice";
     vm = "microvm@${slot}";
-    vmDir = "${config.microvm.stateDir}/${slot}";
+    # Root-only writes to current/booted and the virtiofsd working directory.
+    # QEMU owns only its runtime data, never the parent used by root hooks.
+    controlDir = "${config.microvm.stateDir}/${slot}";
+    vmDir = "${controlDir}/job";
     credParent = "/run/microvm-credentials";
     credDir = "${credParent}/${slot}";
     credIds = ["runner-token" "runner-uuid" "job-handle"];
@@ -24,7 +29,12 @@
     gateway = "10.99.2.1";
     address = "10.99.2.2";
     inherit (self.lib.hosts) cerberus;
-    cacheIP = self.lib.vips.traefik;
+    inherit (self.lib.lan) ryza-eph;
+    persistentPaths =
+      ["-/persist"]
+      ++ lib.concatMap
+      (name: ["-${credParent}/${name}" "-${config.microvm.stateDir}/${name}"])
+      ["ryza-ci-noosphere" "ryza-ci-ugalabugala" "ryza-ci"];
     guard = "forgejo-ephemeral-firewall";
     outChain = "ryza-eph-out";
     inChain = "ryza-eph-in";
@@ -49,12 +59,12 @@
     guardScript = ''
       set -eu -o pipefail
       apply() {
-        local cmd="$1" hook
-        shift
+        local cmd="$1" table="$2" hook
+        shift 2
         local -a hooks=( "$@" ) words
         {
-          printf '*filter\n'
-          if [[ "$action" = start && "$cmd" = iptables ]]; then
+          printf '*%s\n' "$table"
+          if [[ "$action" = start && "$cmd/$table" = iptables/filter ]]; then
             printf ':%s - [0:0]\n' ${outChain} ${inChain}
             cat <<'RULES'
       -F ${outChain}
@@ -65,7 +75,6 @@
       -A ${outChain} -d ${cerberus} -p udp --dport 53 -j RETURN
       -A ${outChain} -d ${cerberus} -p tcp --dport 53 -j RETURN
       -A ${outChain} -d ${cerberus} -p tcp --dport 443 -j RETURN
-      -A ${outChain} -d ${cacheIP} -p tcp --dport 443 -j RETURN
       ${lib.concatMapStringsSep "\n" (net: "-A ${outChain} -d ${net} -j DROP") nonPublic}
       -A ${outChain} -p tcp --dport 443 -j RETURN
       -A ${outChain} -j DROP
@@ -75,14 +84,14 @@
           fi
           for hook in "''${hooks[@]}"; do
             read -r -a words <<< "$hook"
-            if "$cmd" -w -C "''${words[@]}" 2>/dev/null; then
+            if "$cmd" -w -t "$table" -C "''${words[@]}" 2>/dev/null; then
               printf -- '-D %s\n' "$hook"
             fi
             if [[ "$action" = start ]]; then
               printf -- '-I %s\n' "$hook"
             fi
           done
-          if [[ "$action" = stop && "$cmd" = iptables ]]; then
+          if [[ "$action" = stop && "$cmd/$table" = iptables/filter ]]; then
             for chain in ${outChain} ${inChain}; do
               if iptables -w -S "$chain" >/dev/null 2>&1; then
                 printf -- '-F %s\n-X %s\n' "$chain" "$chain"
@@ -94,9 +103,10 @@
       }
       apply_rules() {
         local action="$1"
-        apply ip6tables 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
+        apply iptables nat 'POSTROUTING -s ${address}/32 -o ${uplink} -j SNAT --to-source ${ryza-eph}'
+        apply ip6tables filter 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
           'FORWARD -i ${tap} -j DROP' 'FORWARD -o ${tap} -j DROP'
-        apply iptables 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
+        apply iptables filter 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
           'FORWARD -i ${tap} -j ${outChain}' 'FORWARD -o ${tap} -j ${inChain}'
       }
     '';
@@ -142,6 +152,7 @@
         useNetworkd = true;
         useDHCP = false;
         enableIPv6 = false;
+        hosts.${cerberus} = [forgeHost cacheHost];
       };
       systemd.network.networks."10-uplink" = {
         matchConfig.MACAddress = mac;
@@ -155,9 +166,21 @@
         vcpu = 2;
         mem = 4096;
         balloon = true;
+        virtiofsd.group = slotUser;
+        # The upstream tap-up script hardcodes user microvm. Match its
+        # vnet header and multi-queue flags, but attach this slot's UID.
+        binScripts.tap-up = lib.mkForce ''
+          set -euo pipefail
+          if [ -e /sys/class/net/${tap} ]; then
+            ${lib.getExe' pkgs.iproute2 "ip"} link delete ${tap}
+          fi
+          ${lib.getExe' pkgs.iproute2 "ip"} tuntap add name ${tap} mode tap user ${slotUser} vnet_hdr multi_queue
+          ${lib.getExe' pkgs.iproute2 "ip"} link set ${tap} up
+        '';
         shares = [
           {
             tag = "ro-store";
+            socket = "${controlDir}/${slot}-virtiofs-ro-store.sock";
             source = "/nix/store";
             mountPoint = "/nix/.ro-store";
             proto = "virtiofs";
@@ -189,7 +212,7 @@
       nix.settings = {
         experimental-features = ["nix-command" "flakes"];
         build-dir = "${overlay}/builds";
-        substituters = ["https://ncps.noosphere.uk"];
+        substituters = ["https://${cacheHost}"];
         trusted-public-keys = [(builtins.readFile (self.lib.vars.shared "ncps-signing-key" "ncps-signing-key.pub"))];
         max-jobs = 1;
         cores = 2;
@@ -255,7 +278,7 @@
           handle=$(cat "$CREDENTIALS_DIRECTORY/job-handle")
           test -n "$uuid" && test -n "$handle" && test -s "$CREDENTIALS_DIRECTORY/runner-token"
           exec ${lib.getExe pkgs.forgejo-runner} --config ${runnerConfig} one-job \
-            --url ${forge} --uuid "$uuid" --token-url 'file:$CREDENTIALS_DIRECTORY/runner-token' \
+            --url https://${forgeHost} --uuid "$uuid" --token-url 'file:$CREDENTIALS_DIRECTORY/runner-token' \
             --label nix-eph:host --handle "$handle" --wait
         '';
       };
@@ -313,6 +336,24 @@
         }
       ];
       systemd.tmpfiles.rules = ["d ${credParent} 0755 root root - -"];
+      users.groups.${slotUser} = {};
+      users.users.${slotUser} = {
+        isSystemUser = true;
+        group = slotUser;
+        extraGroups = ["kvm"];
+      };
+      systemd.tmpfiles.settings."10-microvm" = {
+        ${controlDir}.d = {
+          user = lib.mkForce "root";
+          group = lib.mkForce slotUser;
+          mode = lib.mkForce "0750";
+        };
+        ${vmDir}.d = {
+          user = slotUser;
+          group = slotUser;
+          mode = "0700";
+        };
+      };
       microvm.vms.${slot} = {
         autostart = false;
         restartIfChanged = false;
@@ -366,6 +407,16 @@
             LoadCredential = ["forgejo-pat:${config.clan.core.vars.generators.${generator}.files.token.path}"];
             StateDirectory = dispatch;
             StateDirectoryMode = "0700";
+            RuntimeDirectory = dispatch;
+            RuntimeDirectoryMode = "0700";
+            RuntimeDirectoryPreserve = "yes";
+            ProtectSystem = "strict";
+            ReadWritePaths = [credParent "-${vmDir}"];
+            ProtectHome = true;
+            PrivateTmp = true;
+            RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
+            InaccessiblePaths = persistentPaths;
+            CapabilityBoundingSet = ["CAP_CHOWN" "CAP_FOWNER" "CAP_DAC_OVERRIDE"];
             UMask = "0077";
             Restart = "on-failure";
             RestartSec = "7s";
@@ -378,6 +429,15 @@
           after = ["${guard}.service"];
           serviceConfig = {
             Slice = slice;
+            User = slotUser;
+            Group = slotUser;
+            WorkingDirectory = vmDir;
+            ProtectSystem = "strict";
+            ReadWritePaths = [vmDir "-${credDir}"];
+            ProtectHome = true;
+            PrivateTmp = true;
+            InaccessiblePaths = persistentPaths;
+            NoNewPrivileges = true;
             Restart = "no";
             RuntimeMaxSec = "75min";
             TimeoutStartSec = "90s";
@@ -385,6 +445,13 @@
             ExecStartPre = [preflight];
             ExecStopPost = ["+${scrub}"];
             LimitCORE = 0;
+          };
+        };
+        "microvm-set-booted@${slot}" = {
+          overrideStrategy = "asDropin";
+          serviceConfig = {
+            User = "root";
+            Group = "root";
           };
         };
         "microvm-virtiofsd@${slot}".serviceConfig.Slice = slice;

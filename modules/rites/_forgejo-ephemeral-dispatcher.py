@@ -32,6 +32,10 @@ RUNNERS = "/user/actions/runners"
 LOGIN = "manjo"
 LABEL = "nix-eph"
 POLL = 7
+BUSY_POLL = 60
+INVENTORY_POLL = 5 * 60
+INTENT_EXPIRY = 24 * 60 * 60
+PAUSE_FILE = Path("/run/forgejo-ephemeral-dispatcher/pause")
 REQUEST_TIMEOUT = 10
 MAX_RESPONSE = 2 * 1024 * 1024
 VM_DEADLINE = 90 + 75 * 60 + 30  # Informational only; systemd enforces the actual deadlines.
@@ -43,6 +47,13 @@ UUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 
 class ApiError(Exception):
     """Only fixed labels and HTTP status may be included in API diagnostics."""
+
+
+class HttpError(ApiError):
+    def __init__(self, operation, status):
+        self.status = status
+        hint = "; verify the manjo PAT and write:user scope" if status in (401, 403) else ""
+        super().__init__(f"Forgejo {operation}: HTTP {status}{hint}")
 
 
 class SlotError(Exception):
@@ -119,10 +130,8 @@ class Forgejo:
                 connection.request(method, "/api/v1" + path, body, headers)
                 with connection.getresponse() as response:
                     status, response_headers = response.status, response.headers
-                    if status in (401, 403):
-                        raise ApiError(f"Forgejo {operation}: HTTP {status}; verify the manjo PAT and write:user scope")
                     if status not in accepted:
-                        raise ApiError(f"Forgejo {operation}: HTTP {status}")
+                        raise HttpError(operation, status)
                     if method == "DELETE":
                         return status, response_headers
                     data = response.read(MAX_RESPONSE + 1)
@@ -153,24 +162,27 @@ class Forgejo:
             raise ApiError("Forgejo jobs: unexpected response")
         jobs = []
         for row in rows:
-            if row.get("repo_id") != repo_id or row.get("runs_on") != [LABEL]:
-                continue
             if (
                 not positive(row.get("repo_id"))
+                or not isinstance(row.get("runs_on"), list)
+                or not all(isinstance(label, str) for label in row["runs_on"])
                 or not positive(row.get("owner_id"))
                 or row["owner_id"] != owner
                 or row.get("status") not in ("waiting", "running")
                 or not handle_ok(row.get("handle"))
                 or not positive(row.get("id"))
                 or not nonnegative(row.get("attempt"))
+                or not nonnegative(row.get("task_id"))
             ):
-                raise ApiError("Forgejo jobs: unexpected job metadata for the pilot repository")
-            jobs.append(row)
+                raise ApiError("Forgejo jobs: unexpected job metadata")
+            if row["repo_id"] == repo_id:
+                jobs.append(row)
         return jobs
 
     def runners(self):
         """Read all pages before deleting, so our deletes cannot move rows between pages."""
         rows = {}
+        expected_total = None
         for page in range(1, 101):
             batch, headers = self._request(
                 "list owned runners", "GET", f"{RUNNERS}?visible=false&page={page}&limit=50", (200,)
@@ -178,6 +190,10 @@ class Forgejo:
             total = headers.get("X-Total-Count", "")
             if not isinstance(batch, list) or not re.fullmatch(r"[0-9]{1,9}", total):
                 raise ApiError("Forgejo list owned runners: invalid inventory or pagination")
+            total = int(total)
+            if expected_total is not None and total != expected_total:
+                raise ApiError("Forgejo list owned runners: inventory changed during pagination")
+            expected_total = total
             for row in batch:
                 if (
                     not isinstance(row, dict)
@@ -194,9 +210,9 @@ class Forgejo:
             # The server supplies Link and X-Total-Count. Never use the URL from Link,
             # even on the same origin: synthesize only the next fixed inventory request.
             next_page = any('; rel="next"' in link for link in headers.get_all("Link", ()))
-            if len(rows) == int(total) and not next_page:
+            if len(rows) == total and not next_page:
                 return rows.values()
-            if not batch or len(rows) >= int(total):
+            if not batch or len(rows) >= total:
                 raise ApiError("Forgejo list owned runners: inconsistent pagination; retrying")
         raise ApiError("Forgejo list owned runners: inventory exceeds 100 pages; reconcile manually")
 
@@ -208,6 +224,34 @@ class Forgejo:
         if not runner_id_ok(runner):
             raise ApiError("Forgejo register runner: invalid ID or UUID; reconciling by name")
         return runner, result.get("token")
+
+    def runner_undeclared(self, active, owner):
+        runner = active["runner"]
+        try:
+            row, _ = self._request("get runner", "GET", f"{RUNNERS}/{runner['id']}", (200,))
+        except HttpError as error:
+            if error.status == 404:  # Forgejo can remove an ephemeral runner after a task.
+                return False
+            raise
+        # v15.0.12 Status() reports only recent RPC activity, not assignment.
+        # REST registration leaves version and agent labels empty, Declare writes
+        # both before one-job fetches, and CreateTaskForRunner requires matching labels.
+        return (
+            isinstance(row, dict)
+            and positive(row.get("id"))
+            and row["id"] == runner["id"]
+            and row.get("uuid") == runner["uuid"]
+            and row.get("name") == active["name"]
+            and row.get("ephemeral") is True
+            and positive(row.get("owner_id"))
+            and row["owner_id"] == owner
+            and nonnegative(row.get("repo_id"))
+            and row["repo_id"] == 0
+            and row.get("status") in ("idle", "offline")
+            and row.get("version") == ""
+            and "labels" in row
+            and row["labels"] in (None, [])
+        )
 
     def delete(self, runner):
         status, _ = self._request("delete runner", "DELETE", f"{RUNNERS}/{runner['id']}", (204, 404))
@@ -260,6 +304,9 @@ class Systemctl:
 
     def start(self):
         self._call("start", VM, options=("--no-block", "--job-mode=fail"))
+
+    def stop(self):
+        self._call("stop", VM, options=("--no-block",))
 
     def stop_support(self, units):
         self._call("stop", *units, options=("--no-block",))
@@ -356,8 +403,12 @@ class Store:
             if (
                 not handle_ok(handle)
                 or not isinstance(intent, dict)
-                or intent.keys() != {"name", "runners"}
+                or intent.keys() not in ({"name", "runners"}, {"name", "runners", "absent_since"})
                 or not matches(NAME, intent["name"])
+                or (
+                    "absent_since" in intent
+                    and (intent["runners"] is not None or not positive(intent["absent_since"]))
+                )
                 or (
                     intent["runners"] is not None
                     and (
@@ -373,10 +424,11 @@ class Store:
             return True
         if (
             not isinstance(active, dict)
-            or active.keys() != {"handle", "name", "runner", "phase", "deadline"}
+            or active.keys() - {"assigned"} != {"handle", "name", "runner", "phase", "deadline"}
             or not handle_ok(active["handle"])
             or not matches(NAME, active["name"])
             or active["phase"] not in ("intent", "registered", "start", "cleanup")
+            or ("assigned" in active and (active["phase"] != "start" or active["assigned"] is not True))
         ):
             return False
         if active["phase"] == "intent":
@@ -407,19 +459,27 @@ class Store:
 
 
 class Dispatcher:
-    def __init__(self, repo_id, api, system, files, store, monotonic=time.monotonic, wall=time.time):
+    def __init__(self, repo_id, api, system, files, store, monotonic=time.monotonic, wall=time.time, pause=PAUSE_FILE):
         self.repo_id, self.api, self.system, self.files, self.store = repo_id, api, system, files, store
         self.monotonic, self.wall = monotonic, wall
+        self.pause = pause
         self.api_after = self.api_delay = 0
+        self.inventory_after = self.busy_after = 0
         self.observed = None
+        self.identity_verified = False
         self.deadline_logged = False
 
     def tick(self):
         try:
             idle = self._local()
-            if self.monotonic() >= self.api_after and (idle or self.store.data["ambiguous"]):
+            now = self.monotonic()
+            if not idle:
+                if now >= self.busy_after:
+                    self.busy_after = now + BUSY_POLL
+                    self._remote(False)
+            elif now >= self.api_after:
                 try:
-                    self._remote(idle)
+                    self._remote(True)
                 except ApiError:
                     self.api_delay = min(60, max(POLL, 2 * self.api_delay))
                     self.api_after = self.monotonic() + self.api_delay
@@ -437,6 +497,7 @@ class Dispatcher:
             if self.observed != active["name"]:
                 self.observed = active["name"]
                 self.deadline_logged = False
+                self.busy_after = 0
                 log(f"monitoring VM for runner {active['runner']['id']}; systemd owns its deadline")
             if self.wall() >= active["deadline"] and not self.deadline_logged:
                 self.deadline_logged = True
@@ -459,61 +520,157 @@ class Dispatcher:
             self.store.save(active=None, ambiguous=ambiguous)
             log(f"registration outcome unresolved for {active['name']}; searching owned runners by exact name")
         else:
-            self.store.save(active=active | {"phase": "cleanup", "deadline": None})
+            cleanup = active | {"phase": "cleanup", "deadline": None}
+            cleanup.pop("assigned", None)
+            self.store.save(active=cleanup)
             log(f"VM idle ({result}); local files scrubbed for runner {active['runner']['id']}")
         return True
 
     def _remote(self, idle):
         data = self.store.data
         owner = self.api.identify(data["owner_id"])
+        if not self.identity_verified:
+            log("Forgejo PAT identity verified as manjo")
+            self.identity_verified = True
         if data["owner_id"] is None:
-            if any(row["owner_id"] == owner and matches(NAME, row["name"]) for row in self.api.runners()):
+            if self.monotonic() < self.inventory_after:
+                return
+            if any(row["owner_id"] == owner and matches(NAME, row["name"]) for row in self._inventory()):
                 raise ApiError("state.json absent but a dispatcher-named runner exists; reconcile before enabling dispatch")
             self.store.save(owner_id=owner)
         if idle and data["active"] is not None:
             active = data["active"]
             self.api.delete(active["runner"])
             self.store.save(active=None, retired=[*data["retired"], active["handle"]])
-        self._reconcile_ambiguous(owner)
-        if not idle:
-            return
+        inventory_ok = False
+        if idle:
+            self._delete_recovered()
+            if (
+                self.monotonic() >= self.inventory_after
+                and any(intent["runners"] is None for intent in self.store.data["ambiguous"].values())
+            ):
+                try:
+                    self._recover_by_name(owner)
+                except ApiError as error:
+                    # Inventory has its own cooldown; keep checking jobs and servicing known IDs.
+                    log(error)
+                else:
+                    inventory_ok = True
+                    self._delete_recovered()
         jobs = self.api.jobs(self.repo_id, owner)
-        data = self.store.data
         seen = {job["handle"] for job in jobs}
-        retired = [handle for handle in data["retired"] if handle in seen]
-        if retired != data["retired"]:
-            self.store.save(retired=retired)
-        blocked = set(retired) | data["ambiguous"].keys()
+        self._observe_queue(seen, inventory_ok)
+        if not idle:
+            self._check_cancelled(jobs, seen, owner)
+            return
+        data = self.store.data
+        blocked = set(data["retired"]) | data["ambiguous"].keys()
         job = min(
-            (job for job in jobs if job["status"] == "waiting" and job["handle"] not in blocked),
+            (
+                job for job in jobs
+                if job["status"] == "waiting" and job["task_id"] == 0
+                and job["runs_on"] == [LABEL] and job["handle"] not in blocked
+            ),
             key=lambda job: job["id"],
             default=None,
         )
-        if job is not None:
+        if job is not None and not self._paused():
             self._dispatch(job)
 
-    def _reconcile_ambiguous(self, owner):
+    def _check_cancelled(self, jobs, seen, owner):
+        active = self.store.data["active"]
+        if active.get("assigned"):
+            return
+        handle = active["handle"]
+        if handle in seen:
+            if any(job["handle"] == handle and (job["status"] == "running" or job["task_id"]) for job in jobs):
+                self.store.save(active=active | {"assigned": True})
+            return
+        # Check detail *after* the job list. Never stop a declared runner based on
+        # inactivity or a 404: an assigned task could have finished between polls.
+        if self.api.runner_undeclared(active, owner) and not self.system.idle(VM):
+            self.system.stop()
+            log(f"queued VM stop: target handle vanished before runner {active['runner']['id']} declared")
+
+    def _observe_queue(self, seen, inventory_ok):
+        data = self.store.data
+        changes = {}
+        retired = [handle for handle in data["retired"] if handle in seen]
+        if retired != data["retired"]:
+            changes["retired"] = retired
+        # A complete inventory plus a fresh jobs response brackets the window;
+        # observed reappearance invalidates earlier evidence.
+        now = int(self.wall())
+        ambiguous = data["ambiguous"]
+        remaining = None
+        for handle, intent in ambiguous.items():
+            if intent["runners"] is not None:
+                continue
+            since = intent.get("absent_since")
+            if handle in seen:
+                if since is None:
+                    continue
+                replacement = {"name": intent["name"], "runners": None}
+            elif not inventory_ok:
+                continue
+            elif since is None or now < since:
+                replacement = intent | {"absent_since": now}
+            elif now - since >= INTENT_EXPIRY:
+                replacement = None
+                log(f"expired registration intent for {intent['name']}: no queued handle or exact runner match")
+            else:
+                continue
+            if remaining is None:
+                remaining = ambiguous.copy()
+            if replacement is None:
+                del remaining[handle]
+            else:
+                remaining[handle] = replacement
+        if remaining is not None:
+            changes["ambiguous"] = remaining
+        if changes:
+            self.store.save(**changes)
+
+    def _inventory(self):
+        try:
+            return self.api.runners()
+        finally:
+            self.inventory_after = self.monotonic() + INVENTORY_POLL
+
+    def _recover_by_name(self, owner):
         ambiguous = self.store.data["ambiguous"]
         unresolved = {intent["name"]: handle for handle, intent in ambiguous.items() if intent["runners"] is None}
-        if unresolved:
-            found = {}
-            for row in self.api.runners():
-                if row["name"] in unresolved and row["ephemeral"] and row["owner_id"] == owner and row["repo_id"] == 0:
-                    found.setdefault(row["name"], []).append({"id": row["id"], "uuid": row["uuid"]})
-            if found:
-                ambiguous = ambiguous | {
-                    unresolved[name]: {"name": name, "runners": runners} for name, runners in found.items()
-                }
-                # Save recovered IDs before DELETE so a crash can replay cleanup by ID.
-                self.store.save(ambiguous=ambiguous)
-        for handle, intent in ambiguous.items():
-            if intent["runners"] is None:
-                continue
-            for runner in intent["runners"]:
-                self.api.delete(runner)
-            remaining = self.store.data["ambiguous"].copy()
-            del remaining[handle]
-            self.store.save(ambiguous=remaining, retired=[*self.store.data["retired"], handle])
+        found = {}
+        for row in self._inventory():
+            if row["name"] in unresolved and row["ephemeral"] and row["owner_id"] == owner and row["repo_id"] == 0:
+                found.setdefault(row["name"], []).append({"id": row["id"], "uuid": row["uuid"]})
+        if found:
+            # Save recovered IDs before DELETE so a crash can replay cleanup by ID.
+            self.store.save(ambiguous=ambiguous | {
+                unresolved[name]: {"name": name, "runners": runners} for name, runners in found.items()
+            })
+        unmatched = [name for name in unresolved if name not in found]
+        if unmatched:
+            log(f"{len(unmatched)} unresolved registration(s); no exact runner match for {', '.join(unmatched[:3])}")
+
+    def _delete_recovered(self):
+        for handle, intent in self.store.data["ambiguous"].items():
+            if intent["runners"] is not None:
+                for runner in intent["runners"]:
+                    self.api.delete(runner)
+                data = self.store.data
+                remaining = data["ambiguous"].copy()
+                del remaining[handle]
+                self.store.save(ambiguous=remaining, retired=[*data["retired"], handle])
+
+    def _paused(self):
+        try:
+            self.pause.lstat()
+        except FileNotFoundError:
+            return False
+        except OSError:
+            raise SlotError("cannot check the dispatch pause flag; refusing new dispatch") from None
+        return True
 
     def _dispatch(self, job):
         handle = job["handle"]
@@ -521,7 +678,14 @@ class Dispatcher:
         active = dict(handle=handle, name=f"eph-{digest}-ryza-{secrets.token_hex(16)}", runner=None, phase="intent", deadline=None)
         self.store.save(active=active)
         log(f"registering runner for job {job['id']} attempt {job['attempt']} ({digest})")
-        runner, token = self.api.register(active["name"])
+        try:
+            runner, token = self.api.register(active["name"])
+        except HttpError as error:
+            # An explicit refusal is not a lost result. HTTP 408, transport
+            # failures, 5xx and unreadable success replies may hide a new runner.
+            if 300 <= error.status < 500 and error.status != 408:
+                self.store.save(active=None, retired=[*self.store.data["retired"], handle])
+            raise
         active = active | {"runner": runner, "phase": "registered"}
         self.store.save(active=active)
         if any(not self.system.idle(unit) for unit in SUPPORT) or not self.system.idle(VM):
@@ -556,7 +720,9 @@ def main():
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 raise StateError("another dispatcher holds the state lock") from None
-            files = SlotFiles(args.vm_dir, args.credential_dir, pwd.getpwnam("microvm").pw_uid, grp.getgrnam("kvm").gr_gid)
+            files = SlotFiles(
+                args.vm_dir, args.credential_dir, pwd.getpwnam("microvm-eph").pw_uid, grp.getgrnam("microvm-eph").gr_gid
+            )
             dispatcher = Dispatcher(
                 args.repo_id,
                 Forgejo(Path(directory) / "forgejo-pat" if directory else None),
