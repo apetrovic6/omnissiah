@@ -1,0 +1,5 @@
+name: tiers
+version: 1.0.0
+description: "delegate_task tiers: the agent picks a named tier per subagent (plan, implement, review, ...); each tier is a model and effort on an allowlisted provider, or on the parent's own credentials."
+author: omnissiah
+kind: backend

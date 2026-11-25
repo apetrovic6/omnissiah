@@ -299,6 +299,79 @@ The hard stop affects every process owned by `hermes` on stygies; the SSH
 connection may drop. If SSH itself is unavailable, use the stygies console.
 Restart the gateway and lift the pause when ready.
 
+### Hermes delegation tiers
+
+`coder` hands sub-tasks to subagents (`delegate_task`) on a model picked by
+**tier**. The coder SOUL's "Delegation" section says when to use which.
+`work` has the same tiers on the DevZero token only, switched off for now
+(`workTiersEnabled` in `machines/ryza/hermes.nix`).
+
+| Tier | Model (effort) | Fallback, in order |
+| --- | --- | --- |
+| `plan` | claude-fable-5-2 (high) | claude-opus-5-5 |
+| `implement` (default) | claude-sonnet-5-5 (medium) | gpt-6.2-sol, gpt-6.1-terra |
+| `review` | claude-opus-5-5 (high) | gpt-6.2-sol |
+| `quick` | claude-haiku-5-5 (low) | gpt-6-luna, deepseek-flash |
+| `bulk` | deepseek-v4-pro (high) | qwen3.8-max (Token Plan) |
+
+- **Accounts:**
+  - Claude models use the hermes user's Claude Code login (Max).
+  - GPT models use the ChatGPT Plus device login.
+  - DeepSeek and Qwen use the `pi-api-keys` keys.
+- **Fallback effort:** a fallback runs at its tier's effort, because Hermes fallback entries are only a provider and a model.
+- **Data leaving the subscriptions:** `bulk` sends repo content and logs to DeepSeek (falling back to Alibaba's Token Plan), and so does `quick` when it reaches its last fallback (DeepSeek). Every other tier stays on Anthropic or OpenAI.
+
+How it works:
+- A small delegation backend of ours, `tiers` (`modules/rites/_hermes-delegation-tiers`), is bundled into the Hermes package. Its smoke test runs at build time, so a Hermes bump that breaks it fails the build.
+- `services.imperium.hermes.profiles.<name>.delegation` renders the profile's `delegation` settings on every activation, tiers on or off. It pins:
+  - `max_concurrent_children = 2`. This is not a cap on subagents overall: it limits the children of one `delegate_task` call, and separately the background calls running at once. The background pool is shared by every profile in the gateway, and a call that finds it full runs inline instead of being refused, so one profile can still have several calls' worth of children at once. The SOUL's "at most two" is the rule the agent follows.
+  - no nested delegation, no auto-approval, no inherited fallback
+  - the core route keys (`delegation.provider`, `model`, `base_url`, `api_key`, `profile`, ...) empty, meaning "the parent's". Hermes' default backend routes every child by these, and the `hermes model` menu can write them; activation resets them. `settings.delegation` may not set them (assertion).
+- Only tier names and descriptions reach the model.
+- Coder's `auxiliary.review` is pinned to Opus 5.5, so core `/review` doesn't run on the `implement` tier.
+
+**Guard rails.** Each provider a tier or fallback names must be in the profile's `allowedProviders`. This is checked by a Nix assertion and again by the backend on every task. At runtime the allowlist is the intersection of config.yaml's and a read-only copy in the Nix store (`HERMES_DELEGATION_TIERS_ALLOWLIST`, set for the gateway and the `hermes` wrapper), so a hand edit of config.yaml can narrow it, never widen it. The backend also refuses:
+- provider aliases, and meta ids such as `auto` and `custom` (they pick whatever login or endpoint is present)
+- endpoints and keys
+- profile routes
+- fast tiers
+- unknown tiers: they fail with a message instead of running elsewhere
+
+`work` must keep `allowedProviders = []`, tiers without a provider, and no `settings.delegation`; an assertion enforces all three. A profile with an empty allowlist always runs the `tiers` backend, even with no tiers, so every subagent keeps the parent's exact credentials, the DevZero token, whatever `delegation.*` says. This matters because a profile with no ChatGPT grant of its own borrows the default profile's, whatever `auth.adopt_external_logins` says.
+
+Never install NousResearch's `advanced-delegation` plugin here: its `/delegation` command and `hermes delegation config` editor write `delegation.backend` and the same keys Nix owns.
+
+Subagents never see SOUL.md, and they get the parent's full tools, including the stygies terminal, Kaneo and the shared working copy. That is why the coder SOUL tells the parent to put the rules into each task's context, keeps every tier but `implement` read-only, runs one `implement` at a time, and leaves every commit, push, PR, task-slot and Kaneo action to the parent.
+
+After deploying ryza:
+1. **ChatGPT login (already done).** Codex refresh tokens rotate on every use, so the login can't be a clan var. It lives in the persisted `/var/lib/hermes/.hermes/auth.json`, and `coder` reads it from there. Check it:
+   ```sh
+   sudo -iu hermes hermes -p coder auth list openai-codex
+   ```
+   This should show one device-code OAuth credential. If it ever shows none, sign in again with `sudo -iu hermes hermes auth`, pick OpenAI Codex, and finish the device code in a browser.
+2. **Rendered settings.** Check `delegation.backend: tiers` and the five options:
+   ```sh
+   sudo -u hermes sed -n '/^delegation:/,/^[a-z]/p' /var/lib/hermes/.hermes/profiles/coder/config.yaml
+   ```
+3. **New sessions.** Send `/new` in each coder room and app chat. A session keeps the `delegate_task` it started with, so older sessions run with no tiers.
+4. **Smoke test.** In a coder thread, ask: "Delegate one `quick` task: run `uname -n` and report it." The result's route should read `quick · claude-haiku-5-5`, and its `model` names the model that actually ran.
+5. **Qwen Token Plan region.** Check which endpoint the key works on. This lists models only, so it starts no paid call. The key is never printed: curl reads the header from stdin, so it is never in a process's arguments either.
+   ```sh
+   sudo -iu hermes bash -c 'key="$(tr -d "\n" < /run/secrets/vars/shared/pi-api-keys/qwen-api-key)"
+   for host in token-plan.ap-southeast-1 token-plan.cn-beijing; do
+     printf "%s: " "$host"
+     printf "Authorization: Bearer %s\n" "$key" |
+       curl -s -o /dev/null -w "%{http_code}\n" -H @- "https://$host.maas.aliyuncs.com/compatible-mode/v1/models"
+   done'
+   ```
+   - `200` on `cn-beijing` only: set `qwenTokenPlanProvider = "alibaba-token-plan-cn"` in `machines/ryza/hermes.nix`.
+   - `401` on both: the plan's API may not serve `/models`, so check the key's region in the Model Studio console instead.
+6. **Watch usage for a week:** the Claude weekly limits (Fable has its own), the ChatGPT Plus 5-hour and weekly windows, and DeepSeek spend.
+
+**To enable `work` tiers:**
+1. Set `workTiersEnabled = true`, deploy, and send `/new` in the work rooms.
+2. Repeat the billing comparison from [Hermes work profile](#hermes-work-profile-ryza--stygies) step 4 with a delegated `quick` task. Only DevZero usage should move.
+
 ### Hermes workspaces on stygies
 
 Both profiles run as `hermes` on stygies (home `/home/hermes`), in separate

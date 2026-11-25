@@ -47,6 +47,27 @@ Run the task commands on stygies. If they aren't on `PATH`, use `/etc/profiles/p
 7. **Report and stop.** Post the PR link in the task's original chat or thread and say its CI waits for manjo's approval. Release the slot and hand off as above.
 8. **Address review when asked.** Review follow-up is a task: claim the slot or queue before touching the branch. Follow steps 1–2, including explicit approval of the plan. Use the existing PR branch; check the changes, push to `origin`, reply using the project's `fj` host, and release the slot.
 
+## Delegation
+
+You may hand self-contained sub-tasks to subagents with `delegate_task`, choosing a `tier` per task. You stay responsible for the result; delegation never skips the plan approval in step 2.
+
+| Tier | Use it for |
+| --- | --- |
+| `plan` | A hard design question inside an approved task: a cross-cutting change, an unclear root cause, two viable approaches. Not for restating the task. |
+| `implement` | A well-specified change you have already planned: files, approach and tests named in the goal. The default when you set no tier. |
+| `review` | Always, once per PR, after your final commit and before step 6: an adversarial review of the full diff: break it, don't confirm it (bugs, edge cases, security, missing tests, rule violations). |
+| `quick` | Mechanical, read-only work: find usages, summarise a file or log, draft a commit message or PR body for you to use. |
+| `bulk` | Reading a lot of text (long logs, large diffs, many files) where you need a short summary back. Never for code you will push. |
+
+- Make the step 2 plan yourself; delegate only after manjo approves it.
+- Subagents do not see this file. Every task's `context` must give the workspace path under `~/personal/<repo>`, the branch, what to return, and these rules: never push, open or comment on PRs, run `task-*` commands, use Kaneo, or touch other repos; edit only inside that workspace.
+- `plan`, `review`, `quick` and `bulk` subagents are read-only: say in their `context` that they must not edit files or commit. `implement` subagents edit but never commit; you review and commit their changes.
+- Subagents share your working copy and its git index. Run at most two subagents at once, and only one `implement` at a time.
+- You do every push, PR, task-slot and Kaneo action yourself, after checking the subagents' work.
+- Before opening a PR, run one adversarial `review` task on `git diff upstream/<default branch>...HEAD`. Brief it to break the change, not to confirm it: give it the task, the diff and the hard rules, not your own conclusions, and ask for concrete failure scenarios with file:line, severity and a fix, plus a verdict. Verify each finding yourself before acting on it. Fix or answer every finding, and in the PR body mention the review and any finding you rejected, with why. If the review fails or is refused, say so in the PR body; never skip it silently.
+- If a tier is refused or fails (unknown tier, provider not allowed, limit reached), tell manjo in the task's thread or chat and continue without it; never retry the same task in a loop.
+- Name each delegated tier in your milestone updates with the model from the result's `model` field, which shows a fallback when one took over (the route label always names the tier's first model), for example "review (gpt-6.2-sol): 2 findings fixed".
+
 ## Kaneo
 
 Use the `kaneo` MCP server to read boards and tickets for context. If the task came from a ticket, you may comment on that ticket with the plan or PR link and move it between To Do, In Progress, and In Review. Never create, delete, or edit other tickets, labels, or projects unless manjo asks in the task's chat or thread. If Kaneo is unavailable, tell manjo there and keep working without it. Do not claim a board update succeeded if you could not make it.

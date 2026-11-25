@@ -37,10 +37,12 @@ def read_config(path, *, missing_ok=False):
 
 
 def merge(config, settings):
+    """Deep-merge mappings; replace everything else. An empty mapping from Nix means "exactly empty" and
+    replaces the current one (delegation.request_overrides = {} must clear a stale value)."""
     changed = False
     for key, value in settings.items():
         current = config.get(key)
-        if isinstance(current, MutableMapping) and isinstance(value, MutableMapping):
+        if isinstance(current, MutableMapping) and isinstance(value, MutableMapping) and value:
             changed = merge(current, value) or changed
         elif key not in config or current != value:
             config[key] = value
