@@ -137,6 +137,30 @@
         mode = "0755";
       }
     ];
+    # The job's PATH besides nix. A superset of the host runners' toolset
+    # (_ci-toolset.nix, asserted below) in its own order, which the unit
+    # already has: reordering would change it for nothing.
+    slotToolset = pkgs:
+      with pkgs; [
+        bash
+        cacert
+        cargo
+        coreutils
+        curl
+        devenv
+        diffutils
+        gawk
+        git
+        gzip
+        jq
+        mold
+        nodejs
+        rustc
+        stdenv.cc
+        gnutar
+        util-linux
+      ];
+    ciToolset = import ./_ci-toolset.nix;
     installLine = dir: ''"$install" -d -o ${dir.owner} -g ${dir.group} -m ${dir.mode} -- ${lib.escapeShellArg dir.path}'';
     # Refuses a pre-existing symlink. This is a check, not a race-free guard:
     # it relies on the writers of the microvm-owned state dir being trusted.
@@ -286,27 +310,7 @@
           SuccessAction = "poweroff";
           FailureAction = "poweroff";
         };
-        path =
-          [config.nix.package]
-          ++ (with pkgs; [
-            bash
-            cacert
-            cargo
-            coreutils
-            curl
-            devenv
-            diffutils
-            gawk
-            git
-            gzip
-            jq
-            mold
-            nodejs
-            rustc
-            stdenv.cc
-            gnutar
-            util-linux
-          ]);
+        path = [config.nix.package] ++ slotToolset pkgs;
         serviceConfig = {
           Type = "exec";
           User = "forgejo-one-job";
@@ -334,7 +338,11 @@
       };
     };
   in {
-    imports = [(import ./_forgejo-ephemeral-trusted.nix {inherit cfg slot vm dispatch controlDir trustDir cacheHost;})];
+    imports = [
+      # The CI credentials trusted jobs receive (_forgejo-ephemeral-trusted.nix enables them).
+      self.nixosModules.ci-credentials
+      (import ./_forgejo-ephemeral-trusted.nix {inherit cfg slot vm dispatch controlDir trustDir cacheHost;})
+    ];
 
     options.services.imperium.forgejoEphemeral = {
       enable = lib.mkEnableOption "the Ryza Forgejo one-job microVM pilot";
@@ -371,6 +379,12 @@
             && !config.networking.nftables.enable
             && config.networking.nat.externalInterface == uplink;
           message = "forgejoEphemeral requires Ryza's microVM host and iptables NAT via ens18.";
+        }
+        {
+          # Compared by outPath. The label rule (top of forgejo-runner.nix)
+          # needs this once a slot shares a label with the host runners.
+          assertion = lib.all (p: builtins.elem p (slotToolset pkgs)) (ciToolset pkgs);
+          message = "forgejoEphemeral: the slot's PATH must carry the whole shared CI toolset (_ci-toolset.nix).";
         }
       ];
       clan.core.vars.generators.${generator} = {
