@@ -16,8 +16,9 @@
         self.nixosConfigurations)
       // lib.optionalAttrs (system == "x86_64-linux" && self.nixosConfigurations ? ryza) {
         # Fails at eval if a Forgejo one-job slot unit names a mandatory
-        # path the installer doesn't create first (HOM-30). The context is
-        # discarded so the check never builds the test's enabled variant.
+        # path the installer doesn't create first (HOM-30), or pool packaging
+        # and per-forge credentials regress. Discard context so the check
+        # never builds the test's enabled variant.
         forgejo-ephemeral-jobdir = pkgs.writeText "forgejo-ephemeral-jobdir.json" (
           builtins.unsafeDiscardStringContext (builtins.toJSON
             (import ../rites/_forgejo-ephemeral-jobdir-test.nix {inherit (self.nixosConfigurations) ryza;}))
@@ -32,7 +33,12 @@
               {
                 services.imperium.forgejoEphemeral = {
                   enable = true;
-                  repoId = 4242;
+                  pools.ugalabugala = {
+                    forge = "ugalabugala";
+                    scope.user = "manjo";
+                    labels = ["nix-eph"];
+                    dispatch = [4242];
+                  };
                   inventory = lib.mapAttrs (_: entry: entry // {dispatcher = "cerberus";}) self.lib.ciSlots;
                 };
                 clan.core.vars.generators.forgejo-slotctl-ssh.files.id_ed25519.path = lib.mkForce "/run/secrets/fixture-key";

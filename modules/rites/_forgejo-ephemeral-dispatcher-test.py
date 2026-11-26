@@ -50,6 +50,7 @@ REPO_NAME = "rust-app-template"
 REPOSITORY = f"/api/v1/repos/manjo/{REPO_NAME}"
 TASKS = REPOSITORY + "/actions/tasks?status=running&page={}&limit=50"
 KEYS = REPOSITORY + "/keys?page={}&limit=50"
+PROTECTIONS = REPOSITORY + "/branch_protections"
 RUN = REPOSITORY + "/actions/runs?run_number={}&limit=50"
 HERMES = 77
 # Synthetic, shaped like the real files (nix-store --generate-binary-cache-key; reliquary-ncps netrc).
@@ -57,6 +58,42 @@ SIGNING_SECRET = "c3ludGhldGljLXNpZ25pbmcta2V5LW5vdC1hLXNlY3JldC1ub3QtYS1zZWNyZX
 SIGNING_KEY = f"ci.noosphere.uk-1:{SIGNING_SECRET}".encode()
 NETRC_PASSWORD = "0123456789abcdef-synthetic-netrc-password-not-a-secret"
 NETRC = f"machine ncps.noosphere.uk\nlogin forgejo-runner\npassword {NETRC_PASSWORD}\n".encode()
+PILOT_URL = "https://forge.ugalabugala.org"
+NOOSPHERE_URL = "https://forge.noosphere.uk"
+LABEL = "nix-eph"
+GUEST_CREDENTIALS = {"runner-uuid", "runner-token", "job-handle", "forgejo-url", "runner-label"}
+PILOT_POOL = {
+    "forge": "ugalabugala", "host": "forge.ugalabugala.org", "login": "manjo", "scope": {"user": "manjo"},
+    "labels": [LABEL], "dispatch": [REPO], "maxSlots": 2,
+    "trust": {"repos": {str(REPO): {"owner": "manjo", "name": REPO_NAME, "schedules": False}}, "users": ["manjo"]},
+}
+SCHEDULE_POOL = PILOT_POOL | {
+    "trust": {"repos": {str(REPO): {"owner": "manjo", "name": REPO_NAME, "schedules": True}}, "users": ["manjo"]},
+}
+ORG = "monolith-softworks"
+ORG_ID = 64
+ORG_POOL = PILOT_POOL | {
+    "forge": "noosphere", "host": "forge.noosphere.uk", "scope": {"org": ORG}, "dispatch": "owner",
+    "trust": {"repos": {str(REPO): {"owner": ORG, "name": "inanna", "schedules": False}}, "users": ["manjo"]},
+}
+
+
+def protection(branch="master", **fields):
+    """The default branch rule a trusted repo needs, as Forgejo v15.0.12 serializes it (convert.ToBranchProtection)."""
+    return {
+        "branch_name": branch, "rule_name": branch,
+        "enable_push": True, "enable_push_whitelist": True,
+        "push_whitelist_usernames": ["manjo"], "push_whitelist_teams": [], "push_whitelist_deploy_keys": False,
+        "enable_merge_whitelist": True, "merge_whitelist_usernames": ["manjo"], "merge_whitelist_teams": [],
+        "protected_file_patterns": "", "unprotected_file_patterns": "", "apply_to_admins": False,
+    } | fields
+
+
+def make_queue(pool, forge, slot, state_dirs, claim_root, clock, pat_file, trust=None):
+    return D.Queue(
+        D.Forgejo(pool, pat_file, forge.connect), slot, D.Store(state_dirs[D.SLOT], pool.state_file),
+        D.Claims(claim_root, state_dirs, pool), clock.monotonic, clock.wall, trust=trust,
+    )
 
 
 def job(job_id=1, handle="opaque/attempt-1", **fields):
@@ -110,13 +147,14 @@ def create_slot_lock(root, slot):
     (root / f"{slot}.lock").touch(mode=0o600)
 
 
-def write_slotctl_config(path, slot, vm_dir, credential_dir, trust_dir=None, *, deliver=False, min_free_bytes=1):
+def write_slotctl_config(path, slot, vm_dir, credential_dir, trust_dir=None, *, deliver=False, fixed_pilot=False, min_free_bytes=1):
     """What the slot module generates per host, pointed at temporary directories and the current user."""
     entry = {
         "vm_dir": str(vm_dir),
         "credential_dir": str(credential_dir),
         "trust_dir": str(credential_dir.with_name(f"{slot}-trust") if trust_dir is None else trust_dir),
         "deliver": deliver,
+        "fixed_pilot": fixed_pilot,
         "user": pwd.getpwuid(os.getuid()).pw_name,
         "group": grp.getgrgid(os.getgid()).gr_name,
         "min_free_bytes": min_free_bytes,
@@ -153,7 +191,13 @@ def command_slot(config, systemctl_run):
 
 
 class FakeForge:
-    def __init__(self):
+    def __init__(self, *, scope=None, labels=LABEL, repo_name=REPO_NAME):
+        self.owner_id = OWNER if scope is None else ORG_ID
+        self.runners_path = RUNNERS if scope is None else f"/api/v1/orgs/{scope}/actions/runners"
+        self.jobs_path = f"{self.runners_path}/jobs?labels={labels}"
+        self.list_path = self.runners_path + "?visible=false&page={}&limit=50"
+        self.org = None if scope is None else {"name": scope, "id": self.owner_id}
+        self.repository_path = f"/api/v1/repos/{scope or 'manjo'}/{repo_name}"
         self.calls = []
         self.faults = {}
         self.identity = {"login": "manjo", "id": OWNER}
@@ -163,7 +207,11 @@ class FakeForge:
         self.page_size = 50
         self.next_link = None
         self.observe_post = None
-        self.repository = {"id": REPO, "name": REPO_NAME, "owner": {"id": OWNER, "login": "manjo"}}
+        self.repository = {
+            "id": REPO, "name": repo_name, "owner": {"id": self.owner_id, "login": scope or "manjo"}, "mirror": False,
+        }
+        self.protections = [protection()]
+        self.users = {}
         self.tasks = []
         self.runs = []
         self.keys = [{"id": 3, "title": "read-only mirror", "read_only": True}]
@@ -223,7 +271,7 @@ class FakeForge:
             "id": runner_id,
             "uuid": uuid_for(runner_id),
             "name": name,
-            "owner_id": OWNER,
+            "owner_id": self.owner_id,
             "repo_id": 0,
             "ephemeral": True,
         } | fields
@@ -234,9 +282,11 @@ class FakeForge:
             return scripted.popleft()
         if method == "GET" and path == USER:
             return 200, self.identity, {}
-        if method == "GET" and path == JOBS:
+        if self.org is not None and method == "GET" and path == f"/api/v1/orgs/{self.org['name']}":
+            return 200, self.org, {}
+        if method == "GET" and path == self.jobs_path:
             return 200, self.jobs, {}
-        if method == "GET" and path.startswith(RUNNERS + "?"):
+        if method == "GET" and path.startswith(self.runners_path + "?"):
             query = parse_qs(urlsplit(path).query)
             if query.get("visible") != ["false"] or query.get("limit") != ["50"]:
                 return 400, {"error": "unexpected runner inventory query"}, {}
@@ -244,35 +294,39 @@ class FakeForge:
             end = page * self.page_size
             headers = {"X-Total-Count": str(len(self.runners))}
             if end < len(self.runners):
-                link = self.next_link or self.url + LIST.format(page + 1)
+                link = self.next_link or self.url + self.list_path.format(page + 1)
                 headers["Link"] = f'<{link}>; rel="next"'
             return 200, list(self.runners.values())[end - self.page_size : end], headers
-        if method == "POST" and path == RUNNERS:
+        if method == "POST" and path == self.runners_path:
             if self.observe_post is not None:
                 self.observe_post()
             if payload.keys() != {"name", "ephemeral"} or payload["ephemeral"] is not True:
                 return 400, {"error": "unexpected registration payload"}, {}
             runner_id = self.add_runner(payload["name"])
             return 201, {"id": runner_id, "uuid": uuid_for(runner_id), "token": TOKEN}, {}
-        if method == "DELETE" and path.startswith(RUNNERS + "/"):
+        if method == "DELETE" and path.startswith(self.runners_path + "/"):
             runner_id = int(path.rsplit("/", 1)[1])
             return (204 if self.runners.pop(runner_id, None) is not None else 404), None, {}
-        if method == "GET" and path == REPOSITORY:
+        if method == "GET" and path == self.repository_path:
             return 200, self.repository, {}
-        if method == "GET" and path.startswith(REPOSITORY + "/actions/tasks?"):
+        if method == "GET" and path.startswith(self.repository_path + "/actions/tasks?"):
             query = parse_qs(urlsplit(path).query)
             if query.get("limit") != ["50"] or query.get("status") != ["running"]:
                 return 400, {"error": "unexpected task query"}, {}
             page = int(query["page"][0])
             rows = sorted((row for row in self.tasks if row["status"] == "running"), key=lambda row: -row["id"])
             return 200, {"total_count": len(rows), "workflow_runs": rows[(page - 1) * 50 : page * 50]}, {}
-        if method == "GET" and path.startswith(REPOSITORY + "/keys?"):
+        if method == "GET" and path.startswith(self.repository_path + "/keys?"):
             query = parse_qs(urlsplit(path).query)
             if query.get("limit") != ["50"]:
                 return 400, {"error": "unexpected key query"}, {}
             page = int(query["page"][0])
             return 200, self.keys[(page - 1) * 50 : page * 50], {"X-Total-Count": str(len(self.keys))}
-        if method == "GET" and path.startswith(REPOSITORY + "/actions/runs?"):
+        if method == "GET" and path == self.repository_path + "/branch_protections":
+            return 200, self.protections, {}
+        if method == "GET" and path.startswith("/api/v1/users/") and path[len("/api/v1/users/"):] in self.users:
+            return 200, self.users[path[len("/api/v1/users/"):]], {}
+        if method == "GET" and path.startswith(self.repository_path + "/actions/runs?"):
             query = parse_qs(urlsplit(path).query)
             if query.get("limit") != ["50"] or "status" in query:
                 return 400, {"error": "unexpected run query"}, {}
@@ -375,6 +429,8 @@ class DispatcherTests(unittest.TestCase):
         self.pat_file.write_text(PAT + "\n")
         self.forge = FakeForge()
         self.addCleanup(self.forge.close)
+        self.pool = D.Pool("ugalabugala", **PILOT_POOL)
+        self.more_pools = []
         self.system = FakeSystemctl()
         # For assertions on the slot's paths; the dispatcher itself goes through slotctl.
         self.files = S.SlotFiles(
@@ -394,17 +450,22 @@ class DispatcherTests(unittest.TestCase):
 
     def restart(self):
         slot, self.slotctl = command_slot(self.config, self.system.run)
+        self.queue, *others = self.queues_for(slot)
         self.dispatcher = D.Dispatcher(
-            REPO,
-            D.Forgejo(self.pat_file, self.forge.connect),
-            slot,
-            D.Store(self.state_dir),
-            D.Claims(self.claim_root, self.state_dirs),
-            self.clock.monotonic,
-            self.clock.wall,
-            pause=self.pause,
-            host_pause=self.host_pause,
+            [self.queue, *others], self.clock.monotonic, pause=self.pause, host_pause=self.host_pause,
         )
+
+    def queues_for(self, slot):
+        return [
+            make_queue(pool, forge, slot, self.state_dirs, self.claim_root, self.clock, self.pat_file)
+            for pool, forge in [(self.pool, self.forge), *self.more_pools]
+        ]
+
+    def add_pool(self, name, config, **forge_options):
+        forge = FakeForge(**forge_options)
+        self.addCleanup(forge.close)
+        self.more_pools.append((D.Pool(name, **config), forge))
+        return forge
 
     def tick(self, advance=0):
         self.clock.now += advance
@@ -425,7 +486,7 @@ class DispatcherTests(unittest.TestCase):
 
     @contextlib.contextmanager
     def second_slot(self):
-        pilot = (D.SLOT, D.MACHINE, D.HOST, D.LOGIN, D.LABEL)
+        pilot = (D.SLOT, D.MACHINE)
         slot = "ryza-eph-2"
         D.configure(slot, *pilot[1:])
         try:
@@ -438,16 +499,99 @@ class DispatcherTests(unittest.TestCase):
             system = FakeSystemctl()
             transport, _ = command_slot(config, system.run)
             dispatcher = D.Dispatcher(
-                REPO, D.Forgejo(self.pat_file, self.forge.connect), transport, D.Store(state_dir),
-                D.Claims(self.claim_root, self.state_dirs), self.clock.monotonic, self.clock.wall,
-                pause=root / "pause-2", host_pause=self.host_pause,
+                self.queues_for(transport), self.clock.monotonic, pause=root / "pause-2", host_pause=self.host_pause,
             )
             yield dispatcher, system
         finally:
             D.configure(*pilot)
 
     def claim_file(self, handle):
-        return self.dispatcher.claims.directory / D.handle_digest(handle)
+        return self.queue.claims.directory / D.handle_digest(handle)
+
+    def test_round_robin_uses_oldest_eligible_job_in_each_pool(self):
+        other = self.add_pool(
+            "noosphere", PILOT_POOL | {"forge": "noosphere", "host": "forge.noosphere.uk", "labels": ["nix-eph", "nix-nightly"]},
+            labels="nix-eph,nix-nightly",
+        )
+        first, second = job(40, "pilot-oldest"), job(50, "pilot-next")
+        self.forge.jobs = [second, first]
+        other.jobs = [
+            job(4, "noosphere-next"),
+            job(3, "noosphere-oldest", runs_on=["nix-nightly"]),
+            job(2, "multi-label", runs_on=["nix-eph", "nix-nightly"]),
+            job(1, "unavailable-label", runs_on=["unavailable"]),
+        ]
+        self.restart()
+        self.tick()
+        self.assertEqual(first["handle"], self.state()["active"]["handle"])
+        self.assertEqual(PILOT_URL, (self.credential_dir / "forgejo-url").read_text())
+        self.forge.jobs = [second]
+        self.system.set()
+        self.tick(D.POLL)
+        self.assertEqual([other.runners_path], other.paths("POST"))
+        self.assertEqual("noosphere-oldest", (self.credential_dir / "job-handle").read_text())
+        self.assertEqual(NOOSPHERE_URL, (self.credential_dir / "forgejo-url").read_text())
+        self.assertEqual("nix-nightly", (self.credential_dir / "runner-label").read_text())
+        self.assertIn(other.jobs_path, other.paths("GET"))
+        self.system.set()
+        self.tick(D.POLL)
+        self.assertEqual(second["handle"], self.state()["active"]["handle"])
+        self.assertIn("[noosphere] registering runner for job 3", self.logs.getvalue())
+
+    def test_pool_capacity_is_recovered_from_claims_without_blocking_other_pool(self):
+        self.pool = D.Pool("ugalabugala", **(PILOT_POOL | {"maxSlots": 1}))
+        org = self.add_pool("monolith-softworks", ORG_POOL, scope=ORG)
+        self.forge.jobs = [job(), job(2, "waiting-behind-cap")]
+        org.jobs = [job(owner_id=ORG_ID, repo_id=90)]  # Same opaque handle, different owner and forge.
+        self.restart()
+        self.tick()
+        claim = self.claim_file(job()["handle"])
+        claim.unlink()  # Peer's active intent remains durable after /run is lost.
+        with self.second_slot() as (peer, system):
+            self.assertTrue(claim.is_file())
+            peer.tick()
+            self.assertEqual([RUNNERS], self.forge.paths("POST"))
+            self.assertEqual([org.runners_path], org.paths("POST"))
+            self.assertEqual(1, len(system.mutations("start")))
+            self.assertIsNone(peer.queues[0].store.data["active"])
+        self.system.set()
+        self.forge.jobs.pop(0)
+        self.tick(D.POLL)
+        self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
+        self.assertEqual("waiting-behind-cap", self.state()["active"]["handle"])
+
+    def test_org_scope_inventory_registration_jobs_and_cleanup_survive_restart(self):
+        org = self.add_pool("monolith-softworks", ORG_POOL, scope=ORG)
+        self.forge.reply_once("GET", USER, 503)  # One forge can fail without blocking idle peers.
+        org.jobs = [job(owner_id=ORG_ID, repo_id=90)]
+        self.restart()
+        self.tick()
+        org_endpoint = f"/api/v1/orgs/{ORG}"
+        runner_endpoint = f"{org_endpoint}/actions/runners"
+        self.assertEqual([USER, org_endpoint, runner_endpoint + "?visible=false&page=1&limit=50",
+                          runner_endpoint + "/jobs?labels=nix-eph", runner_endpoint], org.paths())
+        self.assertEqual([], self.forge.paths("POST"))
+        with self.assertRaisesRegex(D.StateError, "removed pool still owns registrations"):
+            D.check_removed_pools(self.state_dir, [self.pool])
+        self.restart()
+        self.dispatcher.withdraw()
+        self.tick(D.POLL)
+        self.assertEqual(1, len(self.system.mutations("start")))
+        self.assertEqual([USER], self.forge.paths())  # Busy polling does not look at the unrelated pool.
+        org.jobs = []
+        self.system.set()
+        self.tick(D.POLL)
+        self.assertEqual([runner_endpoint + "/100"], org.paths("DELETE"))
+        self.assertEqual([], self.forge.paths("DELETE"))
+        D.check_removed_pools(self.state_dir, [self.pool])  # Drain allows removal without deleting state.
+
+    def test_org_job_with_wrong_owner_is_not_dispatched(self):
+        org = self.add_pool("monolith-softworks", ORG_POOL, scope=ORG)
+        org.jobs = [job()]  # The PAT owner's personal job is not an org job.
+        self.restart()
+        self.tick()
+        self.assertEqual([], org.paths("POST"))
+        self.assertIn("unexpected job metadata", self.logs.getvalue())
 
     def test_claim_collision_skips_to_next_job_and_cleanup_releases_claim(self):
         first, second, third = job(), job(2, "attempt-2"), job(3, "attempt-3")
@@ -456,7 +600,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertTrue(self.claim_file(first["handle"]).is_file())
         with self.second_slot() as (peer, system):
             peer.tick()
-            active = peer.store.data["active"]
+            active = peer.queues[0].store.data["active"]
             self.assertEqual(second["handle"], active["handle"])
             self.assertRegex(active["name"], r"^eph-[0-9a-f]{12}-ryza-eph-2-[0-9a-f]{32}$")
             self.assertEqual(1, len(system.mutations("start")))
@@ -478,7 +622,7 @@ class DispatcherTests(unittest.TestCase):
         with self.second_slot() as (peer, system):
             self.assertTrue(claim.is_file())
             peer.tick()
-            self.assertIsNone(peer.store.data["active"])
+            self.assertIsNone(peer.queues[0].store.data["active"])
             self.assertEqual([], system.mutations())
         self.restart()
         self.tick()
@@ -509,7 +653,7 @@ class DispatcherTests(unittest.TestCase):
             self.assertEqual([], self.forge.paths("POST"))
             self.host_pause.unlink()
             peer.tick()
-            self.assertEqual(waiting["handle"], peer.store.data["active"]["handle"])
+            self.assertEqual(waiting["handle"], peer.queues[0].store.data["active"]["handle"])
         self.tick()
         self.assertIsNone(self.state()["active"])
         self.assertEqual(1, len(self.forge.paths("POST")))
@@ -519,7 +663,7 @@ class DispatcherTests(unittest.TestCase):
             return subprocess.CompletedProcess(argv, 255, stderr=TOKEN.encode())
 
         self.forge.jobs = [job()]
-        self.dispatcher.slot = D.CommandSlot(("/nix/store/x-ssh-slotctl",), disconnected, remote=True)
+        self.queue.slot = D.CommandSlot(("/nix/store/x-ssh-slotctl",), disconnected, remote=True)
         self.tick()
         self.assertIn("SSH transport failed", self.logs.getvalue())
         self.assertEqual([], self.forge.paths())
@@ -529,12 +673,19 @@ class DispatcherTests(unittest.TestCase):
         self.forge.jobs = [waiting]
         with patch.object(S.os, "fstatvfs", return_value=SimpleNamespace(f_bavail=0, f_frsize=4096)):
             self.tick()
-        self.assertIn("insufficient free space", self.logs.getvalue())
+            self.tick(D.POLL)
+            self.tick(D.POLL)
+        with patch.object(S.os, "fstatvfs", side_effect=OSError):
+            self.tick(D.POLL)
+            self.tick(D.POLL)
+        self.assertEqual(1, self.logs.getvalue().count("insufficient free space"))
+        self.assertEqual(1, self.logs.getvalue().count("cannot check free space"))
         self.assertIsNone(self.state()["active"])
         self.assertFalse(self.claim_file(waiting["handle"]).exists())
         self.assertEqual([], self.forge.paths("POST"))
         self.assertEqual([], self.system.mutations("start"))
         self.tick(D.POLL)
+        self.assertEqual(1, self.logs.getvalue().count("pre-claim check-space recovered"))
         self.assertEqual([RUNNERS], self.forge.paths("POST"))
         self.assertEqual(1, len(self.system.mutations("start")))
 
@@ -562,6 +713,35 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([RUNNERS, RUNNERS], self.forge.paths("POST"))
         self.assertEqual(1, len(self.system.mutations("start")))
 
+    def test_start_refusal_backoff_is_slot_wide_capped_escalates_once_and_resets(self):
+        self.forge.jobs = [job(1, "refusal-0")]
+        delays = (7, 14, 28, 56, 112, 224, 448, 600, 600)
+        with patch.object(self.queue.slot, "start", side_effect=D.StartRefused("pre-submission refusal")):
+            for index, delay in enumerate(delays):
+                self.tick(1 if index else 0)
+                self.assertEqual(index + 1, len(self.forge.paths("POST")))
+                self.forge.jobs = [job(index + 2, f"refusal-{index + 1}")]
+                self.tick(delay - 1)
+                self.assertEqual(index + 1, len(self.forge.paths("DELETE")))
+                self.assertEqual(index + 1, len(self.forge.paths("POST")))
+                self.assertFalse(self.claim_file(f"refusal-{index}").exists())
+                if index < 4:
+                    self.assertNotIn("consecutive start refusals", self.logs.getvalue())
+        self.assertEqual(1, self.logs.getvalue().count("5 consecutive start refusals"))
+        self.assertEqual([], self.system.mutations("start"))
+        self.tick(1)
+        self.assertEqual(1, len(self.system.mutations("start")))
+        self.system.set()
+        self.forge.jobs = [job(99, "fresh-refusal")]
+        with patch.object(self.queue.slot, "start", side_effect=D.StartRefused("pre-submission refusal")):
+            self.tick(D.POLL)
+        self.forge.jobs = [job(100, "fresh-after-refusal")]
+        self.tick(6)
+        self.assertEqual(1, len(self.system.mutations("start")))
+        self.tick(1)
+        self.assertEqual(2, len(self.system.mutations("start")))
+        self.assertEqual(1, self.logs.getvalue().count("5 consecutive start refusals"))
+
     def test_pre_start_ssh_failure_releases_job_with_backoff(self):
         real_slotctl = self.slotctl
         calls = []
@@ -576,7 +756,7 @@ class DispatcherTests(unittest.TestCase):
                 return subprocess.CompletedProcess(argv, 255)
             return reply
 
-        self.dispatcher.slot = D.CommandSlot(("/nix/store/x-ssh-slotctl",), transport, remote=True)
+        self.queue.slot = D.CommandSlot(("/nix/store/x-ssh-slotctl",), transport, remote=True)
         self.forge.jobs = [job()]
         self.tick()
         self.assertTrue(self.credential_dir.exists())
@@ -599,7 +779,7 @@ class DispatcherTests(unittest.TestCase):
         self.pause.touch()
         token = self.credential_dir / "runner-token"
         marker = self.credential_dir.parent / f"{D.SLOT}.run"
-        self.dispatcher.slot.stage(SLOT_RUN, uuid_for(99), TOKEN, job()["handle"])
+        self.queue.slot.stage(SLOT_RUN, uuid_for(99), TOKEN, job()["handle"], PILOT_URL, LABEL)
         self.leave_images()
         self.system.set(pending="71")
         self.restart()
@@ -652,7 +832,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(self.clock.wall(), active["queued_at"])
         self.assertEqual(0o600, stat.S_IMODE((self.state_dir / "state.json").stat().st_mode))
         self.assertEqual(0o700, stat.S_IMODE(self.credential_dir.stat().st_mode))
-        self.assertEqual({"runner-uuid", "runner-token", "job-handle"}, {path.name for path in self.credential_dir.iterdir()})
+        self.assertEqual(GUEST_CREDENTIALS, {path.name for path in self.credential_dir.iterdir()})
         self.assertEqual(uuid_for(100), (self.credential_dir / "runner-uuid").read_text())
         self.assertTrue((self.credential_dir / "runner-token").read_text() == TOKEN)
         self.assertEqual(first["handle"], (self.credential_dir / "job-handle").read_text())
@@ -1051,7 +1231,7 @@ class DispatcherTests(unittest.TestCase):
         self.tick()
         self.assert_scrubbed()
         self.assertEqual("cleanup", self.state()["active"]["phase"])
-        self.assertIn("forgejo-pat credential is unavailable", self.logs.getvalue())
+        self.assertIn("forgejo-pat-ugalabugala credential is unavailable", self.logs.getvalue())
         self.assertEqual([], self.forge.paths("DELETE"))
         self.pat_file.write_text(PAT)
         self.tick(7)
@@ -1071,7 +1251,7 @@ class DispatcherTests(unittest.TestCase):
 
     def test_crash_after_stage_before_start_intent_scrubs_without_booting(self):
         self.forge.jobs = [job()]
-        store = self.dispatcher.store
+        store = self.queue.store
         durable_save = store.save
 
         def crash_before_start(**changes):
@@ -1091,14 +1271,14 @@ class DispatcherTests(unittest.TestCase):
 
     def test_crash_after_post_discovers_and_deletes_exact_owned_runner(self):
         self.forge.jobs = [job()]
-        durable_save = self.dispatcher.store.save
+        durable_save = self.queue.store.save
 
         def crash_after_post(**changes):
             if changes.get("active", {}).get("phase") == "registered":
                 raise Crash
             durable_save(**changes)
 
-        with patch.object(self.dispatcher.store, "save", side_effect=crash_after_post), self.assertRaises(Crash):
+        with patch.object(self.queue.store, "save", side_effect=crash_after_post), self.assertRaises(Crash):
             self.tick()
         original = self.state()["active"]
         self.assertEqual("intent", original["phase"])
@@ -1143,7 +1323,7 @@ class DispatcherTests(unittest.TestCase):
 
     def test_unresolved_empty_inventory_allows_other_handle_not_original(self):
         self.forge.jobs = [job(), job(2, "other")]
-        with patch.object(self.dispatcher.api, "register", side_effect=Crash), self.assertRaises(Crash):
+        with patch.object(self.queue.api, "register", side_effect=Crash), self.assertRaises(Crash):
             self.tick()
         old_name = self.state()["active"]["name"]
         self.assertEqual([], self.forge.paths("POST"))
@@ -1162,7 +1342,7 @@ class DispatcherTests(unittest.TestCase):
         entry = self.state()["active"]
         self.assertIn(entry["handle"], self.state()["refusals"])
         runner_id = self.forge.add_runner(entry["name"])
-        with patch.object(self.dispatcher.api, "delete", side_effect=Crash), self.assertRaises(Crash):
+        with patch.object(self.queue.api, "delete", side_effect=Crash), self.assertRaises(Crash):
             self.tick(D.INVENTORY_POLL)
         self.assertEqual(
             [{"id": runner_id, "uuid": uuid_for(runner_id)}], self.state()["ambiguous"][entry["handle"]]["runners"]
@@ -1492,11 +1672,19 @@ class DispatcherTests(unittest.TestCase):
             data | {"active": data["active"] | {"queued_at": None}},
             data | {"refusals": {job()["handle"]: {"count": True, "first_at": self.clock.wall()}}},
             data | {"refusals": {job()["handle"]: {"count": 1, "first_at": float("nan")}}},
+            data | {"trust_ids": []},
+            data | {"trust_ids": {"Manjo": OWNER}},
+            data | {"trust_ids": {"manjo": 0}},
+            data | {"trust_ids": {"bad/login": OWNER}},
+            data | {"trust_ids": {"manjo": True}},
         ):
             with self.subTest(invalid=invalid):
                 (self.state_dir / "state.json").write_text(json.dumps(invalid))
                 with self.assertRaises(D.StateError):
                     self.restart()
+        # Pinned trust users ride along with the rest of the state, readable by every peer slot.
+        (self.state_dir / "state.json").write_text(json.dumps(data | {"trust_ids": {"manjo": OWNER, "hermes": HERMES}}))
+        self.restart()
 
 
 class TrustedJobTests(unittest.TestCase):
@@ -1506,7 +1694,7 @@ class TrustedJobTests(unittest.TestCase):
         self.surfaces = []
         self.build()
 
-    def build(self, trusted=True):
+    def build(self, trusted=True, *, pool=None, **forge_options):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -1521,7 +1709,8 @@ class TrustedJobTests(unittest.TestCase):
         self.pat_file = root / "forgejo-pat"
         self.pat_file.write_text(PAT)
         self.pause = root / "pause"
-        self.forge = FakeForge()
+        self.pool = D.Pool("ugalabugala", **PILOT_POOL) if pool is None else pool
+        self.forge = FakeForge(**forge_options)
         self.addCleanup(self.forge.close)
         self.forge.tasks = [task(70, 6), task()]
         self.forge.runs = [run(6, commit_sha="old"), run()]
@@ -1549,17 +1738,11 @@ class TrustedJobTests(unittest.TestCase):
     def restart(self):
         slot, slotctl = command_slot(self.config, self.system.run)
         self.slotctls.append(slotctl)
-        self.dispatcher = D.Dispatcher(
-            REPO,
-            D.Forgejo(self.pat_file, self.forge.connect),
-            slot,
-            D.Store(self.state_dir),
-            D.Claims(self.state_dir.parent, {D.SLOT: self.state_dir}),
-            self.clock.monotonic,
-            self.clock.wall,
-            pause=self.pause,
-            trust=D.Trust(REPO_NAME, self.sources) if self.trusted else None,
+        queue = make_queue(
+            self.pool, self.forge, slot, {D.SLOT: self.state_dir}, self.state_dir.parent, self.clock, self.pat_file,
+            trust=D.Trust(self.sources) if self.trusted else None,
         )
+        self.dispatcher = D.Dispatcher([queue], self.clock.monotonic, pause=self.pause)
 
     def tick(self, advance=0):
         self.clock.now += advance
@@ -1588,34 +1771,72 @@ class TrustedJobTests(unittest.TestCase):
         self.assertEqual(polls, self.polls())
 
     def lookups(self):
-        return [path for path in self.forge.paths("GET") if path.startswith(REPOSITORY)]
+        return [path for path in self.forge.paths("GET") if path.startswith("/api/v1/repos/")]
 
     def test_boots_untrusted_and_delivers_after_exact_trusted_pickup(self):
         self.boot()
         self.assertEqual({}, self.delivered())
         self.assertEqual(0o700, stat.S_IMODE(self.trust_dir.stat().st_mode))
-        self.assertEqual({"runner-uuid", "runner-token", "job-handle"}, {p.name for p in self.credential_dir.iterdir()})
+        self.assertEqual(GUEST_CREDENTIALS, {p.name for p in self.credential_dir.iterdir()})
         polls = self.polls()
-        self.tick(D.POLL)  # Not picked up yet: fast polls; only the up-front repository check so far.
+        self.tick(D.POLL)  # Not picked up yet: fast polls but no repository lookups.
         self.assertEqual(polls + 1, self.polls())
-        self.assertEqual([REPOSITORY], self.lookups())
-        self.assertIn("repository manjo/rust-app-template verified as ID 17", self.logs.getvalue())
+        self.assertEqual([], self.lookups())
         polls = self.forge.paths("GET").count(JOBS)
         self.pick_up()
         self.assertEqual({"ncps-netrc": NETRC, "ci-signing-key": SIGNING_KEY}, self.delivered())
         for path in self.trust_dir.iterdir():
             info = path.stat()
             self.assertEqual((0o400, os.getuid()), (stat.S_IMODE(info.st_mode), info.st_uid))
-        self.assertEqual([REPOSITORY, TASKS.format(1), RUN.format(7), KEYS.format(1), RUN.format(7)], self.lookups())
+        self.assertEqual(
+            [REPOSITORY, TASKS.format(1), RUN.format(7), KEYS.format(1), PROTECTIONS, RUN.format(7)], self.lookups()
+        )
         self.assertEqual(polls + 2, self.forge.paths("GET").count(JOBS))  # The poll plus the pre-delivery recheck.
         self.assertIn("trusted: run #7 (push); delivered CI upload credentials", self.logs.getvalue())
         self.assert_settled_cadence()
-        self.assertEqual(5, len(self.lookups()))
+        self.assertEqual(6, len(self.lookups()))
         self.assertEqual([], self.system.mutations("stop"))
         self.system.set()
         self.tick(D.POLL)
         self.assertFalse(self.trust_dir.exists())
         self.assertFalse(self.credential_dir.exists())
+
+    def test_org_trust_allowlist_and_schedule_identity(self):
+        repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}
+        for repo_id, overrides, expected in (
+            (REPO + 1, {}, "repository not in the trust allowlist"),
+            (REPO, {"repository": repository | {"owner": {"id": ORG_ID, "login": "other-org"}}}, "repository mismatch"),
+            (REPO, {"trigger_user": {"id": HERMES, "login": "hermes"}}, "push user not in the trust allowlist"),
+            (REPO, {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch"}, None),
+            (REPO, {"trigger_event": "schedule", "ScheduleID": 1}, "schedule not triggered by forgejo-actions"),
+            (REPO, {"trigger_event": "schedule", "ScheduleID": 1, "trigger_user": {"id": -2}}, "schedule trust not enabled for this repository"),
+            (REPO, {"trigger_event": "schedule", "ScheduleID": 1, "trigger_user": {"id": -2}, "schedules": True}, None),
+            (REPO, {}, None),
+        ):
+            with self.subTest(repo_id=repo_id, overrides=overrides):
+                overrides = dict(overrides)
+                schedules = overrides.pop("schedules", False)
+                trust = {"repos": {str(REPO): {"owner": ORG, "name": "inanna", "schedules": schedules}}, "users": ["manjo"]}
+                self.build(pool=D.Pool("monolith-softworks", **(ORG_POOL | {"trust": trust})), scope=ORG, repo_name="inanna")
+                self.forge.runs = [run(**({"repository": repository} | overrides))]
+                waiting = job(repo_id=repo_id, owner_id=ORG_ID)
+                self.forge.jobs = [waiting]
+                self.tick()
+                self.assertEqual({}, self.delivered())
+                self.system.set(active="active")
+                self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+                self.tick(D.POLL)
+                if expected is None:
+                    self.assertEqual({"ncps-netrc": NETRC, "ci-signing-key": SIGNING_KEY}, self.delivered())
+                else:
+                    self.assertIn(expected, self.logs.getvalue())
+                    self.assertEqual({}, self.delivered())
+                if repo_id != REPO:
+                    self.assertEqual([], self.lookups())
+                else:
+                    root = f"/api/v1/repos/{ORG}/inanna"
+                    self.assertEqual(root, self.lookups()[0])
+                    self.assertTrue(all(path.startswith(root) for path in self.lookups()))
 
     def test_trusted_schedules_and_manual_dispatches(self):
         for fields in (
@@ -1624,7 +1845,7 @@ class TrustedJobTests(unittest.TestCase):
             {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "prettyref": "master"},
         ):
             with self.subTest(fields=fields):
-                self.build()
+                self.build(pool=D.Pool("ugalabugala", **SCHEDULE_POOL))
                 self.forge.runs = [run(**fields)]
                 self.boot()
                 self.pick_up()
@@ -1637,7 +1858,7 @@ class TrustedJobTests(unittest.TestCase):
             ("fork or AGit pull request", fork | {"trigger_user": {"id": OWNER}}),  # AGit by manjo is still a fork.
             ("fork or AGit pull request", fork | {"trigger_user": {"id": HERMES}, "approved_by": OWNER}),
             ("awaiting approval", {"need_approval": True}),
-            ("push not by manjo", {"trigger_user": {"id": HERMES}}),
+            ("push user not in the trust allowlist", {"trigger_user": {"id": HERMES, "login": "hermes"}}),
             ("event is not push", {"event": "pull_request", "trigger_event": "pull_request"}),
             ("event is not push", {"event": "pull_request", "trigger_event": "pull_request_target"}),
             ("event is not push", {"event": "issue_comment", "trigger_event": "issue_comment"}),
@@ -1651,7 +1872,7 @@ class TrustedJobTests(unittest.TestCase):
             ("invalid run metadata", {"repository": {"id": REPO, "default_branch": "", "owner": {"id": OWNER, "login": "manjo"}}}),
             ("invalid run metadata", {"repository": {"id": REPO, "default_branch": None, "owner": {"id": OWNER, "login": "manjo"}}}),
             ("invalid run metadata", {"prettyref": ""}),
-            ("dispatch not by manjo", {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "trigger_user": {"id": HERMES}}),
+            ("dispatch user not in the trust allowlist", {"event": "workflow_dispatch", "trigger_event": "workflow_dispatch", "trigger_user": {"id": HERMES, "login": "hermes"}}),
             ("push run carries a schedule", {"ScheduleID": 4}),
             ("schedule run without a schedule", {"trigger_event": "schedule", "trigger_user": {"id": -2}}),
             ("schedule not triggered by forgejo-actions", {"trigger_event": "schedule", "ScheduleID": 4}),
@@ -1711,8 +1932,6 @@ class TrustedJobTests(unittest.TestCase):
                 self.assertIn("trust lookup pending", self.logs.getvalue())
                 if status == 403:
                     self.assertIn("read:repository", self.logs.getvalue())
-                if endpoint == REPOSITORY:
-                    self.assertIn("cannot verify the trusted-job repository", self.logs.getvalue())
                 polls = self.polls()
                 self.tick(D.POLL)  # Pending: keep polling fast.
                 self.assertEqual(polls + 1, self.polls())
@@ -1783,7 +2002,7 @@ class TrustedJobTests(unittest.TestCase):
         self.system.set()
         self.tick(D.POLL)
         self.assertFalse(self.trust_dir.exists())
-        self.assertEqual([REPOSITORY], self.lookups())
+        self.assertEqual([], self.lookups())
 
     def test_bad_credential_sources_withhold(self):
         for name, value in (
@@ -1903,17 +2122,208 @@ class TrustedJobTests(unittest.TestCase):
 
     def test_gate_off_never_looks_up_or_delivers(self):
         self.build(trusted=False)
+        self.assertIn("trust allowlist configured but trusted jobs are off", self.logs.getvalue())
         self.boot()
         self.pick_up()
         self.tick(D.BUSY_POLL_FAST)
         self.assertEqual([], self.lookups())
         self.assertFalse(self.trust_dir.exists())
 
+    SCHEDULE = {"trigger_event": "schedule", "ScheduleID": 9, "trigger_user": {"id": -2, "login": "forgejo-actions"}}
+
+    def org_round(self, run_fields, *, schedules=False, users=("manjo",), login="manjo", identity=None, protections=None):
+        """One org-pool job (monolith-softworks/inanna) picked up with the given run; returns what was delivered."""
+        trust = {"repos": {str(REPO): {"owner": ORG, "name": "inanna", "schedules": schedules}}, "users": list(users)}
+        self.build(pool=D.Pool("monolith-softworks", **(ORG_POOL | {"login": login, "trust": trust})), scope=ORG, repo_name="inanna")
+        if identity is not None:
+            self.forge.identity = identity
+        if protections is not None:
+            self.forge.protections = protections
+        repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}
+        self.forge.runs = [run(**({"repository": repository} | run_fields))]
+        waiting = job(owner_id=ORG_ID)
+        self.forge.jobs = [waiting]
+        self.tick()
+        self.system.set(active="active")
+        self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+        self.tick(D.POLL)
+        return self.delivered()
+
+    def test_schedules_are_untrusted_unless_the_repository_opts_in(self):
+        # Review probe F1: an allowlisted repo without trust.users is now a configuration error.
+        with self.assertRaises(ValueError):
+            D.Pool("monolith-softworks", **(ORG_POOL | {"trust": ORG_POOL["trust"] | {"users": []}}))
+        # Review probe F1b: an org member's push is refused, and so is the schedule it registers.
+        self.assertEqual({}, self.org_round({"trigger_user": {"id": 555, "login": "org-member"}}))
+        self.assertIn("push user not in the trust allowlist", self.logs.getvalue())
+        self.assertEqual({}, self.org_round(self.SCHEDULE))
+        self.assertIn("untrusted: run #7 (schedule trust not enabled for this repository)", self.logs.getvalue())
+        self.assertFalse(any(path.endswith("/branch_protections") for path in self.lookups()))
+        # Opted in, a schedule still needs the branch protection precondition.
+        outsider = protection(push_whitelist_usernames=["manjo", "org-member"])
+        self.assertEqual({}, self.org_round(self.SCHEDULE, schedules=True, protections=[outsider]))
+        self.assertIn("default branch protection allows a user outside trust.users", self.logs.getvalue())
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.org_round(self.SCHEDULE, schedules=True)))
+        self.assertIn("trusted: run #7 (schedule)", self.logs.getvalue())
+
+    def test_default_branch_protection_must_confine_writers_to_trust_users(self):
+        team = protection(merge_whitelist_teams=["Owners"])
+        for reason, rules in (
+            ("default branch has no single branch protection rule of its own", []),
+            ("default branch has no single branch protection rule of its own", [protection("feature")]),
+            ("default branch has no single branch protection rule of its own", [protection(rule_name="mast*", branch_name="")]),
+            ("default branch has no single branch protection rule of its own", [protection(rule_name="*", branch_name="")]),
+            ("default branch has no single branch protection rule of its own", [protection(), protection("Master")]),
+            ("default branch protection lets every writer push", [protection(enable_push_whitelist=False)]),
+            ("default branch protection lets every writer merge", [protection(enable_merge_whitelist=False)]),
+            ("default branch protection has unprotected file patterns", [protection(unprotected_file_patterns=".forgejo/**")]),
+            ("default branch protection allows a team", [protection(push_whitelist_teams=["writers"])]),
+            ("default branch protection allows a team", [team]),
+            ("default branch protection allows a user outside trust.users", [protection(merge_whitelist_usernames=["hermes"])]),
+        ):
+            with self.subTest(reason=reason, rules=rules):
+                self.build()
+                self.forge.protections = rules
+                self.boot()
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertIn(f"untrusted: run #7 ({reason})", self.logs.getvalue())
+        for rules in (
+            [protection("Master")],  # Exact names match case-insensitively, as in Forgejo.
+            [protection(enable_push=False, push_whitelist_usernames=["hermes"])],  # Pushes are off; merges are confined.
+            [protection(push_whitelist_usernames=[], merge_whitelist_usernames=["Manjo"])],
+            [protection(rule_name="*", branch_name="", enable_push_whitelist=False), protection()],
+        ):
+            with self.subTest(rules=rules):
+                self.build()
+                self.forge.protections = rules
+                self.boot()
+                self.pick_up()
+                self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+
+    def test_unreadable_branch_protection_fails_closed_after_the_deadline(self):
+        for reply in ((403, {"message": "forbidden"}), (200, {"rules": []}), (200, [protection(enable_push="yes")]),
+                      (200, [{"branch_name": "master"}])):
+            with self.subTest(reply=reply):
+                self.build()
+                self.boot()
+                for _ in range(2):
+                    self.forge.reply_once("GET", PROTECTIONS, *reply)
+                self.pick_up()
+                self.assertIn("trust lookup pending: Forgejo branch protections", self.logs.getvalue())
+                self.assertEqual({}, self.delivered())
+                self.forge.protections = None if reply[0] == 403 else self.forge.protections
+                self.tick(D.TRUST_DEADLINE)
+                self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
+                self.assertEqual({}, self.delivered())
+
+    def test_pull_mirrors_are_never_trusted(self):
+        self.forge.repository["mirror"] = True
+        self.boot()
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.assertIn("untrusted: run #7 (repository is a pull mirror)", self.logs.getvalue())
+        self.build()
+        self.forge.repository["mirror"] = None
+        self.boot()
+        self.pick_up()
+        self.assertIn("trust lookup pending: Forgejo repository: unexpected repository metadata", self.logs.getvalue())
+
+    def test_trust_users_are_pinned_by_account_id(self):
+        # Review probe F2: PAT account noosphere-ci, trust.users = [manjo]. The first manjo run pins manjo's ID.
+        identity = {"login": "noosphere-ci", "id": 4242}
+        self.build(pool=D.Pool("monolith-softworks", **(ORG_POOL | {"login": "noosphere-ci"})), scope=ORG, repo_name="inanna")
+        self.forge.identity = identity
+        self.forge.users = {"manjo": {"id": OWNER, "login": "Manjo"}}
+        repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}
+        self.forge.runs = [run(repository=repository)]
+        waiting = job(owner_id=ORG_ID)
+        self.forge.jobs = [waiting]
+        self.tick()
+        self.system.set(active="active")
+        self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+        self.tick(D.POLL)
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.assertIn(f"pinned trust user manjo to account {OWNER}", self.logs.getvalue())
+        state = json.loads((self.state_dir / self.pool.state_file).read_text())
+        self.assertEqual({"manjo": OWNER}, state["trust_ids"])
+        self.assertEqual(1, self.forge.paths("GET").count("/api/v1/users/manjo"))
+        # manjo is renamed and someone registers the free name: same login, new ID. Fails closed with no new lookup.
+        for case in ("renamed", "restart"):
+            with self.subTest(case=case):
+                self.forge.users = {"manjo": {"id": 999999, "login": "manjo"}}
+                if case == "restart":
+                    self.restart()
+                self.system.set()
+                self.forge.jobs = []
+                self.tick(D.POLL)
+                self.forge.runs = [run(repository=repository, trigger_user={"id": 999999, "login": "manjo"})]
+                self.forge.jobs = [waiting | {"handle": f"next-{case}"}]
+                self.tick(D.POLL)
+                self.system.set(active="active")
+                self.forge.jobs = [waiting | {"handle": f"next-{case}", "status": "running", "task_id": 71}]
+                self.tick(D.POLL)
+                self.assertEqual({}, self.delivered())
+                self.assertIn("(push user ID differs from the pinned trust user; reconcile the account", self.logs.getvalue())
+                self.assertEqual(1, self.forge.paths("GET").count("/api/v1/users/manjo"))
+
+    def test_trust_user_pins_are_shared_with_peer_slots(self):
+        pool = D.Pool("monolith-softworks", **(ORG_POOL | {"login": "noosphere-ci"}))
+        repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}
+        for peers, expected in (
+            ({"ryza-eph-2": OWNER}, {"ncps-netrc", "ci-signing-key"}),  # Adopted without a lookup, ignoring the impostor.
+            ({"ryza-eph-2": OWNER, "ryza-eph-3": 999999}, set()),
+        ):
+            with self.subTest(peers=peers):
+                self.build(pool=pool, scope=ORG, repo_name="inanna")
+                self.forge.identity = {"login": "noosphere-ci", "id": 4242}
+                self.forge.users = {"manjo": {"id": 999999, "login": "manjo"}}
+                states = {D.SLOT: self.state_dir}
+                for slot, account in peers.items():
+                    directory = self.state_dir.parent / slot
+                    directory.mkdir()
+                    (directory / pool.state_file).write_text(json.dumps({
+                        "version": 2, "slot": slot, "owner_id": ORG_ID, "active": None, "ambiguous": {},
+                        "retired": [], "refusals": {}, "trust_ids": {"manjo": account},
+                    }))
+                    states[slot] = directory
+                slot, slotctl = command_slot(self.config, self.system.run)
+                self.slotctls.append(slotctl)
+                queue = make_queue(pool, self.forge, slot, states, self.state_dir.parent, self.clock, self.pat_file,
+                                   trust=D.Trust(self.sources))
+                self.dispatcher = D.Dispatcher([queue], self.clock.monotonic, pause=self.pause)
+                self.forge.runs = [run(repository=repository)]
+                waiting = job(owner_id=ORG_ID)
+                self.forge.jobs = [waiting]
+                self.tick()
+                self.system.set(active="active")
+                self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+                self.tick(D.POLL)
+                self.assertEqual(expected, set(self.delivered()))
+                self.assertNotIn("/api/v1/users/manjo", self.forge.paths("GET"))
+                if not expected:
+                    self.assertIn("slots pinned trust user manjo to different accounts", self.logs.getvalue())
+
+    def test_pat_account_is_checked_by_id_and_unresolvable_users_fail_closed(self):
+        # Review probe F2 control: the PAT login with another ID is refused.
+        self.assertEqual({}, self.org_round({"trigger_user": {"id": 999999, "login": "manjo"}}))
+        self.assertIn("push user ID differs from the pinned trust user", self.logs.getvalue())
+        self.assertNotIn("/api/v1/users/manjo", self.forge.paths("GET"))
+        # A trust user whose account cannot be resolved (deleted, renamed: 404 or 307) is never trusted.
+        identity = {"login": "noosphere-ci", "id": 4242}
+        self.assertEqual({}, self.org_round({}, login="noosphere-ci", identity=identity))
+        self.assertIn("trust lookup pending: Forgejo trust user: HTTP 404", self.logs.getvalue())
+        self.tick(D.TRUST_DEADLINE)
+        self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
+        self.assertEqual({}, self.delivered())
+        state = json.loads((self.state_dir / self.pool.state_file).read_text())
+        self.assertNotIn("trust_ids", state)
+
 
 class SlotConfigurationTests(unittest.TestCase):
-    """HOM-32: the slot, machine, forge, account and label come from the command line, not constants."""
+    """The slot identity is configured and independent of its pools."""
 
-    PILOT = ("ryza-eph-1", "ryza", "forge.ugalabugala.org", "manjo", "nix-eph")
+    PILOT = ("ryza-eph-1", "ryza")
     INACTIVE = b"LoadState=loaded\nActiveState=inactive\nJob=\nResult=success\n"
 
     def setUp(self):
@@ -1924,8 +2334,7 @@ class SlotConfigurationTests(unittest.TestCase):
     def arguments(self, **changes):
         values = {
             "slot": "terra-eph-1", "machine": "terra", "slotctl": "/nix/store/x-forgejo-slotctl",
-            "forge-host": "forge.noosphere.uk", "login": "manjo", "label": "nix-eph",
-            "repo-id": "9", "state-dir": "/state",
+            "pools": "/pools.json", "state-dir": "/state",
             "claim-states": "/claim-states.json",
         } | changes
         argv = []
@@ -1935,7 +2344,7 @@ class SlotConfigurationTests(unittest.TestCase):
         return argv
 
     def assert_pilot(self):
-        self.assertEqual(self.PILOT, (D.SLOT, D.MACHINE, D.HOST, D.LOGIN, D.LABEL))
+        self.assertEqual(self.PILOT, (D.SLOT, D.MACHINE))
         self.assertEqual("microvm@ryza-eph-1.service", D.VM)
         self.assertEqual(VM, D.VM)
         self.assertEqual(
@@ -1944,13 +2353,10 @@ class SlotConfigurationTests(unittest.TestCase):
         )
         self.assertTrue(D.matches(D.NAME, f"eph-{'0' * 12}-ryza-{'f' * 32}"))
 
-    def test_defaults_are_the_pilot(self):
-        self.assert_pilot()
-
     def test_arguments_configure_one_slot(self):
         args = D.parse_arguments(self.arguments())
         self.assertEqual(Path("/nix/store/x-forgejo-slotctl"), args.slotctl)
-        self.assertEqual(("terra-eph-1", "terra", "forge.noosphere.uk"), (D.SLOT, D.MACHINE, D.HOST))
+        self.assertEqual(("terra-eph-1", "terra"), (D.SLOT, D.MACHINE))
         self.assertEqual("microvm@terra-eph-1.service", D.VM)
         self.assertIn("microvm-virtiofsd@terra-eph-1.service", D.SUPPORT)
         self.assertFalse(any("ryza" in unit for unit in D.SUPPORT))
@@ -1958,10 +2364,10 @@ class SlotConfigurationTests(unittest.TestCase):
         self.assertTrue(D.matches(D.NAME, name))
         self.assertFalse(D.matches(D.NAME, name.replace("eph-1", "eph-2")))
         with tempfile.TemporaryDirectory() as directory:
-            self.assertEqual("terra-eph-1", D.Store(Path(directory)).data["slot"])
+            self.assertEqual("terra-eph-1", D.Store(Path(directory), "state.json").data["slot"])
 
     def test_dispatch_names_units_and_runner_after_the_slot(self):
-        D.configure("terra-eph-1", "terra", "forge.ugalabugala.org", "manjo", "nix-eph")
+        D.configure("terra-eph-1", "terra")
         forge = FakeForge()
         self.addCleanup(forge.close)
         forge.jobs = [job(14)]
@@ -1980,16 +2386,9 @@ class SlotConfigurationTests(unittest.TestCase):
         pat.write_text(PAT + "\n")
         config = write_slotctl_config(root / "slotctl.json", "terra-eph-1", root / "vm", root / "credentials" / "terra-eph-1")
         slot, slotctl = command_slot(config, run)
-        dispatcher = D.Dispatcher(
-            REPO,
-            D.Forgejo(pat, forge.connect),
-            slot,
-            D.Store(root / "state"),
-            D.Claims(root, {D.SLOT: root / "state"}),
-            FakeClock().monotonic,
-            FakeClock().wall,
-            pause=root / "pause",
-        )
+        clock = FakeClock()
+        queue = make_queue(D.Pool("ugalabugala", **PILOT_POOL), forge, slot, {D.SLOT: root / "state"}, root, clock, pat)
+        dispatcher = D.Dispatcher([queue], clock.monotonic, pause=root / "pause")
         dispatcher.tick()
         state = json.loads((root / "state" / "state.json").read_text())
         self.assertEqual("terra-eph-1", state["slot"])
@@ -1999,29 +2398,46 @@ class SlotConfigurationTests(unittest.TestCase):
         self.assertEqual([(SYSTEMCTL, "--system", "--no-pager", "--no-block", "--job-mode=fail", "start", "microvm@terra-eph-1.service")], started)
         shown = {argv[-1] for argv in calls if "show" in argv}
         self.assertEqual({"microvm@terra-eph-1.service", *D.SUPPORT}, shown)
-        self.assertIn("terra-eph-1: queued VM start", self.logs.getvalue())
+        self.assertIn("terra-eph-1: [ugalabugala] queued VM start", self.logs.getvalue())
         self.assertTrue(all(argv[argv.index("--slot") + 1] == "terra-eph-1" for argv in slotctl.calls))
         self.assertEqual(TOKEN, (root / "credentials" / "terra-eph-1" / "runner-token").read_text())
 
     def test_rejects_separators_and_missing_settings(self):
         for changes in (
             {"slot": "ryza/eph-1"}, {"slot": "Ryza-eph-1"}, {"slot": "eph@1"}, {"machine": "ry za"},
-            {"forge-host": "forge.example.org/x"}, {"forge-host": "localhost"}, {"forge-host": "forge.example.org:443"},
-            {"login": "manjo/../x"}, {"login": "man jo"}, {"label": "nix,eph"}, {"label": "nix&eph"}, {"label": "nix-eph:host"},
-            {"slotctl": "relative/slotctl"}, {"slot": None}, {"machine": None}, {"forge-host": None}, {"login": None},
-            {"label": None}, {"slotctl": None}, {"vm-dir": "/vm"},
+            {"pools": "relative/pools.json"}, {"pools": None}, {"slotctl": "relative/slotctl"},
+            {"slot": None}, {"machine": None}, {"slotctl": None}, {"vm-dir": "/vm"},
         ):
             with self.subTest(changes), self.assertRaises(SystemExit):
                 D.parse_arguments(self.arguments(**changes))
             # A refused command line leaves the process as it was.
             self.assert_pilot()
 
+    def test_rejects_duplicate_queues_and_cross_owner_trust_repos(self):
+        trusted = PILOT_POOL["trust"]["repos"][str(REPO)]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pools.json"
+            for entries in (
+                {"first": PILOT_POOL, "second": PILOT_POOL | {"scope": {"user": "Manjo"}}},
+                {"org": ORG_POOL | {"trust": PILOT_POOL["trust"]}},
+                # Review L2 and M1: dead trust entries, an empty dispatch list, trust without users, no schedule flag.
+                {"pilot": PILOT_POOL | {"dispatch": [REPO + 1]}},
+                {"pilot": PILOT_POOL | {"dispatch": []}},
+                {"pilot": PILOT_POOL | {"trust": PILOT_POOL["trust"] | {"users": []}}},
+                {"pilot": PILOT_POOL | {"trust": {"repos": {str(REPO): trusted | {"schedules": 1}}, "users": ["manjo"]}}},
+                {"pilot": PILOT_POOL | {"trust": {"repos": {str(REPO): {"owner": "manjo", "name": REPO_NAME}}, "users": ["manjo"]}}},
+            ):
+                with self.subTest(entries=entries):
+                    path.write_text(json.dumps(entries))
+                    with self.assertRaisesRegex(D.StateError, "invalid dispatcher pool"):
+                        D.load_pools(path)
+
 
 class SlotctlTests(unittest.TestCase):
     """HOM-32: slotctl, the slot host side. Every input is checked there; secrets never reach argv or stderr."""
 
     SLOT = "ryza-eph-1"
-    STAGE = {"uuid": uuid_for(100), "token": TOKEN, "handle": "opaque/attempt-1"}
+    STAGE = {"uuid": uuid_for(100), "token": TOKEN, "handle": "opaque/attempt-1", "url": PILOT_URL, "label": LABEL}
     DELIVER = {"ci-signing-key": base64.b64encode(SIGNING_KEY).decode(), "ncps-netrc": base64.b64encode(NETRC).decode()}
     REFUSED = (2, b"", "invalid-request\n")
 
@@ -2330,6 +2746,10 @@ class SlotctlTests(unittest.TestCase):
             (self.STAGE | {"token": ""}, None),
             (self.STAGE | {"handle": "line\nbreak"}, None),
             (self.STAGE | {"handle": 7}, None),
+            (self.STAGE | {"url": "https://forge.noosphere.uk/other"}, None),
+            (self.STAGE | {"url": "https://other.example"}, None),
+            (self.STAGE | {"label": "nix-eph:docker"}, None),
+            (self.STAGE | {"label": "--other"}, None),
         ):
             with self.subTest(payload=payload, raw=raw and raw[:5]):
                 self.assertEqual(self.REFUSED, self.slotctl("--slot", self.SLOT, "stage", SLOT_RUN, payload=payload, raw=raw))
@@ -2340,6 +2760,17 @@ class SlotctlTests(unittest.TestCase):
         self.assertEqual(0o400, stat.S_IMODE((self.credential_dir / "runner-uuid").stat().st_mode))
         self.assertEqual(0o700, stat.S_IMODE(self.trust_dir.stat().st_mode))
         self.assertEqual([], list(self.trust_dir.iterdir()))
+
+    def test_fixed_pilot_stages_only_the_existing_credentials_and_refuses_other_routes(self):
+        config = write_slotctl_config(
+            self.root / "fixed.json", self.SLOT, self.vm_dir, self.credential_dir, self.trust_dir, fixed_pilot=True,
+        )
+        for route in ({"url": NOOSPHERE_URL}, {"label": "nix-nightly"}):
+            with self.subTest(route=route):
+                self.assertEqual(self.REFUSED, self.slotctl("--slot", self.SLOT, "stage", SLOT_RUN, payload=self.STAGE | route, config=config))
+                self.assertFalse(self.credential_dir.exists())
+        self.assertEqual((0, b"", ""), self.slotctl("--slot", self.SLOT, "stage", SLOT_RUN, payload=self.STAGE, config=config))
+        self.assertEqual({"runner-token", "runner-uuid", "job-handle"}, {path.name for path in self.credential_dir.iterdir()})
 
     def test_scrub_waits_for_the_vm_and_refuses_a_symlinked_slot_dir(self):
         for name in S.IMAGES:
@@ -2546,17 +2977,17 @@ class CommandSlotTests(unittest.TestCase):
 
     def test_secrets_go_on_stdin_only(self):
         slot, calls = self.call()
-        slot.stage(SLOT_RUN, uuid_for(100), TOKEN, "opaque/attempt-1")
+        slot.stage(SLOT_RUN, uuid_for(100), TOKEN, "opaque/attempt-1", PILOT_URL, LABEL)
         slot.deliver(SLOT_RUN, {"ci-signing-key": SIGNING_KEY, "ncps-netrc": NETRC})
         (stage_argv, stage), (deliver_argv, deliver) = calls
         self.assertEqual(("stage", SLOT_RUN), stage_argv[-2:])
         self.assertEqual(("deliver", SLOT_RUN), deliver_argv[-2:])
         self.assertNotIn(TOKEN, repr(stage_argv) + repr(deliver_argv))
-        self.assertEqual({"uuid": uuid_for(100), "token": TOKEN, "handle": "opaque/attempt-1"}, json.loads(stage["input"]))
+        self.assertEqual(SlotctlTests.STAGE, json.loads(stage["input"]))
         self.assertEqual(NETRC, base64.b64decode(json.loads(deliver["input"])["ncps-netrc"]))
         slot, calls = self.call()
         with self.assertRaisesRegex(D.ApiError, "invalid runner token"):
-            slot.stage(SLOT_RUN, uuid_for(100), "bad token", "opaque/attempt-1")
+            slot.stage(SLOT_RUN, uuid_for(100), "bad token", "opaque/attempt-1", PILOT_URL, LABEL)
         self.assertEqual([], calls)
 
 
@@ -2567,6 +2998,8 @@ class SharedConstantsTests(unittest.TestCase):
         self.assertEqual(D.SUPPORT_UNITS, S.SUPPORT_UNITS)
         self.assertEqual(D.RESULTS, (*S.RESULTS, "other result"))
         self.assertEqual(D.TRUST_FILES, S.TRUST_FILES)
+        self.assertEqual({f"https://{host}" for host in D.FORGES.values()}, set(S.FORGE_URLS))
+        self.assertEqual(D.LABEL_NAME.pattern, S.LABEL_NAME.pattern)
         self.assertEqual({k: v.pattern for k, v in D.TRUST_SHAPES.items()}, {k: v.pattern for k, v in S.TRUST_SHAPES.items()})
         for name in ("TOKEN", "UUID", "SLOT_NAME"):
             self.assertEqual(getattr(D, name).pattern, getattr(S, name).pattern, name)
@@ -2620,11 +3053,13 @@ class SlotctlProcessTests(unittest.TestCase):
         snapshot = self.slot.observe()
         self.assertTrue(snapshot.vm_idle and snapshot.again_idle)
         self.assertEqual([], snapshot.residual)
-        self.slot.stage(SLOT_RUN, uuid_for(100), TOKEN, "opaque/attempt-1")
+        self.slot.stage(SLOT_RUN, uuid_for(100), TOKEN, "opaque/attempt-1", NOOSPHERE_URL, "nix-machines")
         self.assertEqual(SLOT_RUN, self.slot.observe().run)
         self.slot.start(SLOT_RUN)
         self.slot.withdraw(SLOT_RUN)
         self.assertEqual(TOKEN, (self.credential_dir / "runner-token").read_text())
+        self.assertEqual(NOOSPHERE_URL, (self.credential_dir / "forgejo-url").read_text())
+        self.assertEqual("nix-machines", (self.credential_dir / "runner-label").read_text())
         (self.vm_dir / "var.img").touch()
         self.slot.scrub(SLOT_RUN)
         self.assertFalse(self.credential_dir.exists())
@@ -2632,7 +3067,7 @@ class SlotctlProcessTests(unittest.TestCase):
         self.assertIsNone(self.slot.observe().run)
 
     def test_a_refusal_and_a_forged_command_line(self):
-        self.slot.stage(SLOT_RUN, uuid_for(100), TOKEN, "opaque/attempt-1")
+        self.slot.stage(SLOT_RUN, uuid_for(100), TOKEN, "opaque/attempt-1", PILOT_URL, LABEL)
         with self.assertRaisesRegex(D.SlotError, "^this slot does not deliver CI credentials"):
             self.slot.deliver(SLOT_RUN, {"ci-signing-key": SIGNING_KEY, "ncps-netrc": NETRC})
         forged = subprocess.run(

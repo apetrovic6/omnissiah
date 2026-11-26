@@ -30,7 +30,19 @@
   # Enroll the dedicated PAT before enabling the one-job pilot (see README).
   services.imperium.forgejoEphemeral = {
     enable = true;
-    repoId = 9;
+    pools.ugalabugala = {
+      forge = "ugalabugala";
+      scope.user = "manjo";
+      labels = ["nix-eph"];
+      dispatch = [9];
+      trust = {
+        repos."9" = {
+          owner = "manjo";
+          name = "rust-app-template";
+        };
+        users = ["manjo"];
+      };
+    };
   };
 
   services.imperium.sccache.enable = true;
