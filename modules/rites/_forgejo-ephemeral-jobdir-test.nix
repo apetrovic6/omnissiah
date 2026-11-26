@@ -14,60 +14,67 @@
   inherit (ryza.pkgs) lib;
   inventory = ryza.config.services.imperium.forgejoEphemeral.inventory;
   host = inventory.ryza;
-  enabled = ryza.extendModules {
-    modules = [
-      {
-        services.imperium.forgejoEphemeral = {
-          enable = lib.mkForce true;
-          inventory =
-            inventory
-            // {
-              ryza =
-                host
+  withPools = pools:
+    ryza.extendModules {
+      modules =
+        [
+          {
+            services.imperium.forgejoEphemeral = {
+              enable = lib.mkForce true;
+              pools = lib.mkForce pools;
+              inventory =
+                inventory
                 // {
-                  slots =
-                    host.slots
+                  ryza =
+                    host
                     // {
-                      ryza-eph-2 = host.slots.ryza-eph-1 // {index = 2;};
+                      slots =
+                        host.slots
+                        // {
+                          ryza-eph-2 =
+                            host.slots.ryza-eph-1
+                            // {
+                              index = 2;
+                              class = "large";
+                            };
+                        };
                     };
                 };
             };
+            clan.core.vars.generators.forgejo-ephemeral-ugalabugala.files.token.path = lib.mkForce "/run/secrets/ephemeral-test-pat";
+          }
+        ]
+        ++ lib.optional (lib.any (pool: pool.forge == "noosphere") (builtins.attrValues pools)) {
+          clan.core.vars.generators.forgejo-ephemeral-noosphere.files.token.path = lib.mkForce "/run/secrets/noosphere-test-pat";
         };
-        clan.core.vars.generators.forgejo-ephemeral-ugalabugala.files.token.path = lib.mkForce "/run/secrets/ephemeral-test-pat";
-      }
-    ];
-  };
+    };
+  pilotPools.ugalabugala = builtins.removeAttrs pilot ["host" "login" "maxSlots"];
+  enabled = withPools pilotPools;
   c = enabled.config;
   multiPool =
-    (enabled.extendModules {
-      modules = [
-        {
-          services.imperium.forgejoEphemeral.pools = {
-            noosphere = {
-              forge = "noosphere";
-              scope.user = "noosphere-ci";
-              labels = ["nix-eph" "nix-nightly"];
-              dispatch = [7];
-              maxSlots = 1;
+    (withPools (pilotPools
+      // {
+        noosphere = {
+          forge = "noosphere";
+          scope.user = "noosphere-ci";
+          labels = ["nix-eph" "nix-nightly"];
+          dispatch = [7];
+          maxSlots = 1;
+        };
+        monolith-softworks = {
+          forge = "noosphere";
+          scope.org = "monolith-softworks";
+          labels = ["nix-eph"];
+          dispatch = "owner";
+          trust = {
+            repos."42" = {
+              owner = "Monolith-Softworks";
+              name = "inanna";
             };
-            monolith-softworks = {
-              forge = "noosphere";
-              scope.org = "monolith-softworks";
-              labels = ["nix-eph"];
-              dispatch = "owner";
-              trust = {
-                repos."42" = {
-                  owner = "Monolith-Softworks";
-                  name = "inanna";
-                };
-                users = ["manjo"];
-              };
-            };
+            users = ["manjo"];
           };
-          clan.core.vars.generators.forgejo-ephemeral-noosphere.files.token.path = lib.mkForce "/run/secrets/noosphere-test-pat";
-        }
-      ];
-    }).config;
+        };
+      })).config;
   poolsFor = machine: builtins.fromJSON machine.services.imperium.forgejoEphemeral.internal.poolsFile.text;
   pilot = {
     forge = "ugalabugala";
@@ -108,14 +115,7 @@
   trustedConfig = trusted.config;
   # One extra pool on the enabled fixture; for assertions, option types and PAT prompts.
   withPool = pool:
-    (enabled.extendModules {
-      modules = [
-        {
-          services.imperium.forgejoEphemeral.pools.extra = pool;
-          clan.core.vars.generators.forgejo-ephemeral-noosphere.files.token.path = lib.mkForce "/run/secrets/noosphere-test-pat";
-        }
-      ];
-    }).config;
+    (withPools (pilotPools // {extra = pool;})).config;
   failsWith = machine: message: lib.any (check: check.message == message && !check.assertion) machine.assertions;
   noosphereUser = {
     forge = "noosphere";
@@ -235,6 +235,28 @@
     guest = c.microvm.vms.${slot}.config.config;
     guestFs = guest.fileSystems."/nix/.ro-store";
     guestRunner = guest.systemd.services.forgejo-one-job;
+    minutes = value: lib.toInt (builtins.head (builtins.match "([0-9]+)min" value));
+    deadline = {
+      runner = internal.runnerMinutes;
+      guest = minutes guestRunner.serviceConfig.RuntimeMaxSec;
+      host = minutes vm.serviceConfig.RuntimeMaxSec;
+    };
+    expected =
+      if slot == "ryza-eph-1"
+      then {
+        runner = 180;
+        guest = 190;
+        host = 195;
+        overlayGiB = 50;
+      }
+      else {
+        runner = 360;
+        guest = 370;
+        host = 375;
+        overlayGiB = 150;
+      };
+    estimate = deadline.host * 60 + 90 + 30;
+    gib = 1024 * 1024 * 1024;
     guestCredentials = ["job-handle" "runner-token" "runner-uuid"];
     guestDNS = builtins.head guest.systemd.network.networks."10-uplink".dns;
     poolPath = c.services.imperium.forgejoEphemeral.internal.poolsFile;
@@ -265,6 +287,15 @@
     assert lib.hasInfix (builtins.unsafeDiscardStringContext "--pools ${poolPath} ") (builtins.unsafeDiscardStringContext dispatcher.serviceConfig.ExecStart);
     assert !(lib.hasInfix "--trusted-jobs" dispatcher.serviceConfig.ExecStart);
     assert lib.hasSuffix " --trusted-jobs" trustedConfig.systemd.services.${dispatchName}.serviceConfig.ExecStart;
+    assert deadline.runner * 60 + internal.pickupSeconds + 5 * 60 <= deadline.guest * 60;
+    assert deadline.guest < deadline.host;
+    assert lib.hasInfix "--wait-timeout ${toString internal.pickupSeconds}s" guestRunner.script;
+    assert deadline == builtins.removeAttrs expected ["overlayGiB"];
+    assert lib.hasSuffix " --vm-deadline ${toString estimate}" dispatcher.serviceConfig.ExecStart;
+    assert (lib.findFirst (volume: volume.image == "nix-store-overlay.img") null guest.microvm.volumes).size == expected.overlayGiB * 1024;
+    assert guest.nix.settings.min-free == expected.overlayGiB / 5 * gib;
+    assert guest.nix.settings.max-free == expected.overlayGiB / 2 * gib;
+    assert slotctl.min_free_bytes == (expected.overlayGiB + 20 + 10) * gib;
     assert lib.all (path:
       builtins.elem path vm.serviceConfig.InaccessiblePaths
       && builtins.elem path dispatcher.serviceConfig.InaccessiblePaths)
@@ -312,6 +343,7 @@
       inherit (vm.serviceConfig) Slice User;
       guestDrv = c.microvm.vms.${slot}.config.config.system.build.toplevel.drvPath;
       inherit prepare created installLines;
+      inherit deadline estimate;
       inherit slotctl trustedSlotctl;
       transientProperties = remotePropertyNames.${slot};
       prepareDrv = builtins.attrNames (builtins.getContext prepare);
@@ -339,11 +371,10 @@
 in
   assert persistent.config.microvm.host.enable;
   assert patGenerators persistent.config == [];
-  assert poolsFor ryza.config == {ugalabugala = pilot;};
+  assert poolsFor c == {ugalabugala = pilot // {maxSlots = 2;};};
   assert !ryza.config.services.imperium.forgejoEphemeral.trustedJobs.enable;
-  assert patGenerators ryza.config == ["forgejo-ephemeral-ugalabugala"];
-  assert ryza.config.clan.core.vars.generators.forgejo-ephemeral-ugalabugala.prompts.token.description
-  == "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user only)";
+  assert patGenerators c == ["forgejo-ephemeral-ugalabugala"];
+  assert prompt c "ugalabugala" == "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user only)";
   assert lib.all (check: check.assertion) multiPool.assertions;
   # Review M1/L2: trust needs users, trusted repos must be dispatched, dispatch lists are nonempty.
   assert failsWith (withPool (noosphereUser // {trust.repos."7" = inanna;}))

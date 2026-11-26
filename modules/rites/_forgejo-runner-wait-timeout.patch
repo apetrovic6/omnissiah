@@ -1,0 +1,319 @@
+--- a/internal/app/cmd/cmd.go
++++ b/internal/app/cmd/cmd.go
+@@ -70,6 +70,7 @@
+ 		},
+ 	}
+ 	jobCmd.Flags().BoolVarP(&runJobArgs.wait, "wait", "w", false, "waits until task has been assigned")
++	jobCmd.Flags().DurationVar(&runJobArgs.waitTimeout, "wait-timeout", 0, "wait up to this duration to declare and fetch a task (0 preserves --wait behavior)")
+ 	jobCmd.Flags().StringVar(&runJobArgs.handle, "handle", "", "request the job attempt with the given handle (Forgejo >= 15)")
+ 	jobCmd.Flags().StringVar(&runJobArgs.url, "url", "", "URL of the Forgejo instance to connect to")
+ 	jobCmd.Flags().StringVar(&runJobArgs.uuid, "uuid", "", "UUID of the runner")
+--- a/internal/app/cmd/daemon.go
++++ b/internal/app/cmd/daemon.go
+@@ -203,19 +203,27 @@
+ 
+ var createRunner = func(ctx context.Context, name string, cfg *config.Config, cli client.Client, ls labels.Labels, cacheProxy *cacheproxy.Handler) (run.RunnerInterface, string, bool, error) {
+ 	runner := run.NewRunner(cfg, name, ls, cli, cacheProxy)
++	runnerName, ephemeral, err := declareRunner(ctx, runner, ls.Names())
++	if err != nil {
++		return nil, "", false, err
++	}
++	return runner, runnerName, ephemeral, nil
++}
++
++func declareRunner(ctx context.Context, runner *run.Runner, labels []string) (string, bool, error) {
+ 	// declare the labels of the runner before fetching tasks
+-	resp, err := runner.Declare(ctx, ls.Names())
++	resp, err := runner.Declare(ctx, labels)
+ 	if err != nil && connect.CodeOf(err) == connect.CodeUnimplemented {
+ 		log.Warn("Because the Forgejo instance is an old version, skipping declaring the labels and version.")
+-		return runner, "runner", false, nil
++		return "runner", false, nil
+ 	} else if err != nil {
+ 		log.WithError(err).Error("fail to invoke Declare")
+-		return nil, "", false, err
++		return "", false, err
+ 	}
+ 
+ 	log.Infof("runner: %s, with version: %s, with labels: %v, ephemeral: %v, declared successfully",
+ 		resp.Msg.GetRunner().GetName(), resp.Msg.GetRunner().GetVersion(), resp.Msg.GetRunner().GetLabels(), resp.Msg.GetRunner().GetEphemeral())
+-	return runner, resp.Msg.GetRunner().GetName(), resp.Msg.GetRunner().GetEphemeral(), nil
++	return resp.Msg.GetRunner().GetName(), resp.Msg.GetRunner().GetEphemeral(), nil
+ }
+ 
+ // func(ctx context.Context, cfg *config.Config, cli client.Client, runner run.RunnerInterface) poll.Poller
+--- a/internal/app/cmd/job.go
++++ b/internal/app/cmd/job.go
+@@ -5,7 +5,9 @@
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"fmt"
++	"time"
+ 
+ 	"code.forgejo.org/forgejo/runner/v13/internal/app/poll"
+ 	log "github.com/sirupsen/logrus"
+@@ -13,12 +15,14 @@
+ 	"code.forgejo.org/forgejo/runner/v13/act/cacheproxy"
+ 	"code.forgejo.org/forgejo/runner/v13/internal/app/run"
+ 	"code.forgejo.org/forgejo/runner/v13/internal/pkg/config"
++	"connectrpc.com/connect"
+ )
+ 
+ type runJobArgs struct {
+ 	connection
+-	wait   bool
+-	handle string
++	wait        bool
++	waitTimeout time.Duration
++	handle      string
+ }
+ 
+ func (a *runJobArgs) GetHandle() *string {
+@@ -44,6 +48,10 @@
+ }
+ 
+ func runJob(ctx context.Context, configFile *string, args *runJobArgs) error {
++	if args.waitTimeout < 0 {
++		return fmt.Errorf("--wait-timeout must not be negative")
++	}
++
+ 	cfg, err := initializeRunJobConfig(configFile, args)
+ 	if err != nil {
+ 		return err
+@@ -81,12 +89,23 @@
+ 	}
+ 
+ 	client := createClient(cfg, conn)
+-	runner, _, _, err := createRunner(ctx, conn.UUID.String(), cfg, client, conn.Labels, cacheProxy)
+-	if err != nil {
+-		return err
+-	}
++	var poller poll.SingleTaskPoller
++	if args.waitTimeout > 0 {
++		pickupCtx, cancelPickup := context.WithTimeout(ctx, args.waitTimeout)
++		defer cancelPickup()
+ 
+-	poller := newSingleTaskPoller(ctx, cfg, client, runner, args.wait, args.GetHandle())
++		runner := run.NewRunner(cfg, conn.UUID.String(), conn.Labels, client, cacheProxy)
++		if err := declareForPickup(pickupCtx, runner, conn.Labels.Names()); err != nil {
++			return err
++		}
++		poller = poll.NewBoundedSingleTaskPoller(ctx, pickupCtx, cfg, client, runner, args.GetHandle())
++	} else {
++		runner, _, _, err := createRunner(ctx, conn.UUID.String(), cfg, client, conn.Labels, cacheProxy)
++		if err != nil {
++			return err
++		}
++		poller = newSingleTaskPoller(ctx, cfg, client, runner, args.wait, args.GetHandle())
++	}
+ 	err = poller.Poll()
+ 	if shutdownErr := poller.Shutdown(ctx); shutdownErr != nil {
+ 		// If the shutdown error was returned, then context cancellation or a timeout would result in an exit code that
+@@ -95,3 +114,30 @@
+ 	}
+ 	return err
+ }
++
++func declareForPickup(ctx context.Context, runner *run.Runner, labels []string) error {
++	for {
++		if err := ctx.Err(); err != nil {
++			if errors.Is(err, context.DeadlineExceeded) {
++				return poll.ErrNoTaskReceived
++			}
++			return err
++		}
++		_, _, err := declareRunner(ctx, runner, labels)
++		if err == nil {
++			return nil
++		}
++		switch connect.CodeOf(err) {
++		case connect.CodeUnavailable, connect.CodeDeadlineExceeded, connect.CodeUnknown, connect.CodeInternal:
++			// Retry transient startup failures without restarting the pickup clock.
++			select {
++			case <-ctx.Done():
++			case <-time.After(time.Second):
++			}
++		default:
++			if ctx.Err() == nil {
++				return err
++			}
++		}
++	}
++}
+--- a/internal/app/poll/single.go
++++ b/internal/app/poll/single.go
+@@ -41,12 +41,22 @@
+ 
+ 	done chan any
+ 
+-	wait   bool
+-	handle *string
++	wait    bool
++	bounded bool
++	handle  *string
+ }
+ 
+ func NewSingleTaskPoller(ctx context.Context, cfg *config.Config, client client.Client, runner run.RunnerInterface, wait bool, handle *string) SingleTaskPoller {
+-	pollingCtx, cancelPolling := context.WithCancel(ctx)
++	return newSingleTaskPoller(ctx, ctx, cfg, client, runner, wait, false, handle)
++}
++
++// NewBoundedSingleTaskPoller uses pickupCtx only for fetching, not for running the assigned task.
++func NewBoundedSingleTaskPoller(ctx, pickupCtx context.Context, cfg *config.Config, client client.Client, runner run.RunnerInterface, handle *string) SingleTaskPoller {
++	return newSingleTaskPoller(ctx, pickupCtx, cfg, client, runner, true, true, handle)
++}
++
++func newSingleTaskPoller(ctx, pickupCtx context.Context, cfg *config.Config, client client.Client, runner run.RunnerInterface, wait, bounded bool, handle *string) SingleTaskPoller {
++	pollingCtx, cancelPolling := context.WithCancel(pickupCtx)
+ 	taskCtx, cancelTasks := context.WithCancel(ctx)
+ 
+ 	return &singleTaskPoller{
+@@ -59,6 +69,7 @@
+ 		cancelTasks:   cancelTasks,
+ 		done:          make(chan any),
+ 		wait:          wait,
++		bounded:       bounded,
+ 		handle:        handle,
+ 	}
+ }
+@@ -87,7 +98,12 @@
+ 	for {
+ 		if err := rateLimiter.Wait(s.pollingCtx); err != nil {
+ 			log.Infof("single task poller is shutting down")
++			s.cancelPolling()
+ 			close(s.done)
++			if s.bounded && s.taskCtx.Err() == nil {
++				// The limiter also rejects a wait that would exceed the pickup deadline.
++				return ErrNoTaskReceived
++			}
+ 			return nil
+ 		}
+ 
+--- a/internal/app/poll/single_test.go
++++ b/internal/app/poll/single_test.go
+@@ -4,7 +4,9 @@
+ package poll
+ 
+ import (
++	"context"
+ 	"testing"
++	"testing/synctest"
+ 	"time"
+ 
+ 	runnerv1 "code.forgejo.org/forgejo/actions-proto/runner/v1"
+@@ -12,6 +14,7 @@
+ 	mock_client "code.forgejo.org/forgejo/runner/v13/internal/pkg/client/mocks"
+ 	"code.forgejo.org/forgejo/runner/v13/internal/pkg/config"
+ 	"connectrpc.com/connect"
++	gouuid "github.com/google/uuid"
+ 	"github.com/stretchr/testify/mock"
+ 	"github.com/stretchr/testify/require"
+ )
+@@ -145,3 +148,46 @@
+ 	err := taskPoller.Poll()
+ 	require.NoError(t, err)
+ }
++
++func TestBoundedSingleTaskPoller_ReplaysFetchAndRunsPastPickupDeadline(t *testing.T) {
++	synctest.Test(t, func(t *testing.T) {
++		cfg := &config.Config{}
++		cfg.Runner.FetchTimeout = time.Second
++		handle := "job-handle"
++		pickupCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
++		defer cancel()
++
++		mockClient := mock_client.NewMockClient(t)
++		mockClient.On("Address").Return("https://example.com/forgejo")
++		mockClient.On("FetchInterval").Return(time.Second)
++		var keys []gouuid.UUID
++		mockClient.EXPECT().SetRequestKey(mock.Anything).Run(func(key gouuid.UUID) {
++			keys = append(keys, key)
++		}).Return(func() {}).Twice()
++		req := connect.NewRequest(&runnerv1.FetchSingleTaskRequest{Handle: &handle})
++		mockClient.EXPECT().FetchSingleTask(mock.Anything, req).
++			RunAndReturn(func(ctx context.Context, _ *connect.Request[runnerv1.FetchSingleTaskRequest]) (*connect.Response[runnerv1.FetchSingleTaskResponse], error) {
++				start := time.Now()
++				<-ctx.Done()
++				require.ErrorIs(t, ctx.Err(), context.DeadlineExceeded)
++				require.Equal(t, cfg.Runner.FetchTimeout, time.Since(start))
++				return nil, ctx.Err()
++			}).Once()
++		task := &runnerv1.Task{}
++		mockClient.EXPECT().FetchSingleTask(mock.Anything, req).
++			Return(connect.NewResponse(&runnerv1.FetchSingleTaskResponse{Task: task}), nil).Once()
++
++		mockRunner := mock_runner.NewMockRunner(t)
++		mockRunner.On("Run", mock.Anything, task).Run(func(args mock.Arguments) {
++			ctx := args.Get(0).(context.Context)
++			<-pickupCtx.Done()
++			require.NoError(t, ctx.Err())
++		}).Once()
++
++		poller := NewBoundedSingleTaskPoller(t.Context(), pickupCtx, cfg, mockClient, mockRunner, &handle)
++		require.NoError(t, poller.Poll())
++		require.Len(t, keys, 2)
++		require.NotEqual(t, gouuid.Nil, keys[0])
++		require.Equal(t, keys[0], keys[1])
++	})
++}
+--- a/internal/app/cmd/job_test.go
++++ b/internal/app/cmd/job_test.go
+@@ -8,6 +8,7 @@
+ 	"os"
+ 	"path/filepath"
+ 	"testing"
++	"testing/synctest"
+ 	"time"
+ 
+ 	runnerv1 "code.forgejo.org/forgejo/actions-proto/runner/v1"
+@@ -417,3 +418,48 @@
+ 	case <-time.After(time.Second):
+ 	}
+ }
++
++func TestRunJob_WaitTimeoutSharesDeclareAndFetchDeadline(t *testing.T) {
++	synctest.Test(t, func(t *testing.T) {
++		const timeout = 5 * time.Second
++		start := time.Now()
++		mockClient := mock_client.NewMockClient(t)
++		mockClient.On("Address").Return("https://example.com/forgejo")
++		mockClient.On("FetchInterval").Return(time.Second)
++		mockClient.On("SetRequestKey", mock.Anything).Return(func() {}).Once()
++		mockClient.EXPECT().Declare(mock.Anything, mock.Anything).
++			Return(nil, connect.NewError(connect.CodeUnavailable, nil)).Once()
++		mockClient.EXPECT().Declare(mock.Anything, mock.Anything).
++			RunAndReturn(func(ctx context.Context, _ *connect.Request[runnerv1.DeclareRequest]) (*connect.Response[runnerv1.DeclareResponse], error) {
++				deadline, ok := ctx.Deadline()
++				require.True(t, ok)
++				require.Equal(t, start.Add(timeout), deadline)
++				require.Equal(t, time.Second, time.Since(start))
++				return connect.NewResponse(&runnerv1.DeclareResponse{}), nil
++			}).Once()
++		mockClient.EXPECT().FetchSingleTask(mock.Anything, mock.Anything).
++			RunAndReturn(func(ctx context.Context, req *connect.Request[runnerv1.FetchSingleTaskRequest]) (*connect.Response[runnerv1.FetchSingleTaskResponse], error) {
++				require.Equal(t, "job-handle", req.Msg.GetHandle())
++				deadline, ok := ctx.Deadline()
++				require.True(t, ok)
++				require.Equal(t, start.Add(timeout), deadline)
++				<-ctx.Done()
++				return nil, ctx.Err()
++			}).Once()
++
++		defer testutils.MockVariable(&initLogging, func(*config.Config) {})()
++		defer testutils.MockVariable(&initializeRunJobConfig, func(*string, *runJobArgs) (*config.Config, error) {
++			cfg := &config.Config{}
++			cfg.Server.Connections = map[string]*config.Connection{"test": {}}
++			cfg.Runner.FetchTimeout = time.Minute
++			return cfg, nil
++		})()
++		defer testutils.MockVariable(&createClient, func(*config.Config, *config.Connection) client.Client {
++			return mockClient
++		})()
++
++		err := runJob(t.Context(), nil, &runJobArgs{handle: "job-handle", waitTimeout: timeout})
++		require.ErrorIs(t, err, poll.ErrNoTaskReceived)
++		require.Equal(t, timeout, time.Since(start))
++	})
++}

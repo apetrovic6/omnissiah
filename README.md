@@ -1300,8 +1300,29 @@ Keep the PAT out of command arguments, shell history and logs. Also verify
 good job. The installer (re-run before every VM start and dispatcher start)
 creates the slot directories and refuses a pre-existing symlink; tmpfiles
 cannot create them, because `/var/lib/microvms` is owned by `microvm`. The
-empty `job/` directory stays for reuse. The deadlines are workflow 60 min,
-runner 65 min, guest 70 min and host 75 min (plus bounded start/stop).
+empty `job/` directory stays for reuse.
+
+| Slot class | Writable store | Runner timeout | Guest limit | Host VM limit |
+|---|---:|---:|---:|---:|
+| `std` (Ryza) | 50 GiB | 180 min | 190 min | 195 min |
+| `large` | 150 GiB | 360 min | 370 min | 375 min |
+
+Both classes collect the writable store below 20% free, targeting 50%.
+Workflow timeouts still apply (60 min for the pilot probe). The dispatcher
+stops any job that has not received a trusted verdict 65 min after first
+observing pickup. If polling fell behind, it counts from the last known
+waiting poll or the recorded VM start. The timestamp survives dispatcher
+restarts. A separate slot-host timer queues a stop after 75 min from boot
+submission even if the dispatcher or its SSH connection is down. Only
+successful trust delivery disarms it while the VM is running. Host startup
+and shutdown have separate 90 s and 30 s limits.
+
+The guest uses one addressed `one-job --wait-timeout 300s` process. It
+keeps the same fetch request key across transport retries and powers off
+on completion or pickup expiry. If the handle is still waiting and
+unassigned after runner deletion, the dispatcher releases it with backoff.
+After three boots without pickup for the same attempt, it retires the
+handle and logs the reason; cancel and re-run that attempt to retry it.
 Forgejo v15.0.12 deletes assigned ephemeral registrations on
 [`UpdateTask` completion](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/routers/api/actions/runner/runner.go#L332-L339)
 and on [`StopTask`](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/services/actions/task.go);
@@ -1368,6 +1389,10 @@ Forgejo runner inventories no longer contain the dispatchers' registrations,
 and **every pool's state file in every slot's state directory** has
 `active: null` and `ambiguous: {}`. The original `ugalabugala`/`manjo` user
 queue keeps `state.json`; other queues have identity-specific filenames.
+Before rolling back to an older dispatcher, also wait for any `unpicked`
+retry entries to clear (finish or cancel the associated queued attempts
+and allow another poll). The older dispatcher cannot read the new
+in-flight trust fields or missed-pickup state. Do not edit state files.
 Find each state directory with
 `systemctl show -p StateDirectory --value forgejo-ephemeral-dispatcher@<slot>.service`;
 `ryza-eph-1` still uses
@@ -1473,22 +1498,28 @@ listed in that pool's `trust.repos`, mapping job `task_id` → task →
 and it must be on the **default branch**: a push or `workflow_dispatch`
 by someone in `trust.users`, or, only for repos with
 `trust.repos.<id>.schedules = true`, a schedule triggered by
-`forgejo-actions` (user ID `-2`). Logins in `trust.users` other than the
-PAT account are pinned to their account ID the first time they trigger a
-run (`pinned trust user … to account N` in the journal). The repo must not
-be a pull mirror, must have no write deploy key, and its default branch
-protection must confine writers to `trust.users` (below). Only then does
+`forgejo-actions` (user ID `-2`). On the first idle poll with trust enabled,
+the dispatcher pins each configured trust login to its account ID, before
+it can trigger a trusted job. It keeps existing pins across restarts and
+prunes logins removed from `trust.users`. The repo must not be a pull
+mirror or have a write deploy key, and only pinned users may write its
+default branch (below). Only then does
 the dispatcher write the CI signing key and ncps upload netrc into
 `/run/microvm-credentials/ryza-eph-1-trust` (root `0700`, files `0400`). The
 guest sees that directory as a read-only virtiofs share at `/run/ci-trust`,
 readable only by guest root. The nix-daemon's post-build hook then uploads
 builds to ncps. Fork PRs, AGit PRs (Hermes's included), fork re-runs or
 approvals by manjo, every `pull_request*` event, lookup errors and 403s get
-nothing. The job still runs, uncached upstream, and the dispatcher logs the
-reason. Builds finished before delivery (seconds after pickup) are not
+nothing. The job can still run up to the untrusted 65 min limit, and
+the dispatcher logs the reason. Builds finished before delivery are not
 uploaded. sccache stays off on `nix-eph`. The full rule, the API fields it
 reads and who can read what (host, guest, escaped QEMU/virtiofsd) are in
 `modules/rites/_forgejo-ephemeral-trusted.nix`.
+
+On restart the dispatcher withdraws delivery and has up to 10 min to
+revalidate the same recorded task and run. Failure to revalidate stops
+the VM. An unresolved `trust.users` login keeps trust off for the pool
+until an idle poll can pin it; untrusted dispatch continues.
 
 A login in `trust.users` includes agents and tools that hold its repository
 write credentials. Forgejo also attributes deploy-key pushes to the owner,
@@ -1505,10 +1536,9 @@ anyone, re-creates the repo's schedules as `forgejo-actions`. So list a
 repository only if nobody outside `trust.users` can write its default
 branch:
 
-- No other collaborator and no team with write or admin on it. For an org
-  repo that includes the Owners team and every team granted the repo; an
-  "org member" here means a member of any such team. Read-only teams don't
-  count.
+- The personal repo owner and every collaborator with write or admin must
+  be in `trust.users`. For org repos, every member of every team with repo
+  access must be in `trust.users`, including Owners and read-only teams.
 - A branch protection rule named exactly like the default branch (not a
   glob) with the merge allowlist on, the push allowlist on (or pushes
   disabled), both naming only `trust.users` and no team, and no
@@ -1516,13 +1546,13 @@ branch:
   a PR into the branch.
 - No write deploy key, and not a pull mirror.
 
-The dispatcher checks the last two on every resolution
-(`GET /repos/<owner>/<repo>/branch_protections`, which needs
-`read:repository` and repo admin) and logs the gap, for example
-`untrusted: run #N (default branch protection lets every writer merge)`.
-The first point is what keeps the rule in place, since repo admins can edit
-it. The check sees today's writers only, so audit the default branch when
-you add a repo.
+The dispatcher checks all three on each trust resolution. Forgejo's
+branch protection API can hide allowlist teams that have lost repository
+access, though enforcement still checks membership by team ID. The
+dispatcher therefore checks collaborators' permissions and all members of
+teams with repo access directly. An unreadable list fails closed under
+the same 10 min trust deadline. These checks see today's access, not prior
+writers; audit the default branch before adding a repo.
 
 **Schedules are a separate opt-in** (`schedules = true` on the repo entry,
 off by default). A scheduled run's trigger is always `forgejo-actions`, so
@@ -1537,8 +1567,11 @@ build of `master`. Ryza's `rust-app-template` pool has it off.
 2. For each forge with a trusted repo, use a dedicated PAT with
    **`read:repository`** in addition to **`write:user`** (and
    **`write:organization`** if there is an org pool). Keep **Public only**
-   for the public pilot. The task, run and deploy-key lookups need repository
-   scope and the underlying account permissions.
+   for the public pilot. Repo lookups use `read:repository`; checking
+   collaborator permissions, deploy keys and branch protection requires
+   repo admin. Listing org team members needs `read:organization`
+   (included in `write:organization`) and team access; org ownership
+   already required for dispatch provides that access.
 3. Set `trustedJobs.enable = true` in `machines/ryza/forgejo-runner.nix`
    and explicitly configure each pool's `trust.repos` and `trust.users`.
    An org pool uses `scope.org = "monolith-softworks"`; set each trusted
@@ -1577,9 +1610,10 @@ build of `master`. Ryza's `rust-app-template` pool has it off.
   `trust.users` login was deleted, renamed or isn't visible to the PAT.
 - If a trusted user's account is recreated under the same login, its runs
   log `ID differs from the pinned trust user`. To accept the new account,
-  stop the dispatchers and remove that login from `trust_ids` in the pool's
-  state file of every slot.
-  After 10 minutes the dispatcher gives up for that job; dispatch still works.
+  first remove the login from `trust.users` (and remove the trusted repos
+  while the list would be empty). Restart every affected dispatcher and
+  let it prune its pins, then re-add the login after verifying the new
+  account. Do not edit state files.
 - The isolation probe above still applies: `$CREDENTIALS_DIRECTORY` holds
   only the five one-job runtime inputs. A trusted job can still check that
   `/run/ci-trust` is unreadable to it

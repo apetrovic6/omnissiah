@@ -22,9 +22,9 @@
 #                     persistent CI guests, forgejo-runner-microvm.nix)
 #     vcpu, memory    guest size, memory in GiB. The host slice allows one GiB
 #                     more for QEMU and virtiofsd.
-#     overlay, var    GiB of the sparse per-job disk images: the writable store
-#                     plus Nix build dir, and /var (workspace, TMPDIR,
-#                     CARGO_HOME)
+#     class           std (50 GiB overlay, 3 h runner) or large (150 GiB, 6 h).
+#                     The overlay also holds Nix's build dir.
+#     var             GiB for /var (workspace, TMPDIR, CARGO_HOME).
 {
   ryza = {
     uplink = "ens18";
@@ -35,7 +35,7 @@
       index = 1;
       vcpu = 2;
       memory = 4;
-      overlay = 50;
+      class = "std";
       var = 20;
     };
   };

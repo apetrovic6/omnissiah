@@ -16,8 +16,8 @@
         self.nixosConfigurations)
       // lib.optionalAttrs (system == "x86_64-linux" && self.nixosConfigurations ? ryza) {
         # Fails at eval if a Forgejo one-job slot unit names a mandatory
-        # path the installer doesn't create first (HOM-30), or pool packaging
-        # and per-forge credentials regress. Discard context so the check
+        # path the installer doesn't create first (HOM-30), or class deadlines,
+        # pool packaging and per-forge credentials regress. Discard context so the check
         # never builds the test's enabled variant.
         forgejo-ephemeral-jobdir = pkgs.writeText "forgejo-ephemeral-jobdir.json" (
           builtins.unsafeDiscardStringContext (builtins.toJSON
@@ -66,6 +66,7 @@
           assert !client.config.microvm.host.enable;
           assert lib.hasInfix (builtins.unsafeDiscardStringContext "--ssh-command ${wrapper} ")
           (builtins.unsafeDiscardStringContext dispatcher.serviceConfig.ExecStart);
+          assert lib.hasSuffix " --vm-deadline 11820" dispatcher.serviceConfig.ExecStart;
             pkgs.runCommand "forgejo-ephemeral-ssh" {} ''
               export CREDENTIALS_DIRECTORY="$TMPDIR/credentials"
               export RUNTIME_DIRECTORY="$TMPDIR/runtime"

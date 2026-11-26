@@ -170,7 +170,31 @@
         util-linux
       ];
     ciToolset = import ./_ci-toolset.nix;
+    slotClasses = {
+      std = {
+        overlayGiB = 50;
+        runnerMinutes = 180;
+      };
+      large = {
+        overlayGiB = 150;
+        runnerMinutes = 360;
+      };
+    };
+    pickupSeconds = 5 * 60;
+    reportingMarginMinutes = 5;
+    vmStartSeconds = 90;
+    vmStopSeconds = 30;
+    classFor = spec: let
+      class = slotClasses.${spec.class} or (throw "forgejoEphemeral: unknown slot class ${spec.class}.");
+      guestMinutes = class.runnerMinutes + pickupSeconds / 60 + reportingMarginMinutes;
+    in
+      class
+      // {
+        inherit guestMinutes;
+        hostMinutes = guestMinutes + 5;
+      };
     mkSlot = slot: spec: let
+      class = classFor spec;
       # Keep index 1's names. Later slices are siblings, not children of
       # forgejo-ephemeral.slice (which has its own quota).
       suffix = lib.optionalString (spec.index != 1) "-${toString spec.index}";
@@ -328,7 +352,7 @@
         fixed_pilot = fixedPilot;
         user = slotUser;
         group = slotUser;
-        min_free_bytes = (spec.overlay + spec.var + 10) * 1024 * 1024 * 1024;
+        min_free_bytes = (class.overlayGiB + spec.var + 10) * 1024 * 1024 * 1024;
       };
       preflight = pkgs.writeShellScript "${slot}-preflight" ''
         set -eu
@@ -362,6 +386,9 @@
         ...
       }: let
         stateDir = "/var/lib/forgejo-one-job";
+        pickupRunner = pkgs.forgejo-runner.overrideAttrs (old: {
+          patches = (old.patches or []) ++ [./_forgejo-runner-wait-timeout.patch];
+        });
         urlArg =
           if fixedPilot
           then "https://${forgeHosts.ugalabugala}"
@@ -380,7 +407,7 @@
         runnerConfig = (pkgs.formats.yaml {}).generate "forgejo-one-job.yml" {
           runner = {
             capacity = 1;
-            timeout = "65m";
+            timeout = "${toString class.runnerMinutes}m";
             envs = {
               TMPDIR = "${stateDir}/tmp";
               CARGO_HOME = "${stateDir}/cargo";
@@ -436,7 +463,7 @@
             {
               image = builtins.elemAt images 0;
               mountPoint = overlay;
-              size = spec.overlay * 1024;
+              size = class.overlayGiB * 1024;
             }
             {
               image = builtins.elemAt images 1;
@@ -462,8 +489,8 @@
           cores = spec.vcpu;
           # Collect below a fifth of the overlay free, up to half, as the
           # persistent CI guests do (forgejo-runner-microvm.nix).
-          min-free = spec.overlay / 5 * 1024 * 1024 * 1024;
-          max-free = spec.overlay / 2 * 1024 * 1024 * 1024;
+          min-free = class.overlayGiB / 5 * 1024 * 1024 * 1024;
+          max-free = class.overlayGiB / 2 * 1024 * 1024 * 1024;
         };
         users.groups.forgejo-one-job = {};
         users.users.forgejo-one-job = {
@@ -492,7 +519,8 @@
             WorkingDirectory = stateDir;
             LoadCredential = credIds;
             Restart = "no";
-            RuntimeMaxSec = "70min";
+            SuccessExitStatus = [2]; # Bounded pickup expired without a task.
+            RuntimeMaxSec = "${toString class.guestMinutes}min";
             TimeoutStopSec = "15s";
             NoNewPrivileges = true;
             LimitCORE = 0;
@@ -503,9 +531,9 @@
             uuid=$(cat "$CREDENTIALS_DIRECTORY/runner-uuid")
             handle=$(cat "$CREDENTIALS_DIRECTORY/job-handle")
             ${checkCredentials}
-            exec ${lib.getExe pkgs.forgejo-runner} --config ${runnerConfig} one-job \
+            exec ${lib.getExe pickupRunner} --config ${runnerConfig} one-job \
               --url ${urlArg} --uuid "$uuid" --token-url 'file:$CREDENTIALS_DIRECTORY/runner-token' \
-              --label ${labelArg} --handle "$handle" --wait
+              --label ${labelArg} --handle "$handle" --wait-timeout ${toString pickupSeconds}s
           '';
         };
       };
@@ -546,6 +574,7 @@
       '';
     in {
       inherit spec slotDirs prepareDirs slotctlEntry sandbox remoteProperties remoteAction dependencies vm controlDir trustDir;
+      inherit (class) runnerMinutes;
       users.groups.${slotUser} = {};
       users.users.${slotUser} = {
         isSystemUser = true;
@@ -640,9 +669,9 @@
             InaccessiblePaths = persistentPaths;
             NoNewPrivileges = true;
             Restart = "no";
-            RuntimeMaxSec = "75min";
-            TimeoutStartSec = "90s";
-            TimeoutStopSec = "30s";
+            RuntimeMaxSec = "${toString class.hostMinutes}min";
+            TimeoutStartSec = "${toString vmStartSeconds}s";
+            TimeoutStopSec = "${toString vmStopSeconds}s";
             ExecStartPre = ["+${prepareDirs}" preflight];
             ExecStopPost = ["+${scrub}"];
             LimitCORE = 0;
@@ -673,6 +702,8 @@
     slotctlScript = pkgs.replaceVars ./_forgejo-slotctl.py {
       config = slotctlConfig;
       systemctl = lib.getExe' pkgs.systemd "systemctl";
+      systemd_run = lib.getExe' pkgs.systemd "systemd-run";
+      python = lib.getExe pkgs.python3;
     };
     slotctl = pkgs.writeShellScript "forgejo-slotctl" ''
       exec ${lib.getExe pkgs.python3} -I -B ${slotctlScript} "$@"
@@ -743,6 +774,8 @@
     mkDispatcher = slot: machine: let
       local = machine == hostName;
       data = localSlots.${slot};
+      class = classFor inventory.${machine}.slots.${slot};
+      vmDeadline = vmStartSeconds + class.hostMinutes * 60 + vmStopSeconds;
       state = stateName slot machine;
       runtime = runtimeName slot machine;
       deps = lib.optionals local data.dependencies;
@@ -772,6 +805,7 @@
               "--pools ${poolsFile}"
               "--state-dir ${stateDirs.${slot}} --pause-file /run/${runtime}/pause"
               "--host-pause-file ${runRoot}/pause --claim-states ${claimStates}"
+              "--vm-deadline ${toString vmDeadline}"
             ]
             ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs");
           LoadCredential = lib.optional (!local) "slotctl-ssh-key:${config.clan.core.vars.generators.${sshGenerator}.files.id_ed25519.path}";
@@ -808,7 +842,8 @@
       };
       trustedJobs.enable = lib.mkEnableOption ''
         delivering the CI signing key and ncps upload netrc to jobs whose exact run matches
-        the pool's trust allowlist and default-branch policy. The PAT then also needs read:repository.
+        the pool's trust allowlist and default-branch policy. The PAT then also needs read:repository
+        and, for organization team member lookups, read:organization (included in write:organization).
         For remote slots enable on both sides. See _forgejo-ephemeral-trusted.nix'';
       pools = mkOption {
         type = types.attrsOf (types.submodule {
@@ -866,13 +901,13 @@
               default = {};
               description = ''
                 Repositories eligible for trusted jobs, keyed by numeric repo ID. List a repository
-                only if nobody outside trust.users can write its default branch: no other
-                collaborator, team or org owner with write or admin on it, an exact-name branch
-                protection rule for the default branch whose push and merge allowlists are subsets
-                of trust.users with no teams and no unprotected file patterns, no write deploy key,
-                and not a pull mirror. trust.users filters who triggers a run, never who wrote the
-                code it runs. The dispatcher checks the protection rule, deploy keys and mirror flag
-                for every resolution (see _forgejo-ephemeral-trusted.nix).
+                only if nobody outside trust.users can write its default branch: the personal repo
+                owner, write/admin collaborators, and all members of every team with access on an
+                org repo must be in trust.users. Require an exact-name branch protection rule for the
+                default branch whose push and merge allowlists are subsets of trust.users with no
+                teams and no unprotected file patterns, no write deploy key, and not a pull mirror.
+                The dispatcher checks these conditions for every resolution. trust.users filters who
+                triggers a run, never who wrote the code it runs (see _forgejo-ephemeral-trusted.nix).
               '';
             };
             trust.users = mkOption {
@@ -880,9 +915,9 @@
               default = [];
               description = ''
                 Users whose pushes or workflow dispatches qualify for trust on allowlisted
-                repositories. Required when trust.repos is set. Each login other than the PAT
-                account is pinned to its account ID on first use (dispatcher state), so a new
-                account reusing the name is not trusted.
+                repositories. Required when trust.repos is set. Logins are pinned to their account
+                IDs on startup with trust enabled, so a new account reusing a login is not trusted.
+                Removing a login from trust.users prunes its pin on restart.
               '';
             };
           };
@@ -904,7 +939,12 @@
         readOnly = true;
         type = lib.types.attrs;
         default = {
-          slots = lib.mapAttrs (_: data: {inherit (data) slotDirs prepareDirs;}) localSlots;
+          slots =
+            lib.mapAttrs (_: data: {
+              inherit (data) slotDirs prepareDirs runnerMinutes;
+              inherit pickupSeconds;
+            })
+            localSlots;
           remotePropertyNames = lib.mapAttrs (_: data: builtins.attrNames data.remoteProperties) localSlots;
           inherit slotctlSlots sshClients poolsFile;
         };

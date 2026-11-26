@@ -11,10 +11,11 @@ slot lock; local dispatch also supplies its already-held state lock with --hold-
   reset-failed
   stop-support UNIT...  only this slot's support units
   stage RUN             stdin {"uuid", "token", "handle"}; sets the run marker before staging
-  start RUN, stop RUN   require a matching marker
+  start RUN             arms the slot host's cutoff before queuing a VM start
+  stop RUN              queues a VM stop, or cleans up the cutoff if already idle
   scrub RUN|none        requires a matching marker and stopped VM; clears marker
   deliver RUN           stdin {"ncps-netrc": base64, "ci-signing-key": base64}; requires a slot that
-                        delivers and an active VM with no job queued
+                        delivers and an active VM with no job queued; disarms the cutoff after delivery
   withdraw RUN|none     removes delivered CI credentials, keeps the trust directory
 
 Exit status and stderr carry fixed codes only, nothing derived from input:
@@ -40,9 +41,11 @@ import sys
 import time
 from pathlib import Path
 
-# Host config and systemctl are compiled in by replaceVars (forgejo-runner-ephemeral.nix).
+# Host paths are compiled in by replaceVars (forgejo-runner-ephemeral.nix).
 CONFIG = "@config@"
 SYSTEMCTL_PATH = "@systemctl@"
+SYSTEMD_RUN_PATH = "@systemd_run@"
+PYTHON_PATH = "@python@"
 SUPPORT_UNITS = ("tap-interfaces", "macvtap-interfaces", "pci-devices", "virtiofsd", "set-booted")
 RESULTS = ("success", "timeout", "exit-code", "signal", "core-dump", "resources", "start-limit-hit")
 STATES_IDLE = ("inactive", "failed")
@@ -68,8 +71,11 @@ LOCK_ROOT = Path("/run/forgejo-slotctl")
 LOCK_WAIT = 2.0
 MAX_COMMAND = 1024
 MAX_RUN = 113  # eph- + 12 hex + '-' + max 63-char slot + '-' + 32 hex
+EXPIRY_MINUTES = 75
+UNIT_NOT_INSTALLED = 5  # systemctl's LSB exit status for StopUnit on a missing unit.
 CODES = (
     "systemctl-failed",
+    "watchdog-arm-failed",
     "vm-not-stopped",
     "vm-not-running",
     "no-trust-share",
@@ -125,29 +131,41 @@ def support_units(slot):
 
 
 class Systemctl:
-    def __init__(self, slot, run, path, lock_fds):
+    def __init__(self, slot, run, path, lock_fds, systemd_run_path, python_path):
+        self.slot = slot
         self.vm = f"microvm@{slot}.service"
         self.support = support_units(slot)
         self.kinds = {self.vm: "vm", **dict(zip(self.support, SUPPORT_UNITS, strict=True))}
         self.run = run
         self.path, self.lock_fds = path, lock_fds
+        self.systemd_run_path, self.python_path = systemd_run_path, python_path
 
-    def _call(self, action, *units, options=()):
+    def _system_command(self, argv, *, missing_ok=False):
         try:
             result = self.run(
-                (self.path, "--system", "--no-pager", *options, action, *units),
+                argv,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                # If slotctl dies while systemctl is still alive, the child keeps the lock
-                # held until the next caller can safely reconcile.
+                # A child issuing a systemd operation must keep the lock held
+                # even if slotctl dies before the reply.
                 pass_fds=self.lock_fds,
                 timeout=10,
                 check=True,
             )
+        except subprocess.CalledProcessError as error:
+            if missing_ok and error.returncode == UNIT_NOT_INSTALLED:
+                return b""
+            raise SlotError("systemctl-failed") from None
         except (OSError, subprocess.SubprocessError):
             raise SlotError("systemctl-failed") from None
         return result.stdout
+
+    def _call(self, action, *units, options=(), missing_ok=False):
+        return self._system_command(
+            (self.path, "--system", "--no-pager", *options, action, *units),
+            missing_ok=missing_ok,
+        )
 
     def state(self, unit):
         # One GetAll via systemctl show: checking ActiveState and list-jobs separately
@@ -177,6 +195,39 @@ class Systemctl:
         """Up and settled: ActiveState=active with no job queued (not starting, stopping or queued to start)."""
         active, queued, _ = self.state(unit)
         return active == "active" and not queued
+
+    def expiry_unit(self, run_name):
+        return f"forgejo-slot-expiry-{self.slot}-{run_name}"
+
+    def arm_expiry(self, run_name):
+        # Wait for PID 1 to activate the timer, not just queue its start. Its
+        # service belongs to the slot host, not the dispatcher or SSH session.
+        self._system_command((
+            self.systemd_run_path, "--system", "--quiet", "--collect",
+            f"--unit={self.expiry_unit(run_name)}",
+            f"--on-active={EXPIRY_MINUTES}min",
+            "--timer-property=AccuracySec=1us", "--timer-property=RemainAfterElapse=no",
+            "--service-type=exec", "--expand-environment=no",
+            "--property=Restart=on-failure", "--property=RestartMode=direct",
+            "--property=RestartSec=1s", "--property=StartLimitIntervalSec=0",
+            "--property=RuntimeMaxSec=20s", "--property=TimeoutStopSec=2s",
+            "--property=RestrictAddressFamilies=AF_UNIX", "--property=NoNewPrivileges=yes",
+            "--property=ProtectSystem=strict", "--property=ProtectHome=yes", "--property=CapabilityBoundingSet=",
+            "--",
+            self.python_path, "-I", "-B", os.path.abspath(__file__), "--slot", self.slot, "expire", run_name,
+        ))
+
+    def disarm_expiry(self, run_name):
+        unit = self.expiry_unit(run_name)
+        # Stop the trigger first, then cancel any already queued/running
+        # expiry job. The canonical lock still excludes the expiry handler.
+        for suffix in (".timer", ".service"):
+            self._call("stop", unit + suffix, options=("--quiet",), missing_ok=True)
+
+    def expire(self):
+        # Wait for completion. An unavailable manager, a failed job, or a
+        # busy lock must cause PID 1 to retry, not consume the only cutoff.
+        self._call("stop", self.vm)
 
     def start(self):
         self._call("start", self.vm, options=("--no-block", "--job-mode=fail"))
@@ -327,9 +378,25 @@ class Slot:
     def check_space(self, min_free_bytes):
         self.files.require_free_space(min_free_bytes)
 
-    def start(self, min_free_bytes):
+    def start(self, min_free_bytes, run_name):
         self.check_space(min_free_bytes)
+        if not self.systemctl.idle(self.systemctl.vm):
+            raise SlotError("vm-not-stopped")
+        # Leave the timer in place even if the start reply is lost.
+        try:
+            self.systemctl.arm_expiry(run_name)
+        except SlotError:
+            # Regardless of the timer result, we have not asked PID 1 to start the VM.
+            raise SlotError("watchdog-arm-failed") from None
         self.systemctl.start()
+
+    def stop(self, run_name):
+        if self.systemctl.idle(self.systemctl.vm):
+            self.systemctl.disarm_expiry(run_name)
+        else:
+            # A queued stop is not a stopped VM. Keep the watchdog until
+            # the idle stop/scrub path can safely cancel it.
+            self.systemctl.stop()
 
     def stage(self, payload, save_run):
         if (
@@ -346,13 +413,15 @@ class Slot:
         save_run()
         self.files.stage(payload["uuid"], payload["token"], payload["handle"], payload["url"], payload["label"])
 
-    def scrub(self):
+    def scrub(self, run_name):
         # The caller checked too, but the images and credentials go only once the VM is down.
         if not self.systemctl.idle(self.systemctl.vm):
             raise SlotError("vm-not-stopped")
+        if run_name is not None:
+            self.systemctl.disarm_expiry(run_name)
         self.files.scrub()
 
-    def deliver(self, payload):
+    def deliver(self, payload, run_name):
         if not isinstance(payload, dict) or payload.keys() != set(TRUST_FILES):
             raise UsageError
         secrets = {}
@@ -370,6 +439,7 @@ class Slot:
         if not self.systemctl.running(self.systemctl.vm):
             raise SlotError("vm-not-running")
         self.files.deliver(secrets)
+        self.systemctl.disarm_expiry(run_name)
 
     def withdraw(self):
         self.files.withdraw()
@@ -519,8 +589,7 @@ class RunMarker:
             raise SlotError("run-marker") from None
 
 
-def read_input(stdin):
-    data = stdin.read(MAX_INPUT + 1)
+def read_input(data):
     if len(data) > MAX_INPUT:
         raise UsageError
     try:
@@ -535,14 +604,17 @@ def parse_command(argv, *, remote=False):
     parser.add_argument("--slot", required=True, action=Once)
     if not remote:
         parser.add_argument("--hold-fd", type=int, action=Once)
-    parser.add_argument("verb", choices=VERBS)
+    # Expiry is only called directly by the host's transient unit, never SSH.
+    parser.add_argument("verb", choices=VERBS if remote else (*VERBS, "expire"))
     parser.add_argument("arguments", nargs="*")
     args = parser.parse_args(argv)
     if not matches(SLOT_NAME, args.slot):
         raise UsageError
     values = args.arguments
     args.run_name = None
-    if args.verb in RUN_VERBS:
+    if args.verb in RUN_VERBS or args.verb == "expire":
+        if args.verb == "expire" and args.hold_fd is not None:
+            raise UsageError
         if len(values) != 1:
             raise UsageError
         if values[0] == "none" and args.verb in ("scrub", "withdraw"):
@@ -569,16 +641,18 @@ def main(
     *,
     config=CONFIG,
     systemctl_path=SYSTEMCTL_PATH,
+    systemd_run_path=SYSTEMD_RUN_PATH,
+    python_path=PYTHON_PATH,
     lock_root=LOCK_ROOT,
 ):
-    """`config`, `systemctl_path` and `lock_root` overrides are only for tests."""
+    """Path overrides are only for tests."""
     stdin = sys.stdin.buffer if stdin is None else stdin
     stdout = sys.stdout.buffer if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
     parent = lock_fd = marker_parent = None
     try:
         args = parse_command(argv)
-        if not os.path.isabs(systemctl_path):
+        if not all(os.path.isabs(path) for path in (systemctl_path, systemd_run_path, python_path)):
             raise UsageError
         if args.hold_fd is not None:
             # Only an open descriptor the caller passed: the dispatcher's state lock.
@@ -589,24 +663,16 @@ def main(
             except OSError:
                 raise UsageError from None
         entry = load_config(config, args.slot)
+        # An incomplete local or SSH request must not hold up the watchdog.
+        payload = stdin.read(MAX_INPUT + 1) if args.verb in ("stage", "deliver") else None
         try:
             parent = os.open(lock_root, DIR_FLAGS)
         except OSError:
             raise SlotError("slot-lock") from None
         lock_fd = acquire_lock(parent, args.slot)
         lock_fds = (lock_fd,) if args.hold_fd is None else (args.hold_fd, lock_fd)
-        try:
-            uid, gid = pwd.getpwnam(entry["user"]).pw_uid, grp.getgrnam(entry["group"]).gr_gid
-        except KeyError:
-            raise SlotError("slot-user-missing") from None
-        slot = Slot(
-            Systemctl(args.slot, run, systemctl_path, lock_fds),
-            SlotFiles(
-                Path(entry["vm_dir"]), Path(entry["credential_dir"]), uid, gid, Path(entry["trust_dir"]), entry["deliver"],
-                fixed_pilot=entry["fixed_pilot"],
-            ),
-        )
-        if args.verb in RUN_VERBS or args.verb == "observe":
+        systemctl = Systemctl(args.slot, run, systemctl_path, lock_fds, systemd_run_path, python_path)
+        if args.verb in RUN_VERBS or args.verb in ("observe", "expire"):
             try:
                 marker_parent = os.open(Path(entry["credential_dir"]).parent, DIR_FLAGS)
                 info = os.fstat(marker_parent)
@@ -616,18 +682,33 @@ def main(
                 raise SlotError("run-marker")
             marker = RunMarker(marker_parent, args.slot)
             current = marker.read()
+            if args.verb == "expire":
+                if current == args.run_name:
+                    systemctl.expire()
+                return 0  # A delayed expiry must not affect the next run.
             if args.verb == "stage" and current is not None:
                 raise SlotError("run-exists")
             if args.verb in RUN_VERBS and args.verb != "stage" and current != args.run_name:
                 raise SlotError("run-mismatch")
+        try:
+            uid, gid = pwd.getpwnam(entry["user"]).pw_uid, grp.getgrnam(entry["group"]).gr_gid
+        except KeyError:
+            raise SlotError("slot-user-missing") from None
+        slot = Slot(
+            systemctl,
+            SlotFiles(
+                Path(entry["vm_dir"]), Path(entry["credential_dir"]), uid, gid, Path(entry["trust_dir"]), entry["deliver"],
+                fixed_pilot=entry["fixed_pilot"],
+            ),
+        )
         if args.verb == "observe":
             stdout.write(json.dumps({**slot.observe(), "run": current}, separators=(",", ":")).encode())
         elif args.verb == "check-space":
             slot.check_space(entry["min_free_bytes"])
         elif args.verb == "start":
-            slot.start(entry["min_free_bytes"])
+            slot.start(entry["min_free_bytes"], args.run_name)
         elif args.verb == "stop":
-            slot.systemctl.stop()
+            slot.stop(args.run_name)
         elif args.verb == "reset-failed":
             slot.systemctl.reset_failed()
         elif args.verb == "stop-support":
@@ -635,12 +716,12 @@ def main(
                 raise SlotError("vm-not-stopped")
             slot.systemctl.stop_support(args.arguments)
         elif args.verb == "stage":
-            slot.stage(read_input(stdin), lambda: marker.save(args.run_name))
+            slot.stage(read_input(payload), lambda: marker.save(args.run_name))
         elif args.verb == "scrub":
-            slot.scrub()
+            slot.scrub(args.run_name)
             marker.clear()
         elif args.verb == "deliver":
-            slot.deliver(read_input(stdin))
+            slot.deliver(read_input(payload), args.run_name)
         else:
             slot.withdraw()
         stdout.flush()
