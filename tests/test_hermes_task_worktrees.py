@@ -7,10 +7,12 @@ import fcntl
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -34,6 +36,14 @@ def row(timestamp, room, thread, project="tally", branch="pending", summary="Old
 
 def thread(number):
     return (MATRIX[0], f"$t{number}")
+
+
+def ago(**delta):
+    return (datetime.now(UTC) - timedelta(**delta)).isoformat().replace("+00:00", "Z")
+
+
+def reservation(reserved_at, action="new", start=None, nonce="0123456789abcdef"):
+    return {"reserved_at": reserved_at, "nonce": nonce, "action": action, "start": start}
 
 
 class WorktreeTasks(unittest.TestCase):
@@ -138,12 +148,12 @@ class WorktreeTasks(unittest.TestCase):
         self.assertEqual(len(set(ids)), 3)
         for claim in claims:
             self.assertRegex(claim["active"]["task_id"], r"\A[0-9a-f]{16}\Z")
-            self.assertEqual(claim["worktree_path"], str(self.personal / ".worktrees/tally" / claim["active"]["task_id"]))
+            # The path is handed out only once task-branch has created it.
+            self.assertNotIn("worktree_path", claim)
             self.assertEqual((claim["active"]["branch"], claim["active"]["worktree"], claim["owned"]),
                              ("pending", None, True))
         app = claims[2]
         self.assertNotEqual(app["session_id"], app["active"]["task_id"])
-        self.assertNotIn(app["session_id"], app["worktree_path"])
         again = self.claim(MATRIX, project="rust-app-template", summary="Don't replace")
         self.assertEqual((again["result"], again["active"]["task_id"], again["active"]["summary"]),
                          ("active", ids[0], "Matrix task"))
@@ -223,10 +233,12 @@ class WorktreeTasks(unittest.TestCase):
         wt = Path(self.branch(first, "hermes/pr")["active"]["worktree"])
         self.git(wt, "commit", "-q", "--allow-empty", "-m", "pr work")
         self.git(wt, "push", "-q", "-u", "origin", "hermes/pr")
-        self.done(first)
+        # The local branch equals origin's: done deletes it, so a later rewrite of the PR can't wedge a follow-up.
+        self.assertTrue(self.done(first)["branch_deleted"])
+        self.assertNotEqual(self.git(self.base, "show-ref", "--verify", "refs/heads/hermes/pr", check=False).returncode, 0)
 
         second = self.claim(thread(2))
-        self.assertIn("already exists locally and on origin", self.branch(second, "hermes/pr", code=2).stderr)
+        self.assertIn("already exists on origin", self.branch(second, "hermes/pr", code=2).stderr)
         wt = Path(self.branch(second, "hermes/pr", "--follow-up")["active"]["worktree"])
         self.assertEqual(self.git(wt, "rev-parse", "--abbrev-ref", "@{u}"), "origin/hermes/pr")
         self.done(second)
@@ -241,7 +253,7 @@ class WorktreeTasks(unittest.TestCase):
         wt = Path(self.branch(third, "hermes/pr", "--follow-up")["active"]["worktree"])
         self.assertEqual(self.git(wt, "rev-parse", "HEAD"), self.git(other, "rev-parse", "HEAD"))
         self.git(wt, "commit", "-q", "--allow-empty", "-m", "unpushed")
-        self.done(third)
+        self.assertFalse(self.done(third)["branch_deleted"])  # ahead of origin: kept
 
         fourth = self.claim(thread(4))
         self.assertIn("aren't on origin/hermes/pr", self.branch(fourth, "hermes/pr", "--follow-up", code=2).stderr)
@@ -422,9 +434,12 @@ class WorktreeTasks(unittest.TestCase):
         a, b = self.claim(thread(1)), self.claim(thread(2))
         path_a = self.personal / ".worktrees/tally" / a["active"]["task_id"]
         self.git(self.base, "worktree", "add", "-q", "--no-track", "-b", "hermes/r", str(path_a), "upstream/main")
-        self.edit_record(a["active"]["task_id"], branch="hermes/r", worktree=str(path_a), preparing=True)
+        self.edit_record(a["active"]["task_id"], branch="hermes/r", worktree=str(path_a), preparing=True,
+                         reservation=reservation(ago(minutes=1)))
         self.assertIn("still being created", self.branch(a, "hermes/r", code=2).stderr)  # maybe still running
-        self.edit_record(a["active"]["task_id"], last_active="2024-01-01T00:00:00Z")
+        # The grace runs from the reservation, not from last_active (which every task-status refreshes).
+        self.edit_record(a["active"]["task_id"], reservation=reservation(ago(hours=3)))
+        self.assertTrue(self.task("task-status", "--", *thread(1))["owned"])
         self.assertEqual(self.branch(a, "hermes/r")["active"]["worktree"], str(path_a))
         self.assertFalse(self.record(a["active"]["task_id"])["preparing"])
         # A partial directory (git died mid-checkout) is moved away and the worktree made afresh.
@@ -432,10 +447,12 @@ class WorktreeTasks(unittest.TestCase):
         path_b.mkdir(parents=True)
         (path_b / "junk").write_text("partial\n")
         self.edit_record(b["active"]["task_id"], branch="hermes/p", worktree=str(path_b), preparing=True,
-                         last_active="2024-01-01T00:00:00Z")
+                         reservation=reservation(ago(hours=3)))
         self.assertIn("still setting up", self.branch(b, "hermes/other", code=2).stderr)
         self.branch(b, "hermes/p")
         self.assertFalse((path_b / "junk").exists())
+        kept = list((self.personal / ".worktrees/.kept").iterdir())
+        self.assertEqual([(k / "junk").read_text() for k in kept], ["partial\n"])  # kept aside, never deleted
         self.assertEqual(self.git(path_b, "symbolic-ref", "HEAD"), "refs/heads/hermes/p")
         self.assertEqual(self.trash(), [])
 
@@ -445,10 +462,13 @@ class WorktreeTasks(unittest.TestCase):
         self.claim()
         data = self.state()
         tampered = dict(data["tasks"][0], worktree=str(self.home / "elsewhere"), branch="hermes/x")
-        for bad in ("{", json.dumps({"version": 2, "tasks": []}), json.dumps({"version": 1, "tasks": [tampered]})):
+        for bad in ("{", json.dumps({"version": 2, "tasks": []}), json.dumps({"version": True, "tasks": []}),
+                    json.dumps({"version": 1, "tasks": [tampered]})):
             with self.subTest(bad=bad[:40]):
                 (self.personal / ".task-state.json").write_text(bad)
-                self.assertIn("ask manjo for 'clear task'", self.invoke("task-status", code=2).stderr)
+                stderr = self.invoke("task-status", code=2).stderr
+                self.assertIn("ask manjo for 'clear task'", stderr)
+                self.assertIn("task-clear --repair", stderr)
                 self.invoke("task-claim", "--", *OTHER, "tally", "-", summary="x", code=2)
         repaired = self.task("task-clear", "--repair")
         self.assertEqual(repaired["result"], "repaired")
@@ -491,12 +511,288 @@ class WorktreeTasks(unittest.TestCase):
 
     def test_invalid_old_slot_refuses_until_repaired(self):
         (self.personal / ".current-task").write_text("garbage\n")
-        self.assertIn("Invalid old task slot state", self.invoke("task-status", code=2).stderr)
+        stderr = self.invoke("task-status", code=2).stderr
+        self.assertIn("Invalid old task slot state", stderr)
+        self.assertIn("task-clear --repair", stderr)
         self.assertTrue((self.personal / ".current-task").exists())
         repaired = self.task("task-clear", "--repair")
         self.assertEqual(repaired["result"], "repaired")
         self.assertRegex(repaired["moved"][0], r"\A\.current-task\.bad-")
         self.assertEqual(self.task("task-status")["result"], "idle")
+
+
+    # --- never discard work Git can't account for (review round 1) ------------------------
+
+    def run_tool(self, *args, env=None):
+        return subprocess.run([sys.executable, "-I", "-B", str(TOOL), *args], env={**self.env, **(env or {})},
+                              capture_output=True, text=True, timeout=60, check=False)
+
+    def kept(self):
+        kept = self.personal / ".worktrees/.kept"
+        return sorted(kept.iterdir()) if kept.exists() else []
+
+    def filtered_file(self, smudge, required=False):
+        """An upstream file whose checkout runs `smudge` (a filter configured in the base clone only)."""
+        seed = self.home / "filterseed"
+        self.git(self.home, "clone", "-q", str(self.upstream), str(seed))
+        (seed / ".gitattributes").write_text("big.bin filter=slow\n")
+        (seed / "big.bin").write_text("payload\n")
+        self.git(seed, "add", ".gitattributes", "big.bin")
+        self.git(seed, "commit", "-q", "-m", "filtered file")
+        self.git(seed, "push", "-q", "origin", "main")
+        self.git(self.base, "fetch", "-q", "upstream")
+        self.git(self.base, "config", "filter.slow.smudge", smudge)
+        self.git(self.base, "config", "filter.slow.clean", "cat")
+        if required:
+            self.git(self.base, "config", "filter.slow.required", "true")
+
+    def slow_filter(self):
+        script = self.home / "smudge.sh"
+        script.write_text('#!/bin/sh\n: > "$SHIM_DIR/started"\n'
+                          'while [ ! -e "$SHIM_DIR/release" ]; do sleep 0.05; done\ncat\n')
+        script.chmod(0o755)
+        self.filtered_file(str(script))
+
+    def start_branch(self, claim, name, *flags, env=None):
+        proc = subprocess.Popen(
+            [sys.executable, "-I", "-B", str(TOOL), "task-branch", *flags, *self.who(claim),
+             claim["active"]["started_at"], name],
+            env={**self.env, "SHIM_DIR": str(self.home), **(env or {})}, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, start_new_session=True,
+        )
+        deadline = time.monotonic() + 20
+        while not (self.home / "started").exists():
+            if proc.poll() is not None:
+                self.fail(proc.stderr.read())
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.05)
+        return proc
+
+    def age_reservation(self, task_id, **delta):
+        record = self.record(task_id)
+        self.edit_record(task_id, reservation={**record["reservation"], "reserved_at": ago(**delta)})
+
+    def add_submodule(self, wt):
+        seed = self.home / "subseed"
+        seed.mkdir()
+        self.git(seed, "init", "-q", "-b", "main")
+        (seed / "lib.txt").write_text("lib\n")
+        self.git(seed, "add", "lib.txt")
+        self.git(seed, "commit", "-q", "-m", "lib")
+        self.git(wt, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(seed), "sub")
+        self.git(wt, "commit", "-q", "-m", "add sub")
+
+    def test_submodules_block_done_and_clear_keeps_them_aside(self):
+        a = self.claim()
+        task_id = a["active"]["task_id"]
+        wt = Path(self.branch(a, "hermes/a")["active"]["worktree"])
+        self.add_submodule(wt)
+        (wt / "sub/lib.txt").write_text("changed in the task\n")
+        self.git(wt / "sub", "commit", "-q", "-a", "-m", "unpushed submodule commit")
+        sub_commit = self.git(wt / "sub", "rev-parse", "HEAD")
+        self.git(wt, "add", "sub")
+        self.git(wt, "commit", "-q", "-m", "bump sub")
+        self.assertEqual(self.git(wt, "status", "--porcelain"), "")
+        self.assertIn("has submodules; ask manjo", self.done(a, code=2).stderr)
+        self.assertTrue(wt.is_dir())
+        cleared = self.task("task-clear", "--id", task_id)
+        self.assertEqual((cleared["worktree_removed"], cleared["wip_ref"]), (False, None))
+        self.assertTrue((Path(cleared["kept"]) / "sub/lib.txt").is_file())
+        # The submodule's objects live in the worktree's admin dir; a kept worktree keeps it (locked).
+        admin = self.base / ".git/worktrees" / task_id
+        # (Its core.worktree still names the old place, hence --work-tree: the objects are what matters.)
+        self.assertEqual(self.git(self.home, "--git-dir", str(admin / "modules/sub"), "--work-tree", str(self.home),
+                                  "cat-file", "-t", sub_commit), "commit")
+        self.git(self.base, "worktree", "prune")
+        self.assertTrue(admin.is_dir())
+
+    def test_done_refuses_work_only_the_worktree_holds_and_clear_saves_it(self):
+        a = self.claim(thread(1))
+        wt = Path(self.branch(a, "hermes/a")["active"]["worktree"])
+        self.git(wt, "checkout", "-q", "--detach")
+        self.git(wt, "commit", "-q", "--allow-empty", "-m", "detached work")
+        lost = self.git(wt, "rev-parse", "HEAD")
+        self.assertIn("not on a branch", self.done(a, code=2).stderr)
+        cleared = self.task("task-clear", "--id", a["active"]["task_id"])  # a clean tree, but unreachable work
+        self.assertIsNotNone(cleared["wip_ref"])
+        self.assertEqual(self.git(self.base, "merge-base", "--is-ancestor", lost, cleared["wip_ref"],
+                                  check=False).returncode, 0)
+
+        b = self.claim(thread(2))
+        wt = Path(self.branch(b, "hermes/b")["active"]["worktree"])
+        (wt / "file.txt").write_text("one\n")
+        self.git(wt, "add", "file.txt")
+        self.git(wt, "commit", "-q", "-m", "one")
+        rebase = subprocess.run(["git", "-C", str(wt), "rebase", "-q", "-i", "HEAD~1"], capture_output=True, text=True,
+                                env={**self.git_env, "GIT_SEQUENCE_EDITOR": "sed -i 1s/^pick/edit/"}, check=False)
+        self.assertEqual(rebase.returncode, 0, rebase.stderr)
+        self.git(wt, "commit", "-q", "--amend", "-m", "amended mid-rebase")
+        self.assertEqual(self.git(wt, "status", "--porcelain"), "")
+        self.assertIn("in progress", self.done(b, code=2).stderr)
+        self.git(wt, "rebase", "--abort")
+        self.assertEqual(self.done(b)["result"], "done")
+
+    def test_a_directory_at_the_worktree_path_is_kept(self):
+        a = self.claim()
+        path = self.personal / ".worktrees/tally" / a["active"]["task_id"]
+        path.mkdir(parents=True)
+        (path / "notes.md").write_text("mine\n")
+        self.assertEqual(self.branch(a, "hermes/a")["result"], "updated")
+        self.assertEqual([(k / "notes.md").read_text() for k in self.kept()], ["mine\n"])
+
+    def test_a_worktree_replaced_by_a_clone_is_kept_on_done(self):
+        a = self.claim()
+        wt = Path(self.branch(a, "hermes/a")["active"]["worktree"])
+        shutil.rmtree(wt)
+        self.git(self.home, "clone", "-q", str(self.upstream), str(wt))
+        self.git(wt, "commit", "-q", "--allow-empty", "-m", "only in the clone")
+        commit = self.git(wt, "rev-parse", "HEAD")
+        done = self.done(a)
+        self.assertEqual(done["worktree_removed"], False)
+        self.assertEqual(self.git(Path(done["kept"]), "cat-file", "-t", commit), "commit")
+
+    def test_hidden_edits_and_nested_repos_are_kept(self):
+        a = self.claim(thread(1))
+        wt = Path(self.branch(a, "hermes/a")["active"]["worktree"])
+        self.git(wt, "update-index", "--skip-worktree", "README.md")
+        (wt / "README.md").write_text("edited under skip-worktree\n")
+        done = self.done(a)
+        self.assertEqual(done["worktree_removed"], False)
+        self.assertEqual((Path(done["kept"]) / "README.md").read_text(), "edited under skip-worktree\n")
+
+        b = self.claim(thread(2))
+        wt = Path(self.branch(b, "hermes/b")["active"]["worktree"])
+        nested = wt / "vendor/thing"
+        nested.mkdir(parents=True)
+        self.git(nested, "init", "-q", "-b", "main")
+        self.git(nested, "commit", "-q", "--allow-empty", "-m", "nested work")
+        commit = self.git(nested, "rev-parse", "HEAD")
+        self.done(b, code=2)
+        cleared = self.task("task-clear", "--id", b["active"]["task_id"])
+        self.assertEqual((cleared["worktree_removed"], cleared["wip_ref"]), (False, None))
+        self.assertEqual(self.git(Path(cleared["kept"]) / "vendor/thing", "cat-file", "-t", commit), "commit")
+
+    def test_an_interrupted_checkout_recovers_and_leaves_no_branch_behind(self):
+        self.slow_filter()
+        a = self.claim()
+        task_id = a["active"]["task_id"]
+        proc = self.start_branch(a, "hermes/t")
+        os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait()
+        (self.home / "release").write_text("")
+        self.assertTrue(self.record(task_id)["preparing"])
+        self.assertIn("still being created", self.branch(a, "hermes/t", code=2).stderr)
+        self.age_reservation(task_id, minutes=11)
+        made = self.branch(a, "hermes/t")
+        self.assertEqual(self.git(Path(made["active"]["worktree"]), "symbolic-ref", "HEAD"), "refs/heads/hermes/t")
+
+    def test_a_failed_checkout_deletes_the_branch_it_created(self):
+        self.filtered_file("false", required=True)
+        a = self.claim()
+        self.assertIn("worktree add failed", self.branch(a, "hermes/f", code=2).stderr)
+        self.assertEqual(self.record(a["active"]["task_id"])["branch"], "pending")
+        self.assertEqual(self.git(self.base, "branch", "--list", "hermes/f"), "")
+        self.git(self.base, "config", "filter.slow.smudge", "cat")
+        self.assertEqual(self.branch(a, "hermes/f")["result"], "updated")
+
+    def test_a_failing_post_checkout_hook_keeps_the_worktree_with_a_warning(self):
+        hook = self.base / ".git/hooks/post-checkout"
+        hook.write_text("#!/bin/sh\necho 'git-lfs was not found on your path' >&2\nexit 2\n")
+        hook.chmod(0o755)
+        a = self.claim()
+        made = self.branch(a, "hermes/h")
+        self.assertIn("git-lfs was not found", " ".join(made["warnings"]))
+        self.assertEqual(self.git(Path(made["active"]["worktree"]), "symbolic-ref", "HEAD"), "refs/heads/hermes/h")
+
+    def test_a_killed_checkout_is_recovered_after_an_hour(self):
+        self.slow_filter()
+        a = self.claim()
+        task_id = a["active"]["task_id"]
+        proc = self.start_branch(a, "hermes/k")
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+        (self.home / "release").write_text("")
+        self.assertIn("locked initializing", self.git(self.base, "worktree", "list", "--porcelain"))
+        self.age_reservation(task_id, minutes=30)
+        self.assertIn("locked worktree", self.branch(a, "hermes/k", code=2).stderr)
+        self.age_reservation(task_id, hours=2)
+        made = self.branch(a, "hermes/k")
+        self.assertEqual(self.git(Path(made["active"]["worktree"]), "symbolic-ref", "HEAD"), "refs/heads/hermes/k")
+        self.assertEqual(len(self.kept()), 1)
+
+    def test_a_slow_task_branch_never_removes_a_worktree_another_one_finished(self):
+        shim = self.home / "git-shim"
+        shim.write_text('#!/bin/sh\ncase " $* " in *" merge "*) : > "$SHIM_DIR/started"; '
+                        'while [ ! -e "$SHIM_DIR/release" ]; do sleep 0.05; done ;; esac\nexec git "$@"\n')
+        shim.chmod(0o755)
+        first = self.claim(thread(1))
+        wt = Path(self.branch(first, "hermes/pr")["active"]["worktree"])
+        self.git(wt, "commit", "-q", "--allow-empty", "-m", "pr")
+        self.git(wt, "push", "-q", "-u", "origin", "hermes/pr")
+        self.git(wt, "commit", "-q", "--allow-empty", "-m", "local only")  # the local branch stays (ahead)
+        self.done(first)
+        self.git(self.base, "push", "-q", "origin", "hermes/pr")
+        a = self.claim(thread(2))
+        p1 = self.start_branch(a, "hermes/pr", "--follow-up", env={"HERMES_TASK_GIT": str(shim)})
+        self.age_reservation(a["active"]["task_id"], minutes=11)
+        p2 = self.branch(a, "hermes/pr", "--follow-up")
+        path = Path(p2["active"]["worktree"])
+        (path / "agent-started.txt").write_text("work began after p2\n")
+        (self.home / "release").write_text("")
+        p1.communicate(timeout=30)
+        self.assertEqual((path / "agent-started.txt").read_text(), "work began after p2\n")
+        record = self.record(a["active"]["task_id"])
+        self.assertEqual((record["preparing"], record["worktree"]), (False, str(path)))
+
+    def test_the_relock_after_a_checkout_outwaits_a_busy_lock(self):
+        shim = self.home / "git-shim"
+        shim.write_text(SHIM)
+        shim.chmod(0o755)
+        a = self.claim()
+        quick = {"HERMES_TASK_LOCK_WAIT": "0.2", "HERMES_TASK_GIT": str(shim)}
+        proc = self.start_branch(a, "hermes/l", env=quick)
+        with open(self.personal / ".task-lock", "ab") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)  # e.g. another task's long task-clear snapshot
+            (self.home / "release").write_text("")
+            time.sleep(1.5)  # well past HERMES_TASK_LOCK_WAIT
+        out, err = proc.communicate(timeout=60)
+        self.assertEqual(proc.returncode, 0, err)
+        self.assertEqual(json.loads(out)["active"]["branch"], "hermes/l")
+        self.assertFalse(self.record(a["active"]["task_id"])["preparing"])
+
+    def test_symlinked_worktree_directories_are_never_followed(self):
+        victim = self.home / "victim"
+        (victim / "dir").mkdir(parents=True)
+        (victim / "important.txt").write_text("not trash\n")
+        (self.personal / ".worktrees").mkdir()
+        (self.personal / ".worktrees/.trash").symlink_to(victim)
+        self.task("task-status")
+        a = self.claim()
+        self.assertIn("symlink", self.branch(a, "hermes/a", code=2).stderr)
+        self.assertEqual(sorted(p.name for p in victim.iterdir()), ["dir", "important.txt"])
+        (self.personal / ".worktrees/.trash").unlink()
+        outside = self.home / "outside"
+        outside.mkdir()
+        (self.personal / ".worktrees/tally").symlink_to(outside)
+        self.assertIn("symlink", self.branch(a, "hermes/a", code=2).stderr)
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_listing_shows_kept_trees_and_wip_refs_and_refs_are_never_overwritten(self):
+        a, b = self.claim(thread(1)), self.claim(thread(2))
+        wt_a = Path(self.branch(a, "hermes/a")["active"]["worktree"])
+        (wt_a / "new.txt").write_text("a\n")
+        wip = self.task("task-clear", "--id", a["active"]["task_id"])["wip_ref"]
+        wt_b = Path(self.branch(b, "hermes/b")["active"]["worktree"])
+        (wt_b / "new.txt").write_text("b\n")
+        taken = f"refs/hermes/wip/{b['active']['task_id']}"
+        self.git(self.base, "update-ref", taken, "upstream/main")
+        cleared = self.task("task-clear", "--id", b["active"]["task_id"])
+        self.assertEqual((cleared["wip_ref"], cleared["worktree_removed"]), (None, False))  # kept, not overwritten
+        self.assertEqual(self.git(self.base, "rev-parse", taken), self.git(self.base, "rev-parse", "upstream/main"))
+        listing = self.task("task-status", "--all")
+        self.assertEqual(listing["kept"], [Path(cleared["kept"]).name])
+        self.assertEqual(listing["wip_refs"], sorted([{"project": "tally", "ref": wip}, {"project": "tally", "ref": taken}],
+                                                     key=lambda r: r["ref"]))
 
 
 if __name__ == "__main__":

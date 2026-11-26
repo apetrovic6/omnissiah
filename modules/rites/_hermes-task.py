@@ -384,7 +384,15 @@ REMOTE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 ORPHAN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 POSITIVE = re.compile(r"[1-9][0-9]*")
 FIELDS = ("task_id", "started_at", "last_active", "room", "thread", "project", "branch", "summary",
-          "worktree", "legacy", "preparing")
+          "worktree", "legacy", "preparing", "reservation")
+RESERVATION = {"reserved_at", "nonce", "action", "start"}
+ACTIONS = ("adopt", "new", "track", "existing")
+SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+# A killed checkout leaves Git's "initializing" lock; after this long it is a crash, not a slow checkout.
+STALE_INIT = timedelta(hours=1)
+# The relock after a long checkout waits longer than a normal command, so it doesn't strand a finished worktree.
+RELOCK_WAIT = 60
+IN_PROGRESS = ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG")
 # Variables that would point git at another repository, index or namespace than -C names.
 GIT_SCRUB = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
              "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_PREFIX")
@@ -495,6 +503,21 @@ def check_record(cfg, record):
         raise ValueError("invalid branch or summary")
     if not isinstance(record["legacy"], bool) or not isinstance(record["preparing"], bool):
         raise ValueError("invalid flags")
+    reservation = record["reservation"]
+    if record["preparing"] != (reservation is not None):
+        raise ValueError("preparing without a reservation")
+    if reservation is not None:
+        if not isinstance(reservation, dict) or set(reservation) != RESERVATION:
+            raise ValueError("invalid reservation")
+        if (not isinstance(reservation["reserved_at"], str) or not isinstance(reservation["nonce"], str)
+                or not TASK_ID.fullmatch(reservation["nonce"]) or reservation["action"] not in ACTIONS
+                or not (reservation["start"] is None
+                        or (isinstance(reservation["start"], str) and SHA.fullmatch(reservation["start"])))):
+            raise ValueError("invalid reservation")
+        try:
+            parse_time(reservation["reserved_at"])
+        except ValueError:
+            raise ValueError("invalid reservation") from None
     worktree, pending = record["worktree"], record["branch"] == PENDING
     if record["legacy"]:
         if worktree != str(base_path(cfg, record["project"])) or pending or record["preparing"]:
@@ -513,7 +536,7 @@ def load_live(cfg):
     except FileNotFoundError:
         return []
     data = json.loads(text)
-    if (not isinstance(data, dict) or set(data) != {"version", "tasks"} or data["version"] != 1
+    if (not isinstance(data, dict) or set(data) != {"version", "tasks"} or type(data["version"]) is not int or data["version"] != 1
             or not isinstance(data["tasks"], list)):
         raise ValueError("unexpected layout")
     return validate(cfg, data["tasks"])
@@ -583,14 +606,14 @@ def adopt_legacy(cfg, tasks, now, repair, moved):
                 "last_active": stamp(now), "room": row.room, "thread": row.thread, "project": row.project,
                 "branch": row.branch if legacy else PENDING, "summary": row.summary,
                 "worktree": str(base_path(cfg, row.project)) if legacy else None,
-                "legacy": legacy, "preparing": False,
+                "legacy": legacy, "preparing": False, "reservation": None,
             }
             check_record(cfg, record)
             adopted.append(record)
         merged = validate(cfg, tasks + adopted)  # e.g. no branch recorded twice
     except ValueError as error:
         if not repair:
-            raise Refusal(f"Invalid old task slot state ({error}); ask manjo for 'clear task'.") from None
+            raise Refusal(f"Invalid old task slot state ({error}); ask manjo for 'clear task' (task-clear --repair).") from None
         suffix = "bad"
     else:
         save_state(cfg, merged)
@@ -617,9 +640,9 @@ class Store:
         self.stream = None
         self.tasks = []
 
-    def lock(self):
+    def lock(self, wait=None):
         stream = open(self.cfg.state / LOCK_FILE, "ab")
-        deadline = time.monotonic() + self.cfg.lock_wait
+        deadline = time.monotonic() + (self.cfg.lock_wait if wait is None else wait)
         while True:
             try:
                 fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -641,7 +664,7 @@ class Store:
         try:
             self.tasks = load_live(self.cfg)
         except ValueError as error:
-            raise Refusal(f"Invalid task state in {STATE_FILE} ({error}); ask manjo for 'clear task'.") from None
+            raise Refusal(f"Invalid task state in {STATE_FILE} ({error}); ask manjo for 'clear task' (task-clear --repair).") from None
         return self.tasks
 
     def save(self):
@@ -718,7 +741,9 @@ def uncommitted(cfg, path):
 def snapshot(cfg, path, name, label):
     """Commit everything uncommitted in a worktree (ignored files aside) to refs/hermes/wip/<name>.
 
-    A private index, so the worktree's own index and HEAD stay as they were. Returns the ref."""
+    A private index, so the worktree's own index and HEAD stay as they were; the commit's parent
+    is HEAD, so commits only HEAD holds (a detached HEAD, a rebase) are kept too. Never replaces
+    an existing ref. Returns the ref."""
     ref = f"refs/hermes/wip/{name}"
     index = cfg.state / f".wip-index-{secrets.token_hex(4)}"
     env = git_env({
@@ -729,32 +754,55 @@ def snapshot(cfg, path, name, label):
         def step(*args):
             result = run_git(cfg, path, *args, env=env)
             if result.returncode != 0:
-                raise Refusal(f"Could not save the uncommitted work in {path} ({' '.join(args[:2])}); "
-                              "nothing was removed. Ask manjo to look at it.")
+                raise Refusal(f"Could not save the uncommitted work in {path} ({' '.join(args[:2])}).")
             return result.stdout.strip()
         step("read-tree", "HEAD")
         step("add", "-A")
         tree = step("write-tree")
         commit = step("commit-tree", tree, "-p", "HEAD", "-m", f"hermes wip: {label}")
-        step("update-ref", ref, commit)
+        step("update-ref", ref, commit, "")  # "" as the old value: only if the ref doesn't exist yet
     finally:
         index.unlink(missing_ok=True)
         index.with_name(index.name + ".lock").unlink(missing_ok=True)
     return ref
 
 
-def discard(cfg, project, path):
-    """Move a worktree into the trash (one rename) and drop Git's record of it."""
-    removed = False
-    if os.path.lexists(path):
-        trash = cfg.root / WORKTREES / TRASH
-        trash.mkdir(parents=True, exist_ok=True)
-        os.rename(path, trash / f"{path.name}-{secrets.token_hex(4)}")
-        removed = True
+def layout_ok(cfg, project=None):
+    """Refuse when .worktrees, its .trash or .kept, or .worktrees/<project> is a symlink or not a directory."""
+    top = cfg.root / WORKTREES
+    for path in (top, top / TRASH, top / KEPT, *([top / project] if project else [])):
+        if path.is_symlink() or (os.path.lexists(path) and not path.is_dir()):
+            raise Refusal(f"{path} is a symlink or not a directory; ask manjo to check it.")
+
+
+def inside_worktrees(cfg, path):
+    """`path` (which may itself be a symlink) must sit inside the real .worktrees."""
+    top = real(cfg.root / WORKTREES)
+    parent = real(os.path.dirname(os.path.normpath(path)))
+    if parent != top and not parent.startswith(top + os.sep):
+        raise Refusal(f"{path} is not inside {cfg.root / WORKTREES}; refusing to move it.")
+
+
+def move_into(cfg, path, bucket):
+    layout_ok(cfg)
+    inside_worktrees(cfg, path)
+    folder = cfg.root / WORKTREES / bucket
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"{Path(path).name}-{secrets.token_hex(4)}"
+    os.rename(path, target)
+    return target
+
+
+def prune(cfg, project):
     base = base_path(cfg, project)
     if (base / ".git").exists():
         run_git(cfg, base, "worktree", "prune")
-    return removed
+
+
+def trash(cfg, project, path):
+    """Delete a tree that holds nothing to keep: one rename now, the files after the lock is released."""
+    move_into(cfg, path, TRASH)
+    prune(cfg, project)
 
 
 def _force_remove(function, path, _error):
@@ -769,32 +817,39 @@ def _force_remove(function, path, _error):
 
 
 def empty_trash(cfg):
-    trash = cfg.root / WORKTREES / TRASH
-    try:
-        entries = list(trash.iterdir())
-    except OSError:
+    top = cfg.root / WORKTREES
+    folder = top / TRASH
+    if top.is_symlink() or folder.is_symlink() or not folder.is_dir():
         return
-    for entry in entries:
-        if entry.is_dir() and not entry.is_symlink():
-            shutil.rmtree(entry, onexc=_force_remove)
-        else:
-            entry.unlink(missing_ok=True)
+    for entry in list(folder.iterdir()):
+        if real(entry.parent) != real(folder):
+            continue
+        try:
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry, onexc=_force_remove)
+            else:
+                entry.unlink(missing_ok=True)
+        except OSError as error:
+            print(f"warning: could not delete {entry}: {error}", file=sys.stderr)
 
 
-def check_not_locked(cfg, task, path):
-    base = base_path(cfg, task["project"])
-    if not (base / ".git").exists():
-        return
+def add_worktree(cfg, base, path, branch, *args):
+    """`git worktree add`; a non-zero exit after a complete checkout (a failing hook) is a warning."""
+    result = run_git(cfg, base, "worktree", "add", "-q", *args)
+    if result.returncode == 0:
+        return []
+    detail = result.stderr.strip().splitlines()[-3:] or ["no output"]
     entry = entry_for(worktree_entries(cfg, base), path)
-    if entry is not None and "locked" in entry:
-        raise Refusal(f"{path} is a locked worktree; ask manjo to check it "
-                      f"(git -C '{base}' worktree unlock '{path}').")
+    if entry is not None and entry.get("branch") == f"refs/heads/{branch}" and "locked" not in entry:
+        return [f"git worktree add exited {result.returncode} after the checkout: " + " / ".join(detail)]
+    raise Refusal(f"git worktree add failed in {base}: {detail[-1]}")
 
 
 def plan_worktree(cfg, tasks, task, branch, follow_up):
     """Checks under the lock; returns what make_worktree runs without it."""
     base = base_path(cfg, task["project"])
     path = worktree_path(cfg, task["project"], task["task_id"])
+    layout_ok(cfg, task["project"])
     check_base(cfg, base)
     git_out(cfg, base, "worktree", "prune", what="git worktree prune")
     entries = worktree_entries(cfg, base)
@@ -804,10 +859,14 @@ def plan_worktree(cfg, tasks, task, branch, follow_up):
         if "locked" in mine:
             raise Refusal(f"{path} is a locked worktree; ask manjo to check it.")
         if mine.get("branch") == ref:
-            return {"action": "adopt"}  # an interrupted task-branch got this far
+            return {"action": "adopt", "detach": False, "start_sha": None}  # an interrupted task-branch got this far
         raise Refusal(f"{path} is a worktree on another branch; ask manjo to check it.")
     if os.path.lexists(path):
-        discard(cfg, task["project"], path)  # what an interrupted `git worktree add` left
+        # Not a worktree of this base: never ours to delete.
+        if path.is_dir() and not path.is_symlink() and not any(path.iterdir()):
+            path.rmdir()
+        else:
+            keep_aside(cfg, task["project"], path)
     plan = {"action": None, "detach": False}
     holder = next((entry for entry in entries if entry.get("branch") == ref), None)
     if holder is not None:
@@ -830,40 +889,41 @@ def plan_worktree(cfg, tasks, task, branch, follow_up):
             raise Refusal(f"Local {branch} has commits that aren't on {PR_REMOTE}/{branch} (diverged or unpushed); "
                           "ask manjo.")
         plan.update(action="existing" if local else "track", start=remote_ref)
-        return plan
-    if local or remote:
-        where = " and ".join(part for part, there in (("locally", local), (f"on {PR_REMOTE}", remote)) if there)
-        raise Refusal(f"Branch {branch} already exists {where}; for a review follow-up add --follow-up, "
-                      "otherwise pick another name.")
-    prefix = f"refs/remotes/{cfg.base_remote}/"
-    head = run_git(cfg, base, "symbolic-ref", "-q", f"{prefix}HEAD").stdout.strip()
-    if not head.startswith(prefix) or run_git(cfg, base, "rev-parse", "--verify", "-q", f"{head}^{{commit}}").returncode:
-        raise Refusal(f"Unknown default branch: fetch {cfg.base_remote}, then run "
-                      f"`git remote set-head {cfg.base_remote} --auto` in {base}.")
-    plan.update(action="new", start=head)
+    else:
+        if local or remote:
+            where = " and ".join(part for part, there in (("locally", local), (f"on {PR_REMOTE}", remote)) if there)
+            raise Refusal(f"Branch {branch} already exists {where}; for a review follow-up add --follow-up, "
+                          "otherwise pick another name.")
+        prefix = f"refs/remotes/{cfg.base_remote}/"
+        head = run_git(cfg, base, "symbolic-ref", "-q", f"{prefix}HEAD").stdout.strip()
+        if not head.startswith(prefix) or run_git(cfg, base, "rev-parse", "--verify", "-q",
+                                                  f"{head}^{{commit}}").returncode:
+            raise Refusal(f"Unknown default branch: fetch {cfg.base_remote}, then run "
+                          f"`git remote set-head {cfg.base_remote} --auto` in {base}.")
+        plan.update(action="new", start=head)
+    plan["start_sha"] = git_out(cfg, base, "rev-parse", "--verify", f"{plan['start']}^{{commit}}", what="git rev-parse")
     return plan
 
 
 def make_worktree(cfg, project, path, branch, plan):
-    """The slow part, without the lock: check out the task's worktree."""
+    """The slow part, without the lock: check out the task's worktree. Returns warnings."""
     base = base_path(cfg, project)
     action = plan["action"]
     if action == "adopt":
-        return
+        return []
     path.parent.mkdir(parents=True, exist_ok=True)
+    layout_ok(cfg, project)
     if plan["detach"]:
         git_out(cfg, base, "checkout", "-q", "--detach", what="git checkout --detach")
     if action == "new":
         # No tracking: a branch tracking <base remote>/<default> would make a bare `git push` target it.
-        git_out(cfg, base, "worktree", "add", "-q", "--no-track", "-b", branch, str(path), plan["start"],
-                what="git worktree add")
-    elif action == "track":
-        git_out(cfg, base, "worktree", "add", "-q", "--track", "-b", branch, str(path), plan["start"],
-                what="git worktree add")
-    else:
-        git_out(cfg, base, "worktree", "add", "-q", str(path), branch, what="git worktree add")
-        git_out(cfg, path, "merge", "-q", "--ff-only", plan["start"], what="git merge --ff-only")
-        git_out(cfg, path, "branch", "-q", f"--set-upstream-to={PR_REMOTE}/{branch}", what="git branch")
+        return add_worktree(cfg, base, path, branch, "--no-track", "-b", branch, str(path), plan["start"])
+    if action == "track":
+        return add_worktree(cfg, base, path, branch, "--track", "-b", branch, str(path), plan["start"])
+    warnings = add_worktree(cfg, base, path, branch, str(path), branch)
+    git_out(cfg, path, "merge", "-q", "--ff-only", plan["start"], what="git merge --ff-only")
+    git_out(cfg, path, "branch", "-q", f"--set-upstream-to={PR_REMOTE}/{branch}", what="git branch")
+    return warnings
 
 
 # --- commands ---------------------------------------------------------------
@@ -926,7 +986,7 @@ def listing(cfg, store, now):
             "summary": task["summary"],
         })
     return {"result": "active" if tasks else "idle", "tasks": tasks, "live": len(tasks), "max_live": cfg.max_live,
-            "orphans": orphans(cfg, store.tasks)}
+            "orphans": orphans(cfg, store.tasks), "kept": kept_trees(cfg), "wip_refs": wip_refs(cfg)}
 
 
 def cmd_claim(cfg, store, now, origin, project, summary, mint_app):
@@ -947,12 +1007,12 @@ def cmd_claim(cfg, store, now, origin, project, summary, mint_app):
     task = {
         "task_id": mint_task_id(cfg, store.tasks, project), "started_at": stamp(now), "last_active": stamp(now),
         "room": origin[0], "thread": origin[1], "project": project, "branch": PENDING, "summary": summary,
-        "worktree": None, "legacy": False, "preparing": False,
+        "worktree": None, "legacy": False, "preparing": False, "reservation": None,
     }
     store.tasks.append(task)
     store.save()
-    response = reply(cfg, store, now, "claimed", task,
-                     worktree_path=str(worktree_path(cfg, project, task["task_id"])))
+    # No worktree path yet: task-branch creates it, and anything put there before would be in its way.
+    response = reply(cfg, store, now, "claimed", task)
     if session_id is not None:
         response["session_id"] = session_id
     return response
@@ -972,97 +1032,275 @@ def cmd_branch(cfg, store, now, origin, started_at, branch, follow_up):
         task["last_active"] = stamp(now)
         store.save()
         return reply(cfg, store, now, "updated", task)
-    if task["preparing"] and task["branch"] != branch:
-        raise Refusal(f"This task is still setting up a worktree for {task['branch']}; retry that branch, or ask "
-                      "manjo for 'clear task'.")
-    if task["preparing"] and now - parse_time(task["last_active"]) < PREPARING_GRACE:
-        # Another task-branch may still be checking out; only an older reservation is a crash to recover.
-        raise Refusal("This task's worktree is still being created; retry in a few minutes.")
+    if task["preparing"]:
+        if task["branch"] != branch:
+            raise Refusal(f"This task is still setting up a worktree for {task['branch']}; retry that branch, or ask "
+                          "manjo for 'clear task'.")
+        if now - parse_time(task["reservation"]["reserved_at"]) < PREPARING_GRACE:
+            # Another task-branch may still be checking out; only an older reservation is a crash to recover.
+            raise Refusal("This task's worktree is still being created; retry in a few minutes.")
+        recover(cfg, task, now)
     other = next((t for t in store.tasks if t is not task and t["project"] == task["project"]
                   and t["branch"] == branch), None)
     if other is not None:
         raise Refusal(f"Branch {branch} belongs to another live task ({other['task_id']}); pick another name.")
     plan = plan_worktree(cfg, store.tasks, task, branch, follow_up)
     path = worktree_path(cfg, task["project"], task["task_id"])
-    task.update(branch=branch, worktree=str(path), preparing=True, last_active=stamp(now))
+    nonce = secrets.token_hex(8)
+    task.update(branch=branch, worktree=str(path), preparing=True, last_active=stamp(now), reservation={
+        "reserved_at": stamp(now), "nonce": nonce, "action": plan["action"], "start": plan["start_sha"]})
     store.save()
     key = (task["task_id"], task["started_at"])
     store.unlock()
-    failure = None
+    warnings, failure = [], None
     try:
-        make_worktree(cfg, task["project"], path, branch, plan)
+        warnings = make_worktree(cfg, task["project"], path, branch, plan)
     except Refusal as error:
         failure = error
     except OSError as error:
         failure = Refusal(f"Could not create {path}: {error}")
-    store.lock()
+    store.lock(wait=max(RELOCK_WAIT, cfg.lock_wait))
     store.reload()
-    task = next((t for t in store.tasks if (t["task_id"], t["started_at"]) == key), None)
-    if task is None or not task["preparing"] or task["branch"] != branch:
-        discard(cfg, path.parent.name, path)
+    current = next((t for t in store.tasks if (t["task_id"], t["started_at"]) == key), None)
+    if current is None or (current["reservation"] or {}).get("nonce") != nonce:
+        if current is not None:
+            # A later task-branch recovered this reservation and owns the result: leave it alone.
+            if not current["preparing"] and current["branch"] == branch and current["worktree"] == str(path):
+                return reply(cfg, store, now, "updated", current)
+            raise Refusal("Another task-branch took over this task's worktree setup; run task-status.")
+        undo(cfg, task["project"], path, branch, plan, now)
         raise failure or Refusal("The task was cleared while its worktree was being created; the worktree is removed.")
     if failure is not None:
-        if plan["action"] != "adopt":
-            discard(cfg, task["project"], path)
-        task.update(branch=PENDING, worktree=None, preparing=False)
+        undo(cfg, current["project"], path, branch, plan, now)
+        current.update(branch=PENDING, worktree=None, preparing=False, reservation=None)
         store.save()
         raise failure
-    task.update(preparing=False, last_active=stamp(now))
+    current.update(preparing=False, reservation=None, last_active=stamp(now))
     store.save()
-    return reply(cfg, store, now, "updated", task)
+    response = reply(cfg, store, now, "updated", current)
+    if warnings:
+        response["warnings"] = warnings
+    return response
 
 
-def keep_aside(cfg, project, path):
-    """Move a tree Git can't read (or save) into .worktrees/.kept instead of deleting it."""
-    kept = cfg.root / WORKTREES / KEPT
-    kept.mkdir(parents=True, exist_ok=True)
-    target = kept / f"{path.name}-{secrets.token_hex(4)}"
-    os.rename(path, target)
+def keep_aside(cfg, project, path, linked=False):
+    """Move a tree into .worktrees/.kept instead of deleting it. A linked worktree stays registered and
+    locked, so its admin dir (index, HEAD, a submodule's objects) is never pruned."""
     base = base_path(cfg, project)
-    if (base / ".git").exists():
-        run_git(cfg, base, "worktree", "prune")
+    if linked:
+        run_git(cfg, base, "worktree", "lock", "--reason", "kept aside by the Hermes task tools", str(path))
+    target = move_into(cfg, path, KEPT)
+    if linked:
+        run_git(cfg, base, "worktree", "repair", str(target))
+    else:
+        prune(cfg, project)
     return str(target)
 
 
-def retire(cfg, project, path, name, label):
-    """For `task-clear`: save uncommitted work to a wip ref, then remove the worktree; returns (ref, kept)."""
+def linked_entry(cfg, base, path):
+    """Git's entry for `path` when it is a linked worktree of this base clone (not the base itself), else None."""
+    if os.path.islink(path) or not os.path.isdir(path) or not (base / ".git").exists():
+        return None
+    entry = entry_for(worktree_entries(cfg, base), path)
+    if entry is None or real(entry["path"]) == real(base):
+        return None
+    mine = run_git(cfg, path, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir")
+    theirs = run_git(cfg, base, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    lines = mine.stdout.splitlines()
+    if mine.returncode or theirs.returncode or len(lines) != 2:
+        return None
+    if real(lines[0]) != real(path) or real(lines[1]) != real(theirs.stdout.strip()):
+        return None
+    return entry
+
+
+def git_lines(cfg, path, *args):
+    result = run_git(cfg, path, *args)
+    if result.returncode != 0:
+        raise Refusal(f"git {args[0]} failed in {path}")
+    return result.stdout.splitlines()
+
+
+def risks(cfg, path):
+    """What deleting a linked worktree could lose. Raises Refusal when Git can't tell."""
+    paths = git_lines(cfg, path, "rev-parse", "--path-format=absolute", "--git-path", "modules",
+                      *[arg for name in IN_PROGRESS for arg in ("--git-path", name)])
+    if len(paths) != 1 + len(IN_PROGRESS):
+        raise Refusal(f"unexpected git rev-parse output in {path}")
+    submodules = run_git(cfg, path, "submodule", "status")
+    status = git_lines(cfg, path, "status", "--porcelain", "--untracked-files=all")
+    flags = git_lines(cfg, path, "ls-files", "-v")
+    return {
+        "submodules": os.path.lexists(paths[0]) or submodules.returncode != 0 or bool(submodules.stdout.strip()),
+        "detached": run_git(cfg, path, "symbolic-ref", "-q", "HEAD").returncode != 0,
+        "in_progress": [name for name, state in zip(IN_PROGRESS, paths[1:]) if os.path.lexists(state)],
+        # Commits only this worktree's HEAD (and its reflog, which goes with it) holds.
+        "unreachable": bool(git_lines(cfg, path, "rev-list", "-n", "1", "HEAD", "--not", "--branches", "--remotes",
+                                      "--tags")),
+        "changes": len(status),
+        # An untracked nested repository shows as its directory; a snapshot would hold only a gitlink.
+        "nested": any(line.startswith("?? ") and line.rstrip('"').endswith("/") for line in status),
+        # skip-worktree (S) or assume-unchanged (lowercase) entries hide edits from `git status`.
+        "hidden": any(line[:1] == "S" or line[:1].islower() for line in flags),
+    }
+
+
+def remove_tree(cfg, project, path, *, clear, now, wip_name, label, reservation=None):
+    """Remove a worktree directory; returns (wip_ref, kept, removed).
+
+    Deletes only a linked worktree of the project's base clone, and only once nothing in it would be
+    lost (task-done) or it is saved to a wip ref (task-clear). task-done refuses what the agent can
+    fix; anything else (another kind of tree, submodules, nested repos, hidden edits, a tree Git
+    can't read) is kept aside in .worktrees/.kept. Ignored files are not kept.
+    """
+    base = base_path(cfg, project)
+    path = Path(path)
+    if not os.path.lexists(path):
+        prune(cfg, project)  # deleted by hand: drop Git's record of it
+        return None, None, False
+    layout_ok(cfg, project)
+    if path.is_symlink():
+        trash(cfg, project, path)  # only the link goes
+        return None, None, True
+    entry = entry_for(worktree_entries(cfg, base), path) if (base / ".git").exists() else None
+    if entry is not None and "locked" in entry:
+        if (entry["locked"] == "initializing" and reservation is not None
+                and now - parse_time(reservation["reserved_at"]) >= STALE_INIT):
+            run_git(cfg, base, "worktree", "unlock", str(path))  # a killed checkout, never worked in
+            return None, keep_aside(cfg, project, path), False
+        raise Refusal(f"{path} is a locked worktree; ask manjo to check it "
+                      f"(git -C '{base}' worktree unlock '{path}').")
+    if linked_entry(cfg, base, path) is None:
+        if path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
+            prune(cfg, project)
+            return None, None, True
+        return None, keep_aside(cfg, project, path), False
     try:
-        top = git_out(cfg, path, "rev-parse", "--show-toplevel", what="git rev-parse")
-        if real(top) != real(path):
-            raise Refusal("not a worktree's top level")
-        ref = snapshot(cfg, path, name, label) if uncommitted(cfg, path) else None
+        found = risks(cfg, path)
     except Refusal:
-        return None, keep_aside(cfg, project, path)
-    discard(cfg, project, path)
-    return ref, None
+        if not clear:
+            raise
+        return None, keep_aside(cfg, project, path, linked=True), False
+    if not clear:
+        if found["submodules"]:
+            raise Refusal(f"{path} has submodules; ask manjo.")
+        if found["in_progress"]:  # before `detached`: a rebase detaches HEAD
+            raise Refusal(f"{path}: a {'/'.join(found['in_progress'])} is in progress; finish or abort it first.")
+        if found["detached"]:
+            raise Refusal(f"{path}: HEAD is not on a branch. Put what you need on the task's branch and check it "
+                          "out, or ask manjo.")
+        if found["unreachable"]:
+            raise Refusal(f"{path} has commits that no branch, remote or tag holds; ask manjo.")
+        if found["changes"]:
+            raise Refusal(f"{path} has {found['changes']} uncommitted change(s): commit or discard them first, "
+                          "or ask manjo for 'clear task'.")
+        if found["hidden"]:
+            return None, keep_aside(cfg, project, path, linked=True), False
+        trash(cfg, project, path)
+        return None, None, True
+    if found["submodules"] or found["nested"] or found["hidden"]:
+        return None, keep_aside(cfg, project, path, linked=True), False
+    ref = None
+    if found["changes"] or found["unreachable"] or found["in_progress"]:
+        try:
+            ref = snapshot(cfg, path, wip_name, label)
+        except Refusal:
+            return None, keep_aside(cfg, project, path, linked=True), False
+    trash(cfg, project, path)
+    return ref, None, True
 
 
-def release(cfg, store, task, *, save_work):
-    """Remove a task's worktree (if any) and its record; returns (wip ref, kept path, removed)."""
-    ref = kept = None
-    removed = False
-    path = task["worktree"]
-    if path is not None and not task["legacy"]:
-        path = Path(path)
+def drop_branch_at(cfg, base, branch, sha):
+    """Delete refs/heads/<branch> only while it is exactly `sha` and checked out nowhere."""
+    ref = f"refs/heads/{branch}"
+    tip = run_git(cfg, base, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}")
+    if not sha or tip.returncode or tip.stdout.strip() != sha:
+        return False
+    if any(entry.get("branch") == ref for entry in worktree_entries(cfg, base)):
+        return False
+    return run_git(cfg, base, "update-ref", "-d", ref, sha).returncode == 0
+
+
+def drop_pushed_branch(cfg, project, branch):
+    """After task-done: delete the local branch when origin has exactly it. Nothing is lost, and a later
+    follow-up tracks origin afresh even if the PR branch was rewritten."""
+    base = base_path(cfg, project)
+    if branch == PENDING or not (base / ".git").exists():
+        return False
+    remote = run_git(cfg, base, "rev-parse", "-q", "--verify", f"refs/remotes/{PR_REMOTE}/{branch}^{{commit}}")
+    return remote.returncode == 0 and drop_branch_at(cfg, base, branch, remote.stdout.strip())
+
+
+def recover(cfg, task, now):
+    """An old reservation is a crashed task-branch: clear what it left, so the plan starts clean."""
+    base = base_path(cfg, task["project"])
+    path = Path(task["worktree"])
+    reservation = task["reservation"]
+    if not (base / ".git").exists():
+        return
+    layout_ok(cfg, task["project"])
+    entry = entry_for(worktree_entries(cfg, base), path)
+    if (entry is not None and entry.get("locked") == "initializing"
+            and now - parse_time(reservation["reserved_at"]) >= STALE_INIT):
+        run_git(cfg, base, "worktree", "unlock", str(path))  # a killed checkout, never worked in
         if os.path.lexists(path):
-            check_not_locked(cfg, task, path)
-            if save_work:
-                ref, kept = retire(cfg, task["project"], path, task["task_id"],
-                                   f"task {task['task_id']} ({task['branch']})")
-                removed = kept is None
-            else:
-                if not (path / ".git").exists():
-                    raise Refusal(f"{path} is no longer a git worktree; ask manjo for 'clear task'.")
-                changes = uncommitted(cfg, path)
-                if changes:
-                    raise Refusal(f"{path} has {changes} uncommitted change(s): commit or discard them first, "
-                                  "or ask manjo for 'clear task'.")
-                removed = discard(cfg, task["project"], path)
+            keep_aside(cfg, task["project"], path)
         else:
-            discard(cfg, task["project"], path)  # prune Git's record of a tree deleted by hand
+            prune(cfg, task["project"])
+        entry = None
+    if entry is None and reservation["action"] in ("new", "track"):
+        # `git worktree add -b` makes the branch first and leaves it when the checkout dies.
+        drop_branch_at(cfg, base, task["branch"], reservation["start"])
+
+
+def undo(cfg, project, path, branch, plan, now):
+    """After a failed or orphaned checkout: remove what this run made, never anything else."""
+    try:
+        if plan["action"] != "adopt" and os.path.lexists(path):
+            remove_tree(cfg, project, path, clear=True, now=now, wip_name=path.name,
+                        label=f"interrupted task-branch {branch}")
+        if plan["action"] in ("new", "track"):
+            drop_branch_at(cfg, base_path(cfg, project), branch, plan["start_sha"])
+    except (Refusal, OSError) as error:
+        print(f"warning: could not clean up after task-branch: {error}", file=sys.stderr)
+
+
+def kept_trees(cfg):
+    folder = cfg.root / WORKTREES / KEPT
+    if folder.is_symlink() or not folder.is_dir():
+        return []
+    return sorted(entry.name for entry in folder.iterdir())
+
+
+def wip_refs(cfg):
+    refs = []
+    try:
+        repos = sorted(cfg.root.iterdir())
+    except OSError:
+        return refs
+    for repo in repos:
+        if repo.name.startswith(".") or repo.is_symlink() or not (repo / ".git").exists():
+            continue
+        out = run_git(cfg, repo, "for-each-ref", "--format=%(refname)", "refs/hermes/wip/")
+        if out.returncode == 0:
+            refs += [{"project": repo.name, "ref": ref} for ref in out.stdout.split()]
+    return refs
+
+
+def release(cfg, store, task, now, *, clear):
+    """Remove a task's worktree (if any) and its record; returns (wip ref, kept path, removed, branch deleted)."""
+    ref = kept = None
+    removed = deleted = False
+    if task["worktree"] is not None and not task["legacy"]:
+        ref, kept, removed = remove_tree(
+            cfg, task["project"], task["worktree"], clear=clear, now=now, wip_name=task["task_id"],
+            label=f"task {task['task_id']} ({task['branch']})", reservation=task["reservation"])
+        if not clear and kept is None:
+            deleted = drop_pushed_branch(cfg, task["project"], task["branch"])
     store.tasks.remove(task)
     store.save()
-    return ref, kept, removed
+    return ref, kept, removed, deleted
 
 
 def cmd_done(cfg, store, now, origin, started_at):
@@ -1070,9 +1308,9 @@ def cmd_done(cfg, store, now, origin, started_at):
     if task["preparing"]:
         raise Refusal("This task's worktree is still being created; retry in a moment, or ask manjo for "
                       "'clear task' if that persists.")
-    _, _, removed = release(cfg, store, task, save_work=False)
+    _, kept, removed, deleted = release(cfg, store, task, now, clear=False)
     return reply(cfg, store, now, "done", None, task_id=task["task_id"], project=task["project"],
-                 branch=task["branch"], worktree_removed=removed)
+                 branch=task["branch"], worktree_removed=removed, kept=kept, branch_deleted=deleted)
 
 
 def cmd_clear(cfg, store, now, origin, target):
@@ -1083,17 +1321,18 @@ def cmd_clear(cfg, store, now, origin, target):
     else:
         task = next((t for t in store.tasks if t["task_id"] == target), None)
     if task is not None:
-        ref, kept, removed = release(cfg, store, task, save_work=True)
+        ref, kept, removed, _ = release(cfg, store, task, now, clear=True)
         return {"result": "cleared", "task_id": task["task_id"], "project": task["project"], "branch": task["branch"],
                 "wip_ref": ref, "kept": kept, "worktree_removed": removed, "live": len(store.tasks),
                 "max_live": cfg.max_live}
     project, _, name = (target or "").partition("/")
     if not (PROJECT.fullmatch(project) and ORPHAN.fullmatch(name)) or target not in orphans(cfg, store.tasks):
         raise Refusal("No live task or orphaned worktree with that ID; see task-status --all.")
-    path = cfg.root / WORKTREES / project / name
-    ref, kept = retire(cfg, project, path, name if TASK_ID.fullmatch(name) else f"orphan-{secrets.token_hex(4)}",
-                       f"orphaned worktree {target}")
-    return {"result": "cleared", "orphan": target, "wip_ref": ref, "kept": kept, "worktree_removed": kept is None,
+    ref, kept, removed = remove_tree(
+        cfg, project, cfg.root / WORKTREES / project / name, clear=True, now=now,
+        wip_name=name if TASK_ID.fullmatch(name) else f"orphan-{secrets.token_hex(4)}",
+        label=f"orphaned worktree {target}")
+    return {"result": "cleared", "orphan": target, "wip_ref": ref, "kept": kept, "worktree_removed": removed,
             "live": len(store.tasks), "max_live": cfg.max_live}
 
 
@@ -1189,7 +1428,7 @@ def worktree_main():
             store.tasks = load_live(cfg)
         except ValueError as error:
             if not repair:
-                raise Refusal(f"Invalid task state in {STATE_FILE} ({error}); ask manjo for 'clear task'.") from None
+                raise Refusal(f"Invalid task state in {STATE_FILE} ({error}); ask manjo for 'clear task' (task-clear --repair).") from None
             backup = cfg.state / f"{STATE_FILE}.bad-{now.strftime('%Y%m%dT%H%M%S%fZ')}"
             (cfg.state / STATE_FILE).rename(backup)
             moved.append(backup.name)
@@ -1223,9 +1462,14 @@ def worktree_main():
         empty_trash(cfg)
         print(error, file=sys.stderr)
         sys.exit(2)
+    except OSError as error:
+        # Never a bare traceback: say what failed (state is written atomically, so it is whole either way).
+        store.unlock()
+        print(f"Task command failed: {error}; run task-status before retrying.", file=sys.stderr)
+        sys.exit(2)
     store.unlock()
+    print(json.dumps(response), flush=True)
     empty_trash(cfg)
-    print(json.dumps(response))
 
 
 def main():

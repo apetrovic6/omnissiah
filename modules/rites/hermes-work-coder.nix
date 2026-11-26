@@ -104,6 +104,8 @@
 
     taskLauncherText = name: company: ''
       umask 077
+      # Slot mode: never the personal coder's worktree mode, whatever the caller exported.
+      unset HERMES_TASK_MODE
       export HERMES_TASK_STATE_DIR=${lib.escapeShellArg (stateDir name)}
       export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON (lib.attrNames company.repos))}
       export HERMES_TASK_PROJECTS="$HERMES_TASK_APP_PROJECTS"

@@ -320,7 +320,8 @@ per-company slots for now.
 | --- | --- |
 | `~/personal/<repo>` | Base clone: `origin` (the `hermes/<repo>` fork) and `upstream`. App projects point here; tasks never work in it. |
 | `~/personal/.worktrees/<repo>/<task_id>` | A task's worktree, created by `task-branch`, removed by `task-done` |
-| `~/personal/.worktrees/.trash`, `.kept` | Removed worktrees on their way out (emptied after each command); trees a `clear task` couldn't read, kept for you |
+| `~/personal/.worktrees/.trash` | Removed worktrees on their way out, deleted after each command (outside the lock) |
+| `~/personal/.worktrees/.kept` | Trees the tools would not delete, kept for you (listed by `task-status --all`) |
 | `~/personal/.task-state.json` | Live tasks (JSON, replaced atomically), with `.task-lock` |
 
 Worktrees sit beside the base clones, not inside them, so a `git clean`, a
@@ -333,19 +334,37 @@ Commands (`--follow-up` and other flags go before the origin):
 - `task-status <origin>`: the conversation's own task (`owned`, `worktree`,
   `idle_seconds`, `possibly_stale` after 12 idle hours). `task-status --all`
   lists every live task by `task_id`, project, branch, idle time and summary,
-  plus `orphans` (worktree directories without a task). It never shows Matrix
-  or app IDs.
+  plus `orphans` (worktree directories without a task), `kept` and `wip_refs`.
+  It never shows Matrix or app IDs.
 - `task-branch <origin> <started_at> <branch>` creates the worktree: a new
   branch from `upstream/HEAD` without upstream tracking, or with `--follow-up`
-  the existing PR branch from `origin`, fast-forward only. Two live tasks never
-  share a branch. The lock is released while Git checks out, so big checkouts
-  don't stall other tasks.
-- `task-done` removes a clean worktree and keeps the branch; it refuses while
-  there are uncommitted changes.
+  the existing PR branch from `origin`, fast-forward only. Branches are
+  `hermes/<slug>`, and two live tasks never share one. The lock is released
+  while Git checks out, so big checkouts don't stall other tasks. A checkout
+  that dies is recovered by the next `task-branch` for that task after 10
+  minutes (the branch it left is deleted); one killed outright (SIGKILL, OOM)
+  leaves Git's `initializing` lock, recovered after an hour. A failing
+  post-checkout hook (e.g. git-lfs not installed) is reported as a warning.
+- `task-done` removes the worktree and deletes the local branch if `origin` has
+  exactly it (otherwise it keeps it). It refuses while anything would be lost:
+  uncommitted changes, a detached HEAD, a rebase/merge/cherry-pick/revert/bisect
+  in progress, commits no branch, remote or tag holds, or submodules (their
+  objects live in the worktree's admin dir).
 - `task-clear <origin>`, `task-clear --id <task_id | repo/dir>` (only on your
-  explicit `clear task`): saves uncommitted work to `refs/hermes/wip/<task_id>`
-  in the repo, then removes the worktree. Locked worktrees are never touched.
-  `task-clear --repair` moves invalid state aside.
+  explicit `clear task`): saves uncommitted work, and commits only the
+  worktree's HEAD holds, to `refs/hermes/wip/<task_id>` in the repo (never
+  replacing an existing ref), then removes the worktree. `task-clear --repair`
+  moves invalid state aside; the SOUL runs it on your `clear task` when a
+  command reported invalid state.
+
+The tools only ever delete a linked worktree of the task's own base clone.
+Anything else at a worktree path (another clone, a plain directory), and any
+worktree a snapshot can't hold (submodules, a nested repository, edits hidden
+by skip-worktree or assume-unchanged, a tree Git can't read) is moved to
+`.kept` instead; a kept linked worktree stays registered and locked, so look at
+it and remove it with `git worktree unlock` + `git worktree remove`. Locked
+worktrees are never touched. **Ignored files** (build output, `.env`, local
+notes) are not kept: done and clear delete them with the worktree.
 
 To look at saved work: `git -C ~/personal/<repo> show refs/hermes/wip/<task_id>`,
 or check it out somewhere with `git worktree add`. Delete the ref when done
@@ -355,13 +374,21 @@ or check it out somewhere with `git worktree add`. Delete the ref when done
 live tasks: the active task keeps its branch and finishes in its base clone
 (`legacy`), and queued tasks become pending tasks that start at their next
 `continue`. The old files are renamed `.current-task.migrated-<time>` and
-`.task-queue.migrated-<time>`. Deploy stygies, then ryza, back to back, ideally
-while no task is between `task-branch` and its push.
+`.task-queue.migrated-<time>`.
+
+Deploy stygies, then ryza, back to back, while no personal task is between its
+claim and step 3 (setting up the workspace): an old-SOUL task in that window
+creates its branch in the base clone, and the new `task-branch` then refuses it
+("already exists locally"). Tasks past step 3 migrate cleanly (`legacy`).
+Don't start a task between the two deploys.
 
 **Rollback.** Older tools ignore `.task-state.json`. Before rolling stygies
-back, run `task-status --all` as `hermes` and finish or clear what's live. Then
-remove `.task-state.json` and, if a task must continue in the old slot, rename
-its `.migrated-*` files back. Leftover worktrees are plain git worktrees:
+back, run `task-status --all` as `hermes` and finish or clear what's live, then
+remove `.task-state.json`. Don't rename the `.migrated-*` files back: they hold
+every row from deploy time, including tasks finished since. If a task must go
+on in the old slot, write a fresh `.current-task` with only its row (six
+tab-separated fields: `started_at`, room, thread, project, branch, summary).
+Leftover worktrees are plain git worktrees:
 `git -C ~/personal/<repo> worktree remove <path>`.
 
 ### Hermes delegation tiers

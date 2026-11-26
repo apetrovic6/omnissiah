@@ -84,6 +84,7 @@ class RenderedLaunchers(unittest.TestCase):
         self.bin.mkdir()
         personal = self.home / "launcher-personal"
         self.personal_text = data["personal"]
+        self.company_texts = data["launchers"]
         personal.write_text(localise(data["personal"], self.home, data["home"]))
         for action in ("status", "claim", "branch", "done", "clear"):
             (self.bin / f"task-{action}").symlink_to(personal)
@@ -93,10 +94,10 @@ class RenderedLaunchers(unittest.TestCase):
             for action in ("status", "claim", "branch", "done", "clear", "drop"):
                 (self.bin / f"{company}-task-{action}").symlink_to(launcher)
 
-    def run_task(self, command, *args, summary="", code=0):
+    def run_task(self, command, *args, summary="", code=0, env=None):
         result = subprocess.run(
             [shutil.which("bash"), str(self.bin / command), *args], input=summary, capture_output=True, text=True,
-            env={"PATH": os.environ["PATH"], "HOME": str(self.home)}, timeout=30, check=False,
+            env={"PATH": os.environ["PATH"], "HOME": str(self.home), **(env or {})}, timeout=30, check=False,
         )
         self.assertEqual(result.returncode, code, result.stderr)
         return result
@@ -148,11 +149,21 @@ class RenderedLaunchers(unittest.TestCase):
         # Worktree mode: the script takes the lock itself, and claims go to ~/personal/.task-state.json.
         self.assertIn("export HERMES_TASK_MODE=worktrees", self.personal_text)
         self.assertNotIn("flock", self.personal_text)
-        claim = json.loads(self.run_task("task-claim", "--app", "new", "--", "tally", "-", summary="App task").stdout)
+        # An inherited slot or allowlist never reaches the personal commands.
+        inherited = {"HERMES_TASK_STATE_DIR": str(self.home / "work/.tasks/devzero"), "HERMES_TASK_PROJECTS": "[]",
+                     "HERMES_TASK_ROOMS": "[]", "HERMES_TASK_BRANCH_PATTERN": ".*"}
+        claim = json.loads(self.run_task("task-claim", "--app", "new", "--", "tally", "-", summary="App task",
+                                         env=inherited).stdout)
         self.assertEqual(claim["result"], "claimed")
-        self.assertEqual(claim["worktree_path"], str(self.home / "personal/.worktrees/tally" / claim["active"]["task_id"]))
+        self.assertNotIn("worktree_path", claim)
         self.assertEqual(len(json.loads((self.home / "personal/.task-state.json").read_text())["tasks"]), 1)
         self.assertFalse((self.home / "work").exists())
+        # Personal branches are hermes/<slug>: never the fork's default branch.
+        origin = ("--app", claim["session_id"], "--", claim["active"]["started_at"])
+        refused = self.run_task("task-branch", "--follow-up", *origin, "main", code=2, env=inherited)
+        self.assertIn("does not match the required pattern", refused.stderr)
+        for text in self.company_texts.values():
+            self.assertIn("unset HERMES_TASK_MODE", text)
 
     def test_launchers_refuse_until_the_workspace_migration_ran(self):
         # The old personal slot still in ~/work: the personal commands refuse (the company ones too: R8b test).

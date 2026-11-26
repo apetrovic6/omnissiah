@@ -78,6 +78,7 @@
     appOnlyProjects = lib.attrNames (lib.filterAttrs (_: project: project.room or null == null) projects);
     taskCommandText =
       ''
+        # Task state and checkouts are private (0600/0700) like everything in ~hermes (0700).
         umask 077
         export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON appProjects)}
       ''
@@ -89,6 +90,10 @@
         # One git worktree per task beside the base clones, no slot or queue
         # (README, "Hermes task worktrees"). The script takes .task-lock itself.
         export HERMES_TASK_MODE=worktrees
+        # Never an inherited slot or allowlist: a status call may migrate the state dir it is given.
+        export HERMES_TASK_STATE_DIR="$HOME/personal"
+        unset HERMES_TASK_PROJECTS HERMES_TASK_ROOMS
+        export HERMES_TASK_BRANCH_PATTERN='hermes/.+'
         export HERMES_TASK_REPO_ROOT="$HOME/personal"
         export HERMES_TASK_BASE_REMOTE=upstream
         export HERMES_TASK_MAX_LIVE=${toString config.services.imperium.hermesGit.maxLiveTasks}
