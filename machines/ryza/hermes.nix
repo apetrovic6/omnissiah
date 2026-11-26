@@ -19,8 +19,12 @@
   inherit (config.services.imperium.hermes.stygies) knownHosts;
   hasHostPin = knownHosts != "";
   hostKeyAlgorithm = builtins.head (lib.splitString " " knownHosts);
-  inherit (import ./_coder-projects.nix) forges projects;
+  coderRegistry = import ./_coder-projects.nix;
+  inherit (coderRegistry) forges;
+  projects = coderRegistry.check config.services.imperium.hermes.coderProjects;
   projectNames = lib.attrNames projects;
+  # Projects without a Matrix room: the app is their only origin.
+  appOnlyNames = lib.attrNames (lib.filterAttrs (_: project: project.room or null == null) projects);
   sshTerminal = {
     backend = "ssh";
     ssh_host = stygies;
@@ -190,8 +194,14 @@
     else "Manjo must name the exact repo: ${lib.concatMapStringsSep ", " (repo: "`${repo}`") projectNames}. If unclear or unlisted, ask before claiming or planning.";
   projectRoutes = lib.concatStringsSep "\n" (lib.mapAttrsToList (repo: project: let
     forge = forges.${project.forge};
-  in "| `${repo}` | `${project.owner or "manjo"}` | `${project.room}` | `${forge.gitBase}` | `${forge.host}` |")
+    room =
+      if project.room or null == null
+      then "app only"
+      else "`${project.room}`";
+  in "| `${repo}` | `${project.owner or "manjo"}` | ${room} | `${forge.gitBase}` | `${forge.host}` |")
   projects);
+  # Empty unless a project is app-only, so the SOUL is unchanged without one.
+  appOnlyRule = lib.optionalString (appOnlyNames != []) " Repos whose room is \"app only\" can't be claimed from Matrix; if asked for one in a Matrix room, tell manjo to use the Hermes app.";
   # Work coder (HOM-36): rendered from _work-projects.nix.
   workCoder = config.services.imperium.hermes.workCoder;
   workCompanies = (import ./_work-projects.nix).check workCoder.companies;
@@ -227,6 +237,12 @@ in {
     self.nixosModules.hermes
     ../../modules/rites/_hermes-stygies-ssh.nix
   ];
+
+  options.services.imperium.hermes.coderProjects = lib.mkOption {
+    type = lib.types.attrsOf lib.types.anything;
+    default = coderRegistry.projects;
+    description = "Coder projects (_coder-projects.nix); an option only so checks can evaluate other values.";
+  };
 
   options.services.imperium.hermes.workCoder = {
     companies = lib.mkOption {
@@ -336,10 +352,11 @@ in {
         # Hermes uses accept-new. Without a system pin, don't expose a profile
         # that could trust an unknown host or run its terminal locally on ryza.
         enable = hasHostPin;
-        soul = builtins.replaceStrings ["@appProjectRule@" "@projectRoutes@"] [appProjectRule projectRoutes] (builtins.readFile ./hermes-coder-soul.md);
+        soul = builtins.replaceStrings ["@appProjectRule@" "@appOnlyRule@" "@projectRoutes@"] [appProjectRule appOnlyRule projectRoutes] (builtins.readFile ./hermes-coder-soul.md);
         # One Matrix room per project. Add the room's Internal room ID to
-        # _coder-projects.nix after inviting @hermes.
-        rooms = lib.mapAttrs (_: project: project.room) projects;
+        # _coder-projects.nix after inviting @hermes. App-only projects
+        # (no room) get no route.
+        rooms = lib.mapAttrs (_: project: project.room) (lib.filterAttrs (name: _: !(lib.elem name appOnlyNames)) projects);
         # The SOUL's "Delegation" section says when to use which tier.
         delegation = {
           tiers = coderTiers;

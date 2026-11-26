@@ -218,6 +218,13 @@ one-time migration: [Hermes workspaces on stygies](#hermes-workspaces-on-stygies
    [Hermes on noosphere Forgejo](#hermes-on-noosphere-forgejo)). Ryza uses this map for Matrix routing
    and the coder prompt; Stygies uses its keys to validate app claims.
    Each room is its own conversation; start a thread per task for a fresh one.
+   Two projects can't share a room, and `room = ""` is an evaluation error.
+4. For an app-only project (reachable from Hermes Mobile and the desktop app,
+   never from Matrix), skip the room: add the entry with `forge` (and `owner`)
+   but no `room`, or `room = null`. It gets no Matrix route, the coder prompt
+   lists its room as "app only", and stygies's task tools refuse a Matrix
+   claim for it (`HERMES_TASK_APP_ONLY_PROJECTS`); Hermes asks you to use the
+   app instead. To move it to Matrix later, create the room and add `room`.
 
 In Hermes Mobile, pick `coder`, open one chat per task, and name the exact repo
 from the coder project map. App chats and Matrix threads share one slot and
