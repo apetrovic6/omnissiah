@@ -83,8 +83,9 @@ class RenderedLaunchers(unittest.TestCase):
         self.bin = self.home / "bin"
         self.bin.mkdir()
         personal = self.home / "launcher-personal"
+        self.personal_text = data["personal"]
         personal.write_text(localise(data["personal"], self.home, data["home"]))
-        for action in ("status", "claim", "branch", "done", "clear", "drop"):
+        for action in ("status", "claim", "branch", "done", "clear"):
             (self.bin / f"task-{action}").symlink_to(personal)
         for company, text in data["launchers"].items():
             launcher = self.home / f"launcher-{company}"
@@ -140,9 +141,17 @@ class RenderedLaunchers(unittest.TestCase):
 
     def test_personal_launcher_uses_personal_never_work(self):
         self.sentinel.unlink()  # not a valid task row; the personal commands would refuse it
-        status = json.loads(self.run_task("task-status", "--queue").stdout)
-        self.assertEqual(status["queue"], [])
+        status = json.loads(self.run_task("task-status", "--all").stdout)
+        self.assertEqual((status["tasks"], status["max_live"]), ([], 3))
         self.assertTrue((self.home / "personal/.task-lock").is_file())
+        self.assertFalse((self.home / "work").exists())
+        # Worktree mode: the script takes the lock itself, and claims go to ~/personal/.task-state.json.
+        self.assertIn("export HERMES_TASK_MODE=worktrees", self.personal_text)
+        self.assertNotIn("flock", self.personal_text)
+        claim = json.loads(self.run_task("task-claim", "--app", "new", "--", "tally", "-", summary="App task").stdout)
+        self.assertEqual(claim["result"], "claimed")
+        self.assertEqual(claim["worktree_path"], str(self.home / "personal/.worktrees/tally" / claim["active"]["task_id"]))
+        self.assertEqual(len(json.loads((self.home / "personal/.task-state.json").read_text())["tasks"]), 1)
         self.assertFalse((self.home / "work").exists())
 
     def test_launchers_refuse_until_the_workspace_migration_ran(self):
@@ -152,7 +161,7 @@ class RenderedLaunchers(unittest.TestCase):
             with self.subTest(old=name):
                 old = self.home / "work" / name
                 old.write_text("")
-                result = self.run_task("task-status", "--queue", code=2)
+                result = self.run_task("task-status", "--all", code=2)
                 self.assertIn(f"workspace migration pending: ~/work/{name}", result.stderr)
                 old.unlink()
         self.assertIn("ask manjo", result.stderr)  # the stray-file case never tells an agent to delete state

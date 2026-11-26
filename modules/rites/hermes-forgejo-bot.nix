@@ -86,6 +86,13 @@
         export HERMES_TASK_APP_ONLY_PROJECTS=${lib.escapeShellArg (builtins.toJSON appOnlyProjects)}
       ''
       + ''
+        # One git worktree per task beside the base clones, no slot or queue
+        # (README, "Hermes task worktrees"). The script takes .task-lock itself.
+        export HERMES_TASK_MODE=worktrees
+        export HERMES_TASK_REPO_ROOT="$HOME/personal"
+        export HERMES_TASK_BASE_REMOTE=upstream
+        export HERMES_TASK_MAX_LIVE=${toString config.services.imperium.hermesGit.maxLiveTasks}
+        export HERMES_TASK_GIT=${lib.getExe pkgs.git}
         # Until stygies's activation has moved the old slot out of ~/work
         # (_hermes-workspace-migrate.py), a fresh slot here would hide its task.
         for old in .current-task .task-queue .task-lock; do
@@ -97,8 +104,7 @@
           fi
         done
         ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME/personal" || exit $?
-        ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/personal/.task-lock" \
-          ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "''${0##*/}" "$@"
+        ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "''${0##*/}" "$@"
         status=$?
         if [ "$status" -eq 75 ]; then
           printf '%s\n' 'task lock busy, retry once' >&2
@@ -112,7 +118,7 @@
         passthru.launcherText = taskCommandText;
       } ''
         mkdir -p "$out/bin"
-        for command in task-status task-claim task-branch task-done task-clear task-drop; do
+        for command in task-status task-claim task-branch task-done task-clear; do
           ln -s ${taskCommand} "$out/bin/$command"
         done
       '';
@@ -123,6 +129,16 @@
       type = lib.types.attrsOf lib.types.anything;
       default = coderRegistry.projects;
       description = "Coder projects (machines/ryza/_coder-projects.nix); an option only so checks can evaluate other values.";
+    };
+
+    options.services.imperium.hermesGit.maxLiveTasks = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 3;
+      description = ''
+        Live personal coder tasks at once; a claim beyond it is refused (`busy`), never queued. Each task
+        is an Opus session with up to two subagents, a worktree and its builds on stygies, all on one
+        Claude Max window: check stygies's RAM and disk before raising it.
+      '';
     };
 
     options.services.imperium.hermesGit.extraConfig = lib.mkOption {
