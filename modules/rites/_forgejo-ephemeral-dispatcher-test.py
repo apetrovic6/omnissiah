@@ -1965,14 +1965,17 @@ class TrustedJobTests(unittest.TestCase):
                 self.assertFalse(self.trust_dir.exists())
 
     @unittest.skipUnless(hasattr(D, "SCCACHE_FILE"), "requires the opt-in sccache protocol")
-    def test_sccache_source_is_checked_before_delivery(self):
-        self.build(pool=D.Pool("ugalabugala", sccache=True, **PILOT_POOL), egress=True)
-        (self.sources / "sccache-credentials").write_bytes(SCCACHE_CREDENTIALS.replace(b"[default]", b"[other]"))
-        self.boot()
-        self.pick_up()
-        self.assertEqual({}, self.delivered())
-        self.assertEqual([], self.system.egress_calls("start"))
-        self.assertIn("required trust credential missing or malformed", self.logs.getvalue())
+    def test_bad_trust_source_is_named_and_blocks_sccache_delivery(self):
+        for source in ("trusted-ncps-netrc", "trusted-ci-signing-key", "sccache-credentials"):
+            with self.subTest(source=source):
+                self.build(pool=D.Pool("ugalabugala", sccache=True, **PILOT_POOL), egress=True)
+                (self.sources / "sccache-credentials").write_bytes(SCCACHE_CREDENTIALS)
+                (self.sources / source).write_bytes(b"invalid credential")
+                self.boot()
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertEqual([], self.system.egress_calls("start"))
+                self.assertIn(f"untrusted: {source} credential missing or malformed; withheld", self.logs.getvalue())
 
     def test_org_trust_allowlist_and_schedule_identity(self):
         repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}

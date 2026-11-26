@@ -13,6 +13,7 @@ args @ {
   sources = kind: map (host: self.lib.lan.${host.egress.${kind}}) (builtins.filter (host: (host.egress.${kind} or null) != null) slotHosts);
   trustedSources = sources "trusted";
   guard = args.ciGuard or self.lib.ciGuard;
+  s3Host = "${self.lib.sccacheCiKey.endpointPrefix}.${config.noosphere.domain}";
   # Trusted runs only (README "Trusted slot egress"): the untrusted names
   # plus Garage S3 (path style), Harbor and ntfy.
   # Empty without trusted sources, so the snippet stays byte-identical.
@@ -20,7 +21,7 @@ args @ {
     ""
     "  @blockedEphemeralTrusted {"
     "    remote_ip ${lib.concatStringsSep " " trustedSources}"
-    "    not host ${mkDomain "forge"} ncps.${config.noosphere.domain} forge.${config.noosphere.domain} s3.main.garage.${config.noosphere.domain} harbor.${config.noosphere.domain} ${mkDomain "ntfy"}"
+    "    not host ${mkDomain "forge"} ncps.${config.noosphere.domain} forge.${config.noosphere.domain} ${s3Host} harbor.${config.noosphere.domain} ${mkDomain "ntfy"}"
     "  }"
     "  respond @blockedEphemeralTrusted 403"
   ]);
@@ -140,7 +141,7 @@ in {
   # resolve it straight to the VIP. Only the trusted slot sources may use
   # this vhost: everyone else reaching Caddy here (LAN, Pangolin/VPN, the
   # untrusted .249) gets 403, so S3 is not newly exposed through Cerberus.
-  services.caddy.virtualHosts."s3.main.garage.${config.noosphere.domain}" = lib.mkIf (trustedSources != []) {
+  services.caddy.virtualHosts.${s3Host} = lib.mkIf (trustedSources != []) {
     extraConfig = ''
       @notTrustedCI not remote_ip ${lib.concatStringsSep " " trustedSources}
       respond @notTrustedCI 403

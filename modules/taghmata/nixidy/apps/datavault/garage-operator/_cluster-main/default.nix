@@ -6,7 +6,7 @@
   vars,
   ...
 }: let
-  inherit (sccacheCiKey) generatorName importSecret;
+  inherit (sccacheCiKey) bucket endpointPrefix generatorName importSecret region;
   hasCiKey = builtins.pathExists (vars.shared generatorName generatorName);
 
   sccacheLifecycle = [
@@ -111,8 +111,8 @@ in {
 
         s3Api = {
           bindPort = 3900;
-          region = "main";
-          rootDomain = ".s3.main.garage.${domain}";
+          inherit region;
+          rootDomain = ".${endpointPrefix}.${domain}";
         };
       };
     };
@@ -264,16 +264,16 @@ in {
 
   # The dispatcher is the only holder. Do not reconcile either object until
   # SopsSecrets can supply the import, and never grant the workstation bucket.
-  garage.keys.sccache-ci = lib.mkIf hasCiKey {
+  garage.keys.${bucket} = lib.mkIf hasCiKey {
     cluster = "main";
-    buckets = ["sccache-ci"];
+    buckets = [bucket];
     permissions = {
       read = true;
       write = true;
     };
     owner = false;
     inherit importSecret;
-    bucketSpec.sccache-ci = {
+    bucketSpec.${bucket} = {
       quotas.maxSize = "150Gi";
       lifecycle.rules = sccacheLifecycle;
     };

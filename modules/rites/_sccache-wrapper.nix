@@ -16,6 +16,10 @@ pkgs.writeShellScriptBin "sccache" (
       esac
     fi
     export AWS_SHARED_CREDENTIALS_FILE=${lib.escapeShellArg credentialsFile}
+
+    # Use a 45-second cooldown rather than the host runners' five minutes:
+    # trusted slot egress can come up after the key arrives, so try again
+    # after that short gap without hammering an unresponsive Garage.
   ''
   + ''
     # 1. Cache keys. sccache 0.19 hashes EVERY CARGO_* env var of the
@@ -77,7 +81,11 @@ pkgs.writeShellScriptBin "sccache" (
     #    So, for a compiler invocation (the first argument is not an
     #    sccache flag) with no server listening, start the server
     #    here. If that fails, run the compiler directly and leave a
-    #    marker so that the next 5 minutes of rustc invocations go
+    #    marker so that the next ${
+      if requireCredentials
+      then "45 seconds"
+      else "5 minutes"
+    } of rustc invocations go
     #    straight to the compiler instead of paying the startup
     #    timeout each time. A server that is already listening is
     #    trusted: once it is up, a storage error is a cache miss and
@@ -99,7 +107,7 @@ pkgs.writeShellScriptBin "sccache" (
         marker="''${TMPDIR:-/tmp}/sccache-unavailable-$(${pkgs.coreutils}/bin/id -u)-$port"
         if [ -n "$(${pkgs.findutils}/bin/find "$marker" ${
       if requireCredentials
-      then "-newermt '5 seconds ago'"
+      then "-newermt '45 seconds ago'"
       else "-mmin -5"
     } 2>/dev/null)" ]; then
           exec "$@"
@@ -108,7 +116,7 @@ pkgs.writeShellScriptBin "sccache" (
           ${pkgs.coreutils}/bin/touch "$marker" 2>/dev/null || true
           echo "sccache: cache storage unreachable, compiling locally for the next ${
       if requireCredentials
-      then "5 seconds"
+      then "45 seconds"
       else "5 minutes"
     }" >&2
           exec "$@"

@@ -582,6 +582,24 @@
             };
           slots = lib.recursiveUpdate ciSlots {ryza.egress.trusted = "ryza-eph-trusted";};
           activate.services.imperium.forgejoEphemeral.pools.ugalabugala.sccache.enable = true;
+          withSecondPool = firstUsers: secondUsers:
+            fixture fleet slots [
+              activate
+              {
+                services.imperium.forgejoEphemeral.pools = {
+                  ugalabugala.trust.users = lib.mkForce firstUsers;
+                  noosphere-user = {
+                    sccache.enable = true;
+                    trust.users = secondUsers;
+                    trust.repos."221" = {
+                      owner = "manjo";
+                      name = "auspex";
+                    };
+                  };
+                };
+              }
+            ]
+            fleet.host;
           fixture = fleet: slots: modules: host:
             (self.nixosConfigurations.${host}.extendModules {
               specialArgs = {
@@ -610,6 +628,7 @@
           vars = generator cc;
           failures = cfg: map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
           expects = reason: cfg: lib.any (lib.hasInfix "sccache for pool ugalabugala requires ${reason}") (failures cfg);
+          refusesSharedCache = cfg: lib.any (lib.hasInfix "sccache-enabled pools must have identical trust.users") (failures cfg);
           cache = import ../rites/_forgejo-ephemeral-sccache.nix {inherit lib pkgs;};
         in
           assert builtins.isString cc.system.build.toplevel.drvPath && builtins.isString sc.system.build.toplevel.drvPath;
@@ -633,6 +652,9 @@
             ]
             fleet.host);
           assert expects "the remote dispatcher" (fixture (fleet // {remote = false;}) slots [activate] "ryza");
+          assert !refusesSharedCache self.nixosConfigurations.${ciDispatcher.host}.config;
+          assert !refusesSharedCache (withSecondPool ["manjo" "alice"] ["Alice" "Manjo"]);
+          assert refusesSharedCache (withSecondPool ["manjo"] ["manjo" "alice"]);
             pkgs.testers.runNixOSTest {
               name = "forgejo-ephemeral-sccache";
               nodes.guest = {
@@ -662,9 +684,10 @@
                 # Delivery wakes the path unit when an inotify event arrives.
                 guest.succeed(publish)
                 guest.wait_until_succeeds(f"cmp {source} {target}")
-                assert guest.succeed(f"stat -c '%U:%G %a' {target}").strip() == "forgejo-one-job:forgejo-one-job 400"
+                assert guest.succeed(f"stat -c '%U:%G %a' {target}").strip() == "root:forgejo-one-job 440"
                 guest.succeed(f"runuser -u forgejo-one-job -- test -r {target}")
                 guest.fail(f"runuser -u forgejo-one-job -- test -r {source}")
+                guest.fail(f"runuser -u forgejo-one-job -- chmod u+w {target}")
                 guest.fail(f"runuser -u forgejo-one-job -- rm -f {target}")
                 assert "sccache " in guest.succeed(f"{wrapper} --version")
                 guest.succeed(f"rm {source}")

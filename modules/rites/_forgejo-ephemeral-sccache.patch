@@ -17,7 +17,7 @@
 @@ -109,7 +111,7 @@
  class Pool:
      """Trusted local config for one Forgejo owner queue. Queue identity does not depend on its display name."""
- 
+
 -    def __init__(self, name, *, forge, host, login, scope, labels, dispatch, maxSlots, trust):
 +    def __init__(self, name, *, forge, host, login, scope, labels, dispatch, maxSlots, trust, sccache=False):
          if (
@@ -49,21 +49,31 @@
          self.runners_path = f"{scope_path}/actions/runners"
 @@ -898,7 +902,7 @@
          self._call("scrub", run if run is not None else NO_RUN)
- 
+
      def deliver(self, run, secrets):
 -        self._call("deliver", run, payload={name: base64.b64encode(secrets[name]).decode("ascii") for name in TRUST_FILES})
 +        self._call("deliver", run, payload={name: base64.b64encode(value).decode("ascii") for name, value in secrets.items()})
- 
+
      def withdraw(self, run):
          """Also stops the slot's trusted egress, if its host has one."""
-@@ -1160,10 +1164,11 @@
+@@ -1154,23 +1158,28 @@
+                     pass
+
+
++class TrustCredentialError(Exception):
++    """Only a fixed systemd credential name may be included in the log."""
++
++
+ class Trust:
+     """The systemd credential sources for trusted delivery."""
+
      def __init__(self, sources):
          self.sources = sources
- 
+
 -    def secrets(self):
 -        """The CI upload credentials, or None if either is missing or malformed."""
 +    def secrets(self, *, sccache=False):
-+        """The required credentials for this pool, or None if any is missing or malformed."""
++        """Read the required credentials for this pool, or raise with the failing source name."""
 +        sources = TRUST_SOURCES | {SCCACHE_FILE: SCCACHE_FILE} if sccache else TRUST_SOURCES
          secrets = {}
 -        for name, source in TRUST_SOURCES.items():
@@ -71,21 +81,31 @@
              try:
                  with (self.sources / source).open("rb") as file:
                      value = file.read(8193)
-@@ -1565,10 +1570,11 @@
+             except (OSError, TypeError):
+-                return None
++                raise TrustCredentialError(source) from None
+             if not TRUST_SHAPES[name].fullmatch(value):
+-                return None
++                raise TrustCredentialError(source)
+             secrets[name] = value
+         return secrets
+
+@@ -1565,10 +1574,11 @@
              verdict["state"] = "untrusted"
              self._log(f"untrusted: run #{run['index_in_repo']} ({reason}); CI upload credentials withheld")
              return
 -        secrets = self.trust.secrets()
-+        secrets = self.trust.secrets(sccache=self.pool.sccache)
-         if secrets is None:
+-        if secrets is None:
++        try:
++            secrets = self.trust.secrets(sccache=self.pool.sccache)
++        except TrustCredentialError as error:
              verdict["state"] = "untrusted"
 -            self._log("untrusted: trusted-ci-signing-key or trusted-ncps-netrc credential missing or malformed; withheld")
-+            missing = "required trust credential" if self.pool.sccache else "trusted-ci-signing-key or trusted-ncps-netrc credential"
-+            self._log(f"untrusted: {missing} missing or malformed; withheld")
++            self._log(f"untrusted: {error} credential missing or malformed; withheld")
              return
          try:
              if self.slot.observe().vm_idle:
-@@ -1583,7 +1589,8 @@
+@@ -1583,7 +1593,8 @@
          active.pop("revalidate_by", None)
          self.store.save(active=active)
          verdict["state"] = "delivered"
@@ -93,7 +113,7 @@
 +        self._log(f"trusted: run #{run['index_in_repo']} ({run['trigger_event']}); delivered CI upload credentials"
 +                  + (" and sccache credentials" if self.pool.sccache else ""))
          self._open_egress(active["name"])
- 
+
      def _open_egress(self, name):
 --- a/_forgejo-slotctl.py
 +++ b/_forgejo-slotctl.py
@@ -112,7 +132,17 @@
  }
  DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
  SLOT_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
-@@ -394,7 +397,9 @@
+@@ -325,7 +328,8 @@
+         self.staging = credentials.with_name(f".{credentials.name}.staging")
+         self.uid, self.gid = uid, gid
+         # Root-only (0700 root, files 0400 root): virtiofsd (root) serves it; QEMU's user never reads it.
+-        # Always cleaned (scrub, withdraw), so turning delivery off never strands delivered keys.
++        # Scrub and withdraw remove all names known to this build. Drain and
++        # scrub before rolling back to a build without the sccache names.
+         self.trust_dir = trust_dir
+         # Whether this slot's guest has the trust share: then stage creates it and deliver may fill it.
+         self.deliver_enabled = deliver
+@@ -394,7 +398,9 @@
              info = os.fstat(fd)
              if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
                  raise SlotError("trust-dir-unsafe")
@@ -123,18 +153,18 @@
                  temporary = f".{name}.tmp"
                  try:
                      os.unlink(temporary, dir_fd=fd)
-@@ -498,10 +503,15 @@
+@@ -498,10 +504,15 @@
              raise failure
- 
+
      def deliver(self, payload, run_name):
 -        if not isinstance(payload, dict) or payload.keys() != set(TRUST_FILES):
 +        if not isinstance(payload, dict):
-             raise UsageError
++            raise UsageError
 +        names = set(TRUST_FILES)
 +        if payload.keys() != names and not (
 +            self.files.trusted_egress and payload.keys() == names | {SCCACHE_FILE}
 +        ):
-+            raise UsageError
+             raise UsageError
          secrets = {}
 -        for name in TRUST_FILES:
 +        for name in payload:

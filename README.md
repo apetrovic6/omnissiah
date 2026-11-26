@@ -2059,8 +2059,11 @@ mode, which is also required to enable sccache for a pool.
    ```
 
    The next dispatcher-host deploy with this change adds the root-only
-   `/run/secrets/vars/sccache-ci-garage-key/credentials` file; no service
-   consumes it until PR 10.
+   `/run/secrets/vars/sccache-ci-garage-key/credentials` file. No dispatcher
+   loads it until a pool enables sccache. Slot hosts with trusted jobs and
+   trusted egress switch to the sccache-capable slotctl and scrub and add
+   the guest wrapper and environment, but receive no key until a pool
+   enables it and a trusted run is confirmed.
 
 2. Build the render in the Nix store and copy only the three new manifests.
    The pending Garage operator v0.9.0 → v0.9.1 drift is a separate change.
@@ -2162,11 +2165,15 @@ The workstation bucket is not part of the rollback.
 `services.imperium.forgejoEphemeral.pools.<pool>.sccache.enable` defaults
 to `false`. Only after pickup and the HOM-31 trust recheck does the
 dispatcher deliver the optional `sccache-credentials` file. The guest
-publishes it as `/run/ci-sccache/credentials`, owned by `forgejo-one-job`
-with mode `0400`. **It is readable by trusted job code** and grants read
-and write access to the whole CI-only bucket, including entries written
-by other trusted pools. Never enable it for code that should not have
-that access. The upload credentials remain root-only.
+publishes it as `/run/ci-sccache/credentials` (`root:forgejo-one-job`,
+`0440`). **It is readable by trusted job code** and grants read and write
+access to the whole CI-only bucket. Enabling sccache on several pools
+lets each pool's trusted code run code in the others' trusted jobs
+through the shared cache. Enabled pools must have the same `trust.users`
+set, and all allowlisted repos must belong to one trust domain. Matching
+logins across forges must be controlled by the same trusted people; Nix
+cannot check that. Use separate buckets and keys for independent trust
+domains. The upload credentials remain root-only.
 
 All jobs boot without the cache credential. The `sccache` wrapper runs
 the compiler directly until the file appears (and does not start a
@@ -2199,17 +2206,31 @@ egress; slotctl opens it separately after delivery.
 3. Unpause. Run the same trusted Rust build twice in fresh slots with
    the same source, toolchain and options. Before building, wait for
    `test -r /run/ci-sccache/credentials` to pass and the PR 8 S3 probe
-   to return Garage's XML rather than Caddy's 403. Run
-   `sccache --show-stats` after each build: expect cache writes on the
-   first run with a cold key, and hits on the second. Do not print the
+   to return Garage's XML rather than Caddy's 403. In the dispatcher's
+   slot journal, look for `delivered CI upload credentials and sccache credentials`.
+   For rust-app-template, read `round trip compile cache: N hits, M misses`
+   from `_round-trip-cache-report` and check for hits on the second run.
+   Its private cache server stops at the end of the recipe, so a later
+   `sccache --show-stats` shows a different server. Do not print the
    credentials. In an untrusted run on the same pool, verify
    `! test -e /run/ci-sccache/credentials`; the PR 8 probe must still
    get Caddy's 403.
 
 To roll back, pause and drain, turn off `sccache.enable` in the pool and
-deploy the dispatcher first. Only then remove any unused provisioning or
-slot-host prerequisites. A pool with sccache off can still use the
+deploy the dispatcher first. Before deploying a slot host with any of
+`sccacheCi`, `trustedJobs`, `egress.trusted` or `remote` turned off, run
+`sudo find /run/microvm-credentials -name '*sccache-credentials*'` on that
+host. It must print nothing. If it finds anything, keep dispatch paused
+and the slot host on its current generation. Verify the affected slots
+are stopped and let the current slotctl scrub them. If cleanup still
+fails, remove only the reported credential files (including temporary
+files) on the stopped slots, resolve any scrub error, then repeat the
+check before deploying. A pool with sccache off can still use the
 existing trusted ncps upload path.
+
+PR 12 makes the sccache cleanup names unconditional in slotctl and the
+host stop scrub, and folds the opt-in protocol into the base Python
+sources so the patch can be dropped.
 
 ### Hermes on Cerberus Forgejo
 

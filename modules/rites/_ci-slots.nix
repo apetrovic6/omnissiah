@@ -49,9 +49,12 @@
     # Provision the shared Garage key only with the remote dispatcher.
     sccacheCi = false;
   };
-  sccacheCiKey = {
+  sccacheCiKey = rec {
     generatorName = "sccache-ci-garage-key";
     importSecret = "sccache-ci-s3-import";
+    bucket = "sccache-ci";
+    region = "main";
+    endpointPrefix = "s3.${region}.garage";
   };
   guard = "cerberus";
   hosts.ryza = {

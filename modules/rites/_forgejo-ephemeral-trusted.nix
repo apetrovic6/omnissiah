@@ -155,8 +155,12 @@
 #     That is the point of "trusted": it grants CI write authority to the allowed code.
 #   The CI-only Garage RW key is readable by trusted job code when its pool
 #   enables sccache: the guest copies it to /run/ci-sccache/credentials
-#   (forgejo-one-job, 0400). It is not the workstation bucket key. The slot
-#   boots without it, and Garage is reachable only via trusted egress.
+#   (root:forgejo-one-job, 0440). It is not the workstation bucket key. The
+#   slot boots without it, and Garage is reachable only via trusted egress.
+#   Enabling sccache on several pools lets each pool's trusted code run code
+#   in the others' trusted jobs via shared cache objects. The pools must
+#   have the same trust.users and belong to one trust domain; matching
+#   logins across forges must represent the same trusted people.
 #   Untrusted jobs: the share stays empty for the whole boot. Not even guest
 #     root has anything to read.
 #   Removal: the slot's ExecStopPost trust scrub (ordered first, always

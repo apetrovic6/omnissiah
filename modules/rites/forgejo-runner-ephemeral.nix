@@ -1,4 +1,10 @@
-{self, ...}: {
+{
+  self,
+  config,
+  ...
+}: let
+  inherit (config.noosphere) domain;
+in {
   # Shared by the base-tagged NixOS machines. Assign the inventory and pools
   # here so changing the dispatcher host moves the whole role at once.
   flake.nixosModules.forgejo-ephemeral-fleet = args @ {
@@ -136,7 +142,7 @@
       noosphere = "forge.noosphere.uk";
     };
     cacheHost = "ncps.noosphere.uk";
-    s3Host = "s3.main.garage.noosphere.uk";
+    s3Host = "${sccacheCiKey.endpointPrefix}.${domain}";
     credParent = "/run/microvm-credentials";
     runRoot = "/run/forgejo-ephemeral";
     claims = "${runRoot}/claims";
@@ -145,7 +151,11 @@
     forgejoLogin = types.strMatching "[A-Za-z0-9][A-Za-z0-9._-]{0,39}";
     forgejoRepoName = types.addCheck (types.strMatching "[A-Za-z0-9._-]{1,100}") (name: name != "." && name != "..");
     pools = builtins.attrValues cfg.pools;
-    sccacheActive = lib.any (pool: pool.sccache.enable) pools;
+    sccachePools = builtins.filter (pool: pool.sccache.enable) pools;
+    sccacheActive = sccachePools != [];
+    # Compare the same case-insensitive sets as the dispatcher. Each repo's
+    # branch policy is checked separately against its pool's pinned users.
+    sccacheTrustUsers = map (pool: lib.sort builtins.lessThan (lib.unique (map lib.toLower pool.trust.users))) sccachePools;
     sccacheProvisioned = (fleet.remote or false) && (fleet.sccacheCi or false);
     # Slot hosts have no pool definitions. Prepare their guest and deliver
     # protocol once the fleet prerequisites are present; only the dispatcher
@@ -160,6 +170,9 @@
         fileset = lib.fileset.unions [./_forgejo-ephemeral-dispatcher.py ./_forgejo-slotctl.py];
       };
       patches = [./_forgejo-ephemeral-sccache.patch];
+      # Blank context lines omit their optional leading space (GNU diff
+      # --suppress-blank-empty), so trimming trailing whitespace is safe.
+      patchFlags = ["-p1" "--fuzz=0"];
     };
     # Keep the existing guest and VM units byte-identical on the pilot.
     # Remote slots and any other label/forge selection need boot credentials.
@@ -768,9 +781,9 @@
               }
               // lib.optionalAttrs sccacheSlot {
                 RUSTC_WRAPPER = lib.getExe sccache.wrapper;
-                SCCACHE_BUCKET = "sccache-ci";
+                SCCACHE_BUCKET = sccacheCiKey.bucket;
                 SCCACHE_ENDPOINT = "https://${s3Host}";
-                SCCACHE_REGION = "main";
+                SCCACHE_REGION = sccacheCiKey.region;
                 SCCACHE_S3_ENABLE_VIRTUAL_HOST_STYLE = "false";
                 SCCACHE_IGNORE_SERVER_IO_ERROR = "1";
               };
@@ -1420,6 +1433,10 @@
             {
               assertion = lib.length (lib.unique (lib.mapAttrsToList dispatcherFor inventory)) <= 1;
               message = "forgejoEphemeral: every inventory entry must use the same dispatcher machine.";
+            }
+            {
+              assertion = lib.length (lib.unique sccacheTrustUsers) <= 1;
+              message = "forgejoEphemeral: sccache-enabled pools must have identical trust.users; use separate buckets with separate keys for different trust domains.";
             }
             {
               assertion =

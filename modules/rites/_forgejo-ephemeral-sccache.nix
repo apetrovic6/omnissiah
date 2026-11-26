@@ -48,7 +48,7 @@ in {
         while true; do
           if [[ -f ${source} ]]; then
             if ! cmp -s -- ${source} ${credentialsFile}; then
-              install -m 0400 -o ${user} -g ${user} -- ${source} ${directory}/.credentials.tmp
+              install -m 0440 -o root -g ${user} -- ${source} ${directory}/.credentials.tmp
               mv -fT -- ${directory}/.credentials.tmp ${credentialsFile}
             fi
           elif [[ -e ${credentialsFile} ]]; then
