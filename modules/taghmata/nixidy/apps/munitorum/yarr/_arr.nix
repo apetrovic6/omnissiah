@@ -19,6 +19,8 @@
   # (<prefix>__POSTGRES__*, with a separate -logs database); "bazarr" is
   # Bazarr's POSTGRES_* variables and a single database.
   dbEnv ? "servarr",
+  # Container resources (requests/limits), or null to leave them unset.
+  resources ? null,
   lib,
 }: {
   yarr,
@@ -136,7 +138,7 @@ in {
           ];
 
         spec.containers = [
-          {
+          ({
             name = "${name}";
 
             image = "lscr.io/linuxserver/${name}:latest";
@@ -169,6 +171,9 @@ in {
 
             ports = [{containerPort = port;}];
           }
+          // lib.optionalAttrs (resources != null) {
+            inherit resources;
+          })
         ];
       };
     };

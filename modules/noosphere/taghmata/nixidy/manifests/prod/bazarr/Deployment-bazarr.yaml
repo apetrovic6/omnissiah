@@ -42,6 +42,11 @@ spec:
           name: bazarr
           ports:
             - containerPort: 6767
+          resources:
+            limits:
+              cpu: "1"
+            requests:
+              cpu: 100m
           volumeMounts:
             - mountPath: /config
               name: config

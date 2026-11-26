@@ -51,6 +51,12 @@
         port = 6767;
         description = "Subtitle manager";
         dbEnv = "bazarr";
+        # Audio-based subtitle sync (ffsubsync) decodes whole audio tracks;
+        # keep it from taking over a 4-core node.
+        resources = {
+          requests.cpu = "100m";
+          limits.cpu = "1";
+        };
       })
     ];
 
