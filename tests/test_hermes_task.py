@@ -431,6 +431,55 @@ runpy.run_path(tool, run_name="__main__")
                 self.queue.write_text(row(OLD, *MATRIX))
 
 
+APP_ONLY = "app-only-repo"
+
+
+class TaskToolsWithAppOnly(TaskTools):
+    """Every TaskTools test again, with a roomless project configured: projects with rooms behave the same."""
+
+    def setUp(self):
+        super().setUp()
+        self.env["HERMES_TASK_APP_PROJECTS"] = json.dumps([*APP_PROJECTS, APP_ONLY])
+        self.env["HERMES_TASK_APP_ONLY_PROJECTS"] = json.dumps([APP_ONLY])
+
+    def test_matrix_claim_of_app_only_project_is_refused(self):
+        for origin in (MATRIX, OTHER_MATRIX):
+            with self.subTest(origin=origin):
+                result = self.invoke("task-claim", "--", *origin, APP_ONLY, "-", summary="Matrix task", code=2)
+                self.assertEqual(result.stderr, "Project is app-only; claim it from the Hermes app.\n")
+                self.assertFalse(result.stdout)
+        self.assertEqual(self.state(), {})
+        # Refused while a task holds the slot too: nothing is queued.
+        active = self.claim_matrix()["active"]
+        before = self.state()
+        self.invoke("task-claim", "--", *OTHER_MATRIX, APP_ONLY, "-", summary="Matrix task", code=2)
+        self.assertEqual(self.state(), before)
+        self.assertEqual(self.task("task-done", "--", *MATRIX, active["started_at"])["result"], "idle")
+
+    def test_app_claim_of_app_only_project_works(self):
+        claim = self.claim_app(APP_ONLY)
+        self.assertEqual(claim["result"], "claimed")
+        self.assertEqual(claim["active"]["project"], APP_ONLY)
+        session = claim["session_id"]
+        started = claim["active"]["started_at"]
+        branch = self.task("task-branch", "--app", session, "--", started, "hermes/app-only")
+        self.assertEqual(branch["active"]["branch"], "hermes/app-only")
+        # A Matrix claim of a project with a room still queues behind it.
+        queued = self.claim_matrix()
+        self.assertEqual((queued["result"], queued["queue_position"]), ("queued", 1))
+        promoted = self.task("task-done", "--app", session, "--", started)
+        self.assertEqual((promoted["result"], promoted["active"]["room"]), ("handoff", MATRIX[0]))
+
+    def test_bad_app_only_config_is_rejected_before_claim(self):
+        for raw in ("[", f'"{APP_ONLY}"', "null", "[7]"):
+            with self.subTest(raw=raw):
+                self.env["HERMES_TASK_APP_ONLY_PROJECTS"] = raw
+                for args in (("--", *MATRIX, "tally", "-"), ("--app", "new", "--", APP_ONLY, "-")):
+                    result = self.invoke("task-claim", *args, summary="Task", code=2)
+                    self.assertEqual(result.stderr, "HERMES_TASK_APP_ONLY_PROJECTS must be a JSON list of strings.\n")
+        self.assertEqual(self.state(), {})
+
+
 DEVZERO_ROOM = "!devzero-room:matrix.example"
 CODILAS_ROOM = "!codilas-room:matrix.example"
 BRANCH_PATTERN = r"^(feature|fix|chore)/[A-Z][A-Z0-9]+-[0-9]+-[a-z0-9][a-z0-9-]*$"

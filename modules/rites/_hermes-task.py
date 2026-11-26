@@ -229,6 +229,8 @@ def main():
     work = state_dir(parser)
     allowed_projects = env_list(parser, "HERMES_TASK_PROJECTS")
     allowed_rooms = env_list(parser, "HERMES_TASK_ROOMS")
+    # Set only when a personal project has no Matrix room; the app is its only origin.
+    app_only = env_list(parser, "HERMES_TASK_APP_ONLY_PROJECTS")
     pattern = branch_pattern(parser)
     if allowed_rooms is not None and origin is not None and not origin[0].startswith(APP_PREFIX):
         if origin[0] not in allowed_rooms:
@@ -241,6 +243,8 @@ def main():
     if action == "task-claim":
         if mint_app and args.project not in app_projects(parser):
             parser.exit(2, "Project is not enabled for app tasks.\n")
+        if not mint_app and app_only is not None and args.project in app_only:
+            parser.exit(2, "Project is app-only; claim it from the Hermes app.\n")
         if allowed_projects is not None and args.project not in allowed_projects:
             parser.exit(2, "Project is not enabled for these task commands.\n")
         try:

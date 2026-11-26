@@ -5,7 +5,9 @@
     pkgs,
     ...
   }: let
-    inherit (import ../../machines/ryza/_coder-projects.nix) forges projects;
+    coderRegistry = import ../../machines/ryza/_coder-projects.nix;
+    inherit (coderRegistry) forges;
+    projects = coderRegistry.check config.services.imperium.hermesGit.coderProjects;
     sshForge = forges.cerberus;
     httpsForge = forges.noosphere;
     # A forge's token var, login and Git credentials exist only once its
@@ -72,28 +74,37 @@
       + config.services.imperium.hermesGit.extraConfig);
 
     appProjects = lib.attrNames projects;
-    taskCommandText = ''
-      umask 077
-      export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON appProjects)}
-      # Until stygies's activation has moved the old slot out of ~/work
-      # (_hermes-workspace-migrate.py), a fresh slot here would hide its task.
-      for old in .current-task .task-queue .task-lock; do
-        if [ -e "$HOME/work/$old" ]; then
-          printf '%s\n' "workspace migration pending: ~/work/$old is a personal task slot file in the company tree." \
-            "If the migration has not run, see README, Hermes workspaces on stygies. If it has (~/personal holds the slot)," \
-            "it is a stray. Don't touch it: stop and ask manjo to check it for a live task and remove it." >&2
-          exit 2
+    # No Matrix room: the task tools refuse Matrix claims for these.
+    appOnlyProjects = lib.attrNames (lib.filterAttrs (_: project: project.room or null == null) projects);
+    taskCommandText =
+      ''
+        umask 077
+        export HERMES_TASK_APP_PROJECTS=${lib.escapeShellArg (builtins.toJSON appProjects)}
+      ''
+      # Only with an app-only project, so the launcher is unchanged without one.
+      + lib.optionalString (appOnlyProjects != []) ''
+        export HERMES_TASK_APP_ONLY_PROJECTS=${lib.escapeShellArg (builtins.toJSON appOnlyProjects)}
+      ''
+      + ''
+        # Until stygies's activation has moved the old slot out of ~/work
+        # (_hermes-workspace-migrate.py), a fresh slot here would hide its task.
+        for old in .current-task .task-queue .task-lock; do
+          if [ -e "$HOME/work/$old" ]; then
+            printf '%s\n' "workspace migration pending: ~/work/$old is a personal task slot file in the company tree." \
+              "If the migration has not run, see README, Hermes workspaces on stygies. If it has (~/personal holds the slot)," \
+              "it is a stray. Don't touch it: stop and ask manjo to check it for a live task and remove it." >&2
+            exit 2
+          fi
+        done
+        ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME/personal" || exit $?
+        ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/personal/.task-lock" \
+          ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "''${0##*/}" "$@"
+        status=$?
+        if [ "$status" -eq 75 ]; then
+          printf '%s\n' 'task lock busy, retry once' >&2
         fi
-      done
-      ${lib.getExe' pkgs.coreutils "mkdir"} -p "$HOME/personal" || exit $?
-      ${lib.getExe' pkgs.util-linux "flock"} -w 10 -E 75 "$HOME/personal/.task-lock" \
-        ${lib.getExe pkgs.python3} -I ${./_hermes-task.py} "''${0##*/}" "$@"
-      status=$?
-      if [ "$status" -eq 75 ]; then
-        printf '%s\n' 'task lock busy, retry once' >&2
-      fi
-      exit "$status"
-    '';
+        exit "$status"
+      '';
     taskCommand = pkgs.writeShellScript "hermes-task" taskCommandText;
     taskTools =
       pkgs.runCommand "hermes-task-tools" {
@@ -108,6 +119,12 @@
   in {
     # Further sections for the same read-only file, e.g. the work coder's
     # (hermes-work-coder.nix). Empty keeps the file as it was.
+    options.services.imperium.hermesGit.coderProjects = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
+      default = coderRegistry.projects;
+      description = "Coder projects (machines/ryza/_coder-projects.nix); an option only so checks can evaluate other values.";
+    };
+
     options.services.imperium.hermesGit.extraConfig = lib.mkOption {
       type = lib.types.lines;
       default = "";
