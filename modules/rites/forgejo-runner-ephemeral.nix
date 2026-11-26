@@ -161,19 +161,6 @@ in {
     # protocol once the fleet prerequisites are present; only the dispatcher
     # opts each pool into receiving the file.
     sccacheSlot = sccacheProvisioned && cfg.trustedJobs.enable && cfg.egressTrustedAddress != null;
-    # Preserve the deployed programs byte-for-byte while the feature is off.
-    # Build and test both variants from the same source, not a forked copy.
-    sccacheSources = pkgs.applyPatches {
-      name = "forgejo-ephemeral-sccache-sources";
-      src = lib.fileset.toSource {
-        root = ./.;
-        fileset = lib.fileset.unions [./_forgejo-ephemeral-dispatcher.py ./_forgejo-slotctl.py];
-      };
-      patches = [./_forgejo-ephemeral-sccache.patch];
-      # Blank context lines omit their optional leading space (GNU diff
-      # --suppress-blank-empty), so trimming trailing whitespace is safe.
-      patchFlags = ["-p1" "--fuzz=0"];
-    };
     # Keep the existing guest and VM units byte-identical on the pilot.
     # Remote slots and any other label/forge selection need boot credentials.
     fixedPilot =
@@ -1118,11 +1105,9 @@ in {
     slotctlConfig = pkgs.writeText "${hostName}-slotctl.json" (builtins.toJSON {slots = slotctlSlots;});
     # Both entry points use the same source with host paths baked in. The
     # caller can choose a declared slot and verb, never the config or systemctl.
-    slotctlSource =
-      if sccacheSlot
-      then "${sccacheSources}/_forgejo-slotctl.py"
-      else ./_forgejo-slotctl.py;
-    slotctlScript = pkgs.replaceVars slotctlSource {
+    # One program whether or not sccache is delivered: it always knows (and
+    # scrubs) the sccache names, and accepts that file only with trusted egress.
+    slotctlScript = pkgs.replaceVars ./_forgejo-slotctl.py {
       config = slotctlConfig;
       systemctl = lib.getExe' pkgs.systemd "systemctl";
       systemd_run = lib.getExe' pkgs.systemd "systemd-run";
@@ -1201,10 +1186,6 @@ in {
       vmDeadline = vmStartSeconds + class.hostMinutes * 60 + vmStopSeconds;
       state = stateName slot machine;
       runtime = runtimeName slot machine;
-      dispatcherSource =
-        if sccacheActive
-        then "${sccacheSources}/_forgejo-ephemeral-dispatcher.py"
-        else ./_forgejo-ephemeral-dispatcher.py;
       deps = lib.optionals local data.dependencies;
       transport =
         if local
@@ -1227,7 +1208,7 @@ in {
         // {
           ExecStart = lib.concatStringsSep " " ([
               (lib.getExe pkgs.python3)
-              "-I -B ${dispatcherSource}"
+              "-I -B ${./_forgejo-ephemeral-dispatcher.py}"
               "--slot ${slot} --machine ${machine} ${transport}"
               "--pools ${poolsFile}"
               "--state-dir ${stateDirs.${slot}} --pause-file /run/${runtime}/pause"
@@ -1251,7 +1232,7 @@ in {
       # forgejo-runner-microvm.nix loads it once.
       self.inputs.microvm.nixosModules.host
       self.nixosModules.ci-credentials
-      (import ./_forgejo-ephemeral-trusted.nix {inherit cfg localSlots dispatch dispatching cacheHost sccacheSlot;})
+      (import ./_forgejo-ephemeral-trusted.nix {inherit cfg localSlots dispatch dispatching cacheHost;})
     ];
 
     options.services.imperium.forgejoEphemeral = {
@@ -1401,7 +1382,6 @@ in {
           localSlots;
           inherit slotctlSlots sshClients poolsFile trustedEgressHosts forcedCommand;
           inherit untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
-          inherit sccacheSources;
         };
         description = "Slot, pool, and transport details for checks.";
       };

@@ -1944,7 +1944,6 @@ class TrustedJobTests(unittest.TestCase):
         self.assertFalse(self.trust_dir.exists())
         self.assertFalse(self.credential_dir.exists())
 
-    @unittest.skipUnless(hasattr(D, "SCCACHE_FILE"), "requires the opt-in sccache protocol")
     def test_sccache_delivery_is_late_trusted_and_pool_opt_in(self):
         for opted_in, fork in ((True, False), (True, True), (False, False)):
             with self.subTest(opted_in=opted_in, fork=fork):
@@ -1964,7 +1963,6 @@ class TrustedJobTests(unittest.TestCase):
                 self.tick(D.POLL)
                 self.assertFalse(self.trust_dir.exists())
 
-    @unittest.skipUnless(hasattr(D, "SCCACHE_FILE"), "requires the opt-in sccache protocol")
     def test_bad_trust_source_is_named_and_blocks_sccache_delivery(self):
         for source in ("trusted-ncps-netrc", "trusted-ci-signing-key", "sccache-credentials"):
             with self.subTest(source=source):
@@ -3341,10 +3339,13 @@ class SlotctlTests(unittest.TestCase):
         self.assertTrue((elsewhere / "var.img").exists())
 
     def test_cleanup_clears_the_trust_share_even_with_delivery_off(self):
+        # Also the sccache file on a slot without trusted egress: a host whose sccache
+        # prerequisites were turned off must not strand a key delivered before (PR 10 L1).
+        leftovers = (*S.TRUST_FILES, ".ncps-netrc.tmp", "sccache-credentials", ".sccache-credentials.tmp")
         for verb in ("withdraw", "scrub"):
             with self.subTest(verb=verb):
                 self.trust_dir.mkdir(mode=0o700, exist_ok=True)
-                for name in (*S.TRUST_FILES, ".ncps-netrc.tmp"):
+                for name in leftovers:
                     (self.trust_dir / name).write_bytes(b"left over from when trust was on")
                 self.assertEqual(0, self.slotctl("--slot", self.SLOT, verb, "none", config=self.off)[0])
                 self.assertEqual(verb == "withdraw", self.trust_dir.exists())
@@ -3395,7 +3396,6 @@ class SlotctlTests(unittest.TestCase):
         self.assertEqual((1, b"", "trust-dir-missing\n"), self.slotctl(*deliver, payload=self.DELIVER))
         self.assertEqual([], list(target.iterdir()))
 
-    @unittest.skipUnless(hasattr(S, "SCCACHE_FILE"), "requires the opt-in sccache protocol")
     def test_sccache_delivery_shape_egress_gate_and_cleanup(self):
         self.assertEqual(0, self.slotctl("--slot", self.SLOT, "stage", SLOT_RUN, payload=self.STAGE, config=self.egress)[0])
         self.system.set(active="active")

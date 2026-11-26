@@ -634,8 +634,8 @@
           assert builtins.isString cc.system.build.toplevel.drvPath && builtins.isString sc.system.build.toplevel.drvPath;
           assert lib.subtractLists (load prepared) (load cc) == ["sccache-credentials:${source}"];
           assert lib.subtractLists (load cc) (load prepared) == [];
-          assert lib.hasInfix "forgejo-ephemeral-sccache-sources/_forgejo-ephemeral-dispatcher.py" (exec cc);
-          assert !(lib.hasInfix "forgejo-ephemeral-sccache-sources" (exec prepared));
+          # One dispatcher program with or without the pool opt-in (HOM-32 PR 12).
+          assert lib.all (cfg: lib.hasInfix " -I -B ${../rites/_forgejo-ephemeral-dispatcher.py} " (exec cfg)) [cc prepared];
           assert (config cc).pools.ugalabugala.sccache.enable;
           assert lib.all (pool: !(config cc).pools.${pool}.sccache.enable) ["noosphere-user" "noosphere-org"];
           assert vars.share && vars.files.credentials.secret && vars.files.credentials.owner == "root" && vars.files.credentials.mode == "0400";
@@ -711,13 +711,10 @@
         forgejo-ephemeral-dispatcher-tests =
           pkgs.runCommand "forgejo-ephemeral-dispatcher-tests" {
             nativeBuildInputs = [self.nixosConfigurations.ryza.pkgs.python3];
-            sccacheSources = self.nixosConfigurations.ryza.config.services.imperium.forgejoEphemeral.internal.sccacheSources;
           } ''
             cp ${../rites/_forgejo-ephemeral-dispatcher.py} _forgejo-ephemeral-dispatcher.py
             cp ${../rites/_forgejo-slotctl.py} _forgejo-slotctl.py
             cp ${../rites/_forgejo-ephemeral-dispatcher-test.py} test.py
-            python3 -B test.py
-            cp --remove-destination "$sccacheSources"/_forgejo-{ephemeral-dispatcher,slotctl}.py .
             python3 -B test.py
             touch "$out"
           '';

@@ -186,7 +186,6 @@
   dispatch,
   dispatching,
   cacheHost,
-  sccacheSlot,
 }: {
   config,
   lib,
@@ -195,9 +194,18 @@
 }: let
   ccfg = config.services.imperium.ciCredentials;
   guestTrustDir = "/run/ci-trust";
-  names =
-    ["ci-signing-key" "ncps-netrc" ".ci-signing-key.tmp" ".ncps-netrc.tmp"]
-    ++ lib.optionals sccacheSlot ["sccache-credentials" ".sccache-credentials.tmp"];
+  # Every name slotctl may write (TRUST_NAMES in _forgejo-slotctl.py), the
+  # sccache file included even where it is never delivered: a slot host
+  # whose sccache prerequisites were turned off must still remove a key
+  # delivered before that.
+  names = [
+    "ci-signing-key"
+    "ncps-netrc"
+    "sccache-credentials"
+    ".ci-signing-key.tmp"
+    ".ncps-netrc.tmp"
+    ".sccache-credentials.tmp"
+  ];
   mkTrustedSlot = slot: {
     vm,
     controlDir,

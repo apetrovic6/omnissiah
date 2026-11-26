@@ -2217,8 +2217,11 @@ egress; slotctl opens it separately after delivery.
    get Caddy's 403.
 
 To roll back, pause and drain, turn off `sccache.enable` in the pool and
-deploy the dispatcher first. Before deploying a slot host with any of
-`sccacheCi`, `trustedJobs`, `egress.trusted` or `remote` turned off, run
+deploy the dispatcher first. slotctl and the slot's stop scrub always
+know the sccache file names (since HOM-32 PR 12, no longer a patched
+variant), so a slot host with `sccacheCi`, `trustedJobs`,
+`egress.trusted` or `remote` turned off still removes a delivered key.
+Only before deploying a slot host generation **older than PR 12**, run
 `sudo find /run/microvm-credentials -name '*sccache-credentials*'` on that
 host. It must print nothing. If it finds anything, keep dispatch paused
 and the slot host on its current generation. Verify the affected slots
@@ -2228,9 +2231,11 @@ files) on the stopped slots, resolve any scrub error, then repeat the
 check before deploying. A pool with sccache off can still use the
 existing trusted ncps upload path.
 
-PR 12 makes the sccache cleanup names unconditional in slotctl and the
-host stop scrub, and folds the opt-in protocol into the base Python
-sources so the patch can be dropped.
+The opt-in protocol is part of the one dispatcher and slotctl program
+(PR 12 folded the former `_forgejo-ephemeral-sccache.patch` in). With
+`sccache.enable` off in every pool, the dispatcher reads and delivers
+only the two upload files, and slotctl accepts the sccache file only
+from a slot with trusted egress.
 
 ### Hermes on Cerberus Forgejo
 
