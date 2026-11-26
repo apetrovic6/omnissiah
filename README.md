@@ -1139,7 +1139,7 @@ jobs wait; Forgejo's `cancel_abandoned_jobs` cancels jobs waiting over 24 hours.
 
    links='
    set -eu
-   for path in etc/systemd/system/rke2-server.service etc/systemd/system/rke2-agent.service kernel; do
+   for path in etc/systemd/system/rke2-server.service etc/systemd/system/rke2-agent.service etc/rancher/rke2/registries.yaml kernel; do
      printf "%s: " "$path"
      if [ "$path" = kernel ] || [ -L "$1/$path" ]; then
        readlink "$1/$path"
@@ -1150,12 +1150,14 @@ jobs wait; Forgejo's `cancel_abandoned_jobs` cancels jobs waiting over 24 hours.
    candidate=$(sh -s -- "$toplevel" <<<"$links") &&
      live=$(ssh "$target" sh -s -- /run/current-system <<<"$links") &&
      diff -u --label live --label candidate \
-       <(printf '%s\n' "$live") <(printf '%s\n' "$candidate")
+       <(printf '%s\n' "$live") <(printf '%s\n' "$candidate") &&
+     echo "OK: RKE2 units and kernel match" ||
+     echo "STOP: drift, or a generation could not be read"
    ```
 
-   No diff means the RKE2 unit targets and kernel match. If a target
-   differs, treat the switch as an RKE2 restart. Do not switch if the
-   comparison failed to read either generation.
+   Only `OK: RKE2 units and kernel match` lets you switch as a runner-only
+   change. On `STOP` with a diff, treat the switch as an RKE2 restart. On
+   `STOP` without a diff, a read failed: fix that before switching.
 
    When both runner units are idle, stop them before switching so they
    cannot pick up another job:
