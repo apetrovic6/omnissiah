@@ -170,10 +170,12 @@
 #       on that host can still have their own CI credentials until retired.
 #       The second virtiofsd is otherwise the same kind as the store's.
 #
-# NOT HERE (HOM-32): sccache on nix-eph (Garage is unreachable from the slot's
-# source address; a read-only key on the shared bucket would expose every
-# object). The two credentials come from ci-credentials.nix, which this
-# module enables only on the dispatcher.
+# NOT HERE (HOM-32): sccache on nix-eph. Garage is reachable only from a slot
+# host's trusted egress source, which a run gets after delivery (`egress
+# trusted`, forgejo-runner-ephemeral.nix); a read-only key on the shared
+# bucket would expose every object, so it waits for a CI-only bucket. The two
+# credentials come from ci-credentials.nix, which this module enables only on
+# the dispatcher.
 {
   cfg,
   localSlots,

@@ -9,13 +9,14 @@
   }: let
     inherit (config.networking) hostName;
     # Fixtures supply the same replacement fleet data to each evaluation
-    # via specialArgs. Machine modules cannot override these settings.
+    # via specialArgs (also read by the guard's Caddy, proxy.nix). Machine
+    # modules cannot override these settings.
     fleet = args.ciDispatcher or self.lib.ciDispatcher;
     inventory = lib.mapAttrs (_: entry:
       if fleet.remote
       then entry // {dispatcher = fleet.host;}
       else entry)
-    self.lib.ciSlots;
+    (args.ciSlots or self.lib.ciSlots);
     cfg = config.services.imperium.forgejoEphemeral;
     hostsSlots = builtins.hasAttr hostName inventory;
     dispatches =
@@ -91,7 +92,7 @@
     ];
   };
 
-  flake.nixosModules.forgejo-runner-ephemeral = {
+  flake.nixosModules.forgejo-runner-ephemeral = args @ {
     config,
     lib,
     options,
@@ -204,7 +205,41 @@
         }
       ])
       cfg.pools);
-    inherit (self.lib.hosts) cerberus;
+    # The one LAN host guests reach: DNS and HTTPS through its Caddy guard.
+    # Fixtures may move it (specialArgs.ciGuard), like the fleet data.
+    guardAddress = self.lib.hosts.${args.ciGuard or self.lib.ciGuard};
+    # Every slot SNAT source: unique, and the trusted ones no other chart
+    # address (Caddy on the guard tells slots apart only by source).
+    trustedNames = lib.concatMap (entry: lib.optional ((entry.egress.trusted or null) != null) entry.egress.trusted) (builtins.attrValues inventory);
+    egressAddresses = map (name: self.lib.lan.${name}) (map (entry: entry.egress.untrusted) (builtins.attrValues inventory) ++ trustedNames);
+    vipPool = builtins.match "([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)-([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)" self.lib.vips.pool;
+    inVipPool = addr: let
+      parts = builtins.match "([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)" addr;
+      last = lib.toInt (builtins.elemAt parts 1);
+    in
+      vipPool
+      != null
+      && parts != null
+      && builtins.elemAt parts 0 == builtins.elemAt vipPool 0
+      && last >= lib.toInt (builtins.elemAt vipPool 1)
+      && last <= lib.toInt (builtins.elemAt vipPool 3);
+    chartStrings = attrs: builtins.filter builtins.isString (builtins.attrValues attrs);
+    trustedSourceFree = name: let
+      addr = self.lib.lan.${name};
+    in
+      !(builtins.elem addr (chartStrings self.lib.hosts ++ chartStrings (builtins.removeAttrs self.lib.lan [name]) ++ chartStrings self.lib.vips))
+      && !(inVipPool addr);
+    # Names only trusted runs may reach through the guard (README "Trusted
+    # slot egress"). Caddy on the guard lists the same six, proxy.nix.
+    trustedEgressHosts = ["s3.main.garage.noosphere.uk" "harbor.noosphere.uk" "ntfy.ugalabugala.org"];
+    egressUnitFor = slot: "forgejo-ephemeral-trusted-egress@${slot}";
+    egressCleanupFor = slot: "forgejo-ephemeral-trusted-egress-cleanup@${slot}";
+    trustedSource = machine: let
+      name = inventory.${machine}.egress.trusted or null;
+    in
+      if name == null
+      then null
+      else self.lib.lan.${name};
     allSlotNames = lib.concatMap (entry: builtins.attrNames entry.slots) (builtins.attrValues inventory);
     # The live pilot keeps its fw_cfg paths. New/remote slots have their own
     # writable credential parent, including the root-only slot run marker.
@@ -318,6 +353,9 @@
       gateway = "${subnet}.1";
       address = "${subnet}.2";
       egress = cfg.egressAddress;
+      trustedEgress = cfg.egressTrustedAddress;
+      egressUnit = egressUnitFor slot;
+      cleanupUnit = egressCleanupFor slot;
       persistentPaths = inaccessibleVMs slot;
       guard = "forgejo-ephemeral-firewall${suffix}";
       outChain = "${hostName}-eph-out${suffix}";
@@ -357,9 +395,9 @@
         -A ${outChain} ! -s ${address} -j DROP
         -A ${outChain} ! -o ${uplink} -j DROP
         -A ${outChain} -m conntrack --ctstate INVALID -j DROP
-        -A ${outChain} -d ${cerberus} -p udp --dport 53 -j ACCEPT
-        -A ${outChain} -d ${cerberus} -p tcp --dport 53 -j ACCEPT
-        -A ${outChain} -d ${cerberus} -p tcp --dport 443 -j ACCEPT
+        -A ${outChain} -d ${guardAddress} -p udp --dport 53 -j ACCEPT
+        -A ${outChain} -d ${guardAddress} -p tcp --dport 53 -j ACCEPT
+        -A ${outChain} -d ${guardAddress} -p tcp --dport 443 -j ACCEPT
         ${lib.concatMapStringsSep "\n" (net: "-A ${outChain} -d ${net} -j DROP") nonPublic}
         -A ${outChain} -p tcp --dport 443 -j ACCEPT
         -A ${outChain} -j DROP
@@ -394,6 +432,172 @@
           apply iptables filter 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
             'FORWARD -i ${tap} -j ${outChain}' 'FORWARD -o ${tap} -j ${inChain}'
         }
+      '';
+      # Trusted egress (README "Trusted slot egress"): only HTTPS to the guard
+      # leaves from the second source, above the guard's default SNAT rule.
+      # The filter chains are unchanged. Exit codes 10 and 11 are slotctl's
+      # egress-address-conflict and egress-address-missing refusals.
+      # Fail closed: the VM preflight checks the NAT table and conntrack
+      # itself, so isolation never depends on ExecStop having worked.
+      egressRule = "POSTROUTING -s ${address}/32 -d ${guardAddress}/32 -p tcp --dport 443 -o ${uplink} -j SNAT --to-source ${trustedEgress}";
+      # Any form of a trusted SNAT rule for this slot, as `iptables -S` prints it.
+      egressPattern = "^-A POSTROUTING .*-s ${lib.escapeRegex address}/32( |$).*--to-source ${lib.escapeRegex trustedEgress}([ :-]|$)";
+      egressCommon = ''
+        set -u -o pipefail
+        iptables=${lib.getExe' config.networking.firewall.package "iptables"}
+        conntrack=${lib.getExe' pkgs.conntrack-tools "conntrack"}
+        ip=${lib.getExe' pkgs.iproute2 "ip"}
+        arping=${lib.getExe' pkgs.iputils "arping"}
+        systemctl=${lib.getExe' pkgs.systemd "systemctl"}
+        notify=${lib.getExe' pkgs.systemd "systemd-notify"}
+        grep=${lib.getExe' pkgs.gnugrep "grep"}
+        read -r -a rule <<< ${lib.escapeShellArg egressRule}
+        nat() { "$iptables" -w 5 -t nat "$@"; }
+        # 0 present, 1 absent. Anything else is an error, never "absent".
+        has_rule() {
+          local status=0
+          nat -C "''${rule[@]}" 2>/dev/null || status=$?
+          return "$status"
+        }
+        listed_rules() {
+          local out
+          out=$(nat -S POSTROUTING) || return 1
+          # grep exits 1 for "no match"; anything else (an error) fails closed.
+          printf '%s\n' "$out" | "$grep" -E -- ${lib.escapeShellArg egressPattern} || [[ $? == 1 ]]
+        }
+        # The exact rule until -C says absent, then any other form -S shows.
+        remove_rules() {
+          local status lines line words attempt
+          for attempt in 1 2 3 4 5 6 7 8; do
+            status=0
+            has_rule || status=$?
+            if (( status == 0 )); then
+              nat -D "''${rule[@]}" || return 1
+              continue
+            elif (( status != 1 )); then
+              return 1
+            fi
+            lines=$(listed_rules) || return 1
+            [[ -z "$lines" ]] && return 0
+            while read -r line; do
+              read -r -a words <<< "''${line#-A }"
+              nat -D "''${words[@]}" || return 1
+            done <<< "$lines"
+          done
+          return 1
+        }
+        # Established flows keep their NAT binding: drop the ones NATed to the
+        # trusted source. conntrack -D exits 1 when nothing matched; -L decides.
+        flush_flows() {
+          local flows
+          "$conntrack" -D --orig-src ${address} --reply-dst ${trustedEgress} >/dev/null 2>&1 || true
+          flows=$("$conntrack" -L --orig-src ${address} --reply-dst ${trustedEgress} 2>/dev/null) || return 1
+          [[ -z "$flows" ]]
+        }
+        clean() {
+          remove_rules && flush_flows
+        }
+        unit_idle() {
+          local state job
+          state=$("$systemctl" show --property=ActiveState --value ${egressUnit}.service) || return 1
+          job=$("$systemctl" show --property=Job --value ${egressUnit}.service) || return 1
+          [[ "$state" == inactive && -z "$job" ]]
+        }
+        present() {
+          [[ -n "$("$ip" -4 -o address show dev ${uplink} to ${trustedEgress}/32)" ]]
+        }
+      '';
+      # Type=notify: ready once the rule is in, then it lives only as long as
+      # the address does. If networkd drops it (a conflict after binding), the
+      # unit ends, ExecStop removes the rule and the run is back on the
+      # untrusted source instead of sending its forge traffic to a stranger.
+      egressStart = pkgs.writeShellScript "${slot}-trusted-egress-start" ''
+        ${egressCommon}
+        # Watch first, so a removal right after the check below is still seen.
+        coproc monitor { exec "$ip" -o -4 monitor address dev ${uplink}; }
+        watch=''${monitor[0]}
+        # networkd probes before it (re)adds the /32 (DuplicateAddressDetection)
+        # and drops it on a conflict, so a missing address means don't use it.
+        if ! present; then
+          echo "trusted egress refused for ${slot}: ${trustedEgress} is not on ${uplink}; networkd drops it on an address conflict" >&2
+          exit 11
+        fi
+        # Probe again before every use: never take an address another host answers for.
+        status=0
+        "$arping" -q -D -c 2 -w 3 -I ${uplink} ${trustedEgress} || status=$?
+        if (( status == 1 )); then
+          echo "trusted egress refused for ${slot}: another host answers ARP for ${trustedEgress} on ${uplink}; not taking the address" >&2
+          exit 10
+        elif (( status != 0 )); then
+          echo "trusted egress refused for ${slot}: duplicate address probe for ${trustedEgress} failed (arping exit $status)" >&2
+          exit 1
+        fi
+        if ! remove_rules || ! nat -I POSTROUTING 1 "''${rule[@]:1}"; then
+          echo "trusted egress refused for ${slot}: cannot install the NAT rule" >&2
+          exit 1
+        fi
+        "$notify" --ready
+        echo "trusted egress for ${slot} via ${trustedEgress}"
+        while :; do
+          if read -r -t 5 line <&"$watch"; then
+            [[ "$line" == Deleted* && "$line" == *" inet ${trustedEgress}/32 "* ]] || continue
+          else
+            # A timeout re-checks the address; a monitor that ended ends the unit.
+            status=$?
+            if (( status > 128 )) && present; then
+              continue
+            fi
+          fi
+          echo "trusted egress for ${slot} ends: ${trustedEgress} left ${uplink}; back to the untrusted source" >&2
+          exit 0
+        done
+      '';
+      # The guard's reload re-inserts its own rule first; go back above it.
+      egressReload = pkgs.writeShellScript "${slot}-trusted-egress-reload" ''
+        ${egressCommon}
+        remove_rules && nat -I POSTROUTING 1 "''${rule[@]:1}"
+      '';
+      # ExecStop and ExecStopPost (the latter also after a failed stop).
+      egressStop = pkgs.writeShellScript "${slot}-trusted-egress-stop" ''
+        ${egressCommon}
+        if ! clean; then
+          echo "trusted egress for ${slot}: cannot remove the NAT rule or flows via ${trustedEgress}" >&2
+          exit 1
+        fi
+      '';
+      # Started by slotctl withdraw and scrub. Stops the unit, removes what a
+      # failed stop left, clears the failed state, and succeeds only when the
+      # unit is idle and no rule or flow is left.
+      egressCleanup = pkgs.writeShellScript "${slot}-trusted-egress-cleanup" ''
+        ${egressCommon}
+        "$systemctl" stop ${egressUnit}.service || true
+        if ! clean; then
+          echo "trusted egress cleanup for ${slot}: NAT rule or flows via ${trustedEgress} remain; the slot stays unusable" >&2
+          exit 1
+        fi
+        "$systemctl" reset-failed ${egressUnit}.service 2>/dev/null || true
+        if ! unit_idle; then
+          echo "trusted egress cleanup for ${slot}: ${egressUnit} is not inactive" >&2
+          exit 1
+        fi
+      '';
+      # Root, before every boot: the egress unit inactive (not failed, nothing
+      # queued: binding to the VM, a stray start would pull the VM up), no
+      # trusted rule for this slot and no flow mapped to the trusted source.
+      egressPreflight = pkgs.writeShellScript "${slot}-trusted-egress-preflight" ''
+        ${egressCommon}
+        refuse() {
+          echo "refusing to boot ${slot}: $1; run slotctl scrub (or start ${cleanupUnit})" >&2
+          exit 1
+        }
+        unit_idle || refuse "${egressUnit} is not inactive"
+        status=0
+        has_rule || status=$?
+        (( status == 1 )) || refuse "trusted NAT rule present or unreadable (iptables -C exit $status)"
+        lines=$(listed_rules) || refuse "cannot list the NAT table"
+        [[ -z "$lines" ]] || refuse "a trusted NAT rule for ${address} is present"
+        flows=$("$conntrack" -L --orig-src ${address} --reply-dst ${trustedEgress} 2>/dev/null) || refuse "cannot list conntrack"
+        [[ -z "$flows" ]] || refuse "flows from ${address} via ${trustedEgress} remain"
       '';
       # Every directory a slot unit names as a mandatory namespace path, in
       # creation order (parents first). The eval check
@@ -439,18 +643,21 @@
         install=${lib.getExe' pkgs.coreutils "install"}
         ${lib.concatMapStringsSep "\n" installLine slotDirs}
       '';
-      slotctlEntry = {
-        vm_dir = vmDir;
-        credential_dir = credDir;
-        # Cleanup still needs this path when delivery is disabled.
-        trust_dir = trustDir;
-        deliver = cfg.trustedJobs.enable;
-        fixed_pilot = fixedPilot;
-        user = slotUser;
-        group = slotUser;
-        min_free_bytes = (class.overlayGiB + spec.var + 10) * 1024 * 1024 * 1024;
-        expiry_minutes = expiryMinutes;
-      };
+      slotctlEntry =
+        {
+          vm_dir = vmDir;
+          credential_dir = credDir;
+          # Cleanup still needs this path when delivery is disabled.
+          trust_dir = trustDir;
+          deliver = cfg.trustedJobs.enable;
+          fixed_pilot = fixedPilot;
+          user = slotUser;
+          group = slotUser;
+          min_free_bytes = (class.overlayGiB + spec.var + 10) * 1024 * 1024 * 1024;
+          expiry_minutes = expiryMinutes;
+        }
+        # Only with a second source: `egress trusted` and its cleanup in withdraw/scrub.
+        // lib.optionalAttrs (trustedEgress != null) {trusted_egress = true;};
       preflight = pkgs.writeShellScript "${slot}-preflight" ''
         set -eu
         # WorkingDirectory is optional so privileged stop hooks can clean a failed start.
@@ -520,13 +727,17 @@
           useNetworkd = true;
           useDHCP = false;
           enableIPv6 = false;
-          hosts.${cerberus} = [forgeHosts.ugalabugala cacheHost] ++ lib.optional (!fixedPilot) forgeHosts.noosphere;
+          # Untrusted sources get the guard's 403 for the trusted-only names.
+          hosts.${guardAddress} =
+            [forgeHosts.ugalabugala cacheHost]
+            ++ lib.optional (!fixedPilot) forgeHosts.noosphere
+            ++ lib.optionals (trustedEgress != null) trustedEgressHosts;
         };
         systemd.network.networks."10-uplink" = {
           matchConfig.MACAddress = mac;
           address = ["${address}/24"];
           gateway = ["${gateway}"];
-          dns = [cerberus];
+          dns = [guardAddress];
           networkConfig.IPv6AcceptRA = false;
         };
         microvm = {
@@ -670,7 +881,7 @@
         exit "$status"
       '';
     in {
-      inherit spec slotDirs prepareDirs slotctlEntry sandbox remoteProperties remoteAction dependencies vm controlDir trustDir;
+      inherit spec slotDirs prepareDirs slotctlEntry sandbox remoteProperties remoteAction dependencies vm controlDir trustDir egressRule egressUnit cleanupUnit egressPattern egressStart egressReload egressStop egressCleanup egressPreflight;
       inherit (class) runnerMinutes;
       users.groups.${slotUser} = {};
       users.users.${slotUser} = {
@@ -711,86 +922,126 @@
         MemorySwapMax = 0;
         IOWeight = 20;
       };
-      systemd.services = {
-        ${installer} = {
-          unitConfig = {
-            RequiresMountsFor = [config.microvm.stateDir];
-            # Re-run before every VM, dispatcher and support-unit start, so
-            # repeated manual restarts must not trip start-limit-hit.
-            StartLimitIntervalSec = 0;
+      systemd.services =
+        {
+          ${installer} = {
+            unitConfig = {
+              RequiresMountsFor = [config.microvm.stateDir];
+              # Re-run before every VM, dispatcher and support-unit start, so
+              # repeated manual restarts must not trip start-limit-hit.
+              StartLimitIntervalSec = 0;
+            };
+            serviceConfig = {
+              # Both the installer and its pre-start must be able to start with no slot directory.
+              WorkingDirectory = lib.mkForce "/";
+              ExecStartPre = ["+${prepareDirs}"];
+            };
+            script = lib.mkBefore ''
+              cd -- ${lib.escapeShellArg controlDir}
+            '';
           };
-          serviceConfig = {
-            # Both the installer and its pre-start must be able to start with no slot directory.
-            WorkingDirectory = lib.mkForce "/";
-            ExecStartPre = ["+${prepareDirs}"];
+          ${guard} = {
+            description = "Restrict traffic on the Forgejo one-job tap";
+            after = ["firewall.service"];
+            requires = ["firewall.service"];
+            path = [config.networking.firewall.package pkgs.coreutils];
+            reloadIfChanged = true;
+            script = guardScript + "\napply_rules start\n";
+            reload = guardScript + "\napply_rules start\n";
+            preStop = guardScript + "\napply_rules stop\n";
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+            };
           };
-          script = lib.mkBefore ''
-            cd -- ${lib.escapeShellArg controlDir}
-          '';
+          ${vm} = {
+            # A oneshot without RemainAfterExit: every start re-runs it.
+            requires = ["${installer}.service"];
+            bindsTo = ["${guard}.service"];
+            after = ["${guard}.service"];
+            serviceConfig = {
+              Slice = slice;
+              User = slotUser;
+              Group = slotUser;
+              # Optional, so namespace setup and chdir cannot fail before the
+              # first ExecStartPre or in the '+' stop hooks; preflight checks it.
+              # QEMU only reads the credentials (fw_cfg), so credDir is not
+              # listed: its bind mount made the scrub's rmdir fail with EBUSY.
+              WorkingDirectory = "-${vmDir}";
+              ProtectSystem = "strict";
+              ReadWritePaths = ["-${vmDir}"];
+              ProtectHome = true;
+              PrivateTmp = true;
+              # The pre-created TAP carries frames via /dev/net/tun, not IP sockets.
+              RestrictAddressFamilies = ["AF_UNIX"];
+              IPAddressDeny = "any";
+              InaccessiblePaths = persistentPaths;
+              NoNewPrivileges = true;
+              Restart = "no";
+              RuntimeMaxSec = "${toString class.hostMinutes}min";
+              TimeoutStartSec = "${toString vmStartSeconds}s";
+              TimeoutStopSec = "${toString vmStopSeconds}s";
+              ExecStartPre = ["+${prepareDirs}" preflight] ++ lib.optional (trustedEgress != null) "+${egressPreflight}";
+              ExecStopPost = ["+${scrub}"];
+              LimitCORE = 0;
+            };
+          };
+          "microvm-set-booted@${slot}" = {
+            overrideStrategy = "asDropin";
+            requires = ["${installer}.service"];
+            serviceConfig = {
+              User = "root";
+              Group = "root";
+            };
+          };
+          "microvm-virtiofsd@${slot}" = {
+            requires = ["${installer}.service"];
+            serviceConfig = {
+              Slice = slice;
+              RestrictAddressFamilies = ["AF_UNIX"];
+              IPAddressDeny = "any";
+            };
+          };
+        }
+        // lib.optionalAttrs (trustedEgress != null) {
+          ${egressUnit} = {
+            description = "Trusted egress source for Forgejo one-job slot ${slot}";
+            # Started only by slotctl `egress trusted`, after delivery to a running VM.
+            # Stops with the VM (BindsTo) or its address (the start script's
+            # watch), and restarts with the guard, whose stop/start reorders
+            # the NAT chain; follows its reloads too.
+            bindsTo = ["${vm}.service"];
+            partOf = ["${guard}.service"];
+            after = ["${vm}.service" "${guard}.service"];
+            unitConfig.ReloadPropagatedFrom = ["${guard}.service"];
+            serviceConfig = {
+              Type = "notify";
+              NotifyAccess = "all";
+              Restart = "no";
+              ExecStart = egressStart;
+              ExecReload = egressReload;
+              ExecStop = egressStop;
+              # Also after a failed or timed-out ExecStop.
+              ExecStopPost = egressStop;
+              TimeoutStartSec = "20s";
+              # iptables waits up to 5 s for the xtables lock per call. Each of
+              # ExecStop and ExecStopPost gets this; the cleanup unit allows both.
+              TimeoutStopSec = "25s";
+            };
+          };
+          ${cleanupUnit} = {
+            description = "Remove trusted egress leftovers of Forgejo one-job slot ${slot}";
+            # Retried every idle pass; like the installer, never start-limit-hit.
+            unitConfig.StartLimitIntervalSec = 0;
+            # Started by slotctl withdraw and scrub; fails while anything is left.
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = egressCleanup;
+              # Inside slotctl's 70 s wait and the remote sandbox's 95 s.
+              TimeoutStartSec = "60s";
+            };
+          };
         };
-        ${guard} = {
-          description = "Restrict traffic on the Forgejo one-job tap";
-          after = ["firewall.service"];
-          requires = ["firewall.service"];
-          path = [config.networking.firewall.package pkgs.coreutils];
-          reloadIfChanged = true;
-          script = guardScript + "\napply_rules start\n";
-          reload = guardScript + "\napply_rules start\n";
-          preStop = guardScript + "\napply_rules stop\n";
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-        };
-        ${vm} = {
-          # A oneshot without RemainAfterExit: every start re-runs it.
-          requires = ["${installer}.service"];
-          bindsTo = ["${guard}.service"];
-          after = ["${guard}.service"];
-          serviceConfig = {
-            Slice = slice;
-            User = slotUser;
-            Group = slotUser;
-            # Optional, so namespace setup and chdir cannot fail before the
-            # first ExecStartPre or in the '+' stop hooks; preflight checks it.
-            # QEMU only reads the credentials (fw_cfg), so credDir is not
-            # listed: its bind mount made the scrub's rmdir fail with EBUSY.
-            WorkingDirectory = "-${vmDir}";
-            ProtectSystem = "strict";
-            ReadWritePaths = ["-${vmDir}"];
-            ProtectHome = true;
-            PrivateTmp = true;
-            # The pre-created TAP carries frames via /dev/net/tun, not IP sockets.
-            RestrictAddressFamilies = ["AF_UNIX"];
-            IPAddressDeny = "any";
-            InaccessiblePaths = persistentPaths;
-            NoNewPrivileges = true;
-            Restart = "no";
-            RuntimeMaxSec = "${toString class.hostMinutes}min";
-            TimeoutStartSec = "${toString vmStartSeconds}s";
-            TimeoutStopSec = "${toString vmStopSeconds}s";
-            ExecStartPre = ["+${prepareDirs}" preflight];
-            ExecStopPost = ["+${scrub}"];
-            LimitCORE = 0;
-          };
-        };
-        "microvm-set-booted@${slot}" = {
-          overrideStrategy = "asDropin";
-          requires = ["${installer}.service"];
-          serviceConfig = {
-            User = "root";
-            Group = "root";
-          };
-        };
-        "microvm-virtiofsd@${slot}" = {
-          requires = ["${installer}.service"];
-          serviceConfig = {
-            Slice = slice;
-            RestrictAddressFamilies = ["AF_UNIX"];
-            IPAddressDeny = "any";
-          };
-        };
-      };
     };
     slotctlSlots = lib.mapAttrs (_: data: data.slotctlEntry) localSlots;
     slotctlConfig = pkgs.writeText "${hostName}-slotctl.json" (builtins.toJSON {slots = slotctlSlots;});
@@ -905,7 +1156,9 @@
               "--untrusted-limit ${toString untrustedLimitSeconds}"
               "--vm-deadline ${toString vmDeadline}"
             ]
-            ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs");
+            ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs"
+            # The slot host has a second source; used only for delivered runs.
+            ++ lib.optional (trustedSource machine != null) "--trusted-egress");
           LoadCredential = lib.optional (!local) "slotctl-ssh-key:${config.clan.core.vars.generators.${sshGenerator}.files.id_ed25519.path}";
           StateDirectory = state;
           RuntimeDirectory = runtime;
@@ -1032,6 +1285,18 @@
           else null;
         description = "Dedicated SNAT source of this host's slots. The host's uplink must carry it as a /32.";
       };
+      egressTrustedAddress = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        readOnly = true;
+        default =
+          if hosted
+          then trustedSource hostName
+          else null;
+        description = ''
+          Second SNAT source of this host's slots, used only by delivered trusted runs, or null.
+          The host's uplink must carry it as a /32 with IPv4 duplicate address detection.
+        '';
+      };
       internal = lib.mkOption {
         internal = true;
         readOnly = true;
@@ -1045,7 +1310,16 @@
             localSlots;
           remotePropertyNames = lib.mapAttrs (_: data: builtins.attrNames data.remoteProperties) localSlots;
           remoteActions = lib.mapAttrs (_: data: data.remoteAction) localSlots;
-          inherit slotctlSlots sshClients poolsFile;
+          egress = lib.mapAttrs (_: data:
+            lib.optionalAttrs (cfg.egressTrustedAddress != null) {
+              unit = data.egressUnit;
+              inherit (data) cleanupUnit;
+              rule = data.egressRule;
+              pattern = data.egressPattern;
+              scripts = {inherit (data) egressStart egressReload egressStop egressCleanup egressPreflight;};
+            })
+          localSlots;
+          inherit slotctlSlots sshClients poolsFile trustedEgressHosts forcedCommand;
           inherit untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
         };
         description = "Slot, pool, and transport details for checks.";
@@ -1106,6 +1380,11 @@
             assertion = lib.all (p: builtins.elem p (slotToolset pkgs)) (ciToolset pkgs);
             message = "forgejoEphemeral: the slot's PATH must carry the whole shared CI toolset (_ci-toolset.nix).";
           }
+          {
+            # Caddy on the guard tells slot sources apart only by address.
+            assertion = allUnique egressAddresses && lib.all trustedSourceFree trustedNames;
+            message = "forgejoEphemeral: slot SNAT sources must be unique across slot hosts, and each trusted one its own chart address: no host, other lan entry or VIP.";
+          }
         ];
         users = slotDefinitions (data: data.users);
         microvm.vms = slotDefinitions (data: data.microvm.vms);
@@ -1130,6 +1409,8 @@
         # The guard owns forwarding and SNAT; don't add its TAP to stock NAT.
         boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = lib.mkDefault true;
         microvm.host.enable = true;
+        # For the README checks of the trusted flows (the unit has its own copy).
+        environment.systemPackages = lib.optional (cfg.egressTrustedAddress != null) pkgs.conntrack-tools;
       })
       (lib.mkIf (cfg.enable && dispatching) {
         clan.core.vars.generators = lib.mapAttrs' (forge: {

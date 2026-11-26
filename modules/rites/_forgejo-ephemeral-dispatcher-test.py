@@ -93,11 +93,11 @@ def protection(branch="master", **fields):
     } | fields
 
 
-def make_queue(pool, forge, slot, state_dirs, claim_root, clock, pat_file, trust=None, *, vm_deadline=STD_DEADLINE):
+def make_queue(pool, forge, slot, state_dirs, claim_root, clock, pat_file, trust=None, *, vm_deadline=STD_DEADLINE, trusted_egress=False):
     return D.Queue(
         D.Forgejo(pool, pat_file, forge.connect), slot, D.Store(state_dirs[D.SLOT], pool.state_file),
         D.Claims(claim_root, state_dirs, pool), clock.monotonic, clock.wall, vm_deadline=vm_deadline,
-        untrusted_limit=UNTRUSTED_LIMIT, trust=trust,
+        untrusted_limit=UNTRUSTED_LIMIT, trust=trust, trusted_egress=trusted_egress,
     )
 
 
@@ -146,6 +146,8 @@ def run(index=7, **fields):
 
 SYSTEMCTL = "/test/systemctl"
 SYSTEMD_RUN = "/test/systemd-run"
+EGRESS = f"forgejo-ephemeral-trusted-egress@{D.SLOT}.service"
+CLEANUP = f"forgejo-ephemeral-trusted-egress-cleanup@{D.SLOT}.service"
 WATCHDOG = f"forgejo-slot-expiry-{D.SLOT}-{SLOT_RUN}"
 
 
@@ -154,9 +156,12 @@ def create_slot_lock(root, slot):
     (root / f"{slot}.lock").touch(mode=0o600)
 
 
-def write_slotctl_config(path, slot, vm_dir, credential_dir, trust_dir=None, *, deliver=False, fixed_pilot=False, min_free_bytes=1, expiry_minutes=75):
+def write_slotctl_config(
+    path, slot, vm_dir, credential_dir, trust_dir=None, *, deliver=False, fixed_pilot=False, min_free_bytes=1, expiry_minutes=75,
+    trusted_egress=False,
+):
     """What the slot module generates per host, pointed at temporary directories and the current user."""
-    entry = {
+    entry = ({"trusted_egress": True} if trusted_egress else {}) | {
         "vm_dir": str(vm_dir),
         "credential_dir": str(credential_dir),
         "trust_dir": str(credential_dir.with_name(f"{slot}-trust") if trust_dir is None else trust_dir),
@@ -397,6 +402,24 @@ class FakeSystemctl:
         self.watchdog_arm_fails = False
         self.watchdog_cancel_fails = False
         self.on_watchdog_cancel = None
+        # The trusted egress oneshot: its ExecMainStatus after a start ("0" succeeds), and whether it is up.
+        self.egress_exit = "0"
+        self.egress_active = False
+        # Whether a failed start ran ExecStart; if not, show reports the previous run's status.
+        self.egress_runs = True
+        self.egress_exited = 0  # ExecMainExitTimestampMonotonic: advances when a main process exits
+        self.egress_result = "success"
+        self.egress_status = "0"
+        self.egress_show_fails = False
+        # The root cleanup unit (withdraw, scrub) fails while a rule or flow is left.
+        self.egress_cleanup_fails = False
+        self.cleanup_timeouts = []  # What slotctl waits for each cleanup start
+
+    def egress_calls(self, verb):
+        return [argv for argv in self.calls if argv[-1] == EGRESS and verb in argv]
+
+    def cleanups(self):
+        return [argv for argv in self.calls if argv[-1] == CLEANUP]
 
     def set(self, unit=None, *, active="inactive", pending="", result="success", loaded="loaded"):
         self.states[unit or self.vm] = f"LoadState={loaded}\nActiveState={active}\nJob={pending}\nResult={result}\n".encode()
@@ -411,6 +434,8 @@ class FakeSystemctl:
             self.watchdogs.update((f"{stem}.timer", f"{stem}.service"))
             return subprocess.CompletedProcess(argv, 0, stdout=b"")
         assert argv[:3] == (SYSTEMCTL, "--system", "--no-pager")
+        if argv[-1] in (EGRESS, CLEANUP):
+            return self._egress(argv, options["timeout"])
         if "show" in argv:
             assert "--all" in argv and "--property=LoadState,ActiveState,Job,Result" in argv
             unit = argv[-1]
@@ -458,6 +483,30 @@ class FakeSystemctl:
             assert units == (self.vm,) or all(unit in D.SUPPORT for unit in units)
             for unit in units:
                 self.set(unit, active="deactivating", pending="72")
+        return subprocess.CompletedProcess(argv, 0, stdout=b"")
+
+    def _egress(self, argv, timeout):
+        """Blocking start/stop of the oneshot, and the status slotctl reads after a failed start."""
+        if argv[3:] == ("--property=Result,ExecMainStatus,ExecMainExitTimestampMonotonic", "show", EGRESS):
+            if self.egress_show_fails:
+                raise subprocess.CalledProcessError(1, argv)
+            text = f"Result={self.egress_result}\nExecMainStatus={self.egress_status}\nExecMainExitTimestampMonotonic={self.egress_exited}\n"
+            return subprocess.CompletedProcess(argv, 0, stdout=text.encode())
+        if argv[3:] == ("--job-mode=fail", "start", CLEANUP):
+            self.cleanup_timeouts.append(timeout)
+            # Stops the unit, then removes what is left, unless it cannot.
+            self.egress_active = False
+            if self.egress_cleanup_fails:
+                raise subprocess.CalledProcessError(1, argv)
+            self.egress_result = "success"
+            return subprocess.CompletedProcess(argv, 0, stdout=b"")
+        assert argv[3:] == ("--job-mode=fail", "start", EGRESS), argv
+        if self.egress_exit != "0":
+            if self.egress_runs:
+                self.egress_exited += 1
+                self.egress_result, self.egress_status = "exit-code", self.egress_exit
+            raise subprocess.CalledProcessError(1, argv)
+        self.egress_active = True
         return subprocess.CompletedProcess(argv, 0, stdout=b"")
 
     def mutations(self, verb=None):
@@ -1780,7 +1829,7 @@ class TrustedJobTests(unittest.TestCase):
         self.surfaces = []
         self.build()
 
-    def build(self, trusted=True, *, pool=None, **forge_options):
+    def build(self, trusted=True, *, pool=None, egress=False, **forge_options):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -1803,7 +1852,8 @@ class TrustedJobTests(unittest.TestCase):
         self.system = FakeSystemctl()
         self.files = S.SlotFiles(self.vm_dir, self.credential_dir, os.getuid(), os.getgid(), self.trust_dir, trusted)
         self.config = write_slotctl_config(
-            root / "slotctl.json", "ryza-eph-1", self.vm_dir, self.credential_dir, self.trust_dir, deliver=trusted
+            root / "slotctl.json", "ryza-eph-1", self.vm_dir, self.credential_dir, self.trust_dir, deliver=trusted,
+            trusted_egress=egress,
         )
         self.slotctls = []
         self.clock = FakeClock()
@@ -1811,6 +1861,7 @@ class TrustedJobTests(unittest.TestCase):
         self.enterContext(contextlib.redirect_stderr(self.logs))
         self.surfaces.append((self.logs, self.system, self.state_dir, self.slotctls))
         self.trusted = trusted
+        self.egress = egress
         self.vm_deadline = STD_DEADLINE
         self.restart()
 
@@ -1828,6 +1879,7 @@ class TrustedJobTests(unittest.TestCase):
         queue = make_queue(
             self.pool, self.forge, slot, {D.SLOT: self.state_dir}, self.state_dir.parent, self.clock, self.pat_file,
             trust=D.Trust(self.sources) if self.trusted else None, vm_deadline=self.vm_deadline,
+            trusted_egress=self.egress,
         )
         self.dispatcher = D.Dispatcher([queue], self.clock.monotonic, pause=self.pause)
 
@@ -2555,6 +2607,148 @@ class TrustedJobTests(unittest.TestCase):
         self.assertNotIn("trust_ids", state)
         self.assertEqual(1, self.forge.paths("GET").count("/api/v1/users/manjo"))
 
+    # HOM-32 PR 8: trusted egress, the slot host's second SNAT source.
+
+    def verbs(self):
+        """Every slotctl verb this test's dispatchers called, in order (argv: slotctl --slot SLOT VERB ...)."""
+        return [call[3] for slotctl in self.slotctls for call in slotctl.calls]
+
+    def test_trusted_egress_starts_only_after_a_successful_delivery(self):
+        self.build(egress=True)
+        self.boot()
+        self.tick(D.POLL)  # Booted, not picked up: untrusted.
+        self.trust_dir.chmod(0o755)
+        self.pick_up()
+        self.assertIn("delivery pending: trust directory has unexpected ownership or mode", self.logs.getvalue())
+        self.assertEqual({}, self.delivered())
+        self.assertNotIn("egress", self.verbs())
+        self.assertEqual([], self.system.egress_calls("start"))
+        self.trust_dir.chmod(0o700)
+        self.tick(D.POLL)
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        verbs = self.verbs()
+        self.assertEqual(["deliver", "egress"], [verb for verb in verbs if verb in ("deliver", "egress")][-2:])
+        self.assertEqual(1, verbs.count("egress"))
+        self.assertTrue(self.system.egress_active)
+        self.assertIn("trusted egress: the run now leaves from the slot host's trusted source", self.logs.getvalue())
+        self.tick(D.POLL)
+        self.tick(D.BUSY_POLL)
+        self.assertEqual(1, self.verbs().count("egress"))  # Open for this run: never started again.
+        self.assertEqual(1, len(self.system.egress_calls("start")))
+        # The VM's own stop ends it on the host (BindsTo); the idle scrub runs the cleanup unit.
+        self.system.set()
+        self.system.egress_active = False
+        cleanups = len(self.system.cleanups())
+        self.tick(D.POLL)
+        self.assertFalse(self.trust_dir.exists())
+        self.assertEqual(cleanups + 1, len(self.system.cleanups()))
+        self.assertIsNone(self.dispatcher.local_queue.egress)
+
+    def test_a_failed_egress_cleanup_keeps_the_slot_from_booting_again(self):
+        """ExecStop failed and left a rule or flow the cleanup can't remove: no next job on this slot."""
+        self.build(egress=True)
+        self.boot()
+        self.pick_up()
+        self.assertTrue(self.system.egress_active)
+        self.system.egress_cleanup_fails = True
+        self.system.set()  # The trusted run ends.
+        self.tick(D.POLL)
+        self.assertIn(
+            "trusted egress left a NAT rule or flow the cleanup could not remove; refusing slot reuse", self.logs.getvalue(),
+        )
+        self.forge.jobs = [job(2, "opaque/attempt-2")]
+        for _ in range(3):
+            self.tick(D.POLL)
+        self.assertEqual([], [argv for argv in self.system.mutations("start") if argv[-1] == VM][1:])  # Only the first boot.
+        self.assertEqual(1, len([verb for verb in self.verbs() if verb == "stage"]))
+        self.assertGreaterEqual(len(self.system.cleanups()), 2)  # Retried every idle pass.
+        marker = self.credential_dir.parent / "ryza-eph-1.run"
+        first = marker.read_text()  # The first run's marker stays.
+        self.system.egress_cleanup_fails = False
+        self.tick(D.POLL)  # Clean again: the scrub finishes and the waiting job gets the slot.
+        self.assertEqual(2, len([verb for verb in self.verbs() if verb == "stage"]))
+        self.assertNotEqual(first, marker.read_text())
+
+    def test_trusted_egress_is_never_used_with_trusted_jobs_off(self):
+        self.build(trusted=False, egress=True)
+        self.boot()
+        self.pick_up()
+        self.tick(D.POLL)
+        self.tick(UNTRUSTED_LIMIT)
+        self.assertIn("untrusted job reached its 65 min limit", self.logs.getvalue())
+        self.system.set()
+        self.tick(D.POLL)
+        self.restart()
+        self.dispatcher.withdraw()
+        self.assertNotIn("egress", self.verbs())
+        self.assertEqual([], self.system.egress_calls("start"))
+        self.assertFalse(self.system.egress_active)
+        # Withdraw (startup) and scrub still stop the unit: cleanup does not depend on trust.
+        self.assertIn("withdraw", self.verbs())
+        self.assertNotEqual([], self.system.cleanups())
+
+    def test_untrusted_runs_never_get_trusted_egress(self):
+        self.build(egress=True)
+        self.forge.runs = [run(is_fork_pull_request=True)]
+        self.boot()
+        self.pick_up()
+        self.tick(D.POLL)
+        self.assertIn("untrusted: run #7 (fork or AGit pull request)", self.logs.getvalue())
+        self.assertEqual({}, self.delivered())
+        self.assertNotIn("egress", self.verbs())
+        self.assertEqual([], self.system.egress_calls("start"))
+
+    def test_withdraw_and_dispatcher_startup_stop_trusted_egress(self):
+        self.build(egress=True)
+        self.boot()
+        self.pick_up()
+        self.assertTrue(self.system.egress_active)
+        self.dispatcher.withdraw()  # What main() does before a new dispatcher runs.
+        self.assertFalse(self.system.egress_active)
+        self.assertEqual({}, self.delivered())
+        self.restart()
+        self.tick(D.POLL)  # Revalidates the recorded run, delivers again, then moves it back.
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.assertTrue(self.system.egress_active)
+        self.assertEqual(2, len(self.system.egress_calls("start")))
+        verbs = self.verbs()
+        first = verbs.index("egress")
+        withdrawn = verbs.index("withdraw", first)
+        self.assertEqual(["deliver", "egress"], [verb for verb in verbs[withdrawn:] if verb in ("deliver", "egress")])
+
+    def test_an_address_conflict_is_refused_for_the_whole_run(self):
+        self.build(egress=True)
+        self.system.egress_exit = "10"
+        self.boot()
+        self.pick_up()
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.assertFalse(self.system.egress_active)
+        self.assertIn(
+            "trusted egress refused for this run: another host answers ARP for the trusted egress address; "
+            "the slot host won't take it; it stays on the untrusted source", self.logs.getvalue(),
+        )
+        self.system.egress_exit = "0"
+        self.tick(D.POLL)
+        self.tick(D.BUSY_POLL)
+        self.assertEqual(1, self.verbs().count("egress"))
+        self.assertFalse(self.system.egress_active)
+        self.assertEqual([], [argv for argv in self.system.mutations("stop") if argv[-1] == VM])  # The job keeps running.
+
+    def test_other_egress_failures_are_retried_and_logged_once(self):
+        self.build(egress=True)
+        self.system.egress_exit = "1"
+        self.boot()
+        self.pick_up()
+        self.tick(D.POLL)
+        self.tick(D.BUSY_POLL)
+        message = "trusted egress pending: cannot start trusted egress; check the slot host's egress unit"
+        self.assertEqual(1, self.logs.getvalue().count(message))
+        self.assertGreaterEqual(self.verbs().count("egress"), 3)
+        self.system.egress_exit = "0"
+        self.tick(D.BUSY_POLL)
+        self.assertTrue(self.system.egress_active)
+        self.assertIn("trusted egress: the run now leaves", self.logs.getvalue())
+
 
 class SlotConfigurationTests(unittest.TestCase):
     """The slot identity is configured and independent of its pools."""
@@ -2592,6 +2786,8 @@ class SlotConfigurationTests(unittest.TestCase):
     def test_arguments_configure_one_slot(self):
         args = D.parse_arguments(self.arguments())
         self.assertEqual(Path("/nix/store/x-forgejo-slotctl"), args.slotctl)
+        self.assertFalse(args.trusted_egress or args.trusted_jobs)
+        self.assertTrue(D.parse_arguments([*self.arguments(), "--trusted-egress"]).trusted_egress)
         self.assertEqual(LARGE_DEADLINE, args.vm_deadline)
         self.assertEqual(("terra-eph-1", "terra"), (D.SLOT, D.MACHINE))
         self.assertEqual("microvm@terra-eph-1.service", D.VM)
@@ -2697,6 +2893,13 @@ class SlotctlTests(unittest.TestCase):
         self.off = write_slotctl_config(
             self.root / "off.json", self.SLOT, self.vm_dir, self.credential_dir, self.trust_dir, deliver=False
         )
+        self.egress = write_slotctl_config(
+            self.root / "egress.json", self.SLOT, self.vm_dir, self.credential_dir, self.trust_dir, deliver=True, trusted_egress=True,
+        )
+        self.egress_off = write_slotctl_config(
+            self.root / "egress-off.json", self.SLOT, self.vm_dir, self.credential_dir, self.trust_dir, deliver=False,
+            trusted_egress=True,
+        )
         self.system = FakeSystemctl()
         self.stderrs = []
 
@@ -2741,6 +2944,8 @@ class SlotctlTests(unittest.TestCase):
             ("extra", {"extra": 1}),
             ("bad-space", {"min_free_bytes": 0}),
             ("bad-expiry", {"expiry_minutes": True}),
+            ("false-egress", {"trusted_egress": False}),
+            ("string-egress", {"trusted_egress": "true"}),
         ):
             shapes[name] = self.root / f"{name}.json"
             shapes[name].write_text(json.dumps({"slots": {self.SLOT: {
@@ -2865,6 +3070,7 @@ class SlotctlTests(unittest.TestCase):
                 for args in (
                     ("observe",), ("check-space",), ("reset-failed",), ("stop-support", D.SUPPORT[0]),
                     *((verb, SLOT_RUN) for verb in ("stage", "start", "stop", "scrub", "deliver", "withdraw", "expire")),
+                    ("egress", "trusted", SLOT_RUN),
                 ):
                     with self.subTest(args=args):
                         self.assertEqual((1, b"", "slot-busy\n"), self.slotctl("--slot", self.SLOT, *args))
@@ -2897,6 +3103,8 @@ class SlotctlTests(unittest.TestCase):
             f"--slot {self.SLOT} check-space {SLOT_RUN}",
             f"--slot {self.SLOT} observe {TOKEN}", "x" * 2048,
             f"--slot {self.SLOT} expire {SLOT_RUN}",
+            f"--slot {self.SLOT} egress {SLOT_RUN}", f"--slot {self.SLOT} egress untrusted {SLOT_RUN}",
+            f"--slot {self.SLOT} egress trusted", f"--slot {self.SLOT} egress trusted none",
         ):
             with self.subTest(command=command[:100]):
                 self.assertEqual((2, "invalid-request\n"), forced(command))
@@ -2905,6 +3113,8 @@ class SlotctlTests(unittest.TestCase):
         self.assertEqual([(launcher, [launcher, "--slot", self.SLOT, "stage", SLOT_RUN])], commands)
         self.assertEqual((0, ""), forced(f"--slot {self.SLOT} check-space"))
         self.assertEqual((launcher, [launcher, "--slot", self.SLOT, "check-space"]), commands[-1])
+        self.assertEqual((0, ""), forced(f"--slot {self.SLOT} egress trusted {SLOT_RUN}"))
+        self.assertEqual((launcher, [launcher, "--slot", self.SLOT, "egress", "trusted", SLOT_RUN]), commands[-1])
 
     def test_named_verbs_refuse_delayed_commands_from_a_previous_run(self):
         next_run = SLOT_RUN[:-1] + "b"
@@ -2924,6 +3134,7 @@ class SlotctlTests(unittest.TestCase):
             with self.subTest(verb=verb):
                 self.assertEqual((1, b"", "run-mismatch\n"), self.slotctl(*args, verb, SLOT_RUN, payload=self.DELIVER))
         self.assertEqual((1, b"", "run-mismatch\n"), self.slotctl(*args, "scrub", "none"))
+        self.assertEqual((1, b"", "run-mismatch\n"), self.slotctl(*args, "egress", "trusted", SLOT_RUN, config=self.egress))
         self.assertEqual(calls, self.system.calls)
         self.assertEqual(next_run, marker.read_text())
         self.assertTrue((self.credential_dir / "runner-token").exists())
@@ -3147,6 +3358,89 @@ class SlotctlTests(unittest.TestCase):
         self.assertEqual((1, b"", "trust-dir-missing\n"), self.slotctl(*deliver, payload=self.DELIVER))
         self.assertEqual([], list(target.iterdir()))
 
+    def test_egress_needs_a_trusted_host_a_running_vm_and_delivered_credentials(self):
+        args = ("--slot", self.SLOT)
+        egress = (*args, "egress", "trusted", SLOT_RUN)
+        self.assertEqual(0, self.slotctl(*args, "stage", SLOT_RUN, payload=self.STAGE, config=self.egress)[0])
+        for argv in (
+            (*args, "egress", SLOT_RUN), (*args, "egress", "untrusted", SLOT_RUN), (*args, "egress", "trusted"),
+            (*args, "egress", "trusted", SLOT_RUN, SLOT_RUN), (*args, "egress", "trusted", "none"), (*args, "egress"),
+        ):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.REFUSED, self.slotctl(*argv, config=self.egress))
+        self.system.set(active="active")
+        # Gate off: a host without a second source refuses before looking at anything else.
+        self.assertEqual((1, b"", "no-trusted-egress\n"), self.slotctl(*egress))
+        self.assertEqual((1, b"", "no-trust-share\n"), self.slotctl(*egress, config=self.egress_off))
+        for state in (
+            {}, {"active": "failed"}, {"active": "activating", "pending": "71"},
+            {"active": "deactivating", "pending": "72"}, {"active": "active", "pending": "73"},
+        ):
+            with self.subTest(state=state):
+                self.system.set(**state)
+                self.assertEqual((1, b"", "vm-not-running\n"), self.slotctl(*egress, config=self.egress))
+        self.system.set(active="active")
+        self.assertEqual((1, b"", "egress-not-delivered\n"), self.slotctl(*egress, config=self.egress))
+        (self.trust_dir / "ci-signing-key").symlink_to(self.root / "elsewhere")
+        (self.trust_dir / "ncps-netrc").write_bytes(NETRC)
+        self.assertEqual((1, b"", "egress-not-delivered\n"), self.slotctl(*egress, config=self.egress))
+        self.assertEqual([], self.system.egress_calls("start"))
+        self.assertEqual(0, self.slotctl(*args, "withdraw", SLOT_RUN, config=self.egress)[0])
+        self.assertEqual(0, self.slotctl(*args, "deliver", SLOT_RUN, payload=self.DELIVER, config=self.egress)[0])
+        # The unit's exit status is the reason; only the fixed codes reach the dispatcher.
+        for code, status, show_fails in (
+            ("egress-address-conflict", "10", False), ("egress-address-missing", "11", False),
+            ("egress-failed", "1", False), ("egress-failed", "10", True),
+        ):
+            with self.subTest(code=code, status=status, show_fails=show_fails):
+                self.system.egress_exit, self.system.egress_show_fails = status, show_fails
+                self.assertEqual((1, b"", f"{code}\n"), self.slotctl(*egress, config=self.egress))
+                self.assertFalse(self.system.egress_active)
+        # A start that never ran ExecStart (a failed dependency, a start limit) leaves the last run's 10 in
+        # place: that is not this run's conflict.
+        self.system.egress_exit, self.system.egress_show_fails = "10", False
+        self.assertEqual((1, b"", "egress-address-conflict\n"), self.slotctl(*egress, config=self.egress))
+        self.system.egress_runs = False
+        self.assertEqual((1, b"", "egress-failed\n"), self.slotctl(*egress, config=self.egress))
+        self.system.egress_runs = True
+        self.system.egress_exit = "0"
+        self.assertEqual((0, b"", ""), self.slotctl(*egress, config=self.egress))
+        self.assertTrue(self.system.egress_active)
+        self.assertEqual([SYSTEMCTL, "--system", "--no-pager", "--job-mode=fail", "start", EGRESS], list(self.system.egress_calls("start")[-1]))
+
+    def test_withdraw_and_scrub_run_the_egress_cleanup_and_refuse_while_it_fails(self):
+        args = ("--slot", self.SLOT)
+        marker = self.credential_dir.parent / f"{self.SLOT}.run"
+        self.assertEqual(0, self.slotctl(*args, "stage", SLOT_RUN, payload=self.STAGE, config=self.egress)[0])
+        self.system.set(active="active")
+        self.assertEqual(0, self.slotctl(*args, "deliver", SLOT_RUN, payload=self.DELIVER, config=self.egress)[0])
+        self.assertEqual(0, self.slotctl(*args, "egress", "trusted", SLOT_RUN, config=self.egress)[0])
+        self.system.egress_cleanup_fails = True
+        self.assertEqual((1, b"", "egress-cleanup-failed\n"), self.slotctl(*args, "withdraw", SLOT_RUN, config=self.egress))
+        self.assertEqual([], list(self.trust_dir.iterdir()))  # The credentials go even so.
+        self.system.egress_cleanup_fails = False
+        self.assertEqual(0, self.slotctl(*args, "withdraw", SLOT_RUN, config=self.egress)[0])
+        self.assertFalse(self.system.egress_active)
+        self.assertEqual([SYSTEMCTL, "--system", "--no-pager", "--job-mode=fail", "start", CLEANUP], list(self.system.cleanups()[-1]))
+        # The cleanup may stop the unit (ExecStop and ExecStopPost, 25 s each) and then clean up inside its
+        # own 60 s TimeoutStartSec: slotctl must wait longer than that, within the remote sandbox's 95 s.
+        self.assertEqual({70}, set(self.system.cleanup_timeouts))
+        self.assertTrue(60 < S.CLEANUP_WAIT < 95)
+        # ExecStop failed and left something: scrub refuses and keeps the run marker, so nothing boots.
+        self.system.set()
+        self.system.egress_cleanup_fails = True
+        self.assertEqual((1, b"", "egress-cleanup-failed\n"), self.slotctl(*args, "scrub", SLOT_RUN, config=self.egress))
+        self.assertEqual(SLOT_RUN, marker.read_text())
+        self.assertFalse(self.trust_dir.exists())  # Files are scrubbed anyway.
+        self.system.egress_cleanup_fails = False
+        self.assertEqual(0, self.slotctl(*args, "scrub", SLOT_RUN, config=self.egress)[0])
+        self.assertFalse(marker.exists())
+        # Hosts without a second source never touch either unit (gate off).
+        before = len(self.system.calls)
+        self.assertEqual(0, self.slotctl(*args, "withdraw", "none")[0])
+        self.assertEqual(0, self.slotctl(*args, "scrub", "none")[0])
+        self.assertEqual([], [argv for argv in self.system.calls[before:] if argv[-1] in (EGRESS, CLEANUP)])
+
 
 class CommandSlotTests(unittest.TestCase):
     """HOM-32: the dispatcher's side of slotctl. Answers are checked as strictly as Forgejo's."""
@@ -3285,6 +3579,34 @@ class CommandSlotTests(unittest.TestCase):
         with self.assertRaisesRegex(D.ApiError, "invalid runner token"):
             slot.stage(SLOT_RUN, uuid_for(100), "bad token", "opaque/attempt-1", PILOT_URL, LABEL)
         self.assertEqual([], calls)
+
+    def test_egress_argv_and_its_refusals(self):
+        slot, calls = self.call()
+        slot.egress_trusted(SLOT_RUN)
+        argv, options = calls[0]
+        self.assertEqual(("/nix/store/x-slotctl", "--slot", D.SLOT, "--hold-fd", "9", "egress", "trusted", SLOT_RUN), argv)
+        self.assertEqual(b"", options["input"])
+        for code, message in (
+            ("egress-address-conflict", "another host answers ARP for the trusted egress address; the slot host won't take it"),
+            ("egress-address-missing", "the trusted egress address is not on the slot host's uplink (dropped on a conflict?)"),
+        ):
+            with self.subTest(code=code):
+                slot, _ = self.call(code=1, stderr=code.encode() + b"\n")
+                with self.assertRaises(D.EgressRefused) as raised:
+                    slot.egress_trusted(SLOT_RUN)
+                self.assertEqual(message, str(raised.exception))
+        for code in ("egress-failed", "egress-not-delivered", "vm-not-running", "systemctl-failed", "no-trusted-egress"):
+            with self.subTest(code=code):
+                slot, _ = self.call(code=1, stderr=code.encode() + b"\n")
+                with self.assertRaises(D.SlotError) as raised:
+                    slot.egress_trusted(SLOT_RUN)
+                self.assertNotIsInstance(raised.exception, D.EgressRefused)
+        remote = []
+        D.CommandSlot(
+            ("/nix/store/x-ssh-slotctl",), lambda argv, **_: remote.append(argv) or subprocess.CompletedProcess(argv, 0, b"", b""),
+            lock_fd=9, remote=True,
+        ).egress_trusted(SLOT_RUN)
+        self.assertEqual([("/nix/store/x-ssh-slotctl", f"--slot {D.SLOT} egress trusted {SLOT_RUN}")], remote)
 
 
 class SharedConstantsTests(unittest.TestCase):

@@ -3,7 +3,9 @@
 
 Every boot is untrusted. With --trusted-jobs, a picked-up job in a pool's trust allowlist is mapped exactly:
 job task_id -> repository task -> run_number -> run. Only then can the dispatcher deliver the CI signing key
-and ncps netrc to the slot's root-only trust share. Any doubt means nothing is delivered.
+and ncps netrc to the slot's root-only trust share. Any doubt means nothing is delivered. With --trusted-egress,
+only after a successful delivery, the slot host also moves the run's HTTPS to the guard onto its second SNAT
+source (slotctl `egress trusted`); withdraw, scrub and the VM's stop end it.
 
 The dispatcher only decides. Every slot side effect (systemd units, staged credentials, disk images, the trust
 share) goes through slotctl (--slotctl, _forgejo-slotctl.py), one validated verb per call.
@@ -174,6 +176,10 @@ class SlotError(Exception):
 
 class StartRefused(SlotError):
     """slotctl explicitly refused before asking systemd to queue a start."""
+
+
+class EgressRefused(SlotError):
+    """The slot host will not use its trusted source for this run (it may belong to another host)."""
 
 
 class StateError(Exception):
@@ -745,12 +751,14 @@ class CommandSlot:
     codes are mapped to log messages; slotctl's text is never logged. SSH pipes are bounded by run_ssh.
     """
 
-    TIMEOUTS = {"observe": 80}  # Seven systemctl calls of at most 10 s each.
+    # observe: seven systemctl calls of at most 10 s each. scrub and withdraw may wait up to 70 s for the
+    # trusted egress cleanup unit.
+    TIMEOUTS = {"observe": 80, "scrub": 90, "withdraw": 90}
     MAX_CODE = 64
     # The systemctl action behind each verb, for the "systemctl-failed" message.
     ACTIONS = {
         "observe": "show", "start": "start", "stop": "stop", "reset-failed": "reset-failed",
-        "stop-support": "stop", "scrub": "show", "deliver": "show",
+        "stop-support": "stop", "scrub": "show", "deliver": "show", "egress": "start",
     }
     REFUSALS = {
         "watchdog-arm-failed": "could not arm the slot watchdog; no VM start was submitted",
@@ -773,7 +781,15 @@ class CommandSlot:
         "run-exists": "a slot run is already staged; refusing to replace it",
         "run-marker": "cannot read or update the slot run marker",
         "remote-launch": "cannot launch the sandboxed slotctl verb",
+        "no-trusted-egress": "this slot host has no trusted egress source; check egress.trusted on both ends",
+        "egress-not-delivered": "CI credentials are not in the trust share; not using the trusted egress source",
+        "egress-address-conflict": "another host answers ARP for the trusted egress address; the slot host won't take it",
+        "egress-address-missing": "the trusted egress address is not on the slot host's uplink (dropped on a conflict?)",
+        "egress-failed": "cannot start trusted egress; check the slot host's egress unit",
+        "egress-cleanup-failed": "trusted egress left a NAT rule or flow the cleanup could not remove; refusing slot reuse",
     }
+    # Refusals that hold for the rest of a run: retrying would only probe the address again.
+    EGRESS_REFUSALS = frozenset((b"egress-address-conflict", b"egress-address-missing"))
     # These gates run before VM start submission. A generic systemctl
     # failure, by contrast, can mean the reply to a queued start was lost.
     START_REFUSALS = frozenset((
@@ -815,6 +831,8 @@ class CommandSlot:
             message = self._refusal(verb, result.stderr)
             if message is not None and verb == "start" and result.stderr.removesuffix(b"\n") in self.START_REFUSALS:
                 raise StartRefused(message)
+            if message is not None and verb == "egress" and result.stderr.removesuffix(b"\n") in self.EGRESS_REFUSALS:
+                raise EgressRefused(message)
             raise SlotError(message or f"slotctl {verb} refused for {SLOT}; reconciling unit state")
         if verb == "start" and result.returncode == 2 and result.stderr == b"invalid-request\n":
             raise StartRefused(f"slotctl start rejected the request for {SLOT} before submission")
@@ -883,7 +901,11 @@ class CommandSlot:
         self._call("deliver", run, payload={name: base64.b64encode(secrets[name]).decode("ascii") for name in TRUST_FILES})
 
     def withdraw(self, run):
+        """Also stops the slot's trusted egress, if its host has one."""
         self._call("withdraw", run if run is not None else NO_RUN)
+
+    def egress_trusted(self, run):
+        self._call("egress", "trusted", run)
 
 
 
@@ -1156,11 +1178,15 @@ class Trust:
 class Queue:
     """One pool's API and durable registration lifecycle on this slot."""
 
-    def __init__(self, api, slot, store, claims, monotonic=time.monotonic, wall=time.time, *, vm_deadline, untrusted_limit, trust=None):
+    def __init__(self, api, slot, store, claims, monotonic=time.monotonic, wall=time.time, *, vm_deadline, untrusted_limit, trust=None, trusted_egress=False):
         self.api, self.slot, self.store = api, slot, store
         self.pool = api.pool
         self.monotonic, self.wall = monotonic, wall
         self.trust = trust
+        # The slot host has a second SNAT source (_ci-slots.nix egress.trusted). Used only
+        # after a successful deliver, so never with trusted jobs off.
+        self.trusted_egress = trusted_egress
+        self.egress = None  # {"name", "state": open|refused|pending, "error"} for the active run
         self.vm_deadline = vm_deadline
         self.untrusted_limit = untrusted_limit  # From first observed pickup; persisted across restarts.
         self.claims = claims
@@ -1312,6 +1338,7 @@ class Queue:
             self._log("scrubbing idle slot with unknown run marker")
         self.slot.scrub(snapshot.run)
         self.verdict = None
+        self.egress = None
         if result == "success":
             self.reset_pending = False
         else:
@@ -1493,6 +1520,8 @@ class Queue:
         if self.verdict is None or self.verdict["name"] != active["name"]:
             self.verdict = {"name": active["name"], "state": "pending", "since": None}
         verdict = self.verdict
+        if verdict["state"] == "delivered":
+            self._open_egress(active["name"])  # Retries a pending egress on later polls.
         if verdict["state"] != "pending":
             return
         repo_id = job["repo_id"]
@@ -1555,6 +1584,32 @@ class Queue:
         self.store.save(active=active)
         verdict["state"] = "delivered"
         self._log(f"trusted: run #{run['index_in_repo']} ({run['trigger_event']}); delivered CI upload credentials")
+        self._open_egress(active["name"])
+
+    def _open_egress(self, name):
+        """Move a delivered run to the slot host's trusted source. Withdraw, scrub and the VM's stop end it.
+
+        Only reached after a successful deliver, which needs trusted jobs on. A failure leaves the run on the
+        untrusted source: it keeps its credentials but can reach only the forges and ncps.
+        """
+        if not self.trusted_egress or self.trust is None:
+            return
+        egress = self.egress if self.egress is not None and self.egress["name"] == name else None
+        if egress is not None and egress["state"] in ("open", "refused"):
+            return
+        try:
+            self.slot.egress_trusted(name)
+        except EgressRefused as error:
+            self.egress = {"name": name, "state": "refused", "error": str(error)}
+            self._log(f"trusted egress refused for this run: {error}; it stays on the untrusted source")
+            return
+        except SlotError as error:
+            if egress is None or egress["error"] != str(error):
+                self._log(f"trusted egress pending: {error}")
+            self.egress = {"name": name, "state": "pending", "error": str(error)}
+            return
+        self.egress = {"name": name, "state": "open", "error": None}
+        self._log("trusted egress: the run now leaves from the slot host's trusted source")
 
     def _defer(self, verdict, message, error):
         if self.monotonic() - verdict["since"] >= TRUST_DEADLINE:
@@ -1885,6 +1940,7 @@ def parse_arguments(argv=None):
     parser.add_argument("--pause-file", type=Path, default=PAUSE_FILE)
     parser.add_argument("--host-pause-file", type=Path, default=HOST_PAUSE_FILE)
     parser.add_argument("--trusted-jobs", action="store_true", help="deliver CI upload credentials to trusted runs")
+    parser.add_argument("--trusted-egress", action="store_true", help="move delivered runs to the slot host's trusted source")
     args = parser.parse_args(argv)
     if not positive(args.vm_deadline):
         parser.error("--vm-deadline must be positive")
@@ -1948,6 +2004,7 @@ def main():
                     Forgejo(pool, credentials / f"forgejo-pat-{pool.forge}" if credentials is not None else None),
                     slot, Store(args.state_dir, pool.state_file), Claims(CLAIM_ROOT, states, pool),
                     vm_deadline=args.vm_deadline, untrusted_limit=args.untrusted_limit, trust=trust,
+                    trusted_egress=args.trusted_egress,
                 )
                 for pool in pools
             ]

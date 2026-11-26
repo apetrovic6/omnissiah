@@ -1,6 +1,6 @@
 # Caddy hosts for things that are not services of this machine: the NAS,
 # Proxmox, and the wildcard forwards to the cluster and to keksic.
-{
+args @ {
   self,
   lib,
   config,
@@ -8,6 +8,22 @@
   ...
 }: let
   inherit (self.lib) mkRevProxyVHost mkDomain;
+  # The slot inventory (modules/rites/_ci-slots.nix); fixtures pass their own.
+  slotHosts = builtins.attrValues (args.ciSlots or self.lib.ciSlots);
+  sources = kind: map (host: self.lib.lan.${host.egress.${kind}}) (builtins.filter (host: (host.egress.${kind} or null) != null) slotHosts);
+  trustedSources = sources "trusted";
+  guard = args.ciGuard or self.lib.ciGuard;
+  # Trusted runs only (README "Trusted slot egress"): the untrusted names
+  # plus Garage S3 (path style), Harbor and ntfy.
+  # Empty without trusted sources, so the snippet stays byte-identical.
+  trustedMatcher = lib.optionalString (trustedSources != []) (lib.concatMapStrings (line: "\n" + line) [
+    ""
+    "  @blockedEphemeralTrusted {"
+    "    remote_ip ${lib.concatStringsSep " " trustedSources}"
+    "    not host ${mkDomain "forge"} ncps.${config.noosphere.domain} forge.${config.noosphere.domain} s3.main.garage.${config.noosphere.domain} harbor.${config.noosphere.domain} ${mkDomain "ntfy"}"
+    "  }"
+    "  respond @blockedEphemeralTrusted 403"
+  ]);
 in {
   # TODO: Setup services so that they listen on localhost
 
@@ -27,6 +43,14 @@ in {
     }
   ];
 
+  # Slot guests reach only this host on the LAN (guard in _ci-slots.nix).
+  assertions = [
+    {
+      assertion = guard == config.networking.hostName;
+      message = "The nix-eph egress guard (_ci-slots.nix guard = \"${guard}\") must carry this Caddy guard; move it with the setting.";
+    }
+  ];
+
   services.imperium.caddy = {
     enable = true;
     openFirewall = true;
@@ -40,7 +64,8 @@ in {
     # Check the socket peer before any site handler can proxy or respond.
     globalConfig = "order invoke first";
     # @blockedEphemeral matches every nix-eph slot host's untrusted source
-    # address (modules/rites/_ci-slots.nix).
+    # address (modules/rites/_ci-slots.nix), @blockedEphemeralTrusted the
+    # trusted ones, if any.
     extraConfig = ''
       &(stygies-access) {
         @blocked {
@@ -51,10 +76,10 @@ in {
 
         # Protect the slot source even if Ryza is on a different generation.
         @blockedEphemeral {
-          remote_ip ${lib.concatMapStringsSep " " (host: self.lib.lan.${host.egress.untrusted}) (builtins.attrValues self.lib.ciSlots)}
+          remote_ip ${lib.concatStringsSep " " (sources "untrusted")}
           not host ${mkDomain "forge"} ncps.${config.noosphere.domain} forge.${config.noosphere.domain}
         }
-        respond @blockedEphemeral 403
+        respond @blockedEphemeral 403${trustedMatcher}
       }
     '';
   };
@@ -108,6 +133,29 @@ in {
         }
       '';
     };
+  };
+
+  # Garage S3 for trusted nix-eph runs (README "Trusted slot egress"). Four
+  # labels, so `*.noosphere.uk` (one label) never matched it; LAN clients
+  # resolve it straight to the VIP. Only the trusted slot sources may use
+  # this vhost: everyone else reaching Caddy here (LAN, Pangolin/VPN, the
+  # untrusted .249) gets 403, so S3 is not newly exposed through Cerberus.
+  services.caddy.virtualHosts."s3.main.garage.${config.noosphere.domain}" = lib.mkIf (trustedSources != []) {
+    extraConfig = ''
+      @notTrustedCI not remote_ip ${lib.concatStringsSep " " trustedSources}
+      respond @notTrustedCI 403
+      reverse_proxy https://${self.lib.vips.traefik} {
+        header_up Host {http.request.host}
+        transport http {
+          tls_server_name {http.request.host}
+        }
+      }
+      tls {
+        dns cloudflare {$CLOUDFLARE_API_TOKEN}
+        # As for *.noosphere.uk above.
+        resolvers 1.1.1.1 1.0.0.1
+      }
+    '';
   };
 
   # keksic.xyz is on a separate Cloudflare account — needs its own token.

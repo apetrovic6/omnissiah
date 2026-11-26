@@ -12,6 +12,12 @@ rec {
     cidr = "192.168.1.0/24";
     gateway = "192.168.1.1";
     ryza-eph = "192.168.1.249"; # Dedicated CI SNAT address, not a DNS host; keep free of DHCP leases.
+    # Ryza's second CI SNAT address, for trusted nix-eph runs only (HOM-32;
+    # `egress.trusted` in modules/rites/_ci-slots.nix). Not a DNS host. From
+    # the block .240-.247 kept for slot SNAT sources (.243 is keksic). The
+    # router's DHCP pool can't be checked, so Ryza probes for a duplicate
+    # before using it, and the pool should exclude the block.
+    ryza-eph-trusted = "192.168.1.240";
     # The LAN's resolvers: Blocky on each, identical configs
     # (modules/rites/blocky.nix), the only resolvers that know the
     # split-horizon names. On three independent machines (cerberus and ryza

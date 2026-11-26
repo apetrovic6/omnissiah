@@ -14,7 +14,7 @@
   config,
   ...
 }: let
-  inherit (config.services.imperium.forgejoEphemeral) egressAddress enable;
+  inherit (config.services.imperium.forgejoEphemeral) egressAddress egressTrustedAddress enable;
 in {
   networking.networkmanager.enable = lib.mkForce false;
   networking.useDHCP = lib.mkForce false;
@@ -28,6 +28,23 @@ in {
       ["${self.lib.hosts.ryza}/24"]
       # The slots' dedicated SNAT source (modules/rites/_ci-slots.nix).
       ++ lib.optional (enable && egressAddress != null) "${egressAddress}/32";
+    # The trusted runs' second source. networkd probes it (RFC 5227, like
+    # `arping -D`) before it adds or re-adds it and drops it on a conflict,
+    # so it never takes an address another device holds. The egress unit
+    # probes again before each use (forgejo-runner-ephemeral.nix).
+    # A device answering late (asleep, 300 ms+) still loses to the default
+    # 200 ms window; 3 s catches it. While another device holds the address,
+    # networkd re-probes about twice a second and the link stays
+    # `configuring` (routes and the other addresses are up); it takes the
+    # address back as soon as that device goes quiet (README "Trusted slot
+    # egress"). Excluding .240-.247 from the router's DHCP is the real fix.
+    addresses = lib.optional (enable && egressTrustedAddress != null) {
+      Address = "${egressTrustedAddress}/32";
+      DuplicateAddressDetection = "ipv4";
+    };
+    networkConfig = lib.optionalAttrs (enable && egressTrustedAddress != null) {
+      IPv4DuplicateAddressDetectionTimeoutSec = "3s";
+    };
     gateway = [self.lib.lan.gateway];
     # The LAN's Blocky resolvers, the only ones that know the split-horizon
     # names (ncps.noosphere.uk must resolve to the LAN for substitution).
