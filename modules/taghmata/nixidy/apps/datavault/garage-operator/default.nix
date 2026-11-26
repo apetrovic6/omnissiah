@@ -2,13 +2,14 @@
   nixidy.envs.prod.apps.garage-operator = {
     charts,
     config,
+    lib,
     vars,
     ...
   }: let
     namespace = "garage-operator";
     domain = config.noosphere.domain;
 
-    cluster-main = import ./_cluster-main {inherit config namespace domain;};
+    cluster-main = import ./_cluster-main {inherit config lib namespace domain vars;};
     cluster-backup = import ./_cluster-backup {inherit config namespace domain;};
   in {
     imports = [

@@ -1,9 +1,30 @@
 {
   domain,
+  lib,
   namespace,
+  vars,
   ...
-}: {
+}: let
+  ciGenerator = "sccache-ci-garage-key";
+  ciImportSecret = "sccache-ci-s3-import";
+  hasCiKey = builtins.pathExists (vars.shared ciGenerator ciGenerator);
+
+  sccacheLifecycle = [
+    {
+      # sccache only writes objects it later reads back; without expiry the
+      # caches only grow. Expiry counts from upload, not from the last read.
+      id = "expire-after-7-days";
+      status = "Enabled";
+      expirationDays = 7;
+      # A killed build can leave multipart uploads that expiration does not
+      # cover and that still count against the quota.
+      abortIncompleteMultipartUploadDays = 7;
+    }
+  ];
+in {
   applications.garage-operator = {
+    sopsSecrets = lib.optional hasCiKey ciGenerator;
+
     resources.garageClusters.garage-main = {
       metadata = {inherit namespace;};
       spec = {
@@ -236,22 +257,24 @@
       # ArgoCD OutOfSync forever. A quantity string round-trips unchanged.
       quotas.maxSize = "250Gi";
 
-      lifecycle.rules = [
-        {
-          # sccache never deletes anything from S3 -- it only writes objects
-          # it later reads back -- so without expiry this bucket only grows.
-          # 7 days (the owner's call, 2026-11-15) caps it at about a week
-          # of churn. Expiry counts from upload, not last read, so even a
-          # hot entry is recompiled and re-uploaded once a week.
-          id = "expire-after-7-days";
-          status = "Enabled";
-          expirationDays = 7;
-          # Large objects go up as multipart uploads; a build killed mid-
-          # upload leaves parts behind that Expiration does not cover and
-          # that still count against the quota.
-          abortIncompleteMultipartUploadDays = 7;
-        }
-      ];
+      lifecycle.rules = sccacheLifecycle;
+    };
+  };
+
+  # The dispatcher is the only holder. Do not reconcile either object until
+  # SopsSecrets can supply the import, and never grant the workstation bucket.
+  garage.keys.sccache-ci = lib.mkIf hasCiKey {
+    cluster = "main";
+    buckets = ["sccache-ci"];
+    permissions = {
+      read = true;
+      write = true;
+    };
+    owner = false;
+    importSecret = ciImportSecret;
+    bucketSpec.sccache-ci = {
+      quotas.maxSize = "150Gi";
+      lifecycle.rules = sccacheLifecycle;
     };
   };
 }

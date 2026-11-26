@@ -43,6 +43,25 @@
         description = "Further GarageBucket spec per bucket, such as quotas or lifecycle rules.";
       };
 
+      permissions = mkOption {
+        type = types.submodule {
+          options = {
+            read = mkOption {
+              type = types.bool;
+              default = true;
+              description = "Whether this key can read objects in its buckets.";
+            };
+            write = mkOption {
+              type = types.bool;
+              default = true;
+              description = "Whether this key can write objects in its buckets.";
+            };
+          };
+        };
+        default = {};
+        description = "Object access granted to this key on each of its listed buckets.";
+      };
+
       owner = mkOption {
         type = types.bool;
         default = true;
@@ -111,8 +130,7 @@ in {
             bucketPermissions =
               map (bucket: {
                 bucketRef.name = bucket;
-                read = true;
-                write = true;
+                inherit (key.permissions) read write;
                 inherit (key) owner;
               })
               key.buckets;

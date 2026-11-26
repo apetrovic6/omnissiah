@@ -5,6 +5,7 @@
     config,
     lib,
     options,
+    pkgs,
     ...
   }: let
     inherit (config.networking) hostName;
@@ -58,6 +59,15 @@
       (lib.mkIf (fleet.remote && dispatches) (lib.optionalAttrs (options.services.imperium ? forgejoRunner) {
         services.imperium.forgejoRunner.enable = lib.mkForce false;
       }))
+      (lib.mkIf (fleet.remote && dispatches) {
+        # Provision independently of trustedJobs; PR 9 does not consume it.
+        clan.core.vars.generators.sccache-ci-garage-key = import ./_sccache-garage-key.nix {
+          inherit lib pkgs;
+          ageKey = config.noosphere.agePublicKey;
+          generatorName = "sccache-ci-garage-key";
+          importSecret = "sccache-ci-s3-import";
+        };
+      })
       (lib.mkIf dispatches {
         services.imperium.forgejoEphemeral.pools = {
           ugalabugala = {

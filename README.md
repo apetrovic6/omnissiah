@@ -1629,6 +1629,10 @@ becomes the dispatcher. Cerberus's own runners stay off for good once
 role to Terra leaves `nix` on Luna and Sol only until PR 13. Generate its fresh PATs and its own
 `forgejo-slotctl-ssh` key (do not copy the old private key). If trust is
 already enabled, ensure the shared CI credentials can deploy there.
+If `sccache-ci` has been provisioned, add the new dispatcher as a recipient
+of the existing shared `sccache-ci-garage-key/credentials` with Clan vars
+fix; remove the old recipient after the move. Do not regenerate the key
+just to move the role: Garage imports the same shared value regardless of host.
 Pause and drain, stop the old dispatcher, and carry over each drained
 slot's root-owned state directory so queue identities and trust user pins
 are preserved. Pause the new host and deploy slot hosts first so they
@@ -2003,8 +2007,90 @@ it also means moving what that machine serves: the Caddy matchers and the
 S3 site (`machines/cerberus/proxy.nix`; evaluation fails if `guard` names
 another machine), the forge, the ncps relay, and the `*.noosphere.uk`
 relay to Harbor, plus ntfy. The slot SNAT addresses stay with their slot
-hosts. The dispatcher role (`dispatcher.host`, with the PAT vars and the
-slotctl SSH key) moves separately.
+hosts. The dispatcher role (`dispatcher.host`, with the PAT vars, slotctl
+SSH key and access to the shared `sccache-ci-garage-key`) moves separately.
+
+#### CI-only sccache bucket (HOM-32 PR 9, operator only)
+
+`sccache-ci` is a separate `garage-main` bucket with a 150 GiB quota,
+seven-day object expiry, and seven-day incomplete multipart upload abort.
+Its imported key has read and write on `sccache-ci` only, no bucket
+ownership and no access to the shared workstation `sccache` bucket.
+Nothing renders until the shared import var exists. This does not enable
+sccache for any slot; PR 10 is the consumer.
+
+1. Set `host` to `dispatcher.host` in `modules/rites/_ci-slots.nix`
+   (the remote dispatcher; currently `cerberus`). Generate and commit the
+   new shared var, including the encrypted credentials and SopsSecret:
+
+   ```sh
+   CLAN_NO_COMMIT=1 clan vars generate "$host" --generator sccache-ci-garage-key
+   git add -- vars/shared/sccache-ci-garage-key
+   git commit -m "chore(ci): provision the sccache-ci Garage key"
+   ```
+
+2. Render with `nix run .#render-prod`. Commit only
+   `GarageKey-sccache-ci.yaml`, `GarageBucket-sccache-ci.yaml`, and
+   `SopsSecret-sccache-ci-s3-import.yaml` from the `garage-operator`
+   manifest directory. Keep unrelated render drift out of this change.
+   Merge the var and manifest commits, then sync `garage-operator` in ArgoCD.
+3. Check reconciliation:
+
+   ```sh
+   kubectl -n garage-operator get garagekey sccache-ci -o json | jq '.status'
+   kubectl -n garage-operator get garagebucket sccache-ci -o json | jq '.status'
+   ```
+
+   Require current generations and Ready status on both. The key's
+   `.status.buckets` must contain only `sccache-ci` with read and write
+   enabled and owner false. The bucket's `.status.quotaUsage.sizeLimit`
+   must be `161061273600` (150 GiB) and its `.status.lifecycleRules` must
+   show `expire-after-7-days` enabled.
+4. On an authorized workstation, port-forward the Garage S3 API:
+
+   ```sh
+   kubectl -n garage-operator port-forward svc/garage-main 3900:3900
+   ```
+
+   In another terminal, set `host` to the same dispatcher as in step 1.
+   The probe reads that host's Clan var into a private temporary file, not
+   the workstation's `sccache` credentials. The test object expires on its own.
+
+   ```bash
+   (
+     set -euo pipefail
+     umask 077
+     tmp=$(mktemp -d)
+     trap 'rm -rf -- "$tmp"' EXIT
+     unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN
+     unset AWS_ROLE_ARN AWS_WEB_IDENTITY_TOKEN_FILE AWS_PROFILE AWS_DEFAULT_PROFILE
+     clan vars get "$host" sccache-ci-garage-key/credentials > "$tmp/credentials"
+     export AWS_SHARED_CREDENTIALS_FILE="$tmp/credentials" AWS_CONFIG_FILE="$tmp/config"
+     export AWS_EC2_METADATA_DISABLED=true
+     aws configure set s3.addressing_style path --profile default
+     s3() { aws --profile default --region main --endpoint-url http://127.0.0.1:3900 s3api "$@"; }
+     key="hom32-pr9-probe-$(basename "$tmp")"
+     printf 'sccache-ci probe\n' > "$tmp/input"
+     s3 put-object --bucket sccache-ci --key "$key" --body "$tmp/input"
+     s3 get-object --bucket sccache-ci --key "$key" "$tmp/output"
+     cmp "$tmp/input" "$tmp/output"
+
+     denied() {
+       if "$@" >"$tmp/denial" 2>&1; then
+         echo "Unexpectedly allowed: $*" >&2
+         return 1
+       fi
+       grep -F '(AccessDenied)' "$tmp/denial"
+     }
+     denied s3 get-object --bucket sccache --key "$key" "$tmp/forbidden"
+     denied s3 put-object --bucket sccache --key "$key" --body "$tmp/input"
+   )
+   ```
+
+**Rollback.** Before syncing, revert the provisioning commits. After
+sync, removing the manifests with prune on deletes the CI bucket and key.
+Stop any consumers first and confirm it is safe to discard the CI cache.
+The workstation bucket is not part of the rollback.
 
 ### Hermes on Cerberus Forgejo
 
