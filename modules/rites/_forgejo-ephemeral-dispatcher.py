@@ -751,7 +751,9 @@ class CommandSlot:
     codes are mapped to log messages; slotctl's text is never logged. SSH pipes are bounded by run_ssh.
     """
 
-    TIMEOUTS = {"observe": 80}  # Seven systemctl calls of at most 10 s each.
+    # observe: seven systemctl calls of at most 10 s each. scrub and withdraw may wait up to 70 s for the
+    # trusted egress cleanup unit.
+    TIMEOUTS = {"observe": 80, "scrub": 90, "withdraw": 90}
     MAX_CODE = 64
     # The systemctl action behind each verb, for the "systemctl-failed" message.
     ACTIONS = {
@@ -784,7 +786,7 @@ class CommandSlot:
         "egress-address-conflict": "another host answers ARP for the trusted egress address; the slot host won't take it",
         "egress-address-missing": "the trusted egress address is not on the slot host's uplink (dropped on a conflict?)",
         "egress-failed": "cannot start trusted egress; check the slot host's egress unit",
-        "egress-stop-failed": "cannot stop trusted egress; check the slot host's egress unit and NAT rules",
+        "egress-cleanup-failed": "trusted egress left a NAT rule or flow the cleanup could not remove; refusing slot reuse",
     }
     # Refusals that hold for the rest of a run: retrying would only probe the address again.
     EGRESS_REFUSALS = frozenset((b"egress-address-conflict", b"egress-address-missing"))

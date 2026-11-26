@@ -147,6 +147,7 @@ def run(index=7, **fields):
 SYSTEMCTL = "/test/systemctl"
 SYSTEMD_RUN = "/test/systemd-run"
 EGRESS = f"forgejo-ephemeral-trusted-egress@{D.SLOT}.service"
+CLEANUP = f"forgejo-ephemeral-trusted-egress-cleanup@{D.SLOT}.service"
 WATCHDOG = f"forgejo-slot-expiry-{D.SLOT}-{SLOT_RUN}"
 
 
@@ -404,12 +405,20 @@ class FakeSystemctl:
         # The trusted egress oneshot: its ExecMainStatus after a start ("0" succeeds), and whether it is up.
         self.egress_exit = "0"
         self.egress_active = False
-        self.egress_installed = True
-        self.egress_stop_fails = False
+        # Whether a failed start ran ExecStart; if not, show reports the previous run's status.
+        self.egress_runs = True
+        self.egress_exited = 0  # ExecMainExitTimestampMonotonic: advances when a main process exits
+        self.egress_result = "success"
+        self.egress_status = "0"
         self.egress_show_fails = False
+        # The root cleanup unit (withdraw, scrub) fails while a rule or flow is left.
+        self.egress_cleanup_fails = False
 
     def egress_calls(self, verb):
         return [argv for argv in self.calls if argv[-1] == EGRESS and verb in argv]
+
+    def cleanups(self):
+        return [argv for argv in self.calls if argv[-1] == CLEANUP]
 
     def set(self, unit=None, *, active="inactive", pending="", result="success", loaded="loaded"):
         self.states[unit or self.vm] = f"LoadState={loaded}\nActiveState={active}\nJob={pending}\nResult={result}\n".encode()
@@ -424,7 +433,7 @@ class FakeSystemctl:
             self.watchdogs.update((f"{stem}.timer", f"{stem}.service"))
             return subprocess.CompletedProcess(argv, 0, stdout=b"")
         assert argv[:3] == (SYSTEMCTL, "--system", "--no-pager")
-        if argv[-1] == EGRESS:
+        if argv[-1] in (EGRESS, CLEANUP):
             return self._egress(argv)
         if "show" in argv:
             assert "--all" in argv and "--property=LoadState,ActiveState,Job,Result" in argv
@@ -477,21 +486,25 @@ class FakeSystemctl:
 
     def _egress(self, argv):
         """Blocking start/stop of the oneshot, and the status slotctl reads after a failed start."""
-        if not self.egress_installed:
-            raise subprocess.CalledProcessError(5, argv)
-        if argv[3:] == ("--property=ExecMainStatus", "show", EGRESS):
+        if argv[3:] == ("--property=Result,ExecMainStatus,ExecMainExitTimestampMonotonic", "show", EGRESS):
             if self.egress_show_fails:
                 raise subprocess.CalledProcessError(1, argv)
-            return subprocess.CompletedProcess(argv, 0, stdout=f"ExecMainStatus={self.egress_exit}\n".encode())
-        if argv[3:] == ("--job-mode=fail", "start", EGRESS):
-            if self.egress_exit != "0":
+            text = f"Result={self.egress_result}\nExecMainStatus={self.egress_status}\nExecMainExitTimestampMonotonic={self.egress_exited}\n"
+            return subprocess.CompletedProcess(argv, 0, stdout=text.encode())
+        if argv[3:] == ("--job-mode=fail", "start", CLEANUP):
+            # Stops the unit, then removes what is left, unless it cannot.
+            self.egress_active = False
+            if self.egress_cleanup_fails:
                 raise subprocess.CalledProcessError(1, argv)
-            self.egress_active = True
+            self.egress_result = "success"
             return subprocess.CompletedProcess(argv, 0, stdout=b"")
-        assert argv[3:] == ("stop", EGRESS), argv
-        if self.egress_stop_fails:
+        assert argv[3:] == ("--job-mode=fail", "start", EGRESS), argv
+        if self.egress_exit != "0":
+            if self.egress_runs:
+                self.egress_exited += 1
+                self.egress_result, self.egress_status = "exit-code", self.egress_exit
             raise subprocess.CalledProcessError(1, argv)
-        self.egress_active = False
+        self.egress_active = True
         return subprocess.CompletedProcess(argv, 0, stdout=b"")
 
     def mutations(self, verb=None):
@@ -2620,14 +2633,39 @@ class TrustedJobTests(unittest.TestCase):
         self.tick(D.BUSY_POLL)
         self.assertEqual(1, self.verbs().count("egress"))  # Open for this run: never started again.
         self.assertEqual(1, len(self.system.egress_calls("start")))
-        # The VM's own stop ends it on the host (BindsTo); the idle scrub stops it again.
+        # The VM's own stop ends it on the host (BindsTo); the idle scrub runs the cleanup unit.
         self.system.set()
         self.system.egress_active = False
-        stops = len(self.system.egress_calls("stop"))
+        cleanups = len(self.system.cleanups())
         self.tick(D.POLL)
         self.assertFalse(self.trust_dir.exists())
-        self.assertEqual(stops + 1, len(self.system.egress_calls("stop")))
+        self.assertEqual(cleanups + 1, len(self.system.cleanups()))
         self.assertIsNone(self.dispatcher.local_queue.egress)
+
+    def test_a_failed_egress_cleanup_keeps_the_slot_from_booting_again(self):
+        """ExecStop failed and left a rule or flow the cleanup can't remove: no next job on this slot."""
+        self.build(egress=True)
+        self.boot()
+        self.pick_up()
+        self.assertTrue(self.system.egress_active)
+        self.system.egress_cleanup_fails = True
+        self.system.set()  # The trusted run ends.
+        self.tick(D.POLL)
+        self.assertIn(
+            "trusted egress left a NAT rule or flow the cleanup could not remove; refusing slot reuse", self.logs.getvalue(),
+        )
+        self.forge.jobs = [job(2, "opaque/attempt-2")]
+        for _ in range(3):
+            self.tick(D.POLL)
+        self.assertEqual([], [argv for argv in self.system.mutations("start") if argv[-1] == VM][1:])  # Only the first boot.
+        self.assertEqual(1, len([verb for verb in self.verbs() if verb == "stage"]))
+        self.assertGreaterEqual(len(self.system.cleanups()), 2)  # Retried every idle pass.
+        marker = self.credential_dir.parent / "ryza-eph-1.run"
+        first = marker.read_text()  # The first run's marker stays.
+        self.system.egress_cleanup_fails = False
+        self.tick(D.POLL)  # Clean again: the scrub finishes and the waiting job gets the slot.
+        self.assertEqual(2, len([verb for verb in self.verbs() if verb == "stage"]))
+        self.assertNotEqual(first, marker.read_text())
 
     def test_trusted_egress_is_never_used_with_trusted_jobs_off(self):
         self.build(trusted=False, egress=True)
@@ -2645,7 +2683,7 @@ class TrustedJobTests(unittest.TestCase):
         self.assertFalse(self.system.egress_active)
         # Withdraw (startup) and scrub still stop the unit: cleanup does not depend on trust.
         self.assertIn("withdraw", self.verbs())
-        self.assertNotEqual([], self.system.egress_calls("stop"))
+        self.assertNotEqual([], self.system.cleanups())
 
     def test_untrusted_runs_never_get_trusted_egress(self):
         self.build(egress=True)
@@ -3356,36 +3394,46 @@ class SlotctlTests(unittest.TestCase):
                 self.system.egress_exit, self.system.egress_show_fails = status, show_fails
                 self.assertEqual((1, b"", f"{code}\n"), self.slotctl(*egress, config=self.egress))
                 self.assertFalse(self.system.egress_active)
-        self.system.egress_exit, self.system.egress_show_fails = "0", False
+        # A start that never ran ExecStart (a failed dependency, a start limit) leaves the last run's 10 in
+        # place: that is not this run's conflict.
+        self.system.egress_exit, self.system.egress_show_fails = "10", False
+        self.assertEqual((1, b"", "egress-address-conflict\n"), self.slotctl(*egress, config=self.egress))
+        self.system.egress_runs = False
+        self.assertEqual((1, b"", "egress-failed\n"), self.slotctl(*egress, config=self.egress))
+        self.system.egress_runs = True
+        self.system.egress_exit = "0"
         self.assertEqual((0, b"", ""), self.slotctl(*egress, config=self.egress))
         self.assertTrue(self.system.egress_active)
         self.assertEqual([SYSTEMCTL, "--system", "--no-pager", "--job-mode=fail", "start", EGRESS], list(self.system.egress_calls("start")[-1]))
 
-    def test_withdraw_and_scrub_stop_trusted_egress_and_still_clean_up(self):
+    def test_withdraw_and_scrub_run_the_egress_cleanup_and_refuse_while_it_fails(self):
         args = ("--slot", self.SLOT)
+        marker = self.credential_dir.parent / f"{self.SLOT}.run"
         self.assertEqual(0, self.slotctl(*args, "stage", SLOT_RUN, payload=self.STAGE, config=self.egress)[0])
         self.system.set(active="active")
         self.assertEqual(0, self.slotctl(*args, "deliver", SLOT_RUN, payload=self.DELIVER, config=self.egress)[0])
         self.assertEqual(0, self.slotctl(*args, "egress", "trusted", SLOT_RUN, config=self.egress)[0])
-        self.system.egress_stop_fails = True
-        self.assertEqual((1, b"", "egress-stop-failed\n"), self.slotctl(*args, "withdraw", SLOT_RUN, config=self.egress))
+        self.system.egress_cleanup_fails = True
+        self.assertEqual((1, b"", "egress-cleanup-failed\n"), self.slotctl(*args, "withdraw", SLOT_RUN, config=self.egress))
         self.assertEqual([], list(self.trust_dir.iterdir()))  # The credentials go even so.
-        self.system.egress_stop_fails = False
+        self.system.egress_cleanup_fails = False
         self.assertEqual(0, self.slotctl(*args, "withdraw", SLOT_RUN, config=self.egress)[0])
         self.assertFalse(self.system.egress_active)
-        self.assertEqual([SYSTEMCTL, "--system", "--no-pager", "stop", EGRESS], list(self.system.egress_calls("stop")[-1]))
-        self.system.egress_active = True  # A stray start: the idle scrub must not leave it up.
+        self.assertEqual([SYSTEMCTL, "--system", "--no-pager", "--job-mode=fail", "start", CLEANUP], list(self.system.cleanups()[-1]))
+        # ExecStop failed and left something: scrub refuses and keeps the run marker, so nothing boots.
         self.system.set()
+        self.system.egress_cleanup_fails = True
+        self.assertEqual((1, b"", "egress-cleanup-failed\n"), self.slotctl(*args, "scrub", SLOT_RUN, config=self.egress))
+        self.assertEqual(SLOT_RUN, marker.read_text())
+        self.assertFalse(self.trust_dir.exists())  # Files are scrubbed anyway.
+        self.system.egress_cleanup_fails = False
         self.assertEqual(0, self.slotctl(*args, "scrub", SLOT_RUN, config=self.egress)[0])
-        self.assertFalse(self.system.egress_active)
-        self.assertFalse(self.trust_dir.exists())
-        # A missing unit is stopped (systemctl exit 5); hosts without a second source never touch it.
-        self.system.egress_installed = False
-        self.assertEqual(0, self.slotctl(*args, "withdraw", "none", config=self.egress)[0])
+        self.assertFalse(marker.exists())
+        # Hosts without a second source never touch either unit (gate off).
         before = len(self.system.calls)
         self.assertEqual(0, self.slotctl(*args, "withdraw", "none")[0])
         self.assertEqual(0, self.slotctl(*args, "scrub", "none")[0])
-        self.assertEqual([], [argv for argv in self.system.calls[before:] if argv[-1] == EGRESS])
+        self.assertEqual([], [argv for argv in self.system.calls[before:] if argv[-1] in (EGRESS, CLEANUP)])
 
 
 class CommandSlotTests(unittest.TestCase):

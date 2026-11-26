@@ -67,6 +67,27 @@
             egressUnit = sc.systemd.services.${egressName} or null;
             egressRule = "POSTROUTING -s 10.99.2.2/32 -d ${self.lib.hosts.cerberus}/32 -p tcp --dport 443 -o ens18 -j SNAT --to-source ${self.lib.lan.ryza-eph-trusted}";
             vmPre = sc.systemd.services."microvm@ryza-eph-1".serviceConfig.ExecStartPre;
+            # Every name a guest pins must be a site on the guard, with Caddy's
+            # one-label wildcards: `*.noosphere.uk` never serves s3.main.garage.….
+            vhosts = guard.services.caddy.virtualHosts;
+            siteNames = builtins.filter (name: name != "") (lib.concatMap (name:
+              map (address: let
+                bare = lib.removePrefix "https://" (lib.removePrefix "http://" address);
+              in
+                builtins.replaceStrings ["{$LAB_DOMAIN}"] ["ugalabugala.org"] (builtins.head (lib.splitString ":" bare)))
+              (lib.splitString " " (builtins.replaceStrings [","] [" "] name)))
+            (builtins.attrNames vhosts));
+            served = pin:
+              lib.any (site: let
+                rest = lib.removePrefix "*" site;
+                label = lib.removeSuffix rest pin;
+              in
+                site
+                == pin
+                || (lib.hasPrefix "*." site && lib.hasSuffix rest pin && label != "" && !(lib.hasInfix "." label)))
+              siteNames;
+            s3Site = vhosts."s3.main.garage.noosphere.uk" or null;
+            egressInternal = internal.egress.ryza-eph-1;
             client = self.nixosConfigurations.${host}.extendModules {
               inherit specialArgs;
               # Unenrolled Clan vars otherwise report /no-such-path. Use the
@@ -183,6 +204,16 @@
             assert guest.networking.hosts.${self.lib.hosts.cerberus} == pins ++ lib.optionals egressOn trustedPins;
             assert lib.sort builtins.lessThan caddyNames == lib.sort builtins.lessThan (pins ++ trustedPins);
             assert lib.any (lib.hasInfix "trusted-egress-preflight") vmPre == egressOn;
+            assert lib.all served (pins ++ lib.optionals egressOn trustedPins);
+            # S3 on the guard only with trusted egress, and only for the trusted sources.
+            assert (s3Site != null) == egressOn;
+            assert !egressOn
+            || (lib.hasPrefix "invoke stygies-access\n" s3Site.extraConfig
+              && lib.hasInfix "@notTrustedCI not remote_ip ${self.lib.lan.ryza-eph-trusted}\nrespond @notTrustedCI 403\nreverse_proxy https://${self.lib.vips.traefik} {" s3Site.extraConfig
+              && lib.hasInfix "tls_server_name {http.request.host}" s3Site.extraConfig);
+            assert (sc.systemd.services ? "forgejo-ephemeral-trusted-egress-cleanup@ryza-eph-1") == egressOn;
+            assert builtins.elem "conntrack-tools" (map (p: p.pname or "") sc.environment.systemPackages) == egressOn;
+            assert (sc.systemd.network.networks."10-lan".networkConfig ? IPv4DuplicateAddressDetectionTimeoutSec) == egressOn;
             assert !egressOn
             || (egressUnit.bindsTo
               == ["microvm@ryza-eph-1.service"]
@@ -191,24 +222,28 @@
               && egressUnit.after == ["microvm@ryza-eph-1.service" "forgejo-ephemeral-firewall.service"]
               && egressUnit.wantedBy == []
               && egressUnit.requiredBy == []
-              && egressUnit.serviceConfig.Type == "oneshot"
-              && egressUnit.serviceConfig.RemainAfterExit
-              && internal.egress.ryza-eph-1
-              == {
-                unit = egressName;
-                rule = egressRule;
-              }); {
+              && egressUnit.serviceConfig.Type == "notify"
+              && egressUnit.serviceConfig.NotifyAccess == "all"
+              && egressUnit.serviceConfig.ExecStopPost == egressUnit.serviceConfig.ExecStop
+              && egressInternal.unit == egressName
+              && egressInternal.cleanupUnit == "forgejo-ephemeral-trusted-egress-cleanup@ryza-eph-1"
+              && egressInternal.rule == egressRule
+              && lib.hasInfix "trusted-egress-preflight" (lib.last vmPre)); {
               inherit address wrapper egressOn;
               rule = egressRule;
               launcher = internal.remoteActions.ryza-eph-1;
               inherit (internal) forcedCommand;
-              egress = lib.optionalAttrs egressOn {
-                inherit (egressUnit.serviceConfig) ExecStart ExecReload ExecStop;
-                preflight = lib.findFirst (lib.hasInfix "trusted-egress-preflight") null vmPre;
+              egress = lib.optionalAttrs egressOn egressInternal.scripts;
+              tools = {
+                iptables = lib.getExe' sc.networking.firewall.package "iptables";
+                conntrack = lib.getExe' server.pkgs.conntrack-tools "conntrack";
+                ip = lib.getExe' server.pkgs.iproute2 "ip";
+                arping = lib.getExe' server.pkgs.iputils "arping";
+                systemctl = lib.getExe' server.pkgs.systemd "systemctl";
+                notify = lib.getExe' server.pkgs.systemd "systemd-notify";
               };
               ssh = lib.getExe' client.pkgs.openssh "ssh";
               systemdRun = lib.getExe' server.pkgs.systemd "systemd-run";
-              systemctl = lib.getExe' server.pkgs.systemd "systemctl";
             };
           cutover =
             ciDispatcher
@@ -227,22 +262,47 @@
           egressMoved = fixture (cutover // {host = "terra";}) egressSlots;
           egressRun = "eph-${lib.fixedWidthString 12 "0" "0"}-ryza-${lib.fixedWidthString 32 "a" "a"}";
           inherit (default) ssh;
-          # Stand-ins on PATH for the egress unit's tools: they log their
-          # arguments and keep one NAT rule's presence in a file.
+          # Stand-ins for the egress scripts' tools, substituted for their
+          # store paths. iptables keeps the NAT rules in a file, one per line
+          # as -I stored them; conntrack keeps flows in another.
           fakeTools = pkgs.runCommand "trusted-egress-fake-tools" {} ''
             mkdir -p "$out/bin"
             cat > "$out/bin/iptables" <<'EOF'
             #!${pkgs.runtimeShell}
             printf 'iptables %s\n' "$*" >> "$EGRESS_LOG"
-            case "$4" in
-              -C) [[ -e "$EGRESS_STATE" ]] ;;
-              -I) touch "$EGRESS_STATE" ;;
-              -D) rm "$EGRESS_STATE" ;;
+            [[ "$1 $2 $3 $4" == "-w 5 -t nat" ]] || exit 2
+            op=$5
+            shift 5
+            case "$op" in
+              -C)
+                [[ -z "''${EGRESS_CHECK_FAILS:-}" ]] || exit 4
+                grep -qxF -- "$*" "$EGRESS_RULES"
+                ;;
+              -I)
+                chain=$1
+                shift 2
+                printf '%s\n' "$chain $*" >> "$EGRESS_RULES"
+                ;;
+              -D)
+                [[ -z "''${EGRESS_DELETE_FAILS:-}" ]] || exit 4
+                line=$(grep -nxF -- "$*" "$EGRESS_RULES" | head -n 1 | cut -d: -f1)
+                [[ -n "$line" ]] || exit 1
+                sed -i "''${line}d" "$EGRESS_RULES"
+                ;;
+              -S)
+                echo "-P POSTROUTING ACCEPT"
+                sed 's/^/-A /' "$EGRESS_RULES"
+                ;;
               *) exit 2 ;;
             esac
             EOF
             cat > "$out/bin/ip" <<'EOF'
             #!${pkgs.runtimeShell}
+            if [[ "$*" == *monitor* ]]; then
+              # Not logged: it runs beside the script.
+              [[ -z "''${EGRESS_MONITOR:-}" ]] || printf '%s\n' "$EGRESS_MONITOR"
+              exit 0
+            fi
             printf 'ip %s\n' "$*" >> "$EGRESS_LOG"
             [[ -n "''${EGRESS_NO_ADDRESS:-}" ]] || echo "2: ens18    inet ${self.lib.lan.ryza-eph-trusted}/32 scope global ens18"
             EOF
@@ -254,15 +314,30 @@
             cat > "$out/bin/conntrack" <<'EOF'
             #!${pkgs.runtimeShell}
             printf 'conntrack %s\n' "$*" >> "$EGRESS_LOG"
-            exit 1
+            case "$1" in
+              -D)
+                [[ -n "''${EGRESS_FLUSH_FAILS:-}" ]] || rm -f "$EGRESS_FLOWS"
+                exit 1
+                ;;
+              -L)
+                [[ -z "''${EGRESS_LIST_FAILS:-}" ]] || exit 1
+                [[ ! -e "$EGRESS_FLOWS" ]] || cat "$EGRESS_FLOWS"
+                ;;
+            esac
             EOF
             cat > "$out/bin/systemctl" <<'EOF'
             #!${pkgs.runtimeShell}
-            case "$2" in
-              --property=ActiveState) echo "''${EGRESS_UNIT_STATE:-inactive}" ;;
-              --property=Job) echo "''${EGRESS_UNIT_JOB:-}" ;;
+            printf 'systemctl %s\n' "$*" >> "$EGRESS_LOG"
+            case "$1 $2" in
+              "show --property=ActiveState") echo "''${EGRESS_UNIT_STATE:-inactive}" ;;
+              "show --property=Job") echo "''${EGRESS_UNIT_JOB:-}" ;;
+              "stop "* | "reset-failed "*) ;;
               *) exit 2 ;;
             esac
+            EOF
+            cat > "$out/bin/notify" <<'EOF'
+            #!${pkgs.runtimeShell}
+            printf 'notify %s\n' "$*" >> "$EGRESS_LOG"
             EOF
             cat > "$out/bin/launcher" <<'EOF'
             #!${pkgs.runtimeShell}
@@ -270,6 +345,16 @@
             EOF
             chmod +x "$out"/bin/*
           '';
+          # The guard moved to Terra: guests' DNS, pins, filter exceptions and
+          # the trusted rule follow; Cerberus's Caddy guard then refuses to evaluate.
+          guardArgs = {
+            ciDispatcher = cutover;
+            ciSlots = egressSlots;
+            ciGuard = "terra";
+          };
+          movedGuard = (ryza.extendModules {specialArgs = guardArgs;}).config;
+          movedGuest = movedGuard.microvm.vms.ryza-eph-1.config.config;
+          movedCerberus = (cerberus.extendModules {specialArgs = guardArgs;}).config;
           # Change only the executable in a throwaway copy of the deployed
           # wrapper. -G runs OpenSSH's real parser without connecting.
           offlineSsh = pkgs.writeShellScript "slotctl-ssh-offline" ''
@@ -289,6 +374,11 @@
           assert trusted.wrapper == default.wrapper;
           assert egress.wrapper == default.wrapper && egress.egressOn && egressTrusted.egressOn && egressMoved.egressOn;
           assert !(default.egressOn || moved.egressOn || trusted.egressOn);
+          assert movedGuest.systemd.network.networks."10-uplink".dns == [self.lib.hosts.terra];
+          assert movedGuest.networking.hosts ? ${self.lib.hosts.terra} && !(movedGuest.networking.hosts ? ${self.lib.hosts.cerberus});
+          assert lib.hasInfix " -d ${self.lib.hosts.terra}/32 " movedGuard.services.imperium.forgejoEphemeral.internal.egress.ryza-eph-1.rule;
+          assert lib.hasInfix "-d ${self.lib.hosts.terra} -p udp --dport 53 -j ACCEPT" movedGuard.systemd.services.forgejo-ephemeral-firewall.script;
+          assert lib.any (check: !check.assertion && lib.hasPrefix ''The nix-eph egress guard (_ci-slots.nix guard = "terra")'' check.message) movedCerberus.assertions;
             pkgs.runCommand "forgejo-ephemeral-ssh" {} ''
               export CREDENTIALS_DIRECTORY="$TMPDIR/credentials"
               export RUNTIME_DIRECTORY="$TMPDIR/runtime"
@@ -338,58 +428,129 @@
                 done
               '') [default egress]}
 
-              # The egress unit's real scripts against logging stand-ins: the exact
-              # DAD probe, NAT rule, its delete and the conntrack flush.
-              export PATH="${fakeTools}/bin:$PATH" EGRESS_LOG="$TMPDIR/egress.log" EGRESS_STATE="$TMPDIR/egress.rule"
-              rule='${lib.removePrefix "POSTROUTING " egress.rule}'
-              ${egress.egress.ExecStart}
-              ${egress.egress.ExecReload}
-              ${egress.egress.ExecStop}
+              # The egress unit's real scripts, their tools replaced by logging
+              # stand-ins: the exact DAD probe, NAT rule, deletes and flushes.
+              tool() {
+                substitute "$1" "$2" \
+                  --replace-fail ${egress.tools.iptables} ${fakeTools}/bin/iptables \
+                  --replace-fail ${egress.tools.conntrack} ${fakeTools}/bin/conntrack \
+                  --replace-fail ${egress.tools.ip} ${fakeTools}/bin/ip \
+                  --replace-fail ${egress.tools.arping} ${fakeTools}/bin/arping \
+                  --replace-fail ${egress.tools.systemctl} ${fakeTools}/bin/systemctl \
+                  --replace-fail ${egress.tools.notify} ${fakeTools}/bin/notify
+                chmod +x "$2"
+              }
+              tool ${egress.egress.egressStart} ./egress-start
+              tool ${egress.egress.egressReload} ./egress-reload
+              tool ${egress.egress.egressStop} ./egress-stop
+              tool ${egress.egress.egressCleanup} ./egress-cleanup
+              tool ${egress.egress.egressPreflight} ./egress-preflight
+              export EGRESS_LOG="$TMPDIR/egress.log" EGRESS_RULES="$TMPDIR/egress.rules" EGRESS_FLOWS="$TMPDIR/egress.flows"
+              fresh() {
+                : > "$EGRESS_LOG"
+                : > "$EGRESS_RULES"
+                rm -f "$EGRESS_FLOWS"
+              }
+              refused() {
+                if "$@" 2> refused.err; then
+                  echo "allowed: $*" >&2
+                  exit 1
+                fi
+              }
+              rule='${egress.rule}'
+              tail='${lib.removePrefix "POSTROUTING " egress.rule}'
+              fresh
+              ./egress-start 2> start.err
+              ./egress-reload
+              ./egress-stop
               cat > expected <<EOF
               ip -4 -o address show dev ens18 to ${self.lib.lan.ryza-eph-trusted}/32
               arping -q -D -c 2 -w 3 -I ens18 ${self.lib.lan.ryza-eph-trusted}
-              iptables -w -t nat -C POSTROUTING $rule
-              iptables -w -t nat -I POSTROUTING 1 $rule
-              iptables -w -t nat -C POSTROUTING $rule
-              iptables -w -t nat -D POSTROUTING $rule
-              iptables -w -t nat -C POSTROUTING $rule
-              iptables -w -t nat -I POSTROUTING 1 $rule
-              iptables -w -t nat -C POSTROUTING $rule
-              iptables -w -t nat -D POSTROUTING $rule
-              iptables -w -t nat -C POSTROUTING $rule
+              iptables -w 5 -t nat -C $rule
+              iptables -w 5 -t nat -S POSTROUTING
+              iptables -w 5 -t nat -I POSTROUTING 1 $tail
+              notify --ready
+              iptables -w 5 -t nat -C $rule
+              iptables -w 5 -t nat -D $rule
+              iptables -w 5 -t nat -C $rule
+              iptables -w 5 -t nat -S POSTROUTING
+              iptables -w 5 -t nat -I POSTROUTING 1 $tail
+              iptables -w 5 -t nat -C $rule
+              iptables -w 5 -t nat -D $rule
+              iptables -w 5 -t nat -C $rule
+              iptables -w 5 -t nat -S POSTROUTING
               conntrack -D --orig-src 10.99.2.2 --reply-dst ${self.lib.lan.ryza-eph-trusted}
               conntrack -L --orig-src 10.99.2.2 --reply-dst ${self.lib.lan.ryza-eph-trusted}
               EOF
               diff expected "$EGRESS_LOG"
-              [[ ! -e "$EGRESS_STATE" ]]
+              [[ ! -s "$EGRESS_RULES" ]]
+              # With no monitor output the watch ends at once, and with it the unit.
+              grep -F 'trusted egress for ryza-eph-1 ends: ${self.lib.lan.ryza-eph-trusted} left ens18' start.err
+              # The address leaving (a conflict after binding) ends it; others don't.
+              fresh
+              EGRESS_MONITOR='Deleted 2: ens18    inet ${self.lib.lan.ryza-eph}/32 scope global ens18
+              Deleted 2: ens18    inet ${self.lib.lan.ryza-eph-trusted}/32 scope global ens18' ./egress-start 2> start.err
+              [[ $(grep -c 'ends:' start.err) == 1 ]]
               # A duplicate address is a fixed refusal (exit 10), and nothing is inserted.
-              : > "$EGRESS_LOG"
+              fresh
               status=0
-              EGRESS_ARPING=1 ${egress.egress.ExecStart} 2> conflict.err || status=$?
+              EGRESS_ARPING=1 ./egress-start 2> conflict.err || status=$?
               [[ $status == 10 ]]
               grep -F 'another host answers ARP for ${self.lib.lan.ryza-eph-trusted} on ens18' conflict.err
-              if grep -q '^iptables' "$EGRESS_LOG" || [[ -e "$EGRESS_STATE" ]]; then exit 1; fi
+              if grep -q -e '^iptables' -e '^notify' "$EGRESS_LOG"; then exit 1; fi
               status=0
-              EGRESS_ARPING=2 ${egress.egress.ExecStart} 2> /dev/null || status=$?
-              [[ $status == 1 && ! -e "$EGRESS_STATE" ]]
+              EGRESS_ARPING=2 ./egress-start 2> /dev/null || status=$?
+              [[ $status == 1 && ! -s "$EGRESS_RULES" ]]
               # So is an address networkd dropped (exit 11), before any probe.
-              : > "$EGRESS_LOG"
+              fresh
               status=0
-              EGRESS_NO_ADDRESS=1 ${egress.egress.ExecStart} 2> /dev/null || status=$?
+              EGRESS_NO_ADDRESS=1 ./egress-start 2> /dev/null || status=$?
               [[ $status == 11 ]]
               if grep -q -e '^arping' -e '^iptables' "$EGRESS_LOG"; then exit 1; fi
-              # The VM preflight refuses while the unit is up or has a job queued.
-              substitute ${lib.removePrefix "+" egress.egress.preflight} ./egress-preflight \
-                --replace-fail ${egress.systemctl} ${fakeTools}/bin/systemctl
-              chmod +x ./egress-preflight
+
+              # Fail closed. A clean table and an inactive unit boot; a failed,
+              # active or queued unit doesn't, whatever its state.
+              fresh
               ./egress-preflight
-              EGRESS_UNIT_STATE=failed ./egress-preflight
-              for state in active:"" activating:"" deactivating:"" inactive:42; do
-                if EGRESS_UNIT_STATE=''${state%%:*} EGRESS_UNIT_JOB=''${state#*:} ./egress-preflight 2> /dev/null; then
-                  echo "VM preflight allowed egress unit state $state" >&2
-                  exit 1
-                fi
+              for state in failed:"" active:"" activating:"" deactivating:"" inactive:42; do
+                EGRESS_UNIT_STATE=''${state%%:*} EGRESS_UNIT_JOB=''${state#*:} refused ./egress-preflight
               done
+              # ExecStop fails and leaves the rule: the next preflight refuses
+              # even with the unit inactive; the cleanup removes it, then it boots.
+              ./egress-start 2> /dev/null
+              refused env EGRESS_DELETE_FAILS=1 ./egress-stop
+              [[ -s "$EGRESS_RULES" ]]
+              refused ./egress-preflight
+              grep -F 'trusted NAT rule present' refused.err
+              refused env EGRESS_DELETE_FAILS=1 ./egress-cleanup
+              grep -F 'the slot stays unusable' refused.err
+              ./egress-cleanup
+              [[ ! -s "$EGRESS_RULES" ]]
+              grep -Fx 'systemctl stop forgejo-ephemeral-trusted-egress@ryza-eph-1.service' "$EGRESS_LOG"
+              grep -Fx 'systemctl reset-failed forgejo-ephemeral-trusted-egress@ryza-eph-1.service' "$EGRESS_LOG"
+              ./egress-preflight
+              # A rule in another form (an older generation's) is found by -S and removed.
+              printf '%s\n' 'POSTROUTING -s 10.99.2.2/32 -o ens18 -j SNAT --to-source ${self.lib.lan.ryza-eph-trusted}' > "$EGRESS_RULES"
+              refused ./egress-preflight
+              grep -F 'a trusted NAT rule for 10.99.2.2 is present' refused.err
+              ./egress-cleanup
+              [[ ! -s "$EGRESS_RULES" ]]
+              # A flow still NATed to the trusted source refuses the boot too.
+              echo 'tcp 6 431999 ESTABLISHED src=10.99.2.2 dst=${self.lib.hosts.cerberus} sport=40000 dport=443' > "$EGRESS_FLOWS"
+              refused env EGRESS_FLUSH_FAILS=1 ./egress-stop
+              refused ./egress-preflight
+              grep -F 'flows from 10.99.2.2 via ${self.lib.lan.ryza-eph-trusted} remain' refused.err
+              refused env EGRESS_FLUSH_FAILS=1 ./egress-cleanup
+              ./egress-cleanup
+              ./egress-preflight
+              # An unreadable table is never "absent": -C errors and -L failures refuse.
+              EGRESS_CHECK_FAILS=1 refused ./egress-preflight
+              EGRESS_LIST_FAILS=1 refused ./egress-preflight
+              ./egress-start 2> /dev/null
+              EGRESS_CHECK_FAILS=1 refused ./egress-stop
+              [[ -s "$EGRESS_RULES" ]]
+              ./egress-cleanup
+              ./egress-preflight
             '';
         # Fails at eval if a Hermes delegation guard rail stops firing: a work
         # subagent able to reach a personal provider, a meta provider id, a

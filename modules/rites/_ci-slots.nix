@@ -21,8 +21,9 @@
 #                     only trusted runs use, after their credentials were
 #                     delivered (forgejo-ephemeral-trusted-egress@<slot>). The
 #                     guard's Caddy lets it reach Garage S3, Harbor and ntfy
-#                     besides the forges and ncps. null: no address, unit,
-#                     rule, Caddy matcher or extra guest host pins.
+#                     besides the forges and ncps (S3 through its own guard
+#                     site, for trusted sources only). null: no address,
+#                     units, rule, Caddy matcher or S3 site, or extra guest pins.
 #   legacyVMs         stopped microVMs whose state is still on this host. The
 #                     slot units cannot see their directories, nor those of any
 #                     other microVM declared on the host.

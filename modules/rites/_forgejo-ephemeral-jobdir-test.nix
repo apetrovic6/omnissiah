@@ -397,6 +397,25 @@
       ];
     }).config;
   egressRule = subnet: "POSTROUTING -s 10.99.${subnet}.2/32 -d 192.168.1.105/32 -p tcp --dport 443 -o ens18 -j SNAT --to-source 192.168.1.240";
+  sharedSource =
+    (enabled.extendModules {
+      modules = [
+        {
+          services.imperium.forgejoEphemeral.inventory = lib.mkOverride 40 (c.services.imperium.forgejoEphemeral.inventory
+            // {
+              ryza = c.services.imperium.forgejoEphemeral.inventory.ryza // {egress = host.egress // {trusted = "ryza-eph-trusted";};};
+              terra = {
+                uplink = "enp1s0";
+                egress = {
+                  untrusted = "ryza-eph-trusted";
+                  trusted = null;
+                };
+                slots = {};
+              };
+            });
+        }
+      ];
+    }).config;
   egressUnits = lib.genAttrs ["ryza-eph-1" "ryza-eph-2"] (slot: egressed.systemd.services."forgejo-ephemeral-trusted-egress@${slot}");
 in
   assert persistent.config.microvm.host.enable;
@@ -493,17 +512,24 @@ in
   assert builtins.attrNames trustedSlotctlSlots == configuredSlots;
   assert lib.all uniqueBy ["StateDirectory" "RuntimeDirectory" "Slice" "User"];
   assert lib.all (check: check.assertion) egressed.assertions;
-  assert egressed.services.imperium.forgejoEphemeral.internal.egress
+  assert lib.mapAttrs (_: egress: {inherit (egress) unit cleanupUnit rule;}) egressed.services.imperium.forgejoEphemeral.internal.egress
   == {
     ryza-eph-1 = {
       unit = "forgejo-ephemeral-trusted-egress@ryza-eph-1";
+      cleanupUnit = "forgejo-ephemeral-trusted-egress-cleanup@ryza-eph-1";
       rule = egressRule "2";
     };
     ryza-eph-2 = {
       unit = "forgejo-ephemeral-trusted-egress@ryza-eph-2";
+      cleanupUnit = "forgejo-ephemeral-trusted-egress-cleanup@ryza-eph-2";
       rule = egressRule "3";
     };
   };
+  # Each slot's preflight and cleanup look only for its own source.
+  assert lib.hasInfix "10\\.99\\.3\\.2/32" egressed.services.imperium.forgejoEphemeral.internal.egress.ryza-eph-2.pattern;
+  assert lib.all (slot: egressed.systemd.services ? "forgejo-ephemeral-trusted-egress-cleanup@${slot}") ["ryza-eph-1" "ryza-eph-2"];
+  # Two hosts must not share a trusted source.
+  assert lib.any (check: !check.assertion && lib.hasPrefix "forgejoEphemeral: slot SNAT sources must be unique" check.message) sharedSource.assertions;
   assert egressUnits.ryza-eph-1.partOf == ["forgejo-ephemeral-firewall.service"];
   assert egressUnits.ryza-eph-2.partOf == ["forgejo-ephemeral-firewall-2.service"];
   assert lib.all (slot:

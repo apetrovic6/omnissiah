@@ -16,10 +16,12 @@ slot lock; local dispatch also supplies its already-held state lock with --hold-
   scrub RUN|none        requires a matching marker and stopped VM; clears marker
   deliver RUN           stdin {"ncps-netrc": base64, "ci-signing-key": base64}; requires a slot that
                         delivers and an active VM with no job queued; disarms the cutoff after delivery
-  withdraw RUN|none     removes delivered CI credentials, keeps the trust directory; stops trusted egress first
+  withdraw RUN|none     removes delivered CI credentials, keeps the trust directory; ends trusted egress first
   egress trusted RUN    starts forgejo-ephemeral-trusted-egress@SLOT, the second SNAT source; requires a host
                         with trusted egress, a settled running VM and delivered credentials. The unit probes
-                        for a duplicate address first. Stopped by withdraw, scrub and the VM's stop (BindsTo).
+                        for a duplicate address first. Ended by the VM's stop (BindsTo) or by its address going;
+                        withdraw and scrub run its root cleanup unit, which must leave no rule or flow
+                        (else egress-cleanup-failed, and the slot stays unusable).
 
 Exit status and stderr carry fixed codes only, nothing derived from input:
   0  done
@@ -106,7 +108,7 @@ CODES = (
     "egress-address-conflict",
     "egress-address-missing",
     "egress-failed",
-    "egress-stop-failed",
+    "egress-cleanup-failed",
 )
 
 
@@ -146,6 +148,7 @@ class Systemctl:
         self.slot = slot
         self.vm = f"microvm@{slot}.service"
         self.egress = f"forgejo-ephemeral-trusted-egress@{slot}.service"
+        self.egress_cleanup = f"forgejo-ephemeral-trusted-egress-cleanup@{slot}.service"
         self.support = support_units(slot)
         self.kinds = {self.vm: "vm", **dict(zip(self.support, SUPPORT_UNITS, strict=True))}
         self.run = run
@@ -153,7 +156,7 @@ class Systemctl:
         self.systemd_run_path, self.python_path = systemd_run_path, python_path
         self.expiry_minutes = expiry_minutes
 
-    def _system_command(self, argv, *, missing_ok=False):
+    def _system_command(self, argv, *, missing_ok=False, timeout=10):
         try:
             result = self.run(
                 argv,
@@ -163,7 +166,7 @@ class Systemctl:
                 # A child issuing a systemd operation must keep the lock held
                 # even if slotctl dies before the reply.
                 pass_fds=self.lock_fds,
-                timeout=10,
+                timeout=timeout,
                 check=True,
             )
         except subprocess.CalledProcessError as error:
@@ -174,10 +177,10 @@ class Systemctl:
             raise SlotError("systemctl-failed") from None
         return result.stdout
 
-    def _call(self, action, *units, options=(), missing_ok=False):
+    def _call(self, action, *units, options=(), missing_ok=False, timeout=10):
         return self._system_command(
             (self.path, "--system", "--no-pager", *options, action, *units),
-            missing_ok=missing_ok,
+            missing_ok=missing_ok, timeout=timeout,
         )
 
     def state(self, unit):
@@ -254,24 +257,41 @@ class Systemctl:
     def stop_support(self, units):
         self._call("stop", *units, options=("--no-block",))
 
+    def _egress_exit(self):
+        output = self._call("show", self.egress, options=("--property=Result,ExecMainStatus,ExecMainExitTimestampMonotonic",))
+        props = dict(line.split("=", 1) for line in output.decode("ascii").splitlines())
+        return props["Result"], props["ExecMainStatus"], props["ExecMainExitTimestampMonotonic"]
+
     def start_egress(self):
-        """Wait for the oneshot: its exit status says whether the second source may be used."""
+        """Wait until the unit is ready; a failed start's own exit status says why.
+
+        10 and 11 count only if this start ran ExecStart (a new main process exit) and it ended with an exit
+        code. A start that never ran it (a failed dependency, a start limit, a lost reply) leaves the previous
+        run's status in place, which must not be read as this run's refusal.
+        """
+        try:
+            before = self._egress_exit()[2]
+        except (SlotError, KeyError, ValueError, UnicodeError):
+            raise SlotError("egress-failed") from None
         try:
             self._call("start", self.egress, options=("--job-mode=fail",))
         except SlotError:
+            code = "egress-failed"
             try:
-                output = self._call("show", self.egress, options=("--property=ExecMainStatus",))
-                status = dict(line.split("=", 1) for line in output.decode("ascii").splitlines())["ExecMainStatus"]
+                result, status, exited = self._egress_exit()
+                if result == "exit-code" and exited not in ("0", "", before):
+                    code = EGRESS_EXITS.get(status, code)
             except (SlotError, KeyError, ValueError, UnicodeError):
-                status = None
-            raise SlotError(EGRESS_EXITS.get(status, "egress-failed")) from None
+                pass
+            raise SlotError(code) from None
 
-    def stop_egress(self):
-        """Wait for the stop: ExecStop deletes the rule and the flows NATed through it."""
+    def clean_egress(self):
+        """The root cleanup unit stops the egress unit, removes any rule or flow it left and clears its failed
+        state. It fails while anything is left, and then so does this: the slot must not boot again."""
         try:
-            self._call("stop", self.egress, missing_ok=True)
+            self._call("start", self.egress_cleanup, options=("--job-mode=fail",), timeout=70)
         except SlotError:
-            raise SlotError("egress-stop-failed") from None
+            raise SlotError("egress-cleanup-failed") from None
 
 
 def unlink_files(directory, names, *, remove_dir=False):
@@ -470,7 +490,7 @@ class Slot:
             raise SlotError("vm-not-stopped")
         if run_name is not None:
             self.systemctl.disarm_expiry(run_name)
-        failure = self._stop_egress()
+        failure = self._clean_egress()
         self.files.scrub()
         if failure is not None:
             raise failure
@@ -495,19 +515,19 @@ class Slot:
         self.files.deliver(secrets)
         self.systemctl.disarm_expiry(run_name)
 
-    def _stop_egress(self):
-        """Stop the trusted source if this host has one; report a failure only after the caller's cleanup."""
+    def _clean_egress(self):
+        """End the trusted source if this host has one; report a failure only after the caller's cleanup."""
         if not self.files.trusted_egress:
             return None
         try:
-            self.systemctl.stop_egress()
+            self.systemctl.clean_egress()
         except SlotError as error:
             return error
         return None
 
     def withdraw(self):
         # The source first: nothing may leave from it once the credentials are gone.
-        failure = self._stop_egress()
+        failure = self._clean_egress()
         self.files.withdraw()
         if failure is not None:
             raise failure
