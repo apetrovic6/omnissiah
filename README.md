@@ -1304,21 +1304,25 @@ empty `job/` directory stays for reuse.
 
 | Slot class | Writable store | Runner timeout | Guest limit | Host VM limit |
 |---|---:|---:|---:|---:|
-| `std` (Ryza) | 50 GiB | 180 min | 185 min | 190 min |
-| `large` | 150 GiB | 360 min | 365 min | 370 min |
+| `std` (Ryza) | 50 GiB | 180 min | 190 min | 195 min |
+| `large` | 150 GiB | 360 min | 370 min | 375 min |
 
 Both classes collect the writable store below 20% free, targeting 50%.
 Workflow timeouts still apply (60 min for the pilot probe). The dispatcher
 stops any job that has not received a trusted verdict 65 min after first
 observing pickup. If polling fell behind, it counts from the last known
 waiting poll or the recorded VM start. The timestamp survives dispatcher
-restarts.
-The host also bounds startup and shutdown separately (90 s and 30 s).
+restarts. A separate slot-host timer queues a stop after 75 min from boot
+submission even if the dispatcher or its SSH connection is down. Only
+successful trust delivery disarms it while the VM is running. Host startup
+and shutdown have separate 90 s and 30 s limits.
 
-The guest tries `one-job` without `--wait` for at most five minutes. It
-retries only exit `2` (no task); completion, a command error or expiry
-powers off the guest. This releases a slot that lost the job to another
-runner even when the dispatcher is paused.
+The guest uses one addressed `one-job --wait-timeout 300s` process. It
+keeps the same fetch request key across transport retries and powers off
+on completion or pickup expiry. If the handle is still waiting and
+unassigned after runner deletion, the dispatcher releases it with backoff.
+After three boots without pickup for the same attempt, it retires the
+handle and logs the reason; cancel and re-run that attempt to retry it.
 Forgejo v15.0.12 deletes assigned ephemeral registrations on
 [`UpdateTask` completion](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/routers/api/actions/runner/runner.go#L332-L339)
 and on [`StopTask`](https://codeberg.org/forgejo/forgejo/src/tag/v15.0.12/services/actions/task.go);
@@ -1385,6 +1389,10 @@ Forgejo runner inventories no longer contain the dispatchers' registrations,
 and **every pool's state file in every slot's state directory** has
 `active: null` and `ambiguous: {}`. The original `ugalabugala`/`manjo` user
 queue keeps `state.json`; other queues have identity-specific filenames.
+Before rolling back to an older dispatcher, also wait for any `unpicked`
+retry entries to clear (finish or cancel the associated queued attempts
+and allow another poll). The older dispatcher cannot read the new
+in-flight trust fields or missed-pickup state. Do not edit state files.
 Find each state directory with
 `systemctl show -p StateDirectory --value forgejo-ephemeral-dispatcher@<slot>.service`;
 `ryza-eph-1` still uses
@@ -1507,6 +1515,11 @@ the dispatcher logs the reason. Builds finished before delivery are not
 uploaded. sccache stays off on `nix-eph`. The full rule, the API fields it
 reads and who can read what (host, guest, escaped QEMU/virtiofsd) are in
 `modules/rites/_forgejo-ephemeral-trusted.nix`.
+
+On restart the dispatcher withdraws delivery and has up to 10 min to
+revalidate the same recorded task and run. Failure to revalidate stops
+the VM. An unresolved `trust.users` login keeps trust off for the pool
+until an idle poll can pin it; untrusted dispatch continues.
 
 A login in `trust.users` includes agents and tools that hold its repository
 write credentials. Forgejo also attributes deploy-key pushes to the owner,

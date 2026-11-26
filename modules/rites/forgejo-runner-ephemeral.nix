@@ -181,17 +181,17 @@
       };
     };
     pickupSeconds = 5 * 60;
-    # v13.2.1's HTTP client default, in seconds.
-    runnerClientSeconds = 60;
+    reportingMarginMinutes = 5;
     vmStartSeconds = 90;
     vmStopSeconds = 30;
     classFor = spec: let
       class = slotClasses.${spec.class} or (throw "forgejoEphemeral: unknown slot class ${spec.class}.");
+      guestMinutes = class.runnerMinutes + pickupSeconds / 60 + reportingMarginMinutes;
     in
       class
       // {
-        guestMinutes = class.runnerMinutes + 5;
-        hostMinutes = class.runnerMinutes + 10;
+        inherit guestMinutes;
+        hostMinutes = guestMinutes + 5;
       };
     mkSlot = slot: spec: let
       class = classFor spec;
@@ -386,6 +386,9 @@
         ...
       }: let
         stateDir = "/var/lib/forgejo-one-job";
+        pickupRunner = pkgs.forgejo-runner.overrideAttrs (old: {
+          patches = (old.patches or []) ++ [./_forgejo-runner-wait-timeout.patch];
+        });
         urlArg =
           if fixedPilot
           then "https://${forgeHosts.ugalabugala}"
@@ -516,6 +519,7 @@
             WorkingDirectory = stateDir;
             LoadCredential = credIds;
             Restart = "no";
+            SuccessExitStatus = [2]; # Bounded pickup expired without a task.
             RuntimeMaxSec = "${toString class.guestMinutes}min";
             TimeoutStopSec = "15s";
             NoNewPrivileges = true;
@@ -527,30 +531,9 @@
             uuid=$(cat "$CREDENTIALS_DIRECTORY/runner-uuid")
             handle=$(cat "$CREDENTIALS_DIRECTORY/job-handle")
             ${checkCredentials}
-            # Runner v13.2.1 exits 2 for no task, 1 on a command error, and 0
-            # after running a task. Only an empty pickup gets another attempt.
-            deadline=$((SECONDS + ${toString pickupSeconds}))
-            while (( SECONDS + 5 < deadline )); do
-              # Declare and FetchSingleTask both use this HTTP timeout. Fit
-              # both in the remaining pickup window without timing out the job
-              # process itself, and keep the default timeout on early attempts.
-              client_timeout=$(((deadline - SECONDS - 2) / 2))
-              if (( client_timeout > ${toString runnerClientSeconds} )); then
-                client_timeout=${toString runnerClientSeconds}
-              fi
-              if FORGEJO_CLIENT_TIMEOUT="$client_timeout" ${lib.getExe pkgs.forgejo-runner} --config ${runnerConfig} one-job \
-                --url ${urlArg} --uuid "$uuid" --token-url 'file:$CREDENTIALS_DIRECTORY/runner-token' \
-                --label ${labelArg} --handle "$handle"; then
-                exit 0
-              else
-                status=$?
-                if (( status != 2 )); then
-                  exit "$status"
-                fi
-              fi
-              sleep 1
-            done
-            echo "No Forgejo task assigned within ${toString pickupSeconds}s; powering off"
+            exec ${lib.getExe pickupRunner} --config ${runnerConfig} one-job \
+              --url ${urlArg} --uuid "$uuid" --token-url 'file:$CREDENTIALS_DIRECTORY/runner-token' \
+              --label ${labelArg} --handle "$handle" --wait-timeout ${toString pickupSeconds}s
           '';
         };
       };
@@ -719,6 +702,8 @@
     slotctlScript = pkgs.replaceVars ./_forgejo-slotctl.py {
       config = slotctlConfig;
       systemctl = lib.getExe' pkgs.systemd "systemctl";
+      systemd_run = lib.getExe' pkgs.systemd "systemd-run";
+      python = lib.getExe pkgs.python3;
     };
     slotctl = pkgs.writeShellScript "forgejo-slotctl" ''
       exec ${lib.getExe pkgs.python3} -I -B ${slotctlScript} "$@"
@@ -954,7 +939,12 @@
         readOnly = true;
         type = lib.types.attrs;
         default = {
-          slots = lib.mapAttrs (_: data: {inherit (data) slotDirs prepareDirs runnerMinutes;}) localSlots;
+          slots =
+            lib.mapAttrs (_: data: {
+              inherit (data) slotDirs prepareDirs runnerMinutes;
+              inherit pickupSeconds;
+            })
+            localSlots;
           remotePropertyNames = lib.mapAttrs (_: data: builtins.attrNames data.remoteProperties) localSlots;
           inherit slotctlSlots sshClients poolsFile;
         };

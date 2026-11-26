@@ -66,7 +66,7 @@
           assert !client.config.microvm.host.enable;
           assert lib.hasInfix (builtins.unsafeDiscardStringContext "--ssh-command ${wrapper} ")
           (builtins.unsafeDiscardStringContext dispatcher.serviceConfig.ExecStart);
-          assert lib.hasSuffix " --vm-deadline 11520" dispatcher.serviceConfig.ExecStart;
+          assert lib.hasSuffix " --vm-deadline 11820" dispatcher.serviceConfig.ExecStart;
             pkgs.runCommand "forgejo-ephemeral-ssh" {} ''
               export CREDENTIALS_DIRECTORY="$TMPDIR/credentials"
               export RUNTIME_DIRECTORY="$TMPDIR/runtime"

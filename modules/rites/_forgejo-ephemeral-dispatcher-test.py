@@ -44,7 +44,7 @@ JOBS = RUNNERS + "/jobs?labels=nix-eph"
 LIST = RUNNERS + "?visible=false&page={}&limit=50"
 SLOT_RUN = f"eph-{'0' * 12}-ryza-{'a' * 32}"
 VM = "microvm@ryza-eph-1.service"
-STD_DEADLINE, LARGE_DEADLINE = 11520, 22320
+STD_DEADLINE, LARGE_DEADLINE = 11820, 22620
 REPO, OWNER = 17, 42
 PAT = "synthetic-dispatcher-pat-not-a-secret"
 TOKEN = "synthetic-ephemeral-runner-token-not-a-secret"
@@ -143,6 +143,8 @@ def run(index=7, **fields):
 
 
 SYSTEMCTL = "/test/systemctl"
+SYSTEMD_RUN = "/test/systemd-run"
+WATCHDOG = f"forgejo-slot-expiry-{D.SLOT}-{SLOT_RUN}"
 
 
 def create_slot_lock(root, slot):
@@ -184,6 +186,7 @@ class InProcessSlotctl:
         code = S.main(
             list(argv[1:]), stdin=io.BytesIO(input), stdout=out, stderr=err, run=self.systemctl_run,
             config=str(self.config), systemctl_path=SYSTEMCTL, lock_root=self.lock_root,
+            systemd_run_path=SYSTEMD_RUN, python_path=sys.executable,
         )
         return subprocess.CompletedProcess(argv, code, out.getvalue(), err.getvalue().encode())
 
@@ -387,6 +390,10 @@ class FakeSystemctl:
         self.on_start = None
         self.on_reset = None
         self.reset_fails = 0
+        self.watchdogs = set()
+        self.watchdog_arm_fails = False
+        self.watchdog_cancel_fails = False
+        self.on_watchdog_cancel = None
 
     def set(self, unit=None, *, active="inactive", pending="", result="success", loaded="loaded"):
         self.states[unit or self.vm] = f"LoadState={loaded}\nActiveState={active}\nJob={pending}\nResult={result}\n".encode()
@@ -394,6 +401,12 @@ class FakeSystemctl:
     def run(self, argv, **options):
         self.calls.append(argv)
         assert options["check"] and options["timeout"] and options["stderr"] == subprocess.DEVNULL
+        if argv[0] == SYSTEMD_RUN:
+            if self.watchdog_arm_fails:
+                raise subprocess.CalledProcessError(1, argv)
+            stem = next(arg.removeprefix("--unit=") for arg in argv if arg.startswith("--unit="))
+            self.watchdogs.update((f"{stem}.timer", f"{stem}.service"))
+            return subprocess.CompletedProcess(argv, 0, stdout=b"")
         assert argv[:3] == (SYSTEMCTL, "--system", "--no-pager")
         if "show" in argv:
             assert "--all" in argv and "--property=LoadState,ActiveState,Job,Result" in argv
@@ -409,6 +422,19 @@ class FakeSystemctl:
             if self.reset_fails:
                 self.reset_fails -= 1
                 raise subprocess.CalledProcessError(1, argv)
+            self.set()
+            return subprocess.CompletedProcess(argv, 0, stdout=b"")
+        if argv[-1].startswith("forgejo-slot-expiry-"):
+            assert argv[-2] == "stop" and "--no-block" not in argv
+            if self.on_watchdog_cancel:
+                self.on_watchdog_cancel()
+            if self.watchdog_cancel_fails:
+                raise subprocess.CalledProcessError(1, argv)
+            if argv[-1] not in self.watchdogs:
+                raise subprocess.CalledProcessError(5, argv)
+            self.watchdogs.remove(argv[-1])
+            return subprocess.CompletedProcess(argv, 0, stdout=b"")
+        if argv == (SYSTEMCTL, "--system", "--no-pager", "stop", self.vm):
             self.set()
             return subprocess.CompletedProcess(argv, 0, stdout=b"")
         assert "--no-block" in argv
@@ -432,7 +458,8 @@ class FakeSystemctl:
         return subprocess.CompletedProcess(argv, 0, stdout=b"")
 
     def mutations(self, verb=None):
-        return [args for args in self.calls if (verb in args if verb else "show" not in args)]
+        return [args for args in self.calls if args[0] == SYSTEMCTL and not args[-1].startswith("forgejo-slot-expiry-")
+                and (verb in args if verb else "show" not in args)]
 
 
 class DispatcherTests(unittest.TestCase):
@@ -798,6 +825,7 @@ class DispatcherTests(unittest.TestCase):
         self.tick(1)
         self.assertEqual(3, len(self.forge.paths("POST")))
         self.assertEqual(1, len(self.system.mutations("start")))
+        self.assertEqual(1, sum(unit.endswith(".timer") for unit in self.system.watchdogs))
 
     def test_unknown_run_marker_is_scrubbed_only_when_vm_is_idle(self):
         self.forge.jobs = [job()]
@@ -868,6 +896,8 @@ class DispatcherTests(unittest.TestCase):
 
         self.leave_images()
         self.system.set(active="active")
+        self.forge.jobs = [row if row["handle"] != first["handle"] else row | {"status": "running", "task_id": 71}
+                           for row in self.forge.jobs]
         self.tick(7)
         self.assertEqual(1, len(self.system.mutations("start")))
         self.system.set()
@@ -1050,6 +1080,7 @@ class DispatcherTests(unittest.TestCase):
                 else:
                     self.forge.jobs = [job()]
                     self.tick()
+                    self.forge.jobs = [job(status="running", task_id=71)]
                     self.leave_images()
                 self.system.set(active="failed", result=result)
                 for _ in range(3):
@@ -1151,6 +1182,7 @@ class DispatcherTests(unittest.TestCase):
         self.forge.jobs = [job(), job(2, "other")]
         self.system.start_mode = "uncertain"
         self.tick()
+        self.assertEqual(1, sum(unit.endswith(".timer") for unit in self.system.watchdogs))
         queued_at = self.state()["active"]["queued_at"]
         self.restart()
         self.tick(7)  # ActiveState=inactive with a queued start is not idle.
@@ -1175,21 +1207,42 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([], self.forge.paths("DELETE"))
         self.assertTrue(self.credential_dir.exists())
 
-    def test_failed_start_and_same_handle_dedup_across_restart(self):
-        self.forge.jobs = [job()]
-        self.system.start_mode = "failed"
+    def test_lost_pickup_releases_and_retries_then_retires_after_three_boots(self):
+        waiting = job()
+        self.forge.jobs = [waiting]
         self.tick()
-        self.assertTrue(self.credential_dir.exists())
+        for attempt in range(1, D.REFUSAL_LIMIT + 1):
+            self.system.set(active="active")
+            self.tick(D.POLL)
+            self.leave_images()
+            self.system.set()
+            if attempt == 1:
+                self.forge.reply_once("GET", JOBS, 503)
+                self.tick(D.POLL)
+                self.assertTrue(self.claim_file(waiting["handle"]).exists())
+                self.assertFalse(self.forge.runners)
+                self.restart()  # Resume cleanup using a fresh queue snapshot.
+            self.tick(D.POLL)
+            self.assert_scrubbed()
+            self.assertFalse(self.claim_file(waiting["handle"]).exists())
+            self.assertIsNone(self.state()["active"])
+            self.assertIn(f"VM ended without pickup ({attempt}/{D.REFUSAL_LIMIT})", self.logs.getvalue())
+            self.assertEqual(attempt, len(self.system.mutations("start")))
+            if attempt < D.REFUSAL_LIMIT:
+                self.assertEqual([], self.state()["retired"])
+                self.assertEqual({waiting["handle"]: attempt}, self.state()["unpicked"])
+                delay = D.POLL * 2 ** (attempt - 1)
+                self.tick(delay - 1)
+                self.assertEqual(attempt, len(self.system.mutations("start")))
+                if attempt == 2:
+                    self.restart()  # Missed-boot count survives even when the slot-local backoff does not.
+                self.tick(D.POLL)
         self.restart()
-        self.tick(7)
-        self.assert_scrubbed()
-        self.assertIsNone(self.state()["active"])
-        self.assertEqual([job()["handle"]], self.state()["retired"])
-        self.restart()
-        self.tick(7)
-        self.assertEqual([RUNNERS], self.forge.paths("POST"))
-        self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
-        self.assertEqual(1, len(self.system.mutations("start")))
+        self.tick(D.POLL)
+        self.assertEqual([waiting["handle"]], self.state()["retired"])
+        self.assertNotIn("unpicked", self.state())
+        self.assertEqual(D.REFUSAL_LIMIT, len(self.system.mutations("start")))
+        self.assertFalse(self.forge.runners)
 
     def test_leftover_support_units_stopped_before_scrub_and_delete(self):
         self.forge.jobs = [job()]
@@ -1654,6 +1707,7 @@ class DispatcherTests(unittest.TestCase):
         self.leave_images()
         self.pause.touch()
         self.system.set(active="active")
+        self.forge.jobs = [job(status="running", task_id=71), job(2, "other")]
         self.tick(7)
         self.assertEqual([RUNNERS], self.forge.paths("POST"))
         self.system.set()
@@ -2052,20 +2106,55 @@ class TrustedJobTests(unittest.TestCase):
                 self.assertEqual({}, self.delivered())
                 self.assertIn("credential missing or malformed; withheld", self.logs.getvalue())
 
-    def test_restart_withdraws_and_re_resolves(self):
+    def test_restart_after_65_minutes_withdraws_and_revalidates_the_same_run(self):
         self.boot()
         self.pick_up()
         self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.tick(D.UNTRUSTED_LIMIT + 5 * 60)
         self.dispatcher.withdraw()  # What main() does before a new dispatcher runs.
         self.assertEqual({}, self.delivered())
         self.restart()
         self.tick(D.POLL)
         self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+        self.assertEqual([], self.system.mutations("stop"))
         self.forge.runs = [run(is_fork_pull_request=True)]
         self.dispatcher.withdraw()
         self.restart()
         self.tick(D.POLL)
         self.assertEqual({}, self.delivered())
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.assertIn("previously trusted job failed revalidation", self.logs.getvalue())
+
+    def test_revalidation_timeout_cannot_be_reset_by_further_restarts(self):
+        self.boot()
+        self.pick_up()
+        self.tick(D.UNTRUSTED_LIMIT)
+        self.restart()
+        self.dispatcher.withdraw()
+        self.forge.reply_once("GET", USER, 503)
+        self.tick(D.POLL)
+        self.assertEqual([], self.system.mutations("stop"))
+        self.assertEqual({}, self.delivered())
+        self.restart()
+        self.dispatcher.withdraw()
+        self.forge.reply_once("GET", USER, 503)
+        self.tick(D.TRUST_DEADLINE - D.POLL - 1)
+        self.assertEqual([], self.system.mutations("stop"))
+        self.tick(1)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.assertIn("trust revalidation timed out", self.logs.getvalue())
+
+    def test_restart_refuses_different_task_even_if_it_has_an_eligible_run(self):
+        self.boot()
+        self.pick_up()
+        self.tick(D.UNTRUSTED_LIMIT)
+        self.restart()
+        self.dispatcher.withdraw()
+        self.forge.tasks = [task(task_id=72)]
+        self.pick_up(task_id=72)
+        self.assertEqual({}, self.delivered())
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.assertIn("task changed since delivery", self.logs.getvalue())
 
     def test_trust_dir_is_fresh_for_every_boot(self):
         self.trust_dir.mkdir()
@@ -2614,6 +2703,7 @@ class SlotctlTests(unittest.TestCase):
         code = S.main(
             list(argv), stdin=io.BytesIO(data), stdout=out, stderr=err, run=self.system.run,
             config=str(config or self.config), systemctl_path=SYSTEMCTL, lock_root=self.lock_root,
+            systemd_run_path=SYSTEMD_RUN, python_path=sys.executable,
         )
         self.stderrs.append(err.getvalue())
         return code, out.getvalue(), err.getvalue()
@@ -2769,7 +2859,7 @@ class SlotctlTests(unittest.TestCase):
             with patch.object(S, "LOCK_WAIT", 0.01):
                 for args in (
                     ("observe",), ("check-space",), ("reset-failed",), ("stop-support", D.SUPPORT[0]),
-                    *((verb, SLOT_RUN) for verb in ("stage", "start", "stop", "scrub", "deliver", "withdraw")),
+                    *((verb, SLOT_RUN) for verb in ("stage", "start", "stop", "scrub", "deliver", "withdraw", "expire")),
                 ):
                     with self.subTest(args=args):
                         self.assertEqual((1, b"", "slot-busy\n"), self.slotctl("--slot", self.SLOT, *args))
@@ -2801,6 +2891,7 @@ class SlotctlTests(unittest.TestCase):
             f"--slot {self.SLOT} stop-support microvm-virtiofsd@other.service", f"--slot '{self.SLOT} observe",
             f"--slot {self.SLOT} check-space {SLOT_RUN}",
             f"--slot {self.SLOT} observe {TOKEN}", "x" * 2048,
+            f"--slot {self.SLOT} expire {SLOT_RUN}",
         ):
             with self.subTest(command=command[:100]):
                 self.assertEqual((2, "invalid-request\n"), forced(command))
@@ -2868,6 +2959,59 @@ class SlotctlTests(unittest.TestCase):
         with patch.object(S.os, "fstatvfs", return_value=SimpleNamespace(f_bavail=80, f_frsize=gib)):
             self.assertEqual(0, self.slotctl(*args, config=config)[0])
         self.assertEqual(1, len(self.system.mutations("start")))
+
+    def test_watchdog_arms_before_start_and_arm_failure_cannot_boot(self):
+        args = ("--slot", self.SLOT)
+        self.assertEqual(0, self.slotctl(*args, "stage", SLOT_RUN, payload=self.STAGE)[0])
+        self.system.watchdog_arm_fails = True
+        self.assertEqual((1, b"", "watchdog-arm-failed\n"), self.slotctl(*args, "start", SLOT_RUN))
+        self.assertEqual([], self.system.mutations("start"))
+        self.system.watchdog_arm_fails = False
+        self.assertEqual(0, self.slotctl(*args, "start", SLOT_RUN)[0])
+        start = self.system.mutations("start")[0]
+        arm = self.system.calls[self.system.calls.index(start) - 1]
+        self.assertEqual(SYSTEMD_RUN, arm[0])
+        self.assertIn(f"--unit={WATCHDOG}", arm)
+        self.assertIn("--on-active=75min", arm)
+        self.assertIn("--property=Restart=on-failure", arm)
+        self.assertEqual((sys.executable, "-I", "-B", str(SLOTCTL), *args, "expire", SLOT_RUN), arm[-8:])
+
+    def test_only_successful_delivery_disarms_live_watchdog_and_redelivery_works(self):
+        args = ("--slot", self.SLOT)
+        self.assertEqual(0, self.slotctl(*args, "stage", SLOT_RUN, payload=self.STAGE)[0])
+        self.assertEqual(0, self.slotctl(*args, "start", SLOT_RUN)[0])
+        self.system.set(active="active")
+        self.assertEqual(self.REFUSED, self.slotctl(*args, "deliver", SLOT_RUN, payload={}))
+        self.assertIn(f"{WATCHDOG}.timer", self.system.watchdogs)
+        self.system.watchdog_cancel_fails = True
+        self.assertNotEqual(0, self.slotctl(*args, "deliver", SLOT_RUN, payload=self.DELIVER)[0])
+        self.assertIn(f"{WATCHDOG}.timer", self.system.watchdogs)
+        self.system.watchdog_cancel_fails = False
+        self.system.on_watchdog_cancel = lambda: self.assertEqual(set(S.TRUST_FILES), {p.name for p in self.trust_dir.iterdir()})
+        self.assertEqual(0, self.slotctl(*args, "deliver", SLOT_RUN, payload=self.DELIVER)[0])
+        self.assertEqual(set(), self.system.watchdogs)
+        self.assertEqual(0, self.slotctl(*args, "withdraw", SLOT_RUN)[0])
+        self.assertEqual(0, self.slotctl(*args, "deliver", SLOT_RUN, payload=self.DELIVER)[0])
+
+    def test_expiry_stops_only_its_run_and_scrub_cleans_the_timer(self):
+        args = ("--slot", self.SLOT)
+        self.assertEqual(0, self.slotctl(*args, "stage", SLOT_RUN, payload=self.STAGE)[0])
+        self.assertEqual(0, self.slotctl(*args, "start", SLOT_RUN)[0])
+        self.system.set(active="active")
+        self.assertEqual(0, self.slotctl(*args, "expire", SLOT_RUN)[0])
+        self.assertEqual([(SYSTEMCTL, "--system", "--no-pager", "stop", VM)], self.system.mutations("stop"))
+        self.assertEqual(0, self.slotctl(*args, "scrub", SLOT_RUN)[0])
+        self.assertEqual(set(), self.system.watchdogs)
+        next_run = SLOT_RUN[:-1] + "b"
+        self.assertEqual(0, self.slotctl(*args, "stage", next_run, payload=self.STAGE)[0])
+        self.assertEqual(0, self.slotctl(*args, "start", next_run)[0])
+        self.system.set(active="active")
+        self.assertEqual(0, self.slotctl(*args, "expire", SLOT_RUN)[0])
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.assertEqual(0, self.slotctl(*args, "stop", next_run)[0])
+        self.system.set()
+        self.assertEqual(0, self.slotctl(*args, "scrub", next_run)[0])
+        self.assertEqual(set(), self.system.watchdogs)
 
     def test_stop_support_only_stops_this_slots_support_units(self):
         for units in ((), ("microvm@ryza-eph-1.service",), ("microvm-virtiofsd@other.service",), (D.SUPPORT[0], D.SUPPORT[0])):
@@ -3178,6 +3322,9 @@ class SlotctlProcessTests(unittest.TestCase):
             "if 'show' in sys.argv:\n"
             "    print('LoadState=loaded\\nActiveState=inactive\\nJob=\\nResult=success')\n"
         )
+        systemd_run = bin_dir / "systemd-run"
+        systemd_run.write_text(f"#!{sys.executable}\n")
+        systemd_run.chmod(0o755)
         systemctl.chmod(0o755)
         self.vm_dir, self.credential_dir = root / "vm", root / "credentials" / D.SLOT
         for directory in (self.vm_dir, self.credential_dir.parent):
@@ -3191,6 +3338,7 @@ class SlotctlProcessTests(unittest.TestCase):
         source = SLOTCTL.read_text()
         self.script.write_text(
             source.replace("@config@", str(self.config)).replace("@systemctl@", str(systemctl))
+            .replace("@systemd_run@", str(systemd_run)).replace("@python@", sys.executable)
             .replace('"/run/forgejo-slotctl"', json.dumps(str(lock_root)))
         )
         self.slot = D.CommandSlot((sys.executable, "-I", "-B", str(self.script)), lock_fd=self.lock)

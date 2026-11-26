@@ -245,14 +245,14 @@
       if slot == "ryza-eph-1"
       then {
         runner = 180;
-        guest = 185;
-        host = 190;
+        guest = 190;
+        host = 195;
         overlayGiB = 50;
       }
       else {
         runner = 360;
-        guest = 365;
-        host = 370;
+        guest = 370;
+        host = 375;
         overlayGiB = 150;
       };
     estimate = deadline.host * 60 + 90 + 30;
@@ -287,7 +287,9 @@
     assert lib.hasInfix (builtins.unsafeDiscardStringContext "--pools ${poolPath} ") (builtins.unsafeDiscardStringContext dispatcher.serviceConfig.ExecStart);
     assert !(lib.hasInfix "--trusted-jobs" dispatcher.serviceConfig.ExecStart);
     assert lib.hasSuffix " --trusted-jobs" trustedConfig.systemd.services.${dispatchName}.serviceConfig.ExecStart;
-    assert deadline.runner < deadline.guest && deadline.guest < deadline.host;
+    assert deadline.runner * 60 + internal.pickupSeconds + 5 * 60 <= deadline.guest * 60;
+    assert deadline.guest < deadline.host;
+    assert lib.hasInfix "--wait-timeout ${toString internal.pickupSeconds}s" guestRunner.script;
     assert deadline == builtins.removeAttrs expected ["overlayGiB"];
     assert lib.hasSuffix " --vm-deadline ${toString estimate}" dispatcher.serviceConfig.ExecStart;
     assert (lib.findFirst (volume: volume.image == "nix-store-overlay.img") null guest.microvm.volumes).size == expected.overlayGiB * 1024;

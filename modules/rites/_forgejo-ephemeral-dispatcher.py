@@ -262,7 +262,7 @@ class Forgejo:
         if self.deadline is not None:
             timeout = min(timeout, self.deadline - time.monotonic())
             if timeout <= 0:
-                raise ApiError("trust lookup deadline reached")
+                raise ApiError("Forgejo request deadline reached")
         # A socket timeout alone permits an arbitrarily slow trickle of response bytes.
         previous = signal.signal(signal.SIGALRM, expired)
         signal.setitimer(signal.ITIMER_REAL, timeout)
@@ -754,6 +754,7 @@ class CommandSlot:
         "stop-support": "stop", "scrub": "show", "deliver": "show",
     }
     REFUSALS = {
+        "watchdog-arm-failed": "could not arm the slot watchdog; no VM start was submitted",
         "vm-not-stopped": "VM state changed during reconciliation; waiting before slot cleanup",
         "vm-not-running": "slot is not running; not delivering CI credentials",
         "no-trust-share": "this slot does not deliver CI credentials; its trust share is off on the slot host",
@@ -774,11 +775,11 @@ class CommandSlot:
         "run-marker": "cannot read or update the slot run marker",
         "remote-launch": "cannot launch the sandboxed slotctl verb",
     }
-    # These codes in a start reply come from gates before systemctl. In
-    # particular, systemctl-failed can mean the reply to a queued job was lost.
+    # These gates run before VM start submission. A generic systemctl
+    # failure, by contrast, can mean the reply to a queued start was lost.
     START_REFUSALS = frozenset((
         b"slot-busy", b"slot-lock", b"slot-user-missing", b"run-marker", b"run-mismatch",
-        b"disk-space-check", b"disk-space-low", b"remote-launch",
+        b"disk-space-check", b"disk-space-low", b"remote-launch", b"watchdog-arm-failed",
     ))
 
     def __init__(self, command, run=None, lock_fd=None, *, remote=False):
@@ -799,7 +800,7 @@ class CommandSlot:
                 stderr=subprocess.PIPE,
                 # slotctl hands the state lock on to the systemctl calls it makes (see Systemctl there).
                 pass_fds=(self.lock_fd,) if hold else (),
-                timeout=120 if self.remote else self.TIMEOUTS.get(verb, 30),
+                timeout=120 if self.remote else self.TIMEOUTS.get(verb, 40),
                 check=False,
             )
         except (OSError, subprocess.SubprocessError):
@@ -910,7 +911,7 @@ class Store:
         name = runner_pattern(slot)
         if (
             not isinstance(data, dict)
-            or data.keys() - {"trust_ids"} != {"version", "slot", "owner_id", "active", "ambiguous", "retired", "refusals"}
+            or data.keys() - {"trust_ids", "unpicked"} != {"version", "slot", "owner_id", "active", "ambiguous", "retired", "refusals"}
             or not positive(data["version"])
             or data["version"] != 2
             or data["slot"] != slot
@@ -936,6 +937,12 @@ class Store:
                 or not timestamp(budget["first_at"])
             ):
                 return False
+        unpicked = data.get("unpicked", {})
+        if not isinstance(unpicked, dict) or any(
+            not handle_ok(handle) or not positive(count) or count >= REFUSAL_LIMIT
+            for handle, count in unpicked.items()
+        ):
+            return False
         for handle, intent in data["ambiguous"].items():
             if (
                 not handle_ok(handle)
@@ -961,12 +968,22 @@ class Store:
             return True
         if (
             not isinstance(active, dict)
-            or active.keys() - {"picked_up_at"} != {"handle", "name", "runner", "phase", "queued_at"}
+            or active.keys() - {"picked_up_at", "trusted", "revalidate_by"} != {"handle", "name", "runner", "phase", "queued_at"}
             or not handle_ok(active["handle"])
             or not matches(name, active["name"])
             or active["phase"] not in ("intent", "registered", "start", "cleanup", "release")
             or ("picked_up_at" in active and (active["phase"] != "start" or not timestamp(active["picked_up_at"])))
         ):
+            return False
+        if "trusted" in active:
+            proof = active["trusted"]
+            if (
+                "picked_up_at" not in active
+                or not isinstance(proof, dict) or proof.keys() != {"task_id", "run_id"}
+                or not positive(proof["task_id"]) or not positive(proof["run_id"])
+            ):
+                return False
+        if "revalidate_by" in active and ("trusted" not in active or not timestamp(active["revalidate_by"])):
             return False
         if active["phase"] == "intent":
             return active["runner"] is None and active["queued_at"] is None
@@ -976,6 +993,8 @@ class Store:
 
     def save(self, **changes):
         data = self.data | changes
+        if not data.get("unpicked"):
+            data.pop("unpicked", None)
         try:
             directory = os.open(self.directory, DIR_FLAGS)
             try:
@@ -1029,9 +1048,10 @@ class Claims:
                     raise StateError("conflicting durable claims; reconcile dispatcher state before polling")
                 claims.add(digest)
             blocked.update(data["retired"])
-            # The slot that saw a definite refusal owns that handle's retry budget.
+            # The slot that saw a definite refusal or missed pickup owns that handle's budget.
             if slot != SLOT:
                 blocked.update(data["refusals"])
+                blocked.update(data.get("unpicked", {}))
         return claims, blocked
 
     @staticmethod
@@ -1163,10 +1183,9 @@ class Queue:
         self.reset_pending = False  # reset-failed still owed for a stop that timed out
         self.identity_verified = False
         self.deadline_logged = False
-        # In memory only: after a restart the delivered files are withdrawn (main) and the run is re-resolved.
+        # The durable proof only permits revalidation; credentials are withdrawn at startup.
         self.verdict = None  # {"name", "state": pending|delivered|untrusted, "since": first resolution attempt}
-        # Slot-local backoff for requests that never reached systemd. A peer
-        # can still take the job once we delete the unused registration.
+        # Slot-local backoff for failed starts and missed pickups.
         self.pre_start_retries = {}
 
     def _log(self, message):
@@ -1191,13 +1210,20 @@ class Queue:
             if snapshot.vm_idle and snapshot.again_idle:
                 return  # The idle reconciliation pass will scrub this run.
             raise SlotError("live or pending VM has an unknown slot run; refusing slot reuse")
+        if not snapshot.vm_idle:
+            self._begin_revalidation()
         self.slot.withdraw(snapshot.run)
 
     def monitor(self):
         now = self.monotonic()
+        active = self.store.data["active"]
+        if "trusted" in active and self.verdict is not None and self.verdict["state"] == "untrusted":
+            self._stop("previously trusted job failed revalidation")
+            return POLL
+        self._begin_revalidation()
         remaining = self._until_untrusted_limit()
         if remaining <= 0:
-            self._stop("untrusted job reached its 65 min limit")
+            self._stop("trust revalidation timed out" if self._revalidating() else "untrusted job reached its 65 min limit")
             return POLL
         if now >= self.busy_after:
             queued_at = self.store.data["active"]["queued_at"]
@@ -1211,12 +1237,33 @@ class Queue:
             except ApiError as error:
                 self.busy_misses = 0
                 self._log(error)
+        if self.verdict is not None and self.verdict["state"] == "untrusted" and "trusted" in self.store.data["active"]:
+            # Do not grant another recovery window if the dispatcher dies while stopping the VM.
+            active = self.store.data["active"]
+            now_wall = self.wall()
+            if active["revalidate_by"] > now_wall:
+                self.store.save(active=active | {"revalidate_by": now_wall})
+            self._stop("previously trusted job failed revalidation")
+            return POLL
         return max(0, min(POLL, self.busy_after - self.monotonic(), self._until_untrusted_limit()))
+
+    def _begin_revalidation(self):
+        active = self.store.data["active"]
+        if self._revalidating() and "revalidate_by" not in active:
+            self.store.save(active=active | {"revalidate_by": self.wall() + TRUST_DEADLINE})
+
+    def _revalidating(self):
+        active = self.store.data["active"]
+        return self.trust is not None and active is not None and "trusted" in active and (
+            self.verdict is None or self.verdict["state"] == "pending"
+        )
 
     def _until_untrusted_limit(self):
         active = self.store.data["active"]
         if self.verdict is not None and self.verdict["name"] == active["name"] and self.verdict["state"] == "delivered":
             return float("inf")
+        if self._revalidating():
+            return active["revalidate_by"] - self.wall()
         # If the forge never reports pickup, the start time is the safe
         # fallback; a broken API must not grant the longer trusted budget.
         return active.get("picked_up_at", active["queued_at"]) + UNTRUSTED_LIMIT - self.wall()
@@ -1297,8 +1344,8 @@ class Queue:
             self.store.save(active=active | {"phase": "release"})
             self._log(f"VM start not submitted; local files scrubbed for unused runner {active['runner']['id']}")
         else:
-            cleanup = active | {"phase": "cleanup", "queued_at": None}
-            cleanup.pop("picked_up_at", None)
+            cleanup = {key: value for key, value in active.items() if key not in ("picked_up_at", "trusted", "revalidate_by")}
+            cleanup.update(phase="cleanup", queued_at=None)
             self.store.save(active=cleanup)
             self._log(f"VM idle ({result}); local files scrubbed for runner {active['runner']['id']}")
         return True
@@ -1324,18 +1371,15 @@ class Queue:
                 if str(error) != self.pins_error:
                     self._log(f"startup trust pins incomplete: {error}")
                 self.pins_error = str(error)
-        if idle and data["active"] is not None:
-            active = data["active"]
+        active = data["active"]
+        if idle and active is not None:
             self.api.delete(active["runner"])
-            handle = active["handle"]
             if active["phase"] == "release":
+                handle = active["handle"]
                 self.claims.finish(self.store, (handle,), active=None)
-                previous, _ = self.pre_start_retries.get(handle, (0, 0))
-                delay = min(PRE_START_MAX_BACKOFF, max(POLL, previous * 2))
-                self.pre_start_retries[handle] = delay, self.monotonic() + delay
+                delay = self._back_off_start(handle)
                 self._log(f"released job after unused runner {active['runner']['id']} was deleted; retry in {delay}s")
-            else:
-                self.claims.finish(self.store, (handle,), active=None, retired=[*data["retired"], handle])
+                active = None
         inventory_ok = False
         if idle:
             self._delete_recovered()
@@ -1352,6 +1396,8 @@ class Queue:
                     inventory_ok = True
                     self._delete_recovered()
         jobs = self.api.jobs(owner)
+        if idle and active is not None:
+            self._finish_started(active, jobs)
         seen = {job["handle"] for job in jobs}
         self._observe_queue(seen, inventory_ok)
         if not idle:
@@ -1367,6 +1413,7 @@ class Queue:
                     # A poll after an outage must not give an already-running job a fresh 65 minutes.
                     picked_up_at = now if timely else self.last_waiting_at
                     self.store.save(active=active | {"picked_up_at": picked_up_at})
+                    self.pre_start_retries.pop(active["handle"], None)
                 if self.trust is not None and self._until_untrusted_limit() > 0:
                     self._settle_trust(target, owner, account)
             return
@@ -1379,6 +1426,30 @@ class Queue:
             and len(job["runs_on"]) == 1 and job["runs_on"][0] in self.pool.labels
             and job["handle"] not in blocked and now >= self.pre_start_retries.get(job["handle"], (0, 0))[1]
         ]
+
+    def _back_off_start(self, handle):
+        previous, _ = self.pre_start_retries.get(handle, (0, 0))
+        delay = min(PRE_START_MAX_BACKOFF, max(POLL, previous * 2))
+        self.pre_start_retries[handle] = delay, self.monotonic() + delay
+        return delay
+
+    def _finish_started(self, active, jobs):
+        handle = active["handle"]
+        waiting = any(job["handle"] == handle and job["status"] == "waiting" and job["task_id"] == 0 for job in jobs)
+        data = self.store.data
+        unpicked = data.get("unpicked", {}).copy()
+        count = unpicked.pop(handle, 0) + 1
+        retired = data["retired"]
+        if waiting:
+            if count < REFUSAL_LIMIT:
+                unpicked[handle] = count
+                delay = self._back_off_start(handle)
+                self._log(f"VM ended without pickup ({count}/{REFUSAL_LIMIT}); retry in {delay}s")
+            else:
+                self._log(f"VM ended without pickup ({count}/{REFUSAL_LIMIT}); retiring handle")
+        if not waiting or count >= REFUSAL_LIMIT:
+            retired = [*retired, handle]
+        self.claims.finish(self.store, (handle,), active=None, retired=retired, unpicked=unpicked)
 
     def _check_cancelled(self, seen):
         if self.store.data["active"]["handle"] in seen:
@@ -1402,6 +1473,8 @@ class Queue:
     def _resolving(self):
         if self.trust is None:
             return False
+        if self._revalidating():
+            return True
         verdict = self.verdict
         if verdict is None or verdict["name"] != self.store.data["active"]["name"]:
             return True
@@ -1428,6 +1501,11 @@ class Queue:
             verdict["state"] = "untrusted"
             self._log("untrusted: repository not in the trust allowlist; CI upload credentials withheld")
             return
+        proof = active.get("trusted")
+        if proof is not None and job["task_id"] != proof["task_id"]:
+            verdict["state"] = "untrusted"
+            self._log("untrusted: task changed since delivery; CI upload credentials withheld")
+            return
         path = f"/repos/{repo['owner']}/{repo['name']}"
         if verdict["since"] is None:
             verdict["since"] = self.monotonic()
@@ -1438,6 +1516,8 @@ class Queue:
             with self.api.within(remaining):
                 trust_ids = self._pin_trust_users(account)
                 reason, run = self._resolve(job, path, owner, trust_ids)
+                if proof is not None and run["id"] != proof["run_id"]:
+                    reason = "run changed since delivery"
                 if reason is None:
                     # Still the same attempt, running on the same task, and the same trusted run.
                     again = next((row for row in self.api.jobs(owner) if row["handle"] == active["handle"]), None)
@@ -1447,7 +1527,7 @@ class Queue:
                     if rerun["id"] != run["id"]:
                         raise ApiError("run changed before delivery")
                     reason = trusted_run(rerun, repo_id, owner, self.pool, trust_ids)
-                    if self.monotonic() - verdict["since"] >= TRUST_DEADLINE:
+                    if self.monotonic() - verdict["since"] >= TRUST_DEADLINE or self._until_untrusted_limit() <= 0:
                         raise ApiError("trust lookup deadline reached")
         except ApiError as error:
             self._defer(verdict, f"trust lookup pending: {error}", error)
@@ -1464,10 +1544,15 @@ class Queue:
         try:
             if self.slot.observe().vm_idle:
                 return  # The next tick reconciles the stopped slot; never write into a directory being scrubbed.
+            if self._until_untrusted_limit() <= 0:
+                return
             self.slot.deliver(active["name"], secrets)
         except SlotError as error:
             self._defer(verdict, f"delivery pending: {error}", error)
             return
+        active = active | {"trusted": {"task_id": job["task_id"], "run_id": run["id"]}}
+        active.pop("revalidate_by", None)
+        self.store.save(active=active)
         verdict["state"] = "delivered"
         self._log(f"trusted: run #{run['index_in_repo']} ({run['trigger_event']}); delivered CI upload credentials")
 
@@ -1538,6 +1623,9 @@ class Queue:
         refusals = data["refusals"]
         if any(handle not in seen for handle in refusals):
             changes["refusals"] = {handle: budget for handle, budget in refusals.items() if handle in seen}
+        unpicked = data.get("unpicked", {})
+        if unpicked.keys() - seen:
+            changes["unpicked"] = {handle: count for handle, count in unpicked.items() if handle in seen}
         # A complete inventory plus a fresh jobs response brackets the window;
         # observed reappearance invalidates earlier evidence.
         now = int(self.wall())
@@ -1639,7 +1727,6 @@ class Queue:
             # before cleanup so a restart releases instead of retiring.
             self.store.save(active=active)
             raise
-        self.pre_start_retries.pop(handle, None)
         self._log(f"queued VM start for runner {runner['id']}")
 
     def _record_refusal(self, handle):
