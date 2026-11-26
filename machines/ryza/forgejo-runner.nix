@@ -43,6 +43,23 @@
         users = ["manjo"];
       };
     };
+    # forge.noosphere.uk, one PAT for both pools (var forgejo-ephemeral-noosphere).
+    # Only jobs that ask for `runs-on: nix-eph` come here until the label takeover (HOM-32 PR 12).
+    pools.noosphere-user = {
+      forge = "noosphere";
+      scope.user = "manjo";
+      labels = ["nix-eph"];
+      # manjo/auspex, manjo/mushroom-farmer
+      dispatch = [221 188];
+    };
+    # monolith-softworks is not public, so its repo IDs aren't listed here: every org repo
+    # (inanna, tally, and any later one) is dispatched untrusted.
+    pools.noosphere-org = {
+      forge = "noosphere";
+      scope.org = "monolith-softworks";
+      labels = ["nix-eph"];
+      dispatch = "owner";
+    };
   };
 
   services.imperium.sccache.enable = true;
