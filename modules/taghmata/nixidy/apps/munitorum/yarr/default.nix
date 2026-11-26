@@ -1,4 +1,4 @@
-# The yarr media stack: Seerr, the *arr applications and SABnzbd, in one
+# The yarr media stack: Seerr, the *arr applications, SABnzbd and Aurral, in one
 # namespace and on one PostgreSQL cluster.
 #
 # What they share is declared here: the namespace, the pg-yarr cluster with a
@@ -21,6 +21,7 @@
       ../../../_modules/templates/database-template.nix
       ./_seerr
       ./_sabnzbd
+      ./_aurral
       (arr {
         name = "radarr";
         port = 7878;

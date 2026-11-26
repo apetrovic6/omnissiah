@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: aurral
+  name: aurral
+  namespace: yarr
+spec:
+  selector:
+    matchLabels:
+      app: aurral
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: aurral
+    spec:
+      containers:
+        - env:
+            - name: PUID
+              value: "1031"
+            - name: PGID
+              value: "65537"
+            - name: LIBRARY_FOLDER
+              value: /data/media/aurral
+            - name: FILE_BROWSE_ROOTS
+              value: /data/media
+            - name: AURRAL_PUBLIC_URL
+              value: https://aurral.noosphere.uk
+          image: ghcr.io/lklynet/aurral:latest
+          name: aurral
+          ports:
+            - containerPort: 3001
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /data
+              name: data
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: aurral-config
+        - name: data
+          nfs:
+            path: /volume1/data/
+            server: 192.168.1.61
