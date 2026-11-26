@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    category: yarr
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    glance/description: Music discovery and player
+    glance/icon: di:aurral
+    glance/id: aurral
+    glance/name: Aurral
+    glance/parent: aurral
+    glance/url: https://aurral.noosphere.uk
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  name: aurral-ip-root
+  namespace: yarr
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: aurral.noosphere.uk
+      http:
+        paths:
+          - backend:
+              service:
+                name: aurral
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - aurral.noosphere.uk
+      secretName: aurral-tls

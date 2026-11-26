@@ -93,6 +93,7 @@ data:
           - linuxserver/docker-prowlarr
           - linuxserver/docker-sabnzbd
           - linuxserver/docker-bazarr
+          - lklynet/aurral
           - goharbor/harbor
           - longhorn/longhorn
           - dockerhub:dxflrs/amd64_garage

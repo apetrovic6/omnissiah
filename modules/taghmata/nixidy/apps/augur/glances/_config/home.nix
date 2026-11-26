@@ -92,6 +92,7 @@
     "linuxserver/docker-prowlarr" # lscr.io/linuxserver/prowlarr
     "linuxserver/docker-sabnzbd" # lscr.io/linuxserver/sabnzbd
     "linuxserver/docker-bazarr" # lscr.io/linuxserver/bazarr
+    "lklynet/aurral" # ghcr.io/lklynet/aurral
 
     # Storage & Registries
     "goharbor/harbor" # docker.io/goharbor/*
