@@ -5,6 +5,7 @@
     config,
     lib,
     options,
+    pkgs,
     ...
   }: let
     inherit (config.networking) hostName;
@@ -12,6 +13,7 @@
     # via specialArgs (also read by the guard's Caddy, proxy.nix). Machine
     # modules cannot override these settings.
     fleet = args.ciDispatcher or self.lib.ciDispatcher;
+    inherit (self.lib) sccacheCiKey;
     inventory = lib.mapAttrs (_: entry:
       if fleet.remote
       then entry // {dispatcher = fleet.host;}
@@ -58,6 +60,15 @@
       (lib.mkIf (fleet.remote && dispatches) (lib.optionalAttrs (options.services.imperium ? forgejoRunner) {
         services.imperium.forgejoRunner.enable = lib.mkForce false;
       }))
+      (lib.mkIf (fleet.remote && dispatches && (fleet.sccacheCi or false)) {
+        # Provision independently of trustedJobs. PR 10 must require remote
+        # dispatch before wiring LoadCredential; local mode has no holder.
+        clan.core.vars.generators.${sccacheCiKey.generatorName} = import ./_sccache-garage-key.nix {
+          inherit lib pkgs;
+          inherit (sccacheCiKey) generatorName importSecret;
+          ageKey = config.noosphere.agePublicKey;
+        };
+      })
       (lib.mkIf dispatches {
         services.imperium.forgejoEphemeral.pools = {
           ugalabugala = {

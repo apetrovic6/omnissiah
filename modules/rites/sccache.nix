@@ -31,8 +31,6 @@
   ageKey = config.noosphere.agePublicKey;
   domain = config.noosphere.domain;
   generatorName = "sccache-garage-key";
-  fileName = "sccache-garage-key";
-  credentialsFile = "credentials";
   # Name of the SopsSecret-backed Secret the operator imports FROM. Deliberately
   # not "sccache": that is the GarageKey's own name, and the operator writes its
   # own Secret under that name.
@@ -128,7 +126,7 @@ in {
           #    opens it directly). Scoped to sccache's own process tree -- a
           #    session-wide export would redirect the aws CLI and every AWS
           #    SDK tool to a key that can see exactly one bucket.
-          export AWS_SHARED_CREDENTIALS_FILE="''${AWS_SHARED_CREDENTIALS_FILE:-${config.clan.core.vars.generators.${generatorName}.files.${credentialsFile}.path}}"
+          export AWS_SHARED_CREDENTIALS_FILE="''${AWS_SHARED_CREDENTIALS_FILE:-${config.clan.core.vars.generators.${generatorName}.files.credentials.path}}"
 
           # 4. Garage unreachable = uncached, never a failed build (RT-77).
           #    sccache 0.19 runs a storage check (`.sccache_check` GET)
@@ -195,58 +193,8 @@ in {
     };
 
     config = lib.mkIf cfg.enable {
-      clan.core.vars.generators.${generatorName} = {
-        share = true;
-
-        files.${fileName}.secret = false;
-        files.${credentialsFile} = {
-          secret = true;
-          mode = "0400";
-          # root everywhere by default (runners read it through systemd
-          # LoadCredential, which runs as root); the workstations override to
-          # the user, whose sccache server opens the file directly.
-          owner = lib.mkDefault "root";
-        };
-
-        runtimeInputs = [pkgs.coreutils pkgs.openssl pkgs.sops];
-
-        script = ''
-          set -euo pipefail
-
-          # Garage's own format (src/model/key_table.rs): "GK" + 24 hex chars from
-          # 12 random bytes, secret = 64 hex chars from 32 random bytes.
-          access_key_id="GK$(openssl rand -hex 12)"
-          secret_access_key="$(openssl rand -hex 32)"
-
-          # AWS shared-credentials format; reqsign's profile provider reads the
-          # [default] profile (AWS_PROFILE unset) from whatever
-          # AWS_SHARED_CREDENTIALS_FILE points at.
-          umask 077
-          cat > "$out/${credentialsFile}" <<EOF
-          [default]
-          aws_access_key_id = $access_key_id
-          aws_secret_access_key = $secret_access_key
-          EOF
-
-          sops encrypt \
-            --age "${ageKey}" \
-            --encrypted-suffix "Templates" \
-            --input-type yaml --output-type yaml \
-            /dev/stdin > "$out/${fileName}" <<EOF
-          apiVersion: isindir.github.com/v1alpha3
-          kind: SopsSecret
-          metadata:
-            name: ${importSecret}
-            namespace: garage-operator
-          spec:
-            secretTemplates:
-              - name: ${importSecret}
-                type: Opaque
-                stringData:
-                  access-key-id: "$access_key_id"
-                  secret-access-key: "$secret_access_key"
-          EOF
-        '';
+      clan.core.vars.generators.${generatorName} = import ./_sccache-garage-key.nix {
+        inherit lib pkgs ageKey generatorName importSecret;
       };
     };
   };

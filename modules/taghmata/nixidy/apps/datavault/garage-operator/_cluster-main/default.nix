@@ -1,9 +1,30 @@
 {
   domain,
+  lib,
   namespace,
+  sccacheCiKey,
+  vars,
   ...
-}: {
+}: let
+  inherit (sccacheCiKey) generatorName importSecret;
+  hasCiKey = builtins.pathExists (vars.shared generatorName generatorName);
+
+  sccacheLifecycle = [
+    {
+      # sccache only writes objects it later reads back; without expiry the
+      # caches only grow. Expiry counts from upload, not from the last read.
+      id = "expire-after-7-days";
+      status = "Enabled";
+      expirationDays = 7;
+      # A killed build can leave multipart uploads that expiration does not
+      # cover and that still count against the quota.
+      abortIncompleteMultipartUploadDays = 7;
+    }
+  ];
+in {
   applications.garage-operator = {
+    sopsSecrets = lib.optional hasCiKey generatorName;
+
     resources.garageClusters.garage-main = {
       metadata = {inherit namespace;};
       spec = {
@@ -15,9 +36,10 @@
             # Garage's layout capacity per node, not a real limit: local-path
             # neither enforces nor resizes a volume, and the existing nodes
             # keep their claims. Each node's /mnt/storage is a 1.8 TB NVMe
-            # shared with other local-path volumes. At 200Gi, ncps alone
-            # (cache.maxSize 500G) could outgrow what Garage thinks it has;
-            # 1Ti leaves room for it and the sccache bucket.
+            # shared with other local-path volumes. Bounded caches total about
+            # 866 GiB: ncps caps itself at 500G; sccache has 250Gi and
+            # sccache-ci 150Gi. Other buckets have no quotas. Check actual
+            # free space on those devices before enabling CI cache writes.
             size = "1Ti";
             storageClassName = "local-path";
           };
@@ -236,22 +258,24 @@
       # ArgoCD OutOfSync forever. A quantity string round-trips unchanged.
       quotas.maxSize = "250Gi";
 
-      lifecycle.rules = [
-        {
-          # sccache never deletes anything from S3 -- it only writes objects
-          # it later reads back -- so without expiry this bucket only grows.
-          # 7 days (the owner's call, 2026-11-15) caps it at about a week
-          # of churn. Expiry counts from upload, not last read, so even a
-          # hot entry is recompiled and re-uploaded once a week.
-          id = "expire-after-7-days";
-          status = "Enabled";
-          expirationDays = 7;
-          # Large objects go up as multipart uploads; a build killed mid-
-          # upload leaves parts behind that Expiration does not cover and
-          # that still count against the quota.
-          abortIncompleteMultipartUploadDays = 7;
-        }
-      ];
+      lifecycle.rules = sccacheLifecycle;
+    };
+  };
+
+  # The dispatcher is the only holder. Do not reconcile either object until
+  # SopsSecrets can supply the import, and never grant the workstation bucket.
+  garage.keys.sccache-ci = lib.mkIf hasCiKey {
+    cluster = "main";
+    buckets = ["sccache-ci"];
+    permissions = {
+      read = true;
+      write = true;
+    };
+    owner = false;
+    inherit importSecret;
+    bucketSpec.sccache-ci = {
+      quotas.maxSize = "150Gi";
+      lifecycle.rules = sccacheLifecycle;
     };
   };
 }
