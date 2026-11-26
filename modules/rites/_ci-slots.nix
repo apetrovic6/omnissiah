@@ -28,7 +28,7 @@
 {
   dispatcher = {
     # Prepare new PATs and a slotctl key before deploying this as true.
-    remote = false;
+    remote = true;
     host = "cerberus";
     # Separate operator opt-in; applies to the dispatcher and its slots.
     trustedJobs = false;
