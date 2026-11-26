@@ -49,8 +49,7 @@
           hash = "sha256-U9ZcNapbdiR0xzb/1j8Q2bPO4U2kh+VWse9OaSdehKs=";
         };
       };
-    in
-      tofu.mkCliAio {
+      cli = tofu.mkCliAio {
         plugins = lib.mapAttrsToList (source: pin: let
           parts = lib.splitString "/" source;
         in
@@ -71,5 +70,24 @@
           };
         };
       };
+    in
+      # The state bucket's S3 keys are decrypted here, per run, into this
+      # process only. They used to be exported by .envrc, which put them in
+      # the environment of everything started from the repo shell -- editors,
+      # language servers, build scripts and coding agents included.
+      (pkgs.writeShellApplication {
+        name = "tofunix";
+        runtimeInputs = [pkgs.sops pkgs.git];
+        text = ''
+          root=$(git rev-parse --show-toplevel)
+          secret="$root/vars/shared/tofunix-s3-secrets/tofunix-s3-secrets/value"
+          AWS_ACCESS_KEY_ID=$(sops decrypt --input-type yaml --extract '["access_key_id"]' "$secret")
+          AWS_SECRET_ACCESS_KEY=$(sops decrypt --input-type yaml --extract '["secret_access_key"]' "$secret")
+          export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+          exec ${lib.getExe' cli "tofunix"} "$@"
+        '';
+      })
+      # mkCliAio attaches these with `//`; keeps `nix build .#tofunix.tfjson`.
+      // {inherit (cli) module tfjson gitlab;};
   };
 }

@@ -2,6 +2,7 @@
   perSystem = {
     pkgs,
     inputs',
+    self',
     ...
   }: {
     treefmt = {
@@ -19,6 +20,7 @@
         nil
         nixd
         garage_2
+        self'.packages.tofunix
       ];
     };
   };

@@ -1,6 +1,7 @@
 # Conduits: every provider, and the relic (./patterns/reliquary.nix) holding
 # the credential it logs in with. The state bucket's own credentials are not
-# here; .envrc exports them from the `tofunix-s3-secrets` var.
+# here; the tofunix wrapper (../tofunix.nix) decrypts them from the
+# `tofunix-s3-secrets` var for each run.
 {
   noosphere,
   relic,
