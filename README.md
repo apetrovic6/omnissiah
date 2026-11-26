@@ -1644,9 +1644,13 @@ clan vars fix "$new" --generator sccache-ci-garage-key
 
 Commit the recipient change. This preserves the imported key; removing a
 recipient does not revoke a key the old host could already read. If the
-old host is being retired or is untrusted, regenerate instead
+old host is being retired or is untrusted, still run the `git rm` first
+(clan re-encrypts to every existing recipient link), then regenerate
+instead of `fix`
 (`clan vars generate "$new" --generator sccache-ci-garage-key --regenerate`),
-then render and sync. PR 15 handles rotation; check the import snapshot
+then render and sync. Either way,
+`ls vars/shared/sccache-ci-garage-key/credentials/machines/` must list
+only `$new`. PR 15 handles rotation; check the import snapshot
 first, since the operator may need to recreate the `GarageKey`.
 
 Pause the new host and deploy slot hosts first so they replace the old
@@ -2140,9 +2144,12 @@ prune. This removes the CI key and SopsSecret-backed import Secret, but
 ArgoCD leaves the `GarageBucket`: the operator sets an owner reference
 to `GarageCluster`. Garage won't delete a non-empty bucket. Wait at least
 seven days after the last upload for object expiry and multipart cleanup,
-check that the CI bucket is empty, then delete it:
+check that the CI bucket is empty (zero objects and no incomplete
+uploads), then delete it:
 
 ```sh
+kubectl --context default -n garage-operator get garagebucket sccache-ci -o json \
+  | jq '.status | {quotaUsage, incompleteUploads}'
 kubectl --context default -n garage-operator delete garagebucket sccache-ci
 ```
 
