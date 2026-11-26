@@ -176,6 +176,21 @@ class WorkspaceMigration(unittest.TestCase):
                 self.assertIn(f"active task in {self.home / slot.removesuffix('/.current-task')}", log)
                 self.assertEqual(snapshot(self.home), before)
 
+    def test_live_worktree_mode_tasks_refuse_untouched(self):
+        state = '{"version": 1, "tasks": [{"task_id": "0123456789abcdef"}]}\n'
+        for slot, text in (("work/.task-state.json", state), ("work-devzero/.tasks/devzero/.task-state.json", state),
+                           ("work/.task-state.json", "{")):
+            with self.subTest(slot=slot, text=text):
+                shutil.rmtree(self.home)
+                self.home.mkdir()
+                self.old_layout()
+                write(self.home / slot, text)
+                before = snapshot(self.home)
+                status, log = self.run_migration()
+                self.assertEqual(status, migrate.REFUSED, log)
+                self.assertIn(f"active task in {self.home / slot.removesuffix('/.task-state.json')}", log)
+                self.assertEqual(snapshot(self.home), before)
+
     # --- robustness -----------------------------------------------------------------------
 
     def test_skeleton_left_by_tmpfiles_after_a_refused_run_is_ignored(self):

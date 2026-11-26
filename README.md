@@ -227,12 +227,14 @@ one-time migration: [Hermes workspaces on stygies](#hermes-workspaces-on-stygies
    app instead. To move it to Matrix later, create the room and add `room`.
 
 In Hermes Mobile, pick `coder`, open one chat per task, and name the exact repo
-from the coder project map. App chats and Matrix threads share one slot and
-queue; both require explicit plan approval. If queued, return to the same chat
-or thread and say `continue`. There is no push notification. If the app task ID
-is lost, use `clear task` only for a confirmed active task. For a queued task,
-confirm its project and `queued_at` from the queued reply, then say
-`drop queued <queued_at>` instead; this leaves the active task alone.
+from the coder project map. Each app chat or Matrix thread is its own task with
+its own git worktree, so tasks run in parallel, several on one repo too
+([Hermes task worktrees](#hermes-task-worktrees)); each needs explicit plan
+approval. At the cap (`services.imperium.hermesGit.maxLiveTasks`, default 3) a
+new claim is refused as `busy`, not queued: finish or clear a task first. To
+release a task, say `clear task` (or `drop task`) in its chat or thread; from
+anywhere else, say `clear task <task_id>` with the ID from `task-status --all`.
+That is also the way out when an app task ID is lost.
 
 On ryza as `hermes`, use `hermes -p coder model` to select a provider and
 `hermes -p coder --tui` to start a session. `hermes -p coder webapp` selects the
@@ -247,7 +249,7 @@ history kept: the `hermes-refresh-prompts` unit runs
 (`coder`, `work`) whose SOUL or Nix settings changed, after the new file is in
 place. A failure doesn't fail the deploy; it is logged
 (`journalctl -u hermes-refresh-prompts`) and retried on the next switch or
-gateway start. Don't reset an active or queued chat to pick up the prompt.
+gateway start. Don't reset a chat with a live task to pick up the prompt.
 
 **App projects** need stygies paths: create them in the app with an absolute
 `/home/hermes/personal/<repo>` path. Hermes resolves `~` and relative paths on ryza
@@ -256,13 +258,13 @@ A patched Hermes (`services.imperium.hermes.sshHostOnlyPaths`, default
 `/var/lib/hermes`) runs such a project's commands in the profile's
 `terminal.cwd` (`~/personal`) instead of failing every one, and logs
 `ssh working directory … exists only on the Hermes host` in `agent.log`. Fix the
-project's path rather than relying on that.
+project's path rather than relying on that. The project path stays the base
+clone; the SOUL runs a task's commands in that task's worktree
+(`/home/hermes/personal/.worktrees/<repo>/<task_id>`, which the guard leaves
+alone, as it does every path outside `sshHostOnlyPaths`).
 
-Before rolling stygies back, stop submitting new app tasks and use
-`task-status --queue` on stygies to check both the active slot and the queue.
-Finish or clear any active app task and drop any remaining queued app entries
-with `task-drop -- '<position>' '<queued_at>'`. Refresh the queue listing before
-each drop. Older tools cannot read app rows.
+Before rolling stygies back past the task worktrees change, see
+[Hermes task worktrees](#hermes-task-worktrees), "Rollback".
 
 **Kaneo login:** Use a Kaneo account with access to the project workspace.
 A separate workspace member for Hermes is recommended so its edits are
@@ -305,6 +307,96 @@ sudo -u hermes -H ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
 The hard stop affects every process owned by `hermes` on stygies; the SSH
 connection may drop. If SSH itself is unavailable, use the stygies console.
 Restart the gateway and lift the pause when ready.
+
+### Hermes task worktrees
+
+The personal coder runs every task (one Matrix thread or one app chat) in its
+own git worktree, on its own branch, with no slot or queue
+(`modules/rites/_hermes-task.py` in worktree mode, launched by
+`modules/rites/hermes-forgejo-bot.nix`). The work coder still uses its
+per-company slots for now.
+
+| Path on stygies | What |
+| --- | --- |
+| `~/personal/<repo>` | Base clone: `origin` (the `hermes/<repo>` fork) and `upstream`. App projects point here; tasks never work in it. |
+| `~/personal/.worktrees/<repo>/<task_id>` | A task's worktree, created by `task-branch`, removed by `task-done` |
+| `~/personal/.worktrees/.trash` | Removed worktrees on their way out, deleted after each command (outside the lock) |
+| `~/personal/.worktrees/.kept` | Trees the tools would not delete, kept for you (listed by `task-status --all`) |
+| `~/personal/.task-state.json` | Live tasks (JSON, replaced atomically), with `.task-lock` |
+
+Worktrees sit beside the base clones, not inside them, so a `git clean`, a
+search or a `path:` flake copy in a base clone never reaches a task.
+
+Commands (`--follow-up` and other flags go before the origin):
+
+- `task-claim`: `claimed`, `active` (this conversation already has a task), or
+  `busy` (live tasks are at `maxLiveTasks`; nothing is written).
+- `task-status <origin>`: the conversation's own task (`owned`, `worktree`,
+  `idle_seconds`, `possibly_stale` after 12 idle hours). `task-status --all`
+  lists every live task by `task_id`, project, branch, idle time and summary,
+  plus `orphans` (worktree directories without a task), `kept` and `wip_refs`.
+  It never shows Matrix or app IDs.
+- `task-branch <origin> <started_at> <branch>` creates the worktree: a new
+  branch from `upstream/HEAD` without upstream tracking, or with `--follow-up`
+  the existing PR branch from `origin`, fast-forward only. Branches are
+  `hermes/<slug>`, and two live tasks never share one. The lock is released
+  while Git checks out, so big checkouts don't stall other tasks. A checkout
+  that dies is recovered by the next `task-branch` for that task after 10
+  minutes (the branch it left is deleted); one killed outright (SIGKILL, OOM)
+  leaves Git's `initializing` lock, recovered after an hour. A failing
+  post-checkout hook (e.g. git-lfs not installed) is reported as a warning.
+- `task-done` removes the worktree and deletes the local branch if `origin` has
+  exactly it, checked with `git ls-remote` (a stale remote-tracking ref or an
+  unreachable remote keeps it). Commits only the worktree's HEAD reflog names
+  (an amend, a detached commit left behind) are saved to
+  `refs/hermes/wip/<task_id>` first. It refuses while anything would be lost:
+  uncommitted changes, a detached HEAD, a rebase/merge/cherry-pick/revert/bisect
+  in progress, commits no branch, remote or tag holds, or initialised
+  submodules (their objects live in the worktree's admin dir; a submodule never
+  checked out doesn't count).
+- `task-clear <origin>`, `task-clear --id <task_id | repo/dir>` (only on your
+  explicit `clear task`): saves uncommitted work, and commits only the
+  worktree's HEAD holds, to `refs/hermes/wip/<task_id>` in the repo (never
+  replacing an existing ref), then removes the worktree. `task-clear --repair`
+  moves invalid state aside; the SOUL runs it on your `clear task` when a
+  command reported invalid state.
+
+The tools only ever delete a linked worktree of the task's own base clone.
+Anything else at a worktree path (another clone, a plain directory), and any
+worktree a snapshot can't hold (submodules, a nested repository, edits hidden
+by skip-worktree or assume-unchanged, a tree Git can't read) is moved to
+`.kept` instead; a kept linked worktree stays registered and locked, so look at
+it and remove it with `git worktree unlock` + `git worktree remove`. Its
+submodules still name their old place (`core.worktree`), so reach one with
+`git --git-dir ~/personal/<repo>/.git/worktrees/<task_id>/modules/<sub> --work-tree <kept>/<sub> …`.
+If Git can't lock a worktree, nothing is moved and the command refuses. Locked
+worktrees are never touched. **Ignored files** (build output, `.env`, local
+notes) are not kept: done and clear delete them with the worktree.
+
+To look at saved work: `git -C ~/personal/<repo> show refs/hermes/wip/<task_id>`,
+or check it out somewhere with `git worktree add`. Delete the ref when done
+(`git update-ref -d`).
+
+**Migration.** The first task command after the deploy turns the old slot into
+live tasks: the active task keeps its branch and finishes in its base clone
+(`legacy`), and queued tasks become pending tasks that start at their next
+`continue`. The old files are renamed `.current-task.migrated-<time>` and
+`.task-queue.migrated-<time>`.
+
+Deploy stygies, then ryza, back to back, while no personal task is between its
+claim and step 3 (setting up the workspace): an old-SOUL task in that window
+creates its branch in the base clone, and the new `task-branch` then refuses it
+("already exists locally"). Tasks past step 3 migrate cleanly (`legacy`).
+Don't start a task between the two deploys.
+
+**Rollback.** Older tools ignore `.task-state.json`. Before rolling stygies
+back, run `task-status --all` as `hermes` and finish or clear what's live, then
+remove `.task-state.json`. Don't rename the `.migrated-*` files back: they hold
+every row from deploy time, including tasks finished since. If a task must go
+on in the old slot, write a fresh `.current-task` with only its row (six
+tab-separated fields: `started_at`, room, thread, project, branch, summary).
+Leftover worktrees are plain git worktrees:
+`git -C ~/personal/<repo> worktree remove <path>`.
 
 ### Hermes delegation tiers
 
@@ -387,7 +479,7 @@ trees. Each SOUL forbids the other's tree.
 
 | Profile | Terminal cwd | Repos | Task slot |
 | --- | --- | --- | --- |
-| `coder` | `~/personal` | `~/personal/<repo>` | `~/personal/.current-task`, `.task-queue`, `.task-lock` |
+| `coder` | `~/personal` | `~/personal/<repo>`, task worktrees in `~/personal/.worktrees/<repo>/<task_id>` | `~/personal/.task-state.json`, `.task-lock` |
 | `work` | `~/work` | `~/work/<company>/<repo key>` | `~/work/.tasks/<company>/` |
 
 Before 2026-11-25 the coder used `~/work` and the work profile `~/work-devzero`.

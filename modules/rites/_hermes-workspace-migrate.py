@@ -25,6 +25,7 @@ the deploy on it.
 """
 
 import fcntl
+import json
 import os
 import sys
 import time
@@ -85,9 +86,18 @@ def company_slots(old_work):
 
 def active(slot):
     try:
-        return bool((slot / ".current-task").read_text(encoding="utf-8").strip())
+        if (slot / ".current-task").read_text(encoding="utf-8").strip():
+            return True
+    except FileNotFoundError:
+        pass
+    # Worktree mode's state (_hermes-task.py): live tasks, or anything unreadable, count as active.
+    try:
+        tasks = json.loads((slot / ".task-state.json").read_text(encoding="utf-8")).get("tasks")
     except FileNotFoundError:
         return False
+    except (ValueError, AttributeError):
+        return True
+    return tasks != []
 
 
 def lock_slots(stack, slots):
