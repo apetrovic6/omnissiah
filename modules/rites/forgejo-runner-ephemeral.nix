@@ -61,8 +61,7 @@
         services.imperium.forgejoRunner.enable = lib.mkForce false;
       }))
       (lib.mkIf (fleet.remote && dispatches && (fleet.sccacheCi or false)) {
-        # Provision independently of trustedJobs. PR 10 must require remote
-        # dispatch before wiring LoadCredential; local mode has no holder.
+        # Provision independently of pool activation and trustedJobs.
         clan.core.vars.generators.${sccacheCiKey.generatorName} = import ./_sccache-garage-key.nix {
           inherit lib pkgs;
           inherit (sccacheCiKey) generatorName importSecret;
@@ -113,6 +112,8 @@
     inherit (lib) mkOption types;
     cfg = config.services.imperium.forgejoEphemeral;
     inherit (config.networking) hostName;
+    fleet = cfg.remoteDispatcher or {};
+    inherit (self.lib) sccacheCiKey;
     inventory = cfg.inventory;
     host = inventory.${hostName} or {};
     dispatcherFor = machine: entry: entry.dispatcher or machine;
@@ -135,6 +136,7 @@
       noosphere = "forge.noosphere.uk";
     };
     cacheHost = "ncps.noosphere.uk";
+    s3Host = "s3.main.garage.noosphere.uk";
     credParent = "/run/microvm-credentials";
     runRoot = "/run/forgejo-ephemeral";
     claims = "${runRoot}/claims";
@@ -143,6 +145,22 @@
     forgejoLogin = types.strMatching "[A-Za-z0-9][A-Za-z0-9._-]{0,39}";
     forgejoRepoName = types.addCheck (types.strMatching "[A-Za-z0-9._-]{1,100}") (name: name != "." && name != "..");
     pools = builtins.attrValues cfg.pools;
+    sccacheActive = lib.any (pool: pool.sccache.enable) pools;
+    sccacheProvisioned = (fleet.remote or false) && (fleet.sccacheCi or false);
+    # Slot hosts have no pool definitions. Prepare their guest and deliver
+    # protocol once the fleet prerequisites are present; only the dispatcher
+    # opts each pool into receiving the file.
+    sccacheSlot = sccacheProvisioned && cfg.trustedJobs.enable && cfg.egressTrustedAddress != null;
+    # Preserve the deployed programs byte-for-byte while the feature is off.
+    # Build and test both variants from the same source, not a forked copy.
+    sccacheSources = pkgs.applyPatches {
+      name = "forgejo-ephemeral-sccache-sources";
+      src = lib.fileset.toSource {
+        root = ./.;
+        fileset = lib.fileset.unions [./_forgejo-ephemeral-dispatcher.py ./_forgejo-slotctl.py];
+      };
+      patches = [./_forgejo-ephemeral-sccache.patch];
+    };
     # Keep the existing guest and VM units byte-identical on the pilot.
     # Remote slots and any other label/forge selection need boot credentials.
     fixedPilot =
@@ -166,11 +184,13 @@
       credential = "forgejo-pat-${forge}";
     });
     poolsFile = pkgs.writeText "${hostName}-forgejo-ephemeral-pools.json" (builtins.toJSON (
-      lib.mapAttrs (_: pool: {
-        inherit (pool) forge scope labels dispatch maxSlots trust;
-        host = forgeHosts.${pool.forge};
-        inherit (forgeSettings.${pool.forge}) login;
-      })
+      lib.mapAttrs (_: pool:
+        {
+          inherit (pool) forge scope labels dispatch maxSlots trust;
+          host = forgeHosts.${pool.forge};
+          inherit (forgeSettings.${pool.forge}) login;
+        }
+        // lib.optionalAttrs pool.sccache.enable {sccache = true;})
       cfg.pools
     ));
     poolAssertions = lib.concatLists (lib.mapAttrsToList (name: pool: let
@@ -214,6 +234,22 @@
             || lib.all (id: builtins.match "[1-9][0-9]*" id == null || builtins.elem (lib.toInt id) pool.dispatch) (builtins.attrNames pool.trust.repos);
           message = "forgejoEphemeral: every trusted repo of pool ${name} must also be in its dispatch list.";
         }
+        {
+          assertion = !pool.sccache.enable || (fleet.remote or false);
+          message = "forgejoEphemeral: sccache for pool ${name} requires the remote dispatcher.";
+        }
+        {
+          assertion = !pool.sccache.enable || (fleet.sccacheCi or false);
+          message = "forgejoEphemeral: sccache for pool ${name} requires dispatcher.sccacheCi.";
+        }
+        {
+          assertion = !pool.sccache.enable || (cfg.trustedJobs.enable && pool.trust.repos != {} && pool.trust.users != []);
+          message = "forgejoEphemeral: sccache for pool ${name} requires trustedJobs and a pool trust allowlist.";
+        }
+        {
+          assertion = !pool.sccache.enable || lib.all (machine: trustedSource machine != null) (builtins.attrValues serves);
+          message = "forgejoEphemeral: sccache for pool ${name} requires trusted egress on every slot host it serves.";
+        }
       ])
       cfg.pools);
     # The one LAN host guests reach: DNS and HTTPS through its Caddy guard.
@@ -242,7 +278,7 @@
       && !(inVipPool addr);
     # Names only trusted runs may reach through the guard (README "Trusted
     # slot egress"). Caddy on the guard lists the same six, proxy.nix.
-    trustedEgressHosts = ["s3.main.garage.noosphere.uk" "harbor.noosphere.uk" "ntfy.ugalabugala.org"];
+    trustedEgressHosts = [s3Host "harbor.noosphere.uk" "ntfy.ugalabugala.org"];
     egressUnitFor = slot: "forgejo-ephemeral-trusted-egress@${slot}";
     egressCleanupFor = slot: "forgejo-ephemeral-trusted-egress-cleanup@${slot}";
     trustedSource = machine: let
@@ -701,6 +737,7 @@
         ...
       }: let
         stateDir = "/var/lib/forgejo-one-job";
+        sccache = import ./_forgejo-ephemeral-sccache.nix {inherit lib pkgs;};
         pickupRunner = pkgs.forgejo-runner.overrideAttrs (old: {
           patches = (old.patches or []) ++ [./_forgejo-runner-wait-timeout.patch];
         });
@@ -723,16 +760,26 @@
           runner = {
             capacity = 1;
             timeout = "${toString class.runnerMinutes}m";
-            envs = {
-              TMPDIR = "${stateDir}/tmp";
-              CARGO_HOME = "${stateDir}/cargo";
-              CARGO_BUILD_JOBS = toString spec.vcpu;
-            };
+            envs =
+              {
+                TMPDIR = "${stateDir}/tmp";
+                CARGO_HOME = "${stateDir}/cargo";
+                CARGO_BUILD_JOBS = toString spec.vcpu;
+              }
+              // lib.optionalAttrs sccacheSlot {
+                RUSTC_WRAPPER = lib.getExe sccache.wrapper;
+                SCCACHE_BUCKET = "sccache-ci";
+                SCCACHE_ENDPOINT = "https://${s3Host}";
+                SCCACHE_REGION = "main";
+                SCCACHE_S3_ENABLE_VIRTUAL_HOST_STYLE = "false";
+                SCCACHE_IGNORE_SERVER_IO_ERROR = "1";
+              };
           };
           cache.enabled = false;
           host.workdir_parent = "${stateDir}/work";
         };
       in {
+        imports = lib.optional sccacheSlot sccache.guest;
         networking = {
           hostName = slot;
           useNetworkd = true;
@@ -828,7 +875,7 @@
             SuccessAction = "poweroff";
             FailureAction = "poweroff";
           };
-          path = [config.nix.package] ++ slotToolset pkgs;
+          path = lib.optional sccacheSlot sccache.wrapper ++ [config.nix.package] ++ slotToolset pkgs;
           serviceConfig = {
             Type = "exec";
             User = "forgejo-one-job";
@@ -1058,7 +1105,11 @@
     slotctlConfig = pkgs.writeText "${hostName}-slotctl.json" (builtins.toJSON {slots = slotctlSlots;});
     # Both entry points use the same source with host paths baked in. The
     # caller can choose a declared slot and verb, never the config or systemctl.
-    slotctlScript = pkgs.replaceVars ./_forgejo-slotctl.py {
+    slotctlSource =
+      if sccacheSlot
+      then "${sccacheSources}/_forgejo-slotctl.py"
+      else ./_forgejo-slotctl.py;
+    slotctlScript = pkgs.replaceVars slotctlSource {
       config = slotctlConfig;
       systemctl = lib.getExe' pkgs.systemd "systemctl";
       systemd_run = lib.getExe' pkgs.systemd "systemd-run";
@@ -1137,6 +1188,10 @@
       vmDeadline = vmStartSeconds + class.hostMinutes * 60 + vmStopSeconds;
       state = stateName slot machine;
       runtime = runtimeName slot machine;
+      dispatcherSource =
+        if sccacheActive
+        then "${sccacheSources}/_forgejo-ephemeral-dispatcher.py"
+        else ./_forgejo-ephemeral-dispatcher.py;
       deps = lib.optionals local data.dependencies;
       transport =
         if local
@@ -1159,7 +1214,7 @@
         // {
           ExecStart = lib.concatStringsSep " " ([
               (lib.getExe pkgs.python3)
-              "-I -B ${./_forgejo-ephemeral-dispatcher.py}"
+              "-I -B ${dispatcherSource}"
               "--slot ${slot} --machine ${machine} ${transport}"
               "--pools ${poolsFile}"
               "--state-dir ${stateDirs.${slot}} --pause-file /run/${runtime}/pause"
@@ -1183,7 +1238,7 @@
       # forgejo-runner-microvm.nix loads it once.
       self.inputs.microvm.nixosModules.host
       self.nixosModules.ci-credentials
-      (import ./_forgejo-ephemeral-trusted.nix {inherit cfg localSlots dispatch dispatching cacheHost;})
+      (import ./_forgejo-ephemeral-trusted.nix {inherit cfg localSlots dispatch dispatching cacheHost sccacheSlot;})
     ];
 
     options.services.imperium.forgejoEphemeral = {
@@ -1237,6 +1292,7 @@
               default = lib.max 1 (lib.length dispatcherNames);
               description = "Maximum simultaneous slot claims for this pool. Defaults to the number of slots served.";
             };
+            sccache.enable = lib.mkEnableOption "the trusted CI-only sccache bucket for jobs from this pool";
             trust.repos = mkOption {
               type = types.attrsOf (types.submodule {
                 options = {
@@ -1332,6 +1388,7 @@
           localSlots;
           inherit slotctlSlots sshClients poolsFile trustedEgressHosts forcedCommand;
           inherit untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
+          inherit sccacheSources;
         };
         description = "Slot, pool, and transport details for checks.";
       };
@@ -1510,6 +1567,11 @@
             };
           }
           // lib.mapAttrs' (slot: machine: lib.nameValuePair "${dispatch}@${slot}" (mkDispatcher slot machine)) serves;
+      })
+      (lib.mkIf (cfg.enable && dispatching && sccacheActive && sccacheProvisioned) {
+        systemd.services."${dispatch}@".serviceConfig.LoadCredential = [
+          "sccache-credentials:${config.clan.core.vars.generators.${sccacheCiKey.generatorName}.files.credentials.path}"
+        ];
       })
       (lib.mkIf (cfg.enable && remoteClient) {
         clan.core.vars.generators.${sshGenerator} = {

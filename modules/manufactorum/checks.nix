@@ -572,16 +572,129 @@
           builtins.unsafeDiscardStringContext (builtins.toJSON
             (import ../rites/_hermes-delegation-tiers-test.nix {inherit (self.nixosConfigurations) ryza;}))
         );
+        forgejo-ephemeral-sccache = let
+          inherit (self.lib) ciDispatcher ciSlots sccacheCiKey;
+          fleet =
+            ciDispatcher
+            // {
+              sccacheCi = true;
+              trustedJobs = true;
+            };
+          slots = lib.recursiveUpdate ciSlots {ryza.egress.trusted = "ryza-eph-trusted";};
+          activate.services.imperium.forgejoEphemeral.pools.ugalabugala.sccache.enable = true;
+          fixture = fleet: slots: modules: host:
+            (self.nixosConfigurations.${host}.extendModules {
+              specialArgs = {
+                ciDispatcher = fleet;
+                ciSlots = slots;
+              };
+              inherit modules;
+            }).config;
+          source = "/run/secrets/vars/${sccacheCiKey.generatorName}/credentials";
+          cc =
+            fixture fleet slots [
+              activate
+              {clan.core.vars.generators.${sccacheCiKey.generatorName}.files.credentials.path = lib.mkForce source;}
+            ]
+            fleet.host;
+          prepared = fixture fleet slots [] fleet.host;
+          sc = fixture fleet slots [] "ryza";
+          guest = sc.microvm.vms.ryza-eph-1.config.config;
+          ordinaryGuest = self.nixosConfigurations.ryza.config.microvm.vms.ryza-eph-1.config.config;
+          unit = "forgejo-ephemeral-dispatcher@";
+          slotUnit = "${unit}ryza-eph-1";
+          load = cfg: cfg.systemd.services.${unit}.serviceConfig.LoadCredential;
+          exec = cfg: cfg.systemd.services.${slotUnit}.serviceConfig.ExecStart;
+          generator = cfg: cfg.clan.core.vars.generators.${sccacheCiKey.generatorName} or null;
+          config = cfg: cfg.services.imperium.forgejoEphemeral;
+          vars = generator cc;
+          failures = cfg: map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
+          expects = reason: cfg: lib.any (lib.hasInfix "sccache for pool ugalabugala requires ${reason}") (failures cfg);
+          cache = import ../rites/_forgejo-ephemeral-sccache.nix {inherit lib pkgs;};
+        in
+          assert builtins.isString cc.system.build.toplevel.drvPath && builtins.isString sc.system.build.toplevel.drvPath;
+          assert lib.subtractLists (load prepared) (load cc) == ["sccache-credentials:${source}"];
+          assert lib.subtractLists (load cc) (load prepared) == [];
+          assert lib.hasInfix "forgejo-ephemeral-sccache-sources/_forgejo-ephemeral-dispatcher.py" (exec cc);
+          assert !(lib.hasInfix "forgejo-ephemeral-sccache-sources" (exec prepared));
+          assert (config cc).pools.ugalabugala.sccache.enable;
+          assert lib.all (pool: !(config cc).pools.${pool}.sccache.enable) ["noosphere-user" "noosphere-org"];
+          assert vars.share && vars.files.credentials.secret && vars.files.credentials.owner == "root" && vars.files.credentials.mode == "0400";
+          assert generator sc == null;
+          assert !(ordinaryGuest.systemd.paths ? ci-sccache) && !(ordinaryGuest.systemd.services ? ci-sccache);
+          assert guest.systemd.paths.ci-sccache.pathConfig.PathExists == "/run/ci-trust/sccache-credentials";
+          assert lib.getName (lib.head guest.systemd.services.forgejo-one-job.path) == "sccache";
+          assert expects "trusted egress" (fixture fleet ciSlots [activate] fleet.host);
+          assert expects "dispatcher.sccacheCi" (fixture (fleet // {sccacheCi = false;}) slots [activate] fleet.host);
+          assert expects "trustedJobs" (fixture (fleet // {trustedJobs = false;}) slots [activate] fleet.host);
+          assert expects "trustedJobs" (fixture fleet slots [
+              activate
+              {services.imperium.forgejoEphemeral.pools.ugalabugala.trust.repos = lib.mkForce {};}
+            ]
+            fleet.host);
+          assert expects "the remote dispatcher" (fixture (fleet // {remote = false;}) slots [activate] "ryza");
+            pkgs.testers.runNixOSTest {
+              name = "forgejo-ephemeral-sccache";
+              nodes.guest = {
+                imports = [cache.guest];
+                users.groups.forgejo-one-job = {};
+                users.users.forgejo-one-job = {
+                  isSystemUser = true;
+                  group = "forgejo-one-job";
+                };
+                systemd.tmpfiles.rules = ["d /run/ci-trust 0700 root root - -"];
+                systemd.timers.ci-sccache.wantedBy = lib.mkForce [];
+              };
+              testScript = ''
+                guest.wait_for_unit("ci-sccache.path")
+                source = "/run/ci-trust/sccache-credentials"
+                target = "/run/ci-sccache/credentials"
+                wrapper = "runuser -u forgejo-one-job -- ${lib.getExe cache.wrapper}"
+                fixture = ${builtins.toJSON ("[default]\naws_access_key_id = GK" + lib.concatStrings (lib.replicate 12 "ab") + "\naws_secret_access_key = " + lib.concatStrings (lib.replicate 32 "cd") + "\n")}
+                from shlex import quote
+                publish = f"umask 077; printf %s {quote(fixture)} > {source}.tmp; mv {source}.tmp {source}"
+
+                guest.succeed(f"test ! -e {target}")
+                assert guest.succeed(f"{wrapper} ${lib.getExe' pkgs.coreutils "printf"} '%s' 'direct compile'") == "direct compile"
+                guest.fail(f"{wrapper} --start-server")
+                guest.fail("pgrep -u forgejo-one-job -x sccache")
+
+                # Delivery wakes the path unit when an inotify event arrives.
+                guest.succeed(publish)
+                guest.wait_until_succeeds(f"cmp {source} {target}")
+                assert guest.succeed(f"stat -c '%U:%G %a' {target}").strip() == "forgejo-one-job:forgejo-one-job 400"
+                guest.succeed(f"runuser -u forgejo-one-job -- test -r {target}")
+                guest.fail(f"runuser -u forgejo-one-job -- test -r {source}")
+                guest.fail(f"runuser -u forgejo-one-job -- rm -f {target}")
+                assert "sccache " in guest.succeed(f"{wrapper} --version")
+                guest.succeed(f"rm {source}")
+                guest.wait_until_succeeds(f"test ! -e {target}")
+
+                # Without inotify (host-side virtiofs changes), the timer
+                # still starts the watcher and it notices later delivery.
+                guest.succeed("systemctl stop ci-sccache.path ci-sccache.service")
+                guest.succeed("systemctl start ci-sccache.timer")
+                guest.wait_for_unit("ci-sccache.service")
+                guest.succeed(f"test ! -e {target}")
+                guest.succeed(publish)
+                guest.wait_until_succeeds(f"cmp {source} {target}")
+                guest.succeed("systemctl stop ci-sccache.service")
+                guest.succeed(f"test ! -e {target}")
+              '';
+            };
         # The nix-eph dispatcher and slotctl tests (HOM-30..32): a loopback
         # Forgejo, a fake systemctl, slotctl in-process and as a real child.
         # Run with the python3 the slots' host deploys, not a newer one.
         forgejo-ephemeral-dispatcher-tests =
           pkgs.runCommand "forgejo-ephemeral-dispatcher-tests" {
             nativeBuildInputs = [self.nixosConfigurations.ryza.pkgs.python3];
+            sccacheSources = self.nixosConfigurations.ryza.config.services.imperium.forgejoEphemeral.internal.sccacheSources;
           } ''
             cp ${../rites/_forgejo-ephemeral-dispatcher.py} _forgejo-ephemeral-dispatcher.py
             cp ${../rites/_forgejo-slotctl.py} _forgejo-slotctl.py
             cp ${../rites/_forgejo-ephemeral-dispatcher-test.py} test.py
+            python3 -B test.py
+            cp --remove-destination "$sccacheSources"/_forgejo-{ephemeral-dispatcher,slotctl}.py .
             python3 -B test.py
             touch "$out"
           '';
