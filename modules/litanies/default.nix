@@ -14,6 +14,7 @@ in {
     ciDispatcher = ci.dispatcher;
     ciSlots = ci.hosts;
     ciGuard = ci.guard;
+    inherit (ci) sccacheCiKey;
 
     # Generators for sops-encrypted cluster and OpenTofu secrets, see
     # ./_sops-generators.nix.

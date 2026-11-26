@@ -9,7 +9,10 @@
     namespace = "garage-operator";
     domain = config.noosphere.domain;
 
-    cluster-main = import ./_cluster-main {inherit config lib namespace domain vars;};
+    cluster-main = import ./_cluster-main {
+      inherit config lib namespace domain vars;
+      inherit (self.lib) sccacheCiKey;
+    };
     cluster-backup = import ./_cluster-backup {inherit config namespace domain;};
   in {
     imports = [

@@ -253,13 +253,11 @@
               # /metrics -- everything the groups above read -- exports no
               # per-bucket series. The operator polls each GarageBucket's usage
               # into status.quotaUsage and exports size, limit and the ratio;
-              # the ratio exists only for buckets that set a size limit, which
-              # today is exactly sccache (250 GiB, 7-day expiry -- sccache
-              # never deletes, so the lifecycle rule is the only thing that
-              # empties it, and a fill this fast means the rule is not keeping
-              # up or something is writing junk). max-by collapses the three
-              # operator replicas: only the leader reconciles and sets the
-              # gauge, and a stale ex-leader must not mask the current value.
+              # the ratio exists only for buckets with a size limit. Both
+              # sccache buckets rely on seven-day expiry to reclaim space.
+              # max-by collapses the three operator replicas: only the leader
+              # reconciles and sets the gauge, and a stale ex-leader must not
+              # mask the current value.
               #
               # The garage_cluster label is stamped statically, not scraped:
               # these series come from the operator, not from a cluster's admin
@@ -269,7 +267,7 @@
               alert = "GarageBucketQuotaNearing";
               expr = ''
                 max by (namespace, bucket)
-                  (garage_operator_bucket_quota_size_utilization_ratio{bucket="sccache"})
+                  (garage_operator_bucket_quota_size_utilization_ratio{bucket=~"sccache|sccache-ci"})
                 > 0.85
               '';
               "for" = "15m";
@@ -279,7 +277,7 @@
               };
               annotations = {
                 summary = "Garage bucket {{ $labels.bucket }} ({{ $labels.garage_cluster }}) is above 85% of its size quota";
-                description = "garage_operator_bucket_quota_size_utilization_ratio has been above 0.85 for over 15 minutes ({{ $value }} of the quota used). The sccache bucket is capped at 250 GiB with objects expiring after 7 days; past the cap, sccache uploads fail and CI/workstation builds fall back to uncached compiles (SCCACHE_IGNORE_SERVER_IO_ERROR keeps them green). Either the churn outgrew the window or the lifecycle worker is not deleting: check the bucket's lifecycle status and consider raising quotas.maxSize or shortening expirationDays.";
+                description = "garage_operator_bucket_quota_size_utilization_ratio has been above 0.85 for over 15 minutes ({{ $value }} of the quota used). Both sccache buckets expire objects after 7 days. At the quota, uploads fail and builds can silently fall back to uncached compiles (SCCACHE_IGNORE_SERVER_IO_ERROR). Check the affected bucket's lifecycle status, upload churn, and actual disk headroom before changing quotas.maxSize or expirationDays.";
               };
             }
           ];

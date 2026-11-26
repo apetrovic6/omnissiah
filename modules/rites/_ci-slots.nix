@@ -46,6 +46,12 @@
     host = "cerberus";
     # Separate operator opt-in; applies to the dispatcher and its slots.
     trustedJobs = false;
+    # Provision the shared Garage key only with the remote dispatcher.
+    sccacheCi = false;
+  };
+  sccacheCiKey = {
+    generatorName = "sccache-ci-garage-key";
+    importSecret = "sccache-ci-s3-import";
   };
   guard = "cerberus";
   hosts.ryza = {

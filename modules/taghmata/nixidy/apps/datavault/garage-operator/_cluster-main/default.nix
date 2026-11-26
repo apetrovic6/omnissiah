@@ -2,12 +2,12 @@
   domain,
   lib,
   namespace,
+  sccacheCiKey,
   vars,
   ...
 }: let
-  ciGenerator = "sccache-ci-garage-key";
-  ciImportSecret = "sccache-ci-s3-import";
-  hasCiKey = builtins.pathExists (vars.shared ciGenerator ciGenerator);
+  inherit (sccacheCiKey) generatorName importSecret;
+  hasCiKey = builtins.pathExists (vars.shared generatorName generatorName);
 
   sccacheLifecycle = [
     {
@@ -23,7 +23,7 @@
   ];
 in {
   applications.garage-operator = {
-    sopsSecrets = lib.optional hasCiKey ciGenerator;
+    sopsSecrets = lib.optional hasCiKey generatorName;
 
     resources.garageClusters.garage-main = {
       metadata = {inherit namespace;};
@@ -36,9 +36,10 @@ in {
             # Garage's layout capacity per node, not a real limit: local-path
             # neither enforces nor resizes a volume, and the existing nodes
             # keep their claims. Each node's /mnt/storage is a 1.8 TB NVMe
-            # shared with other local-path volumes. At 200Gi, ncps alone
-            # (cache.maxSize 500G) could outgrow what Garage thinks it has;
-            # 1Ti leaves room for it and the sccache bucket.
+            # shared with other local-path volumes. Bounded caches total about
+            # 866 GiB: ncps caps itself at 500G; sccache has 250Gi and
+            # sccache-ci 150Gi. Other buckets have no quotas. Check actual
+            # free space on those devices before enabling CI cache writes.
             size = "1Ti";
             storageClassName = "local-path";
           };
@@ -271,7 +272,7 @@ in {
       write = true;
     };
     owner = false;
-    importSecret = ciImportSecret;
+    inherit importSecret;
     bucketSpec.sccache-ci = {
       quotas.maxSize = "150Gi";
       lifecycle.rules = sccacheLifecycle;

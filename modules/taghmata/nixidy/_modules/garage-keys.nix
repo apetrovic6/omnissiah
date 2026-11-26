@@ -20,7 +20,7 @@
   config,
   ...
 }: let
-  inherit (lib) mkOption types optionalAttrs mapAttrs listToAttrs concatMap nameValuePair attrValues;
+  inherit (lib) mkOption types optionalAttrs mapAttrs concatMap nameValuePair attrValues;
 
   namespace = "garage-operator";
 
@@ -59,7 +59,11 @@
           };
         };
         default = {};
-        description = "Object access granted to this key on each of its listed buckets.";
+        description = ''
+          Object access granted to this key on each of its listed buckets.
+          This does not change owner (default: true). Set owner = false
+          as well for a read-only key that must not administer the bucket.
+        '';
       };
 
       owner = mkOption {
@@ -113,6 +117,16 @@
   });
 
   clusterRef = key: {name = "garage-${key.cluster}";};
+
+  bucketDefinitions = lib.groupBy (entry: entry.name) (concatMap (key:
+    map (bucket:
+      nameValuePair bucket {
+        metadata = {inherit namespace;};
+        spec = {clusterRef = clusterRef key;} // (key.bucketSpec.${bucket} or {});
+      })
+    key.buckets) (attrValues config.garage.keys));
+
+  duplicateBuckets = builtins.attrNames (lib.filterAttrs (_: defs: builtins.length defs > 1) bucketDefinitions);
 in {
   options.garage.keys = mkOption {
     type = types.attrsOf keyType;
@@ -158,12 +172,8 @@ in {
       })
       config.garage.keys;
 
-    garageBuckets = listToAttrs (concatMap (key:
-      map (bucket:
-        nameValuePair bucket {
-          metadata = {inherit namespace;};
-          spec = {clusterRef = clusterRef key;} // (key.bucketSpec.${bucket} or {});
-        })
-      key.buckets) (attrValues config.garage.keys));
+    garageBuckets = assert lib.assertMsg (duplicateBuckets == [])
+    "garage.keys: each GarageBucket must be defined by only one key; duplicate buckets: ${lib.concatStringsSep ", " duplicateBuckets}";
+      mapAttrs (_: defs: (builtins.head defs).value) bucketDefinitions;
   };
 }

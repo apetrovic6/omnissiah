@@ -1629,17 +1629,31 @@ becomes the dispatcher. Cerberus's own runners stay off for good once
 role to Terra leaves `nix` on Luna and Sol only until PR 13. Generate its fresh PATs and its own
 `forgejo-slotctl-ssh` key (do not copy the old private key). If trust is
 already enabled, ensure the shared CI credentials can deploy there.
-If `sccache-ci` has been provisioned, add the new dispatcher as a recipient
-of the existing shared `sccache-ci-garage-key/credentials` with Clan vars
-fix; remove the old recipient after the move. Do not regenerate the key
-just to move the role: Garage imports the same shared value regardless of host.
 Pause and drain, stop the old dispatcher, and carry over each drained
 slot's root-owned state directory so queue identities and trust user pins
-are preserved. Pause the new host and deploy slot hosts first so they
-replace the old source/key, then deploy the new dispatcher. Repeat the
-SSH and job checks above before unpausing. Nothing follows this setting
-for **guest egress**: that is the separate `guard` setting, see "What
-moves with Cerberus" under trusted slot egress below.
+are preserved.
+
+If `sccache-ci` is provisioned, change the credential recipients after
+draining the old dispatcher and before deploying the new one. With `old`
+and `new` set to the two host names:
+
+```sh
+git rm -- "vars/shared/sccache-ci-garage-key/credentials/machines/$old"
+clan vars fix "$new" --generator sccache-ci-garage-key
+```
+
+Commit the recipient change. This preserves the imported key; removing a
+recipient does not revoke a key the old host could already read. If the
+old host is being retired or is untrusted, regenerate instead
+(`clan vars generate "$new" --generator sccache-ci-garage-key --regenerate`),
+then render and sync. PR 15 handles rotation; check the import snapshot
+first, since the operator may need to recreate the `GarageKey`.
+
+Pause the new host and deploy slot hosts first so they replace the old
+source/key, then deploy the new dispatcher. Repeat the SSH and job checks
+above before unpausing. Nothing follows this setting for **guest egress**:
+that is the separate `guard` setting, see "What moves with Cerberus" under
+trusted slot egress below.
 
 **Rotate a PAT.** Pause and wait for cleanup to converge with the old
 PAT as above. Create its replacement with the required scopes, regenerate
@@ -2016,29 +2030,58 @@ SSH key and access to the shared `sccache-ci-garage-key`) moves separately.
 seven-day object expiry, and seven-day incomplete multipart upload abort.
 Its imported key has read and write on `sccache-ci` only, no bucket
 ownership and no access to the shared workstation `sccache` bucket.
-Nothing renders until the shared import var exists. This does not enable
-sccache for any slot; PR 10 is the consumer.
+The three CI objects render only when the shared import var exists.
+`dispatcher.sccacheCi` defaults to false, so machine updates cannot
+generate the var on merge. The declaration requires remote dispatcher
+mode; PR 10 must require it before consuming the credential.
 
-1. Set `host` to `dispatcher.host` in `modules/rites/_ci-slots.nix`
-   (the remote dispatcher; currently `cerberus`). Generate and commit the
-   new shared var, including the encrypted credentials and SopsSecret:
+1. In `modules/rites/_ci-slots.nix`, set `dispatcher.sccacheCi = true`.
+   Generate the shared var and inspect every changed var before staging:
 
    ```sh
+   host=$(nix eval --raw .#lib.ciDispatcher.host)   # currently cerberus
    CLAN_NO_COMMIT=1 clan vars generate "$host" --generator sccache-ci-garage-key
-   git add -- vars/shared/sccache-ci-garage-key
+   git status -- vars sops
+   ```
+
+   If any unrelated vars or SOPS files changed, leave them out and resolve
+   them separately. Commit the gate and the new shared var:
+
+   ```sh
+   git add -- modules/rites/_ci-slots.nix vars/shared/sccache-ci-garage-key
    git commit -m "chore(ci): provision the sccache-ci Garage key"
    ```
 
-2. Render with `nix run .#render-prod`. Commit only
-   `GarageKey-sccache-ci.yaml`, `GarageBucket-sccache-ci.yaml`, and
-   `SopsSecret-sccache-ci-s3-import.yaml` from the `garage-operator`
-   manifest directory. Keep unrelated render drift out of this change.
-   Merge the var and manifest commits, then sync `garage-operator` in ArgoCD.
-3. Check reconciliation:
+   The next dispatcher-host deploy with this change adds the root-only
+   `/run/secrets/vars/sccache-ci-garage-key/credentials` file; no service
+   consumes it until PR 10.
+
+2. Build the render in the Nix store and copy only the three new manifests.
+   The pending Garage operator v0.9.0 → v0.9.1 drift is a separate change.
+   Start with no local changes under `modules/noosphere`.
 
    ```sh
-   kubectl -n garage-operator get garagekey sccache-ci -o json | jq '.status'
-   kubectl -n garage-operator get garagebucket sccache-ci -o json | jq '.status'
+   out=$(nix build --no-link --print-out-paths .#nixidyEnvs.x86_64-linux.prod.environmentPackage)
+   dst=modules/noosphere/taghmata/nixidy/manifests/prod/garage-operator
+   for f in GarageKey-sccache-ci GarageBucket-sccache-ci SopsSecret-sccache-ci-s3-import; do
+     install -m 0644 "$out/garage-operator/$f.yaml" "$dst/$f.yaml"
+   done
+   git status --porcelain -- modules/noosphere
+   ```
+
+   Require exactly those three `??` entries. Then stage and commit:
+
+   ```bash
+   git add -- "$dst"/{GarageKey-sccache-ci,GarageBucket-sccache-ci,SopsSecret-sccache-ci-s3-import}.yaml
+   git commit -m "chore(taghmata): render the sccache-ci Garage resources"
+   ```
+
+   Merge the provisioning commits, then sync `garage-operator` in ArgoCD.
+3. Check reconciliation. `default` is the taghmata context; the workstation's current context is not.
+
+   ```sh
+   kubectl --context default -n garage-operator get garagekey sccache-ci -o json | jq '.status'
+   kubectl --context default -n garage-operator get garagebucket sccache-ci -o json | jq '.status'
    ```
 
    Require current generations and Ready status on both. The key's
@@ -2049,12 +2092,12 @@ sccache for any slot; PR 10 is the consumer.
 4. On an authorized workstation, port-forward the Garage S3 API:
 
    ```sh
-   kubectl -n garage-operator port-forward svc/garage-main 3900:3900
+   kubectl --context default -n garage-operator port-forward svc/garage-s3-api 3900:3900
    ```
 
-   In another terminal, set `host` to the same dispatcher as in step 1.
-   The probe reads that host's Clan var into a private temporary file, not
-   the workstation's `sccache` credentials. The test object expires on its own.
+   In another terminal, use `nix shell nixpkgs#awscli2` and set `host` as
+   in step 1. The probe reads that host's Clan var into a private temporary
+   file, not the workstation's `sccache` credentials.
 
    ```bash
    (
@@ -2074,6 +2117,8 @@ sccache for any slot; PR 10 is the consumer.
      s3 put-object --bucket sccache-ci --key "$key" --body "$tmp/input"
      s3 get-object --bucket sccache-ci --key "$key" "$tmp/output"
      cmp "$tmp/input" "$tmp/output"
+     test "$(s3 list-objects-v2 --bucket sccache-ci --prefix "$key" --max-items 1 --query 'Contents[0].Key' --output text)" = "$key"
+     s3 delete-object --bucket sccache-ci --key "$key"
 
      denied() {
        if "$@" >"$tmp/denial" 2>&1; then
@@ -2084,12 +2129,23 @@ sccache for any slot; PR 10 is the consumer.
      }
      denied s3 get-object --bucket sccache --key "$key" "$tmp/forbidden"
      denied s3 put-object --bucket sccache --key "$key" --body "$tmp/input"
+     denied s3 put-bucket-cors --bucket sccache-ci --cors-configuration \
+       '{"CORSRules":[{"AllowedMethods":["GET"],"AllowedOrigins":["*"]}]}'
    )
    ```
 
 **Rollback.** Before syncing, revert the provisioning commits. After
-sync, removing the manifests with prune on deletes the CI bucket and key.
-Stop any consumers first and confirm it is safe to discard the CI cache.
+sync, stop any consumers, revert the provisioning commits, and sync with
+prune. This removes the CI key and SopsSecret-backed import Secret, but
+ArgoCD leaves the `GarageBucket`: the operator sets an owner reference
+to `GarageCluster`. Garage won't delete a non-empty bucket. Wait at least
+seven days after the last upload for object expiry and multipart cleanup,
+check that the CI bucket is empty, then delete it:
+
+```sh
+kubectl --context default -n garage-operator delete garagebucket sccache-ci
+```
+
 The workstation bucket is not part of the rollback.
 
 ### Hermes on Cerberus Forgejo
