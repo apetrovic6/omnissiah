@@ -39,7 +39,24 @@
 #     class           std (50 GiB overlay, 3 h runner) or large (150 GiB, 6 h).
 #                     The overlay also holds Nix's build dir.
 #     var             GiB for /var (workspace, TMPDIR, CARGO_HOME).
-{
+#
+# takeover (HOM-32 PR 12, operator flip; README "Ryza takeover"): the
+# argument below. Off, everything is as before. On, the ugalabugala and
+# noosphere-user pools take the `nix`, `nix-vm` and `nix-eph` labels for
+# the owner's whole queue with a trust allowlist, ryza gets three std slots,
+# and its persistent `nix-vm` guests and their CI credentials are gone. The
+# fleet module asserts the preconditions (forgejo-runner-ephemeral.nix).
+# Flip it here, never per machine: dispatcher and slot host must agree.
+# Fixtures import this file with `{takeover = true;}`.
+{takeover ? false}: let
+  std = index: {
+    inherit index;
+    vcpu = 2;
+    memory = 4;
+    class = "std";
+    var = 20;
+  };
+in {
   dispatcher = {
     # Prepare new PATs and a slotctl key before deploying this as true.
     remote = true;
@@ -48,6 +65,7 @@
     trustedJobs = false;
     # Provision the shared Garage key only with the remote dispatcher.
     sccacheCi = false;
+    inherit takeover;
   };
   sccacheCiKey = rec {
     generatorName = "sccache-ci-garage-key";
@@ -62,14 +80,29 @@
     egress.untrusted = "ryza-eph";
     # "ryza-eph-trusted" once the hand steps in the README are done.
     egress.trusted = null;
-    # The pre-HOM-29 single guest; its images may still be on disk.
-    legacyVMs = ["ryza-ci"];
-    slots.ryza-eph-1 = {
-      index = 1;
-      vcpu = 2;
-      memory = 4;
-      class = "std";
-      var = 20;
-    };
+    # The pre-HOM-29 single guest; its images may still be on disk. After
+    # the takeover also the two retired `nix-vm` guests, until their state
+    # is removed by hand (README "Ryza takeover").
+    legacyVMs =
+      ["ryza-ci"]
+      ++ (
+        if takeover
+        then ["ryza-ci-ugalabugala" "ryza-ci-noosphere"]
+        else []
+      );
+    # Three std slots take the nix-vm guests' 6 vCPU / 14 GiB: 6 vCPU of
+    # quota and 15 GiB of slices on ryza's 8 vCPU / 24 GiB, down from 8 and
+    # 19 GiB with the guests, leaving 2 vCPU and 9 GiB for the host and
+    # Hermes. A fourth would commit all 8 vCPU and 20 GiB.
+    slots =
+      {ryza-eph-1 = std 1;}
+      // (
+        if takeover
+        then {
+          ryza-eph-2 = std 2;
+          ryza-eph-3 = std 3;
+        }
+        else {}
+      );
   };
 }

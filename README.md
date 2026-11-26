@@ -2237,6 +2237,175 @@ The opt-in protocol is part of the one dispatcher and slotctl program
 only the two upload files, and slotctl accepts the sccache file only
 from a slot with trusted egress.
 
+#### Ryza takeover (HOM-32 PR 12, operator flip)
+
+One flag, `takeover` in `modules/rites/_ci-slots.nix` (the file's
+argument, default `false`). Off, nothing changes. On:
+
+- Pools `ugalabugala` and `noosphere-user` take the labels `nix`,
+  `nix-vm` and `nix-eph`, dispatch the owner's whole queue (`"owner"`),
+  and get a trust allowlist with `trust.users = ["manjo"]`:
+  - ugalabugala: rust-app-template 9, pilot 30, fishing 8, nopresh 7 and
+    omnissiah 1;
+  - noosphere: auspex 221 and mushroom-farmer 188.
+  No repo trusts its schedules, and sccache stays the separate per-pool
+  PR 10 gate. `noosphere-org` stays as it is (`nix-eph`, untrusted).
+- Ryza gets `ryza-eph-2` and `ryza-eph-3` (std: 2 vCPU, 4 GiB, 50 + 20
+  GiB sparse; taps `vm-eph-2`/`-3`, subnets `10.99.3.0/24` and
+  `10.99.4.0/24`), and Cerberus gets one dispatcher instance for each.
+  Three slots take the nix-vm guests' budget: 6 vCPU of quota and 15 GiB
+  of slices on Ryza's 8 vCPU / 24 GiB, down from 8 vCPU and 19 GiB with
+  the guests. That leaves 2 vCPU and 9 GiB for the host and Hermes. A
+  fourth slot would commit all 8 vCPU and 20 GiB. Each claim still needs
+  80 GiB free (check-space). Three worst-case jobs, 210 GiB sparse, would
+  not fit on the 200 GiB disk at once.
+- Ryza loses its persistent runner (`forgejoRunner`,
+  `isolation = "microvm"`, the `forgejo-runner-microvm` import), both
+  `ryza-ci-<forge>` guests and its shared CI credentials: no
+  `forgejo-runner-*`, `nix-ci-signing-key`, `ncps-upload-auth` or
+  `sccache-garage-key` on Ryza. The guests' state directories stay hidden
+  from the slots (`legacyVMs`) until you remove them.
+
+Only the slots serve `nix-vm` after that. `nix` is still shared with the
+Terra, Luna and Sol host runners until PR 13, so a `nix` job may run on
+either. A job that loses the race costs its slot one boot plus the 5-minute
+bounded pickup. `nix-machines` (PR 11) is on no pool, and the guest
+registers only the job's own label, so no `machines.yml` job can land on a
+std slot.
+
+**Inventory (2026-11-26).** Workflows on the default branches, read
+anonymously from both forges. Private repos and the non-public
+`monolith-softworks` org aren't visible that way: **check them in the UI
+before flipping**, because `"owner"` dispatches them too. Runtime: no job
+sets `timeout-minutes` except `machines.yml`. Runner caps apply: host
+runners 3 h on Cerberus (6 h after PR 11) and 6 h on noosphere; a slot
+allows 65 min untrusted and 3 h trusted.
+
+| Repo (id) | Workflow / job | Label | Trigger | Host credentials or egress it uses | In a slot, untrusted |
+|---|---|---|---|---|---|
+| uga rust-app-template (9) | ci `ci-pure`, `ci-android` | `nix` | push master, PR | ncps upload | degrades: no upload |
+| | ci `ci-impure` | `nix-vm` | push master, PR | sccache (round trips), ncps upload; `publish` skips (no HARBOR_* here) | degrades: compiles uncached, no upload |
+| | advisories | `nix` | cron 06:17, dispatch | `ADVISORY_PR_TOKEN` (repo secret, push to the forge), sccache | degrades: full template compile uncached (≈11 min measured) |
+| uga pilot (30) | ci `ci-pure`, `ci-android` | `nix` | push master, PR | ncps upload | degrades |
+| | ci `ci-impure` | `nix` | push master, PR | **Harbor**: `publish` with HARBOR_* (set by tofunix, `_tofunix/fabricata.nix`), ncps upload | **breaks on master**: Caddy's 403 for `harbor.noosphere.uk` |
+| | advisories | `nix` | cron, dispatch | `ADVISORY_PR_TOKEN` | degrades |
+| uga fishing (8) | ci | `nix` | push master, PR | `REGISTRY_TOKEN` to `vars.REGISTRY` (the forge registry), ncps upload | degrades; breaks if `REGISTRY` is not a forge |
+| uga nopresh (7) | build-and-push | `nix` | push master | `REGISTRY_TOKEN` to the forge registry, ncps upload | degrades |
+| uga magos (6) | update-flake | `nix` | cron 04:00, dispatch | the job token pushes `flake.lock` to the forge | works (new: `"owner"` dispatch) |
+| uga omnissiah (1) | machines `update`/`manifests`/`build` | `nix`, PR 11 → `nix-machines` | cron, dispatch | push, ntfy, ncps; 120/60/300 min | must not land: **asserted** |
+| noo auspex (221) | ci `ci-pure` | `nix` | push master, PR | ncps upload | degrades |
+| | ci `ci-impure` | `nix` | push master, PR | ncps upload; `publish` skips unless HARBOR_* are set by hand (auspex is not in `_products.nix`) | degrades |
+| | advisories | `nix` | cron, dispatch | `ADVISORY_PR_TOKEN` (forge.noosphere.uk) | degrades |
+| noo mushroom-farmer (188) | ci | `nix` | push master, PR | ncps upload (its comment relies on it), artifacts to the forge | degrades: Godot exports rebuilt each run |
+
+Repository Actions secrets reach a run whatever the slot's trust, except
+in fork and AGit PRs. "Trusted" here means the CI signing key and ncps
+netrc (and sccache if the pool enables it) plus the trusted egress source.
+Forges and ncps reads are reachable from every slot. Harbor, ntfy and
+Garage are reachable only from the trusted source. PR runs are untrusted
+by design (no upload, no sccache), as they are today on the slots. They
+lose what the persistent runners gave them, which is the point of HOM-32.
+
+**The trust decision (asserted).** With `trustedJobs` off, every slot run is
+untrusted. pilot's master publish would then fail whenever `ci-impure`
+lands on a slot. No master build that runs on a slot reaches ncps, so the
+next build is cold, and `nix-vm` has no other runner at all. So the
+takeover requires, and the fleet module asserts on both ends:
+
+1. `dispatcher.remote = true` (PR 7);
+2. `dispatcher.trustedJobs = true` (the HOM-31 / PR 7 flip, with the
+   `read:repository` PATs);
+3. `egress.trusted` on every slot host (Ryza `ryza-eph-trusted`, PR 8),
+   for Harbor;
+4. no workflow of this repository on `nix`, `nix-vm` or `nix-eph`. Block
+   lists and expressions fail closed. That means PR 11 is merged;
+5. no persistent runner on a slot host.
+
+To take over untrusted instead, drop assertions 2 and 3 in
+`forgejo-runner-ephemeral.nix`. You then accept the table's "breaks" and
+"degrades" rows.
+
+A trusted repo also needs, before trust helps it: an exact-name branch
+protection rule on `master` whose push and merge allowlists name only
+`manjo` and no team, no unprotected file patterns, no write deploy key,
+and no writers outside `manjo` (HOM-31 PRECONDITION in
+`_forgejo-ephemeral-trusted.nix`). Otherwise its runs stay untrusted and
+the dispatcher logs why. Check this for 30, 8, 7, 1, 221 and 188. 9 has it
+already. Don't schedule auto-merges of fork PRs in these repos.
+
+**Flip.**
+
+1. Preconditions: PRs 7–11 live, the trust flip done and verified (a
+   rust-app-template master merge logs `trusted: … delivered`), Ryza's
+   trusted egress verified (PR 8 checks), the branch protection above. In
+   the UI, check the private `manjo` repos on both forges for workflows on
+   these labels that need more than the table allows.
+2. Check Ryza's disk: `sudo btrfs filesystem usage /`, and
+   `sudo du -sh /var/lib/microvms/ryza-ci-*`.
+3. Drain the `nix-vm` guests: wait until no job runs on the `nix-vm` label
+   on either forge (Actions → Runs), or cancel what you don't need.
+   Pause every slot on Cerberus (`sudo touch /run/forgejo-ephemeral/pause`)
+   and wait for the drain checks under "Pause before maintenance".
+4. Set `takeover ? true` in `modules/rites/_ci-slots.nix`, merge, and
+   deploy **Ryza first** (it accepts the new slots and drops the guests),
+   then **Cerberus** (it starts dispatchers for the new slots). Unpause.
+5. Delete Ryza's persistent runner rows on **both** forges. As manjo:
+   **User settings → Actions → Runners** (or Site Administration → Actions
+   → Runners), use the row's delete action for the `ryza` runner whose UUID
+   matches the var:
+   - forge.ugalabugala.org: `vars/per-machine/ryza/forgejo-runner-ugalabugala/uuid/value`
+     (`36303837-3763-6434-6362-376564613230`);
+   - forge.noosphere.uk: `vars/per-machine/ryza/forgejo-runner-noosphere/uuid/value`
+     (`63663530-3531-3864-6362-336466363665`).
+   Delete, don't rotate: a deleted runner's token is refused from then on.
+6. Remove the obsolete vars and commit:
+
+   ```sh
+   git rm -r -- vars/per-machine/ryza/forgejo-runner-ugalabugala \
+     vars/per-machine/ryza/forgejo-runner-noosphere
+   ```
+
+7. Remove Ryza from the shared CI credentials' recipients, deferred from
+   PR 7. Use the commands under **Rotation** in "Trusted `nix-eph` jobs"
+   above: `git rm` the three `machines/ryza` links, then `clan vars fix`
+   from Terra and Phalanx. With trust on, Cerberus also declares the two
+   upload credentials, so `clan vars fix cerberus` works for those. Commit.
+8. On Ryza, with the guests stopped (`systemctl status 'microvm@ryza-ci-*'`
+   shows nothing running): `sudo rm -rf /var/lib/microvms/ryza-ci-ugalabugala
+   /var/lib/microvms/ryza-ci-noosphere`. Also remove `/var/lib/microvms/ryza-ci`
+   if you no longer need it for rollback. They stay listed in `legacyVMs`,
+   which is harmless (`-` paths).
+
+**Verify.**
+
+- On Ryza, `systemctl list-units 'microvm@*'` shows only
+  `ryza-eph-{1,2,3}`. `ip -br link` has `vm-eph-{1,2,3}` and no
+  `vm-ci-*` tap. `ls /run/secrets/vars` has none of
+  `nix-ci-signing-key`, `ncps-upload-auth`, `sccache-garage-key`,
+  `forgejo-runner-*`.
+- On Cerberus, `systemctl list-units 'forgejo-ephemeral-dispatcher@*'` shows
+  three, and each journal has `identity verified`.
+- A Hermes PR on rust-app-template runs `ci-impure` on a slot (`nix-vm`)
+  and logs `untrusted: … fork or AGit pull request`. Its `nix` jobs run on
+  a slot or a node host runner.
+- A rust-app-template master merge: `ci-impure` logs `trusted: … delivered`.
+  A pilot master merge publishes to Harbor from a slot (the job log shows
+  the push). Uploads appear in ncps.
+- A magos `update-flake` dispatch runs on a slot and pushes (or reports
+  `flake.lock unchanged`).
+- Both forges' runner lists show no `ryza` row, only `eph-*` rows for busy
+  slots and the node and Cerberus rows.
+
+**Rollback.** Pause and drain all slots on Cerberus. Set `takeover ? false`,
+deploy Cerberus first (it stops dispatching slots 2 and 3), then Ryza
+(the guests come back with empty disks if step 8 ran). Re-enroll the runner
+credentials: `clan vars generate ryza --generator forgejo-runner-ugalabugala`
+and `--generator forgejo-runner-noosphere` if step 6 ran. Re-add Ryza to the
+shared CI recipients with `clan vars fix ryza --generator <each>`, then
+deploy Ryza again, register with `nix run .#forgejo-runner-register -- ryza`,
+and unpause. Re-adding Ryza as a recipient puts the shared keys back on the
+host that runs Hermes. PR 15 rotates them anyway.
+
 ### Hermes on Cerberus Forgejo
 
 Hermes pushes topic branches only to `hermes/rust-app-template` and

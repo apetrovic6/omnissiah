@@ -4,7 +4,7 @@
   ...
 }: let
   cartographa = import ../cartographa/_cartographa.nix;
-  ci = import ../rites/_ci-slots.nix;
+  ci = import ../rites/_ci-slots.nix {};
 in {
   flake.lib = {
     # The network chart and the vars store, see modules/cartographa.

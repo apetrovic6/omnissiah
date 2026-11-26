@@ -32,6 +32,7 @@
               // {
                 remote = false;
                 trustedJobs = false;
+                takeover = false;
               };
           };
           fixture = fleet: slots: let
@@ -247,13 +248,15 @@
               ssh = lib.getExe' client.pkgs.openssh "ssh";
               systemdRun = lib.getExe' server.pkgs.systemd "systemd-run";
             };
+          # The nix-vm guests stay in every fixture here; the takeover has its own check.
           cutover =
             ciDispatcher
             // {
               remote = true;
               trustedJobs = false;
+              takeover = false;
             };
-          inherit (self.lib) ciSlots;
+          ciSlots = (import ../rites/_ci-slots.nix {takeover = false;}).hosts;
           egressSlots = lib.recursiveUpdate ciSlots {ryza.egress.trusted = "ryza-eph-trusted";};
           default = fixture cutover ciSlots;
           moved = fixture (cutover // {host = "terra";}) ciSlots;
@@ -573,12 +576,14 @@
             (import ../rites/_hermes-delegation-tiers-test.nix {inherit (self.nixosConfigurations) ryza;}))
         );
         forgejo-ephemeral-sccache = let
-          inherit (self.lib) ciDispatcher ciSlots sccacheCiKey;
+          inherit (self.lib) ciDispatcher sccacheCiKey;
+          ciSlots = (import ../rites/_ci-slots.nix {takeover = false;}).hosts;
           fleet =
             ciDispatcher
             // {
               sccacheCi = true;
               trustedJobs = true;
+              takeover = false;
             };
           slots = lib.recursiveUpdate ciSlots {ryza.egress.trusted = "ryza-eph-trusted";};
           activate.services.imperium.forgejoEphemeral.pools.ugalabugala.sccache.enable = true;
@@ -708,6 +713,140 @@
         # The nix-eph dispatcher and slotctl tests (HOM-30..32): a loopback
         # Forgejo, a fake systemctl, slotctl in-process and as a real child.
         # Run with the python3 the slots' host deploys, not a newer one.
+        # HOM-32 PR 12 (README "Ryza takeover"), evaluated with the gate on:
+        # ryza's nix-vm guests and their CI credentials are gone, three std
+        # slots serve the user pools' takeover labels, and the gate refuses
+        # each missing precondition.
+        forgejo-ephemeral-takeover = let
+          on = import ../rites/_ci-slots.nix {takeover = true;};
+          off = import ../rites/_ci-slots.nix {takeover = false;};
+          labels = ["nix" "nix-vm" "nix-eph"];
+          # The preconditions the gate asserts: trust, trusted egress, and
+          # this repository's workflows off the slot labels (PR 11).
+          ready = on.dispatcher // {trustedJobs = true;};
+          readySlots = lib.recursiveUpdate on.hosts {ryza.egress.trusted = "ryza-eph-trusted";};
+          machinesYml = builtins.readFile ../../.forgejo/workflows/machines.yml;
+          pr11 = {"machines.yml" = builtins.replaceStrings ["runs-on: nix\n"] ["runs-on: nix-machines\n"] machinesYml;};
+          eval = host: fleet: slots: workflows: modules:
+            (self.nixosConfigurations.${host}.extendModules {
+              specialArgs = {
+                ciDispatcher = fleet;
+                ciSlots = slots;
+                ciRepoWorkflows = workflows;
+              };
+              inherit modules;
+            }).config;
+          sc = eval "ryza" ready readySlots pr11 [];
+          cc = eval "cerberus" ready readySlots pr11 [];
+          # The gate off, whatever the data file's default is.
+          before = eval "ryza" off.dispatcher off.hosts {} [];
+          failures = cfg: map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
+          refuses = reason: cfg: lib.any (lib.hasInfix "the takeover ${reason}") (failures cfg);
+          slots = ["ryza-eph-1" "ryza-eph-2" "ryza-eph-3"];
+          retiredVMs = ["ryza-ci-ugalabugala" "ryza-ci-noosphere"];
+          ciVars = ["forgejo-runner-ugalabugala" "forgejo-runner-noosphere" "nix-ci-signing-key" "ncps-upload-auth" "sccache-garage-key"];
+          hasCiVar = cfg: lib.filter (var: cfg.clan.core.vars.generators ? ${var}) ciVars;
+          guestUnits = cfg: builtins.filter (name: lib.any (vm: lib.hasSuffix vm name) retiredVMs) (builtins.attrNames cfg.systemd.services);
+          pools = cc.services.imperium.forgejoEphemeral.pools;
+          slice = name: sc.systemd.slices.${name}.sliceConfig;
+          hidden = slot: sc.systemd.services."microvm@${slot}".serviceConfig.InaccessiblePaths;
+          # A persistent nix-vm runner kept on ryza by hand.
+          kept = eval "ryza" ready readySlots pr11 [
+            self.nixosModules.forgejo-runner-microvm
+            self.nixosModules.sccache
+            {
+              services.imperium.forgejoRunner = {
+                enable = true;
+                isolation = "microvm";
+                labels = ["nix-vm:host"];
+                microvm.uplink = "ens18";
+              };
+            }
+          ];
+          slotOnly = workflow: eval "cerberus" ready readySlots {"machines.yml" = workflow;} [];
+        in
+          # The flake reads the same file; on adds two slots and the retired guests.
+          assert import ../rites/_ci-slots.nix {inherit (self.lib.ciDispatcher) takeover;}
+          == {
+            dispatcher = self.lib.ciDispatcher;
+            hosts = self.lib.ciSlots;
+            guard = self.lib.ciGuard;
+            inherit (self.lib) sccacheCiKey;
+          };
+          assert !off.dispatcher.takeover && on.dispatcher.takeover;
+          assert on.dispatcher == off.dispatcher // {takeover = true;} && on.guard == off.guard;
+          assert builtins.attrNames on.hosts.ryza.slots == slots;
+          assert lib.mapAttrs (_: spec: spec.index) on.hosts.ryza.slots
+          == {
+            ryza-eph-1 = 1;
+            ryza-eph-2 = 2;
+            ryza-eph-3 = 3;
+          };
+          assert on.hosts.ryza.slots.ryza-eph-1 == off.hosts.ryza.slots.ryza-eph-1;
+          assert on.hosts.ryza.legacyVMs == off.hosts.ryza.legacyVMs ++ retiredVMs;
+          # Gate off (today): the guests and their credentials are there.
+          assert before.services.imperium.forgejoRunner.enable && before.services.imperium.sccache.enable;
+          assert hasCiVar before == ciVars && guestUnits before != [];
+          # Gate on, ryza: no persistent runner, guests, guest units or CI credentials.
+          assert failures sc == [] && builtins.isString sc.system.build.toplevel.drvPath;
+          assert !(sc.services.imperium.forgejoRunner.enable or false) && !(sc.services.imperium.sccache.enable or false);
+          assert builtins.attrNames sc.microvm.vms == slots;
+          assert guestUnits sc == [] && hasCiVar sc == [];
+          assert !(lib.any (name: lib.any (var: lib.hasInfix var name) ciVars) (builtins.attrNames sc.sops.secrets));
+          # Three std slots: 6 vCPU of quota and 15 GiB of slices on 8 vCPU / 24 GiB.
+          assert lib.all (name: (slice name).CPUQuota == "200%" && (slice name).MemoryMax == "5G") ["forgejo-ephemeral" "forgejo-ephemeral2" "forgejo-ephemeral3"];
+          assert lib.all (i: sc.systemd.network.networks ? "20-vm-eph-${toString i}") [1 2 3];
+          assert map (slot: sc.microvm.vms.${slot}.config.config.systemd.network.networks."10-uplink".address) slots == [["10.99.2.2/24"] ["10.99.3.2/24"] ["10.99.4.2/24"]];
+          assert builtins.attrNames sc.services.imperium.forgejoEphemeral.internal.slotctlSlots == slots;
+          # The retired guests' state stays hidden from every slot until removed by hand.
+          assert lib.all (slot: lib.all (vm: lib.all (path: builtins.elem path (hidden slot)) ["-/var/lib/microvms/${vm}" "-/run/microvm-credentials/${vm}"]) retiredVMs) slots;
+          # Gate on, cerberus: one dispatcher per slot, the user pools on the takeover labels.
+          assert failures cc == [] && builtins.isString cc.system.build.toplevel.drvPath;
+          assert lib.all (slot: cc.systemd.services ? "forgejo-ephemeral-dispatcher@${slot}") slots;
+          assert lib.all (slot: builtins.elem "forgejo-ephemeral-dispatcher@${slot}.service" cc.systemd.services."forgejo-ephemeral-dispatcher@".aliases) slots;
+          assert lib.all (pool: pools.${pool}.labels == labels && pools.${pool}.dispatch == "owner" && pools.${pool}.trust.users == ["manjo"] && !pools.${pool}.sccache.enable) ["ugalabugala" "noosphere-user"];
+          assert lib.mapAttrs (_: repo: "${repo.owner}/${repo.name}") pools.ugalabugala.trust.repos
+          == {
+            "1" = "manjo/omnissiah";
+            "7" = "manjo/nopresh";
+            "8" = "manjo/fishing";
+            "9" = "manjo/rust-app-template";
+            "30" = "manjo/pilot";
+          };
+          assert lib.mapAttrs (_: repo: "${repo.owner}/${repo.name}") pools.noosphere-user.trust.repos
+          == {
+            "188" = "manjo/mushroom-farmer";
+            "221" = "manjo/auspex";
+          };
+          assert lib.all (repo: !repo.schedules) (builtins.attrValues (pools.ugalabugala.trust.repos // pools.noosphere-user.trust.repos));
+          assert pools.noosphere-org.labels == ["nix-eph"] && pools.noosphere-org.dispatch == "owner" && pools.noosphere-org.trust.repos == {};
+          assert lib.all (pool: pool.maxSlots == 3) (builtins.attrValues pools);
+          # Never nix-machines: machines.yml (PR 11) and the large slots (PR 13) stay off std slots.
+          assert lib.all (pool: !(builtins.elem "nix-machines" pool.labels)) (builtins.attrValues pools);
+          # Each precondition, removed alone, is refused on both ends.
+          assert lib.all (host: refuses "requires dispatcher.trustedJobs" (eval host on.dispatcher readySlots pr11 [])) ["ryza" "cerberus"];
+          assert lib.all (host: refuses "requires egress.trusted" (eval host ready on.hosts pr11 [])) ["ryza" "cerberus"];
+          assert refuses "needs the remote dispatcher" (eval "ryza" (ready // {remote = false;}) readySlots pr11 []);
+          assert refuses "retires ryza's persistent runner" kept;
+          # This repository's workflows: any slot label, also as a list, a block list or an expression, is refused.
+          assert lib.all (workflow: refuses "dispatches manjo/omnissiah's whole queue; first move machines.yml" (slotOnly workflow)) [
+            "jobs:\n  build:\n    runs-on: nix\n"
+            "jobs:\n  build:\n    runs-on: nix-vm # trial\n"
+            "jobs:\n  build:\n    runs-on: [nix-eph]\n"
+            "jobs:\n  build:\n    runs-on: [\"docker\", \"nix\"]\n"
+            "jobs:\n  build:\n    runs-on:\n      - nix-machines\n"
+            "jobs:\n  build:\n    runs-on: \${{ matrix.label }}\n"
+          ];
+          assert !refuses "dispatches" (slotOnly "jobs:\n  build:\n    runs-on: nix-machines\n    steps:\n      - run: echo runs-on: nix\n");
+            pkgs.writeText "forgejo-ephemeral-takeover.json" (builtins.toJSON {
+              inherit slots;
+              pools =
+                lib.mapAttrs (_: pool: {
+                  inherit (pool) labels dispatch;
+                  trusted = builtins.attrNames pool.trust.repos;
+                })
+                pools;
+            });
         forgejo-ephemeral-dispatcher-tests =
           pkgs.runCommand "forgejo-ephemeral-dispatcher-tests" {
             nativeBuildInputs = [self.nixosConfigurations.ryza.pkgs.python3];
