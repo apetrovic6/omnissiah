@@ -66,9 +66,9 @@ provider "registry.opentofu.org/integrations/github" {
 }
 
 provider "registry.opentofu.org/trozz/pocketid" {
-  version     = "2.3.0"
-  constraints = "2.3.0"
+  version     = "2.5.0"
+  constraints = "2.5.0"
   hashes = [
-    "h1:hTnmW/Rsw8q2oXni2X0EpiJ3yumBF2AIFHC8GjiHX5g=",
+    "h1:Ic692pYxf+A2gJIAUvM1FHF0IK3b0iDLDee/mkGDVa4=",
   ]
 }

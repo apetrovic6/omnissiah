@@ -109,7 +109,40 @@ in {
                 name = "AURRAL_PUBLIC_URL";
                 value = "https://${host}";
               }
+
+              # Sign-in through Pocket ID, next to the local accounts. The
+              # client and its aurral-oidc Secret come from tofunix
+              # (_tofunix/pharos/clients.nix). Aurral sets the role on every
+              # SSO login from the groups claim, so Pocket ID's Admin group
+              # is what makes an Aurral admin.
+              {
+                name = "OIDC_ENABLED";
+                value = "true";
+              }
+              {
+                name = "OIDC_ISSUER";
+                value = "https://id.${domain}";
+              }
+              {
+                name = "OIDC_REDIRECT_URI";
+                value = "https://${host}/sso/callback";
+              }
+              {
+                name = "OIDC_SCOPES";
+                value = "openid profile email groups";
+              }
+              {
+                name = "OIDC_GROUPS_CLAIM";
+                value = "groups";
+              }
+              {
+                name = "OIDC_ADMIN_GROUPS";
+                value = "Admin";
+              }
             ];
+
+            # OIDC_CLIENT_ID and OIDC_CLIENT_SECRET.
+            envFrom = [{secretRef.name = "aurral-oidc";}];
 
             ports = [{containerPort = port;}];
           }
