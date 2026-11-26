@@ -450,6 +450,7 @@
         arping=${lib.getExe' pkgs.iputils "arping"}
         systemctl=${lib.getExe' pkgs.systemd "systemctl"}
         notify=${lib.getExe' pkgs.systemd "systemd-notify"}
+        grep=${lib.getExe' pkgs.gnugrep "grep"}
         read -r -a rule <<< ${lib.escapeShellArg egressRule}
         nat() { "$iptables" -w 5 -t nat "$@"; }
         # 0 present, 1 absent. Anything else is an error, never "absent".
@@ -461,7 +462,8 @@
         listed_rules() {
           local out
           out=$(nat -S POSTROUTING) || return 1
-          printf '%s\n' "$out" | grep -E -- ${lib.escapeShellArg egressPattern} || true
+          # grep exits 1 for "no match"; anything else (an error) fails closed.
+          printf '%s\n' "$out" | "$grep" -E -- ${lib.escapeShellArg egressPattern} || [[ $? == 1 ]]
         }
         # The exact rule until -C says absent, then any other form -S shows.
         remove_rules() {
@@ -1029,6 +1031,8 @@
           };
           ${cleanupUnit} = {
             description = "Remove trusted egress leftovers of Forgejo one-job slot ${slot}";
+            # Retried every idle pass; like the installer, never start-limit-hit.
+            unitConfig.StartLimitIntervalSec = 0;
             # Started by slotctl withdraw and scrub; fails while anything is left.
             serviceConfig = {
               Type = "oneshot";

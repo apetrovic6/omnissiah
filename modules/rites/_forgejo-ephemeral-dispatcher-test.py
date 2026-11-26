@@ -413,6 +413,7 @@ class FakeSystemctl:
         self.egress_show_fails = False
         # The root cleanup unit (withdraw, scrub) fails while a rule or flow is left.
         self.egress_cleanup_fails = False
+        self.cleanup_timeouts = []  # What slotctl waits for each cleanup start
 
     def egress_calls(self, verb):
         return [argv for argv in self.calls if argv[-1] == EGRESS and verb in argv]
@@ -434,7 +435,7 @@ class FakeSystemctl:
             return subprocess.CompletedProcess(argv, 0, stdout=b"")
         assert argv[:3] == (SYSTEMCTL, "--system", "--no-pager")
         if argv[-1] in (EGRESS, CLEANUP):
-            return self._egress(argv)
+            return self._egress(argv, options["timeout"])
         if "show" in argv:
             assert "--all" in argv and "--property=LoadState,ActiveState,Job,Result" in argv
             unit = argv[-1]
@@ -484,7 +485,7 @@ class FakeSystemctl:
                 self.set(unit, active="deactivating", pending="72")
         return subprocess.CompletedProcess(argv, 0, stdout=b"")
 
-    def _egress(self, argv):
+    def _egress(self, argv, timeout):
         """Blocking start/stop of the oneshot, and the status slotctl reads after a failed start."""
         if argv[3:] == ("--property=Result,ExecMainStatus,ExecMainExitTimestampMonotonic", "show", EGRESS):
             if self.egress_show_fails:
@@ -492,6 +493,7 @@ class FakeSystemctl:
             text = f"Result={self.egress_result}\nExecMainStatus={self.egress_status}\nExecMainExitTimestampMonotonic={self.egress_exited}\n"
             return subprocess.CompletedProcess(argv, 0, stdout=text.encode())
         if argv[3:] == ("--job-mode=fail", "start", CLEANUP):
+            self.cleanup_timeouts.append(timeout)
             # Stops the unit, then removes what is left, unless it cannot.
             self.egress_active = False
             if self.egress_cleanup_fails:
@@ -3420,6 +3422,10 @@ class SlotctlTests(unittest.TestCase):
         self.assertEqual(0, self.slotctl(*args, "withdraw", SLOT_RUN, config=self.egress)[0])
         self.assertFalse(self.system.egress_active)
         self.assertEqual([SYSTEMCTL, "--system", "--no-pager", "--job-mode=fail", "start", CLEANUP], list(self.system.cleanups()[-1]))
+        # The cleanup may stop the unit (ExecStop and ExecStopPost, 25 s each) and then clean up inside its
+        # own 60 s TimeoutStartSec: slotctl must wait longer than that, within the remote sandbox's 95 s.
+        self.assertEqual({70}, set(self.system.cleanup_timeouts))
+        self.assertTrue(60 < S.CLEANUP_WAIT < 95)
         # ExecStop failed and left something: scrub refuses and keeps the run marker, so nothing boots.
         self.system.set()
         self.system.egress_cleanup_fails = True

@@ -212,6 +212,7 @@
               && lib.hasInfix "@notTrustedCI not remote_ip ${self.lib.lan.ryza-eph-trusted}\nrespond @notTrustedCI 403\nreverse_proxy https://${self.lib.vips.traefik} {" s3Site.extraConfig
               && lib.hasInfix "tls_server_name {http.request.host}" s3Site.extraConfig);
             assert (sc.systemd.services ? "forgejo-ephemeral-trusted-egress-cleanup@ryza-eph-1") == egressOn;
+            assert !egressOn || sc.systemd.services."forgejo-ephemeral-trusted-egress-cleanup@ryza-eph-1".unitConfig.StartLimitIntervalSec == 0;
             assert builtins.elem "conntrack-tools" (map (p: p.pname or "") sc.environment.systemPackages) == egressOn;
             assert (sc.systemd.network.networks."10-lan".networkConfig ? IPv4DuplicateAddressDetectionTimeoutSec) == egressOn;
             assert !egressOn
@@ -241,6 +242,7 @@
                 arping = lib.getExe' server.pkgs.iputils "arping";
                 systemctl = lib.getExe' server.pkgs.systemd "systemctl";
                 notify = lib.getExe' server.pkgs.systemd "systemd-notify";
+                grep = lib.getExe' server.pkgs.gnugrep "grep";
               };
               ssh = lib.getExe' client.pkgs.openssh "ssh";
               systemdRun = lib.getExe' server.pkgs.systemd "systemd-run";
@@ -338,6 +340,10 @@
             cat > "$out/bin/notify" <<'EOF'
             #!${pkgs.runtimeShell}
             printf 'notify %s\n' "$*" >> "$EGRESS_LOG"
+            EOF
+            cat > "$out/bin/grep-broken" <<'EOF'
+            #!${pkgs.runtimeShell}
+            exit 2
             EOF
             cat > "$out/bin/launcher" <<'EOF'
             #!${pkgs.runtimeShell}
@@ -550,6 +556,13 @@
               EGRESS_CHECK_FAILS=1 refused ./egress-stop
               [[ -s "$EGRESS_RULES" ]]
               ./egress-cleanup
+              ./egress-preflight
+              # A grep error is never "no other form present".
+              for script in preflight cleanup; do
+                substitute ./egress-$script ./egress-$script-badgrep --replace-fail ${egress.tools.grep} ${fakeTools}/bin/grep-broken
+                chmod +x ./egress-$script-badgrep
+                refused ./egress-$script-badgrep
+              done
               ./egress-preflight
             '';
         # Fails at eval if a Hermes delegation guard rail stops firing: a work

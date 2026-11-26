@@ -80,6 +80,8 @@ LOCK_WAIT = 2.0
 MAX_COMMAND = 1024
 MAX_RUN = 113  # eph- + 12 hex + '-' + max 63-char slot + '-' + 32 hex
 UNIT_NOT_INSTALLED = 5  # systemctl's LSB exit status for StopUnit on a missing unit.
+# The trusted egress cleanup unit's TimeoutStartSec is 60 s; the remote sandbox allows 95 s.
+CLEANUP_WAIT = 70
 CODES = (
     "systemctl-failed",
     "watchdog-arm-failed",
@@ -289,7 +291,7 @@ class Systemctl:
         """The root cleanup unit stops the egress unit, removes any rule or flow it left and clears its failed
         state. It fails while anything is left, and then so does this: the slot must not boot again."""
         try:
-            self._call("start", self.egress_cleanup, options=("--job-mode=fail",), timeout=70)
+            self._call("start", self.egress_cleanup, options=("--job-mode=fail",), timeout=CLEANUP_WAIT)
         except SlotError:
             raise SlotError("egress-cleanup-failed") from None
 
