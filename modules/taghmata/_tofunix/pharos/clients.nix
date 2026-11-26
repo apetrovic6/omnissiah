@@ -99,6 +99,21 @@ in {
       groups = ["users"];
     };
 
+    # Aurral (yarr namespace) reads the keys as OIDC_CLIENT_ID/SECRET through
+    # envFrom. The Aurral Pocket app signs in through this same callback:
+    # Aurral finishes the login and hands it back to the app itself.
+    aurral = {
+      name = "Aurral";
+      url = "https://aurral.${domain}";
+      callbacks = ["/sso/callback"];
+      groups = ["users"];
+      secret = {
+        namespace = "yarr";
+        idKey = "OIDC_CLIENT_ID";
+        secretKey = "OIDC_CLIENT_SECRET";
+      };
+    };
+
     # Its Secret is written below, in the one shape Harbor reads.
     harbor = {
       name = "Harbor";

@@ -28,6 +28,21 @@ spec:
               value: /data/media
             - name: AURRAL_PUBLIC_URL
               value: https://aurral.noosphere.uk
+            - name: OIDC_ENABLED
+              value: "true"
+            - name: OIDC_ISSUER
+              value: https://id.noosphere.uk
+            - name: OIDC_REDIRECT_URI
+              value: https://aurral.noosphere.uk/sso/callback
+            - name: OIDC_SCOPES
+              value: openid profile email groups
+            - name: OIDC_GROUPS_CLAIM
+              value: groups
+            - name: OIDC_ADMIN_GROUPS
+              value: Admin
+          envFrom:
+            - secretRef:
+                name: aurral-oidc
           image: ghcr.io/lklynet/aurral:latest
           name: aurral
           ports:
