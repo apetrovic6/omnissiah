@@ -144,7 +144,15 @@
 +}
 --- a/internal/app/poll/single.go
 +++ b/internal/app/poll/single.go
-@@ -41,12 +41,22 @@
+@@ -6,6 +6,7 @@
+ import (
+ 	"context"
+ 	"errors"
++	"time"
+ 
+ 	runnerv1 "code.forgejo.org/forgejo/actions-proto/runner/v1"
+ 	"code.forgejo.org/forgejo/runner/v13/internal/app/run"
+@@ -41,12 +42,22 @@
  
  	done chan any
  
@@ -170,7 +178,7 @@
  	taskCtx, cancelTasks := context.WithCancel(ctx)
  
  	return &singleTaskPoller{
-@@ -59,6 +69,7 @@
+@@ -59,6 +70,7 @@
  		cancelTasks:   cancelTasks,
  		done:          make(chan any),
  		wait:          wait,
@@ -178,19 +186,122 @@
  		handle:        handle,
  	}
  }
-@@ -87,7 +98,12 @@
+@@ -85,47 +97,55 @@
+ 	requestKey := gouuid.New()
++	var task *runnerv1.Task
++	var lastFetchFailed bool
++	defer func() {
++		log.Info("single task poller is shutting down")
++		s.cancelPolling()
++		close(s.done)
++	}()
+ 
  	for {
  		if err := rateLimiter.Wait(s.pollingCtx); err != nil {
- 			log.Infof("single task poller is shutting down")
-+			s.cancelPolling()
- 			close(s.done)
-+			if s.bounded && s.taskCtx.Err() == nil {
-+				// The limiter also rejects a wait that would exceed the pickup deadline.
-+				return ErrNoTaskReceived
+-			log.Infof("single task poller is shutting down")
+-			close(s.done)
+-			return nil
++			if !s.bounded || s.taskCtx.Err() != nil {
++				return nil
 +			}
- 			return nil
++			if lastFetchFailed {
++				// The limiter may refuse a wait before the deadline. Wait it
++				// out, then recover a task the server may already have assigned
++				// under this key. Do not use the expired pickup context.
++				<-s.pollingCtx.Done()
++				if errors.Is(s.pollingCtx.Err(), context.DeadlineExceeded) && s.taskCtx.Err() == nil {
++					replayCtx, cancel := context.WithTimeout(s.taskCtx, 5*time.Second)
++					task, _, _ = s.fetchSingleTask(replayCtx, s.client, requestKey)
++					cancel()
++				}
++			}
++			break
  		}
  
+ 		log.Tracef("single task poller asking client %s for a task", s.client.Address())
+ 
+ 		// fetchSingleTask() has been introduced with Forgejo 15. That means fetchTask() can be removed and replaced
+ 		// with fetchSingleTask() once Forgejo 14 and earlier have reached their end of life.
+-		var task *runnerv1.Task
+ 		var reuseRequestKey bool
+ 		if s.handle != nil {
+-			task, reuseRequestKey = s.fetchSingleTask(s.pollingCtx, s.client, requestKey)
++			task, reuseRequestKey, lastFetchFailed = s.fetchSingleTask(s.pollingCtx, s.client, requestKey)
+ 		} else {
+ 			task, reuseRequestKey = s.fetchTask(s.pollingCtx, s.client, requestKey)
+ 		}
+ 
+ 		if !reuseRequestKey {
+ 			requestKey = gouuid.New()
+ 		}
+-		if task == nil && s.wait {
+-			log.Infof("single task poller received no task from %s, trying again", s.client.Address())
+-			continue
++		if task != nil || !s.wait {
++			break
+ 		}
+-
+-		var err error
+-		if task != nil {
+-			log.Infof("single task poller successfully fetched one task from %s", s.client.Address())
+-			s.runner.Run(s.taskCtx, task)
+-		} else {
+-			log.Debugf("single task poller received no task from %s", s.client.Address())
+-			err = ErrNoTaskReceived
+-		}
+-
+-		log.Info("single task poller is shutting down")
+-		s.cancelPolling()
+-
+-		// Signal that the poller is done.
+-		close(s.done)
+-
+-		return err
++		log.Infof("single task poller received no task from %s, trying again", s.client.Address())
+ 	}
++	if task == nil {
++		log.Debugf("single task poller received no task from %s", s.client.Address())
++		return ErrNoTaskReceived
++	}
++	log.Infof("single task poller successfully fetched one task from %s", s.client.Address())
++	s.runner.Run(s.taskCtx, task)
++	return nil
+ }
+@@ -179,7 +199,7 @@
+-func (s *singleTaskPoller) fetchSingleTask(ctx context.Context, client client.Client, requestKey gouuid.UUID) (task *runnerv1.Task, reuseRequestKey bool) {
++func (s *singleTaskPoller) fetchSingleTask(ctx context.Context, client client.Client, requestKey gouuid.UUID) (task *runnerv1.Task, reuseRequestKey, fetchFailed bool) {
+ 	cleanupRequestKey := client.SetRequestKey(requestKey)
+ 	defer cleanupRequestKey()
+ 
+ 	reqCtx, cancel := context.WithTimeout(ctx, s.cfg.Runner.FetchTimeout)
+ 	defer cancel()
+ 
+@@ -189,21 +209,21 @@
+ 	}))
+ 	if errors.Is(err, context.DeadlineExceeded) {
+ 		log.Trace("failed to fetch task: deadline exceeded")
+-		return nil, true
++		return nil, true, true
+ 	} else if err != nil {
+ 		if errors.Is(err, context.Canceled) {
+ 			log.WithError(err).Debugf("shutdown, task fetching cancelled")
+ 		} else {
+ 			log.WithError(err).Error("failed to fetch task")
+ 		}
+-		return nil, true
++		return nil, true, true
+ 	}
+ 
+ 	if resp == nil || resp.Msg == nil {
+-		return nil, true
++		return nil, true, false
+ 	}
+ 
+ 	// We've made a successful request without an error. Regardless of whether we've received tasks or not, we now
+ 	// signal the calling loop that the request key should not be reused.
+-	return resp.Msg.GetTask(), false
++	return resp.Msg.GetTask(), false, false
+ }
 --- a/internal/app/poll/single_test.go
 +++ b/internal/app/poll/single_test.go
 @@ -4,7 +4,9 @@
@@ -211,7 +322,7 @@
  	"github.com/stretchr/testify/mock"
  	"github.com/stretchr/testify/require"
  )
-@@ -145,3 +148,46 @@
+@@ -145,3 +148,91 @@
  	err := taskPoller.Poll()
  	require.NoError(t, err)
  }
@@ -258,6 +369,51 @@
 +		require.Equal(t, keys[0], keys[1])
 +	})
 +}
++
++func TestBoundedSingleTaskPoller_ReplaysLastFailedFetchAfterDeadline(t *testing.T) {
++	synctest.Test(t, func(t *testing.T) {
++		const pickupLimit = 5 * time.Second
++		start := time.Now()
++		cfg := &config.Config{}
++		cfg.Runner.FetchTimeout = time.Minute
++		handle := "assigned-at-deadline"
++		pickupCtx, cancel := context.WithTimeout(t.Context(), pickupLimit)
++		defer cancel()
++
++		mockClient := mock_client.NewMockClient(t)
++		mockClient.On("Address").Return("https://example.com/forgejo")
++		// The next rate-limited attempt would miss the pickup deadline.
++		mockClient.On("FetchInterval").Return(2 * pickupLimit)
++		var keys []gouuid.UUID
++		mockClient.EXPECT().SetRequestKey(mock.Anything).Run(func(key gouuid.UUID) {
++			keys = append(keys, key)
++		}).Return(func() {}).Twice()
++		req := connect.NewRequest(&runnerv1.FetchSingleTaskRequest{Handle: &handle})
++		mockClient.EXPECT().FetchSingleTask(mock.Anything, req).
++			Return(nil, connect.NewError(connect.CodeUnavailable, nil)).Once()
++		task := &runnerv1.Task{}
++		mockClient.EXPECT().FetchSingleTask(mock.Anything, req).
++			RunAndReturn(func(ctx context.Context, _ *connect.Request[runnerv1.FetchSingleTaskRequest]) (*connect.Response[runnerv1.FetchSingleTaskResponse], error) {
++				require.ErrorIs(t, pickupCtx.Err(), context.DeadlineExceeded)
++				require.NoError(t, ctx.Err())
++				require.Equal(t, pickupLimit, time.Since(start))
++				deadline, ok := ctx.Deadline()
++				require.True(t, ok)
++				require.Equal(t, start.Add(pickupLimit+5*time.Second), deadline)
++				return connect.NewResponse(&runnerv1.FetchSingleTaskResponse{Task: task}), nil
++			}).Once()
++
++		mockRunner := mock_runner.NewMockRunner(t)
++		mockRunner.On("Run", mock.Anything, task).Run(func(args mock.Arguments) {
++			require.NoError(t, args.Get(0).(context.Context).Err())
++		}).Once()
++		poller := NewBoundedSingleTaskPoller(t.Context(), pickupCtx, cfg, mockClient, mockRunner, &handle)
++		require.NoError(t, poller.Poll())
++		require.Len(t, keys, 2)
++		require.NotEqual(t, gouuid.Nil, keys[0])
++		require.Equal(t, keys[0], keys[1])
++	})
++}
 --- a/internal/app/cmd/job_test.go
 +++ b/internal/app/cmd/job_test.go
 @@ -8,6 +8,7 @@
@@ -268,7 +424,7 @@
  	"time"
  
  	runnerv1 "code.forgejo.org/forgejo/actions-proto/runner/v1"
-@@ -417,3 +418,48 @@
+@@ -417,3 +418,57 @@
  	case <-time.After(time.Second):
  	}
  }
@@ -280,7 +436,7 @@
 +		mockClient := mock_client.NewMockClient(t)
 +		mockClient.On("Address").Return("https://example.com/forgejo")
 +		mockClient.On("FetchInterval").Return(time.Second)
-+		mockClient.On("SetRequestKey", mock.Anything).Return(func() {}).Once()
++		mockClient.On("SetRequestKey", mock.Anything).Return(func() {}).Twice()
 +		mockClient.EXPECT().Declare(mock.Anything, mock.Anything).
 +			Return(nil, connect.NewError(connect.CodeUnavailable, nil)).Once()
 +		mockClient.EXPECT().Declare(mock.Anything, mock.Anything).
@@ -300,6 +456,15 @@
 +				<-ctx.Done()
 +				return nil, ctx.Err()
 +			}).Once()
++		mockClient.EXPECT().FetchSingleTask(mock.Anything, mock.Anything).
++			RunAndReturn(func(ctx context.Context, req *connect.Request[runnerv1.FetchSingleTaskRequest]) (*connect.Response[runnerv1.FetchSingleTaskResponse], error) {
++				require.Equal(t, "job-handle", req.Msg.GetHandle())
++				deadline, ok := ctx.Deadline()
++				require.True(t, ok)
++				require.Equal(t, start.Add(timeout+5*time.Second), deadline)
++				<-ctx.Done()
++				return nil, ctx.Err()
++			}).Once()
 +
 +		defer testutils.MockVariable(&initLogging, func(*config.Config) {})()
 +		defer testutils.MockVariable(&initializeRunJobConfig, func(*string, *runJobArgs) (*config.Config, error) {
@@ -314,6 +479,6 @@
 +
 +		err := runJob(t.Context(), nil, &runJobArgs{handle: "job-handle", waitTimeout: timeout})
 +		require.ErrorIs(t, err, poll.ErrNoTaskReceived)
-+		require.Equal(t, timeout, time.Since(start))
++		require.Equal(t, timeout+5*time.Second, time.Since(start))
 +	})
 +}

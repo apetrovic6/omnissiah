@@ -1013,13 +1013,13 @@ Inspect either Ryza guest's console with
 
 #### Ryza one-job pilot (`nix-eph`)
 
-Ryza ships with one local slot, `ryza-eph-1`, and one pool: `ugalabugala`,
-user `manjo`, label `nix-eph`, dispatch restricted to `manjo/rust-app-template`
-(repo ID 9). Each dispatcher boots its assigned slot for one job handle.
-The guest gets that registration's single-use token, UUID and job handle.
-The shipped guest keeps its fixed forge and label. With multiple pools
-or a different forge/label, the guest also gets the selected URL and label
-as boot credentials. The job can read these files.
+Ryza ships with one slot, `ryza-eph-1`, serving three pools on `nix-eph`:
+`ugalabugala` (manjo/rust-app-template, repo ID 9), `noosphere-user`
+(manjo/auspex and manjo/mushroom-farmer), and `noosphere-org`
+(monolith-softworks, the full org queue). Each dispatcher boots its
+assigned slot for one job handle. The guest gets that registration's
+single-use token, UUID and job handle, plus the selected forge URL and
+label. The job can read these files.
 There is no dispatcher PAT, persistent runner secret, sccache key, ncps netrc
 or signing key in the guest (the opt-in trust policy below adds the last
 two, root-only, for exactly resolved trusted runs). The guest shares the
@@ -1030,9 +1030,10 @@ secrets in store paths.
 
 The dispatcher only decides: Forgejo API calls, durable state, the trust
 verdict. Every slot side effect goes through `slotctl`
-(`modules/rites/_forgejo-slotctl.py`), which the dispatcher runs as a child in
-its own sandbox: systemd units, staged runner credentials, disk images and
-the trust share. Each call names the slot and one verb (`observe`, `start`,
+(`modules/rites/_forgejo-slotctl.py`), either as a local child or through a
+source-restricted SSH forced command. It handles systemd units, staged
+runner credentials, disk images and the trust share on the slot host.
+Each call names a slot and one verb (`observe`, `check-space`, `start`,
 `stop`, `reset-failed`, `stop-support`, `stage`, `scrub`, `deliver`,
 `withdraw`). The module compiles the per-host config, which holds the paths,
 into slotctl. slotctl has no option to point elsewhere, and repeated or
@@ -1046,13 +1047,13 @@ and a verb. Secrets travel on stdin.
   logs its own message for it, the same text as before; slotctl's output is
   never logged.
 
-Existing persistent runners, registrations, labels (including `nix-vm`), state
-and resource limits are unchanged. They are **not** safe for arbitrary
-untrusted workflows: this pilot does not prevent rogue jobs from requesting
-their credential-bearing labels. Review the entire workflow before approving
-a fork run; do not open up fork scheduling more broadly.
+With remote dispatch off, existing persistent runners and labels (including
+`nix-vm`) are unchanged. They are **not** safe for arbitrary untrusted
+workflows: they accept jobs that request their credential-bearing labels.
+Review the entire workflow before approving a fork run; do not open up fork
+scheduling more broadly.
 
-**Enroll (operator only).**
+**Enroll a local pilot pool (operator only, before remote cutover).**
 
 1. Verify the upstream repo is public, owned by `manjo`, and note its numeric
    Forgejo repo ID (not the fork's ID). Create a dedicated PAT as `manjo` in
@@ -1062,9 +1063,9 @@ a fork run; do not open up fork scheduling more broadly.
    even add account SSH keys). See the
    [trusted module header](modules/rites/_forgejo-ephemeral-trusted.nix) for
    the exact authority. Specific-repo PATs cannot carry `write:user`.
-2. On Ryza, configure `services.imperium.forgejoEphemeral.enable = true`
-   and the checked-in pilot pool (replace `9` only when enrolling a
-   different public upstream). Trust policy is separate from dispatch:
+2. Configure the pool in the fleet module in
+   `modules/rites/forgejo-runner-ephemeral.nix` (replace `9` only when
+   enrolling a different public upstream). Trust policy is separate from dispatch:
 
    ```nix
    services.imperium.forgejoEphemeral.pools.ugalabugala = {
@@ -1229,63 +1230,15 @@ not. For a host-file canary, put a non-secret file on Ryza outside
 `/nix/store` and add a presence check for its path to the probe. Do not dump
 environments, mount tables, credential directories or file contents.
 
-**Operator-only: exercise Noosphere with a second pool.** Globally pause and
-drain as below. Verify `manjo/auspex` is public on `forge.noosphere.uk` and
-record its numeric upstream repo ID. Add this to Ryza alongside the existing
-pool. Replace `AUSPEX_REPO_ID` with that positive integer before evaluating:
-
-```nix
-services.imperium.forgejoEphemeral.pools.noosphere-auspex = {
-  forge = "noosphere";
-  scope.user = "manjo";
-  labels = [ "nix-eph" ];
-  dispatch = [ AUSPEX_REPO_ID ];
-};
-```
-
-1. As `manjo` on Noosphere, create a dedicated **Public only** PAT with
-   **`write:user` only**, as the Noosphere prompt requests for a user-only
-   forge. Plain dispatch works on a private `auspex` too: the user job
-   listing filters by owner, not visibility. Do not add
-   `write:organization` for this user-only pilot. The prompt asks for
-   `read:repository` only once `trustedJobs` is on (step 4), and drops
-   Public only once the forge has an org pool. With the pool configured,
-   generate the per-machine var:
-
-   ```sh
-   CLAN_NO_COMMIT=1 clan vars generate ryza --generator forgejo-ephemeral-noosphere
-   ```
-
-   Paste only at the hidden prompt. Commit the pool together with the
-   encrypted per-machine var and its Clan access metadata.
-2. Deploy Cerberus first and verify its active Caddy guard permits
-   `forge.noosphere.uk` from the slot source without changing other sources'
-   access. Deploy Ryza while paused. Check its dispatcher journals for the
-   Noosphere pool and validated PAT identity, then remove the global pause.
-3. Open a reviewed `pull_request` test PR in `manjo/auspex` with
-   `runs-on: nix-eph` and the isolation probe above, with
-   `EPHEMERAL_DYNAMIC_ROUTING: "1"`. Require the Noosphere version
-   endpoint to respond via Cerberus (`192.168.1.105`) and all negative
-   checks to pass. Inspect the pool-tagged logs and Noosphere's user Actions
-   runner inventory: the one-job runner ID should appear during the job
-   and disappear after completion; verify local cleanup too.
-4. To test trust, pause and drain again. Enable `trustedJobs` if not already
-   on (follow the trust opt-in below for every forge with trusted repos).
-   That adds `read:repository` to the Noosphere prompt: regenerate the var
-   with a new PAT (`--regenerate`). Trust lookups on a private `auspex`
-   need a PAT without Public only; otherwise they fail closed. Check the
-   trust precondition below for `auspex` (default branch protection rule
-   included), then add
-   `trust.repos."<auspex ID>" = { owner = "manjo"; name = "auspex"; };`
-   and `trust.users = [ "manjo" ];` to the Noosphere pool, using the real ID
-   as the string key. Deploy Ryza, unpause, and verify an eligible default
-   branch push delivers credentials. The PR must still get none.
-5. To roll back, pause and drain **all** pools and slots with both PATs
-   still valid. Cancel any test jobs you do not want left waiting. Remove
-   the Noosphere pool and restore the pre-test trust settings if changed.
-   Deploy Ryza and verify the original pool before resuming it. Revoke the
-   Noosphere PAT after its runner inventory is reconciled. Leave Cerberus's
-   guard and its three-host allowlist in place.
+**Verify Noosphere dispatch.** On a reviewed `pull_request` test in
+`manjo/auspex`, use `runs-on: nix-eph` and the isolation probe above with
+`EPHEMERAL_DYNAMIC_ROUTING: "1"`. Require the Noosphere version endpoint to
+respond through Cerberus and all negative probes to pass. The Noosphere PAT
+is shared by both Noosphere pools: it needs `write:organization` and must
+belong to an org owner. A Public only PAT cannot reach a non-public org.
+Both Noosphere pools currently dispatch untrusted. Check the pool-tagged
+journal and the correct Forgejo user or org runner inventory for creation
+and cleanup of the one-job registration.
 
 **Verify cleanup and cancellation.** Check the dispatcher and slot journals
 for the pool, job attempt, runner ID, VM exit and deletion. Using that
@@ -1294,8 +1247,9 @@ no longer contains the ID: `GET /api/v1/user/actions/runners` for a user
 pool, or `GET /api/v1/orgs/<org>/actions/runners` for an org pool.
 Keep the PAT out of command arguments, shell history and logs. Also verify
 `nix-store-overlay.img` and `var.img` are gone from
-`/var/lib/microvms/ryza-eph-1/job` and that
-`/run/microvm-credentials/ryza-eph-1` is gone.
+`/var/lib/microvms/ryza-eph-1/job` and that the slot's staged runner
+credential directory is gone (`/run/microvm-credentials/ryza-eph-1`
+locally, or `/run/microvm-credentials/forgejo-ryza-eph-1/ryza-eph-1` remotely).
 `systemctl show -p Result microvm@ryza-eph-1` should report `success` after a
 good job. The installer (re-run before every VM start and dispatcher start)
 creates the slot directories and refuses a pre-existing symlink; tmpfiles
@@ -1318,9 +1272,12 @@ successful trust delivery disarms it while the VM is running. Host startup
 and shutdown have separate 90 s and 30 s limits.
 
 The guest uses one addressed `one-job --wait-timeout 300s` process. It
-keeps the same fetch request key across transport retries and powers off
-on completion or pickup expiry. If the handle is still waiting and
-unassigned after runner deletion, the dispatcher releases it with backoff.
+keeps the same fetch request key across transport retries. If the last
+addressed fetch failed, it replays that key once after the pickup deadline
+on a fresh context bounded to five seconds, to recover a task the forge
+may already have assigned. It powers off on completion or pickup expiry.
+If the handle is still waiting and unassigned after runner deletion, the
+dispatcher releases it with backoff.
 After three boots without pickup for the same attempt, it retires the
 handle and logs the reason; cancel and re-run that attempt to retry it.
 Forgejo v15.0.12 deletes assigned ephemeral registrations on
@@ -1395,8 +1352,9 @@ and allow another poll). The older dispatcher cannot read the new
 in-flight trust fields or missed-pickup state. Do not edit state files.
 Find each state directory with
 `systemctl show -p StateDirectory --value forgejo-ephemeral-dispatcher@<slot>.service`;
-`ryza-eph-1` still uses
-`/var/lib/forgejo-ephemeral-dispatcher`. Do not edit state or claim files.
+`ryza-eph-1` uses `/var/lib/forgejo-ephemeral-dispatcher` on Ryza and
+`/var/lib/forgejo-ephemeral-dispatcher-ryza-eph-1` on the remote dispatcher.
+Do not edit state or claim files.
 Remove the relevant pause flag to resume. Both flags survive dispatcher
 restarts, not a host reboot; restore them before resuming maintenance.
 
@@ -1460,22 +1418,139 @@ Verify cleanup for both slots. To roll back capacity, pause and drain both slots
 and the persistent work, remove `ryza-eph-2`, restore the `nix-vm` budget,
 deploy Ryza, and unpause.
 
-Remote slot transport is available but not configured on Ryza. An inventory
-entry with `dispatcher = "<machine>"` assigns its slots to that dispatcher
-host. Enable the module on both hosts; the dispatcher holds the per-forge
-PATs and its per-machine `forgejo-slotctl-ssh` private key. The slot host
-restricts that transport key to the dispatcher's LAN IP and a forced slotctl
-command. The client checks the slot host's ed25519 key from its Clan
-`openssh` var, not trust on first use. Each slot host serializes calls and rejects
-stale run names. The name checks freshness, not caller authorization;
-authorization comes from the source-restricted SSH key. The inventory
-must use one dispatcher host: claims do not arbitrate across hosts.
+#### Move the dispatcher off Ryza (HOM-32 PR 7, operator only)
+
+The fleet-wide `dispatcher` settings live in `modules/rites/_ci-slots.nix`.
+On merge, `remote = false`: Ryza keeps the local dispatcher, both PAT vars,
+and its two persistent `nix-vm` guests. Only the pickup fix and watchdog
+configuration change its build. Cerberus gets no dispatcher or new vars
+prompts; its persistent runners and Caddy configuration are unchanged.
+
+With `remote = true`, the selected `host` (default `cerberus`) takes both
+PATs and the slotctl private key. No persistent Forgejo runner runs on
+the selected host. The flip disables both Cerberus `nix` runners and
+their sccache setup: `nix` capacity remains on Terra, Luna and Sol. That
+includes all of `machines.yml` (`update`, `manifests` and the per-machine
+build matrix, up to 300 min each), which then runs only within those
+nodes' runner slices (2 CPU / 4 GiB, Luna 3 GiB) instead of sometimes on
+Cerberus (3 CPU / 8 GiB): large closures can run out of memory there. Run
+one `workflow_dispatch` of `machines.yml` before the flip if in doubt;
+PR 11 moves it to its own label. Ryza
+keeps both `nix-vm` guests, their runner tokens, CI key, ncps netrc and
+sccache key until PR 12. PR 14 removes the remaining persistent runner
+code and registrations. Keep fork approvals manual until persistent
+runners are retired and their credentials rotated.
+
+Ryza loses the ephemeral dispatcher and its PATs, not the persistent
+guests' secrets. It authorizes exactly one slotctl key beside the
+existing admin keys: `restrict`, a forced command and `from=` the
+dispatcher's chart IP. The client binds to that IP and pins Ryza's
+ed25519 `openssh` var. The remote dispatcher masks the host's secret
+directories and gets only its declared private copies from systemd.
+Trust stays off; see the separate opt-in below.
+
+1. Globally pause Ryza's ephemeral dispatcher. Confirm the drain: no
+   active run or unresolved registration in any pool, no busy slot or
+   support unit, no staged credentials or job images, and old ephemeral
+   registrations gone from both forges. Drained Ryza state need not move:
+   trust was off, so there are no trust pins. Its retired-handle history
+   will not transfer; cancel stale queued attempts you do not want retried.
+   Drain both Cerberus `nix` runners too: once neither is running a job
+   (the deploy removes them and would cancel one, e.g. a 5-hour
+   `machines.yml` build), run `systemctl stop forgejo-runner-ugalabugala
+   forgejo-runner-noosphere` on Cerberus so queued `nix` jobs go to Terra,
+   Luna and Sol. Their forge rows stay registered (offline) until PR 14.
+   Do not stop Ryza's `nix-vm` guests.
+2. In the operator's working tree, set `dispatcher.remote = true` to
+   expose the new generators. Do **not** deploy or publish that flip
+   until the vars exist. Create **new** dedicated PATs as `manjo`; do not
+   reuse either Ryza token. Ugalabugala: **Public only**, **`write:user`**.
+   Noosphere: **`write:user` + `write:organization`**, not Public only
+   (the org queue is non-public). Paste only at the hidden prompts.
+
+   ```sh
+   CLAN_NO_COMMIT=1 clan vars generate cerberus --generator forgejo-ephemeral-ugalabugala
+   CLAN_NO_COMMIT=1 clan vars generate cerberus --generator forgejo-ephemeral-noosphere
+   CLAN_NO_COMMIT=1 clan vars generate cerberus --generator forgejo-slotctl-ssh
+   ```
+
+   Commit the generated vars and Clan access metadata together with the
+   flag flip. Leave the Ryza PAT vars and those tokens valid for rollback.
+3. On Cerberus, before starting the new dispatcher, set its global pause:
+   `sudo install -d -m 0700 /run/forgejo-ephemeral` then
+   `sudo touch /run/forgejo-ephemeral/pause`. Stop the drained Ryza
+   dispatcher. Deploy **Ryza first**, then **Cerberus**, while both are
+   paused. Restore the pause marker first if either host rebooted.
+4. On Cerberus check `journalctl -u 'forgejo-ephemeral-dispatcher@*'`
+   for `Forgejo PAT identity verified` on each pool and verify
+   `systemctl show -p NRestarts forgejo-ephemeral-dispatcher@ryza-eph-1.service`
+   is not increasing. Even while paused the actual dispatcher performs
+   startup `observe` and `withdraw` through its sandbox. Confirm neither
+   persistent runner is active on Cerberus. On Ryza verify both `nix-vm`
+   guests remain enabled and neither dispatcher unit nor PAT var remains.
+   Check `LoadCredential` for absence of dispatcher credentials; the two
+   persistent guests still have their own credential staging units.
+   Check root's slotctl authorization for the expected `from=` and command.
+5. Run the deferred live SSH `observe` check **from Cerberus**, still
+   paused. From `systemctl cat forgejo-ephemeral-dispatcher@ryza-eph-1.service`
+   take the `--ssh-command` wrapper path and the source path after
+   `LoadCredential=slotctl-ssh-key:` (paths only, not key contents). With
+   `wrapper` and `key_source` set to those paths:
+
+   ```sh
+   sudo systemd-run --wait --pipe --collect \
+     --property="LoadCredential=slotctl-ssh-key:$key_source" \
+     --property=RuntimeDirectory=forgejo-slotctl-probe \
+     "$wrapper" '--slot ryza-eph-1 observe'
+   ```
+
+   Require success, with `vm` and `again` idle, no busy support units and
+   `"run":null`. This exercises the pinned key, source restriction,
+   forced command and slot-side transient sandbox without starting a job.
+6. Unpause **Cerberus**. Run a reviewed `nix-eph` job and verify pickup,
+   no trust delivery, and cleanup on Ryza. Once verified, revoke both
+   old Ryza PATs and remove their obsolete per-machine vars:
+
+   ```sh
+   git rm -r -- vars/per-machine/ryza/forgejo-ephemeral-ugalabugala \
+     vars/per-machine/ryza/forgejo-ephemeral-noosphere
+   ```
+
+   The pinned Clan CLI has no command to delete abandoned per-machine
+   vars; `clan vars list ryza` checks declarations, not stale files.
+   Commit the deletions. Keep Ryza's shared CI recipients for `nix-vm`
+   now; remove them only when PR 12 retires those guests.
+
+**Rollback.** Pause and drain the remote dispatcher, then stop its
+instances. Enroll fresh Ryza PATs first if the old ones were revoked.
+On Ryza restore the pause even after a reboot:
+`sudo install -d -m 0700 /run/forgejo-ephemeral && sudo touch /run/forgejo-ephemeral/pause`.
+Set `dispatcher.remote = false`, deploy Ryza and Cerberus, verify only
+Ryza is dispatching, then unpause it. This restores Cerberus `nix`
+capacity; Ryza's `nix-vm` scheduling never changed.
+
+**Move the dispatcher role again.** Change only `dispatcher.host` in
+`modules/rites/_ci-slots.nix` to a base-tagged NixOS host with a chart
+address. Drain its persistent runners if present; they stop when it
+becomes the dispatcher. Cerberus's own runners stay off for good once
+`remote = true`, even when the dispatcher moves elsewhere, so moving the
+role to Terra leaves `nix` on Luna and Sol only until PR 13. Generate its fresh PATs and its own
+`forgejo-slotctl-ssh` key (do not copy the old private key). If trust is
+already enabled, ensure the shared CI credentials can deploy there.
+Pause and drain, stop the old dispatcher, and carry over each drained
+slot's root-owned state directory so queue identities and trust user pins
+are preserved. Pause the new host and deploy slot hosts first so they
+replace the old source/key, then deploy the new dispatcher. Repeat the
+SSH and job checks above before unpausing. Nothing follows this setting
+for **guest egress**: Cerberus's Caddy guard, the forge and ncps address
+pins, and the slot firewall's DNS/HTTPS exceptions must be migrated
+separately before retiring Cerberus.
 
 **Rotate a PAT.** Pause and wait for cleanup to converge with the old
 PAT as above. Create its replacement with the required scopes, regenerate
-the forge's encrypted Ryza var using its enrollment command with
-`--regenerate`, and deploy the new var while still paused. The var path
-does not change; the service loads PATs only at startup. Explicitly restart
+the forge's encrypted var on the **current dispatcher host** using its
+enrollment command with `--regenerate`, and deploy the new var while paused.
+The var path does not change; the service loads PATs only at startup. Restart
 all `forgejo-ephemeral-dispatcher@<slot>.service` instances using that PAT.
 Require the new invocation's journal to confirm the expected PAT identity
 for that forge before revoking the old PAT. This verifies authentication
@@ -1483,14 +1558,15 @@ and identity, not write scope. Unpause only after verifying the rotation.
 
 **Disable the pilot.** Pause, cancel any queued `nix-eph` runs you do not
 intend to leave waiting, and wait for local and remote cleanup as above.
-Deploy `enable = false` to Ryza; the Cerberus guard stays in place.
+Disable the ephemeral services on the slot host and dispatcher; the
+Cerberus guard stays in place.
 Revoke the dedicated PATs only after cleanup; do not erase pending
 reconciliation state.
 
 #### Trusted `nix-eph` jobs (HOM-31, opt-in)
 
-Off by default (`services.imperium.forgejoEphemeral.trustedJobs.enable`).
-When it is off, the slot VM and its units are identical to the plain pilot.
+Trust is off by default, including after the remote dispatcher cutover.
+With trust off the slot has no trust share.
 When it is on, every job still **boots untrusted**. No repository is
 verified at startup. After pickup, the dispatcher looks up only repos
 listed in that pool's `trust.repos`, mapping job `task_id` → task →
@@ -1503,10 +1579,10 @@ the dispatcher pins each configured trust login to its account ID, before
 it can trigger a trusted job. It keeps existing pins across restarts and
 prunes logins removed from `trust.users`. The repo must not be a pull
 mirror or have a write deploy key, and only pinned users may write its
-default branch (below). Only then does
-the dispatcher write the CI signing key and ncps upload netrc into
-`/run/microvm-credentials/ryza-eph-1-trust` (root `0700`, files `0400`). The
-guest sees that directory as a read-only virtiofs share at `/run/ci-trust`,
+default branch (below). Only then does the dispatcher deliver the signing
+key and netrc. Slotctl writes them to `ryza-eph-1-trust` in the slot's
+runtime credential parent (root `0700`, files `0400`).
+The guest sees that directory as a read-only virtiofs share at `/run/ci-trust`,
 readable only by guest root. The nix-daemon's post-build hook then uploads
 builds to ncps. Fork PRs, AGit PRs (Hermes's included), fork re-runs or
 approvals by manjo, every `pull_request*` event, lookup errors and 403s get
@@ -1561,45 +1637,36 @@ only for a repo that meets the precondition and has a scheduled workflow
 that needs the cache, such as a nightly `nix flake update` or a cache-warming
 build of `master`. Ryza's `rust-app-template` pool has it off.
 
-**Opt in.**
+**Opt in separately (operator only).**
 
-1. Pause and wait for cleanup (above).
-2. For each forge with a trusted repo, use a dedicated PAT with
-   **`read:repository`** in addition to **`write:user`** (and
-   **`write:organization`** if there is an org pool). Keep **Public only**
-   for the public pilot. Repo lookups use `read:repository`; checking
-   collaborator permissions, deploy keys and branch protection requires
-   repo admin. Listing org team members needs `read:organization`
-   (included in `write:organization`) and team access; org ownership
-   already required for dispatch provides that access.
-3. Set `trustedJobs.enable = true` in `machines/ryza/forgejo-runner.nix`
-   and explicitly configure each pool's `trust.repos` and `trust.users`.
-   An org pool uses `scope.org = "monolith-softworks"`; set each trusted
-   repo entry's owner to `"monolith-softworks"` and set
-   `trust.users = [ "manjo" ];` on the pool. The PAT must belong to an org
-   owner for runner operations; the user queue cannot serve org repos.
-   Check the precondition above for every trusted repo, and add its
-   default branch protection rule before deploying.
-   If rotating the pilot PAT, regenerate its var:
+1. Pause and drain all `nix-eph` slots. Audit the default branch and
+   verify the trust preconditions above for every `trust.repos` entry.
+2. Set `dispatcher.trustedJobs = true` in `modules/rites/_ci-slots.nix`,
+   leaving `dispatcher.remote` unchanged. The shared flag enables the
+   dispatcher verdict and the slot-side `deliver` and trust share.
+   Enroll replacement PATs with **`read:repository`** in addition to
+   the dispatch scopes on both forges; regenerate their vars on the
+   active dispatcher host. Keep Public only for the public pilot.
+   Repository protection, deploy-key and collaborator probes require
+   repo admin; org team member reads are included in the required
+   `write:organization` scope.
+3. Deploy the paused slot hosts first, then the dispatcher. On a
+   remote dispatcher this also deploys `nix-ci-signing-key` and
+   `ncps-upload-auth`. Verify its PAT identity checks and unpause.
+4. Put a temporary `workflow_dispatch` workflow on rust-app-template's
+   default branch with `runs-on: nix-eph`. Dispatch it **as manjo against
+   that branch**. In the job, wait at least 30 seconds for pickup and
+   delivery, then build a fresh trivial Nix derivation using the repo's
+   pinned Nixpkgs and a name keyed by `GITHUB_RUN_ID` and
+   `GITHUB_RUN_ATTEMPT`, with `--no-substitute --print-out-paths`.
+   Require `trusted: run #N (workflow_dispatch); delivered CI upload credentials`
+   and check the resulting path's narinfo on ncps for `ci.noosphere.uk-1`.
+   Existing default-branch workflows use `nix` or `nix-vm`; a plain
+   master merge does not exercise this test.
 
-   ```sh
-   CLAN_NO_COMMIT=1 clan vars generate ryza --generator forgejo-ephemeral-ugalabugala --regenerate
-   ```
+**Verify the negative case and cleanup.**
 
-   Paste the PAT only at the hidden prompt. Commit the config and var together.
-   The flag declares the shared `nix-ci-signing-key` and `ncps-upload-auth`
-   vars on Ryza itself (`modules/rites/ci-credentials.nix`), with or without
-   the persistent runner.
-4. `clan machines update ryza`, then restart the dispatcher instances
-   and check journal identity confirmation for each forge. For an org pool
-   the dispatcher also resolves the configured org ID. No repository trust
-   lookup happens until an allowlisted job is picked up. Unpause and verify.
-
-**Verify.**
-
-- After the first job:
-  - a master merge logs `trusted: run #N (push); delivered CI upload credentials`,
-    and paths it built appear in ncps signed `ci.noosphere.uk-1`;
+- Manually approve a reviewed fork PR probe on `nix-eph` and require:
   - a Hermes PR logs `untrusted: run #M (fork or AGit pull request); CI upload credentials withheld`,
     and re-running it as manjo logs the same.
 - An unlisted repo gets an untrusted verdict without repository calls.
@@ -1618,23 +1685,40 @@ build of `master`. Ryza's `rust-app-template` pool has it off.
   only the five one-job runtime inputs. A trusted job can still check that
   `/run/ci-trust` is unreadable to it
   (`! ls /run/ci-trust`). Never print the files.
-- After the VM stops, `/run/microvm-credentials/ryza-eph-1-trust` is gone.
+- After the VM stops, Ryza's `ryza-eph-1-trust` directory is gone.
 
 **Rotation.** Trusted jobs never see the key bytes, only the hook does.
 But a trusted job can get anything it builds signed, so treat the key as
 exposed to trusted code. The persistent runners still hand the same key,
 netrc and the sccache RW key to every job they run, approved fork PRs
-included. So rotate `ci.noosphere.uk-1` → `-2` (`ciKeyName` in
-`modules/rites/ci-credentials.nix`), `ncps-upload-auth` and `sccache-garage-key` when
-HOM-32 retires them, not before. If a dispatcher log ever shows a delivery
-you did not expect: pause, rotate the CI key and the netrc, and audit recent
-ncps uploads.
+included. Once PR 12 retires Ryza's guests, remove their obsolete
+per-machine runner vars after deleting the registrations. The pinned
+Clan SOPS backend does not prune a machine that stops declaring a shared
+generator. Remove only Ryza's links, then use Clan to re-encrypt each
+var from a machine that still declares it (Terra on the default rollout
+for upload credentials, Phalanx for workstation sccache):
 
-**Disable.** Pause and drain all slots, and verify their trust directories
-are gone. With the flag off, nothing scrubs those directories any more.
-Set the flag to false, deploy, and unpause. Rotate each PAT to drop
-`read:repository` if no longer needed; keep the scopes required for its
-configured dispatch queues.
+```sh
+git rm -- vars/shared/nix-ci-signing-key/key/machines/ryza \
+  vars/shared/ncps-upload-auth/netrc/machines/ryza \
+  vars/shared/sccache-garage-key/credentials/machines/ryza
+CLAN_NO_COMMIT=1 clan vars fix terra --generator nix-ci-signing-key
+CLAN_NO_COMMIT=1 clan vars fix terra --generator ncps-upload-auth
+CLAN_NO_COMMIT=1 clan vars fix phalanx --generator sccache-garage-key
+```
+
+Verify the three `machines/ryza` links are gone and no recipient group
+still grants Ryza access; commit the links and re-encrypted files.
+Neither that cleanup nor Git deletion invalidates old ciphertext or
+keys already copied. PR 15 rotates the CI signing key, ncps netrc and
+sccache key after persistent runners are retired. If you see unexpected
+delivery: pause, rotate the CI key and netrc, and audit recent uploads.
+
+**Trust-only rollback.** Pause and drain all slots, and verify their
+trust directories are gone. Set `dispatcher.trustedJobs = false` without
+changing `dispatcher.remote` or `dispatcher.host`. Deploy both ends,
+check `--trusted-jobs` and the share are gone, then unpause the same
+dispatcher. After verification rotate the PATs to remove `read:repository`.
 
 ### Hermes on Cerberus Forgejo
 

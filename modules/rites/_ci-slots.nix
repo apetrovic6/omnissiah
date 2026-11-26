@@ -14,7 +14,7 @@
 #                     slot units cannot see their directories, nor those of any
 #                     other microVM declared on the host.
 #   dispatcher       machine that serves this host's slots; defaults to the
-#                    slot host. A different machine uses forced-command SSH.
+#                    slot host. The fleet sets this when remote dispatch is enabled.
 #   slots.<name>     one per throwaway VM, with globally unique names.
 #     index           1, 2, ...: tap `vm-eph-<index>`, MAC
 #                     02:00:00:c1:00:<index + 2, hex>, subnet
@@ -26,10 +26,17 @@
 #                     The overlay also holds Nix's build dir.
 #     var             GiB for /var (workspace, TMPDIR, CARGO_HOME).
 {
-  ryza = {
+  dispatcher = {
+    # Prepare new PATs and a slotctl key before deploying this as true.
+    remote = false;
+    host = "cerberus";
+    # Separate operator opt-in; applies to the dispatcher and its slots.
+    trustedJobs = false;
+  };
+  hosts.ryza = {
     uplink = "ens18";
     egress.untrusted = "ryza-eph";
-    # The pre-HOM-29 single CI guest; its images may still be on disk.
+    # The pre-HOM-29 single guest; its images may still be on disk.
     legacyVMs = ["ryza-ci"];
     slots.ryza-eph-1 = {
       index = 1;

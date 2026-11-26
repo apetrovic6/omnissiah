@@ -13,7 +13,10 @@
   }: {
     # node_exporter for the cluster's Prometheus; off on RKE2 nodes, which have
     # the DaemonSet (modules/rites/node-exporter.nix).
-    imports = [self.nixosModules.node-exporter];
+    imports = [
+      self.nixosModules.node-exporter
+      self.nixosModules.forgejo-ephemeral-fleet
+    ];
 
     nixpkgs.overlays = [
       self.overlays.go125-shim

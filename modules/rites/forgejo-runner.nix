@@ -383,8 +383,12 @@ in {
       then {inherit (scfg) wrapper bucket endpoint region;}
       else null;
   in {
-    # The CI signing key and ncps upload credentials the post-build hook uses.
-    imports = [self.nixosModules.ci-credentials];
+    imports = [
+      self.nixosModules.ci-credentials
+      # Preserve the shared cache serving-key generator on legacy runner
+      # hosts. It is independent of the upload credentials.
+      self.nixosModules.reliquary-ncps
+    ];
 
     options.services.imperium.forgejoRunner = {
       enable = mkEnableOption "one Forgejo Actions runner per forge in `forges`";

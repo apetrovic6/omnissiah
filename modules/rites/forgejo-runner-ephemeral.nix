@@ -1,4 +1,96 @@
 {self, ...}: {
+  # Shared by the base-tagged NixOS machines. Assign the inventory and pools
+  # here so changing the dispatcher host moves the whole role at once.
+  flake.nixosModules.forgejo-ephemeral-fleet = args @ {
+    config,
+    lib,
+    options,
+    ...
+  }: let
+    inherit (config.networking) hostName;
+    # Fixtures supply the same replacement fleet data to each evaluation
+    # via specialArgs. Machine modules cannot override these settings.
+    fleet = args.ciDispatcher or self.lib.ciDispatcher;
+    inventory = lib.mapAttrs (_: entry:
+      if fleet.remote
+      then entry // {dispatcher = fleet.host;}
+      else entry)
+    self.lib.ciSlots;
+    cfg = config.services.imperium.forgejoEphemeral;
+    hostsSlots = builtins.hasAttr hostName inventory;
+    dispatches =
+      if fleet.remote
+      then hostName == fleet.host
+      else hostsSlots;
+    active = hostsSlots || dispatches;
+  in {
+    imports = [self.nixosModules.forgejo-runner-ephemeral];
+
+    options.services.imperium.forgejoEphemeral.remoteDispatcher = lib.mkOption {
+      type = lib.types.attrs;
+      readOnly = true;
+      default = fleet;
+      description = "Shared dispatcher settings from modules/rites/_ci-slots.nix.";
+    };
+
+    config = lib.mkMerge [
+      {services.imperium.forgejoEphemeral.inventory = lib.mkDefault inventory;}
+      (lib.mkIf active {
+        services.imperium.forgejoEphemeral.enable = true;
+        services.imperium.forgejoEphemeral.trustedJobs.enable = lib.mkDefault fleet.trustedJobs;
+      })
+      (lib.mkIf (fleet.remote && active) {
+        assertions = [
+          {
+            assertion = cfg.enable && cfg.inventory == inventory && cfg.trustedJobs.enable == fleet.trustedJobs;
+            message = "forgejoEphemeral: the remote dispatcher and slot hosts must use the shared fleet inventory and trust gate.";
+          }
+          {
+            assertion =
+              builtins.hasAttr fleet.host self.lib.hosts
+              && !builtins.hasAttr fleet.host inventory
+              && lib.all (tag: builtins.elem tag (self.clan.inventory.machines.${fleet.host}.tags or [])) ["base" "nixos"];
+            message = "forgejoEphemeral: choose a base-tagged dispatcher with a chart address, separate from the slot hosts.";
+          }
+        ];
+      })
+      (lib.mkIf (fleet.remote && dispatches) (lib.optionalAttrs (options.services.imperium ? forgejoRunner) {
+        services.imperium.forgejoRunner.enable = lib.mkForce false;
+      }))
+      (lib.mkIf dispatches {
+        services.imperium.forgejoEphemeral.pools = {
+          ugalabugala = {
+            forge = "ugalabugala";
+            scope.user = "manjo";
+            labels = ["nix-eph"];
+            dispatch = [9];
+            trust = {
+              repos."9" = {
+                owner = "manjo";
+                name = "rust-app-template";
+              };
+              users = ["manjo"];
+            };
+          };
+          noosphere-user = {
+            forge = "noosphere";
+            scope.user = "manjo";
+            labels = ["nix-eph"];
+            # manjo/auspex, manjo/mushroom-farmer
+            dispatch = [221 188];
+          };
+          noosphere-org = {
+            forge = "noosphere";
+            scope.org = "monolith-softworks";
+            labels = ["nix-eph"];
+            # This non-public org's entire queue is dispatched untrusted.
+            dispatch = "owner";
+          };
+        };
+      })
+    ];
+  };
+
   flake.nixosModules.forgejo-runner-ephemeral = {
     config,
     lib,
@@ -136,7 +228,7 @@
         ]
         ++ lib.optional local "-${credentials}/${name}-trust"
         ++ lib.optional (credentials != credParent) "-${credentials}")
-      (builtins.filter (name: name != slot) (builtins.attrNames config.microvm.vms ++ (host.legacyVMs or [])));
+      (builtins.filter (name: name != slot) (lib.unique (builtins.attrNames config.microvm.vms ++ (host.legacyVMs or []))));
     slotCapabilities = ["CAP_CHOWN" "CAP_FOWNER" "CAP_DAC_OVERRIDE"];
     commonSandbox = {
       ProtectSystem = "strict";
@@ -182,6 +274,10 @@
     };
     pickupSeconds = 5 * 60;
     reportingMarginMinutes = 5;
+    untrustedLimitSeconds = 65 * 60;
+    # Slot-host fail-safe starts at boot submission, not observed pickup.
+    expiryBootMarginMinutes = 5;
+    expiryMinutes = (untrustedLimitSeconds + pickupSeconds) / 60 + expiryBootMarginMinutes;
     vmStartSeconds = 90;
     vmStopSeconds = 30;
     classFor = spec: let
@@ -353,6 +449,7 @@
         user = slotUser;
         group = slotUser;
         min_free_bytes = (class.overlayGiB + spec.var + 10) * 1024 * 1024 * 1024;
+        expiry_minutes = expiryMinutes;
       };
       preflight = pkgs.writeShellScript "${slot}-preflight" ''
         set -eu
@@ -805,6 +902,7 @@
               "--pools ${poolsFile}"
               "--state-dir ${stateDirs.${slot}} --pause-file /run/${runtime}/pause"
               "--host-pause-file ${runRoot}/pause --claim-states ${claimStates}"
+              "--untrusted-limit ${toString untrustedLimitSeconds}"
               "--vm-deadline ${toString vmDeadline}"
             ]
             ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs");
@@ -946,7 +1044,9 @@
             })
             localSlots;
           remotePropertyNames = lib.mapAttrs (_: data: builtins.attrNames data.remoteProperties) localSlots;
+          remoteActions = lib.mapAttrs (_: data: data.remoteAction) localSlots;
           inherit slotctlSlots sshClients poolsFile;
+          inherit untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
         };
         description = "Slot, pool, and transport details for checks.";
       };
@@ -1101,6 +1201,19 @@
                   RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
                   Restart = "on-failure";
                   RestartSec = "7s";
+                }
+                // lib.optionalAttrs remoteClient {
+                  # PID 1 copies only the declared LoadCredential sources
+                  # into the unit's private credential directory before exec.
+                  InaccessiblePaths = ["-/run/secrets" "-/run/secrets.d" "-/var/lib/sops-nix" "-/etc/ssh"];
+                  PrivateDevices = true;
+                  ProtectKernelTunables = true;
+                  ProtectKernelModules = true;
+                  ProtectKernelLogs = true;
+                  ProtectControlGroups = true;
+                  SystemCallFilter = ["@system-service"];
+                  # Forge requests use HTTPS hostnames and normal DNS; the
+                  # slot SSH endpoints alone have stable chart addresses.
                 };
             };
           }

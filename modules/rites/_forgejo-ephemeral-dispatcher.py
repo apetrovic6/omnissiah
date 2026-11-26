@@ -52,7 +52,6 @@ HOST_PAUSE_FILE = Path("/run/forgejo-ephemeral/pause")
 CLAIM_ROOT = Path("/run/forgejo-ephemeral/claims")
 REQUEST_TIMEOUT = 10
 MAX_RESPONSE = 2 * 1024 * 1024
-UNTRUSTED_LIMIT = 65 * 60  # From first observed pickup; persisted across dispatcher restarts.
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 CLAIM_NAME = re.compile(r"[0-9a-f]{12}")
 TOKEN = re.compile(r"[!-~]{1,4096}")
@@ -1157,12 +1156,13 @@ class Trust:
 class Queue:
     """One pool's API and durable registration lifecycle on this slot."""
 
-    def __init__(self, api, slot, store, claims, monotonic=time.monotonic, wall=time.time, *, vm_deadline, trust=None):
+    def __init__(self, api, slot, store, claims, monotonic=time.monotonic, wall=time.time, *, vm_deadline, untrusted_limit, trust=None):
         self.api, self.slot, self.store = api, slot, store
         self.pool = api.pool
         self.monotonic, self.wall = monotonic, wall
         self.trust = trust
         self.vm_deadline = vm_deadline
+        self.untrusted_limit = untrusted_limit  # From first observed pickup; persisted across restarts.
         self.claims = claims
         self.claims.recover(store)
         pins = store.data.get("trust_ids", {})
@@ -1266,7 +1266,7 @@ class Queue:
             return active["revalidate_by"] - self.wall()
         # If the forge never reports pickup, the start time is the safe
         # fallback; a broken API must not grant the longer trusted budget.
-        return active.get("picked_up_at", active["queued_at"]) + UNTRUSTED_LIMIT - self.wall()
+        return active.get("picked_up_at", active["queued_at"]) + self.untrusted_limit - self.wall()
 
     def idle_jobs(self):
         if self.monotonic() >= self.api_after:
@@ -1875,6 +1875,7 @@ def parse_arguments(argv=None):
     parser.add_argument("--slot", required=True, help="the slot's microVM name, e.g. ryza-eph-1")
     parser.add_argument("--machine", required=True, help="the slot host's name")
     parser.add_argument("--vm-deadline", type=int, required=True, help="estimated host VM deadline in seconds")
+    parser.add_argument("--untrusted-limit", type=int, required=True, help="untrusted job limit in seconds")
     transport = parser.add_mutually_exclusive_group(required=True)
     transport.add_argument("--slotctl", type=Path, help="the local slot agent")
     transport.add_argument("--ssh-command", type=Path, help="the pinned SSH wrapper for the remote slot agent")
@@ -1887,6 +1888,8 @@ def parse_arguments(argv=None):
     args = parser.parse_args(argv)
     if not positive(args.vm_deadline):
         parser.error("--vm-deadline must be positive")
+    if not positive(args.untrusted_limit):
+        parser.error("--untrusted-limit must be positive")
     for path in (args.slotctl or args.ssh_command, args.pools, args.state_dir, args.claim_states, args.pause_file, args.host_pause_file):
         if not path.is_absolute():
             parser.error("dispatcher paths must be absolute")
@@ -1944,7 +1947,7 @@ def main():
                 Queue(
                     Forgejo(pool, credentials / f"forgejo-pat-{pool.forge}" if credentials is not None else None),
                     slot, Store(args.state_dir, pool.state_file), Claims(CLAIM_ROOT, states, pool),
-                    vm_deadline=args.vm_deadline, trust=trust,
+                    vm_deadline=args.vm_deadline, untrusted_limit=args.untrusted_limit, trust=trust,
                 )
                 for pool in pools
             ]

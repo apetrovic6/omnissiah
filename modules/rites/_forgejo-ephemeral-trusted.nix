@@ -164,15 +164,16 @@
 #       0750 slot directory. So it can read what virtiofsd serves: the host store,
 #       as today, and the share, which holds keys only while a trusted job is
 #       running. It cannot open trustDir directly.
-#     - virtiofsd runs as root on Ryza inside its own sandbox. Escaping it
-#       is root on the host: everything, including the key sources, the
-#       dispatcher PAT and the persistent runners' secrets. The share adds a
-#       second virtiofsd of the same kind as the store's, nothing new in kind.
+#     - virtiofsd runs as root on the slot host inside its own sandbox. An
+#       escape is host root. Remote dispatch takes the PAT and the dispatcher's
+#       upload credential sources off the slot host. Legacy persistent guests
+#       on that host can still have their own CI credentials until retired.
+#       The second virtiofsd is otherwise the same kind as the store's.
 #
 # NOT HERE (HOM-32): sccache on nix-eph (Garage is unreachable from the slot's
 # source address; a read-only key on the shared bucket would expose every
 # object). The two credentials come from ci-credentials.nix, which this
-# module enables, so they no longer depend on the persistent runner.
+# module enables only on the dispatcher.
 {
   cfg,
   localSlots,
