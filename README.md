@@ -346,10 +346,14 @@ Commands (`--follow-up` and other flags go before the origin):
   leaves Git's `initializing` lock, recovered after an hour. A failing
   post-checkout hook (e.g. git-lfs not installed) is reported as a warning.
 - `task-done` removes the worktree and deletes the local branch if `origin` has
-  exactly it (otherwise it keeps it). It refuses while anything would be lost:
+  exactly it, checked with `git ls-remote` (a stale remote-tracking ref or an
+  unreachable remote keeps it). Commits only the worktree's HEAD reflog names
+  (an amend, a detached commit left behind) are saved to
+  `refs/hermes/wip/<task_id>` first. It refuses while anything would be lost:
   uncommitted changes, a detached HEAD, a rebase/merge/cherry-pick/revert/bisect
-  in progress, commits no branch, remote or tag holds, or submodules (their
-  objects live in the worktree's admin dir).
+  in progress, commits no branch, remote or tag holds, or initialised
+  submodules (their objects live in the worktree's admin dir; a submodule never
+  checked out doesn't count).
 - `task-clear <origin>`, `task-clear --id <task_id | repo/dir>` (only on your
   explicit `clear task`): saves uncommitted work, and commits only the
   worktree's HEAD holds, to `refs/hermes/wip/<task_id>` in the repo (never
@@ -362,7 +366,10 @@ Anything else at a worktree path (another clone, a plain directory), and any
 worktree a snapshot can't hold (submodules, a nested repository, edits hidden
 by skip-worktree or assume-unchanged, a tree Git can't read) is moved to
 `.kept` instead; a kept linked worktree stays registered and locked, so look at
-it and remove it with `git worktree unlock` + `git worktree remove`. Locked
+it and remove it with `git worktree unlock` + `git worktree remove`. Its
+submodules still name their old place (`core.worktree`), so reach one with
+`git --git-dir ~/personal/<repo>/.git/worktrees/<task_id>/modules/<sub> --work-tree <kept>/<sub> …`.
+If Git can't lock a worktree, nothing is moved and the command refuses. Locked
 worktrees are never touched. **Ignored files** (build output, `.env`, local
 notes) are not kept: done and clear delete them with the worktree.
 

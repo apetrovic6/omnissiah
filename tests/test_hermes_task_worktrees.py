@@ -632,6 +632,64 @@ class WorktreeTasks(unittest.TestCase):
         self.git(wt, "rebase", "--abort")
         self.assertEqual(self.done(b)["result"], "done")
 
+    def test_commits_only_the_head_reflog_holds_are_saved_on_done(self):
+        a = self.claim(thread(1))
+        wt = Path(self.branch(a, "hermes/a")["active"]["worktree"])
+        self.git(wt, "checkout", "-q", "--detach")
+        self.git(wt, "commit", "-q", "--allow-empty", "-m", "detached work")
+        detached = self.git(wt, "rev-parse", "HEAD")
+        refused = self.done(a, code=2).stderr
+        self.assertIn("git switch -c 'hermes/a-wip'", refused)
+        self.assertIn("don't just check the branch out", refused)
+        # The agent checks the branch out anyway, and amends a commit on it: both old tips are saved.
+        self.git(wt, "checkout", "-q", "hermes/a")
+        self.git(wt, "commit", "-q", "--allow-empty", "-m", "first try")
+        first_try = self.git(wt, "rev-parse", "HEAD")
+        self.git(wt, "commit", "-q", "--amend", "--allow-empty", "-m", "second try")
+        done = self.done(a)
+        self.assertEqual(done["worktree_removed"], True)
+        ref = done["wip_ref"]
+        self.assertEqual(ref, f"refs/hermes/wip/{a['active']['task_id']}")
+        for lost in (detached, first_try):
+            self.assertEqual(self.git(self.base, "merge-base", "--is-ancestor", lost, ref, check=False).returncode, 0)
+        # Nothing to save: no wip ref.
+        b = self.claim(thread(2))
+        self.branch(b, "hermes/b")
+        self.assertIsNone(self.done(b)["wip_ref"])
+
+    def test_done_keeps_the_branch_unless_the_remote_confirms_it(self):
+        a = self.claim(thread(1))
+        wt = Path(self.branch(a, "hermes/a")["active"]["worktree"])
+        self.git(wt, "commit", "-q", "--allow-empty", "-m", "pr")
+        self.git(wt, "push", "-q", "-u", "origin", "hermes/a")
+        # The PR was closed with its branch on the forge; stygies hasn't fetched since.
+        self.git(self.fork, "branch", "-q", "-D", "hermes/a")
+        self.assertFalse(self.done(a)["branch_deleted"])
+        self.assertEqual(self.git(self.base, "rev-parse", "hermes/a"), self.git(self.base, "rev-parse", "origin/hermes/a"))
+        # The remote can't be reached: keep it too.
+        b = self.claim(thread(2))
+        wt = Path(self.branch(b, "hermes/b")["active"]["worktree"])
+        self.git(wt, "push", "-q", "-u", "origin", "hermes/b")
+        self.git(self.base, "remote", "set-url", "origin", str(self.home / "gone.git"))
+        self.assertFalse(self.done(b)["branch_deleted"])
+        self.assertTrue(self.git(self.base, "branch", "--list", "hermes/b"))
+
+    def test_uninitialised_submodules_dont_block_done(self):
+        sub = self.home / "subseed"
+        sub.mkdir()
+        self.git(sub, "init", "-q", "-b", "main")
+        self.git(sub, "commit", "-q", "--allow-empty", "-m", "lib")
+        seed = self.home / "with-sub"
+        self.git(self.home, "clone", "-q", str(self.upstream), str(seed))
+        self.git(seed, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(sub), "sub")
+        self.git(seed, "commit", "-q", "-m", "add a submodule")
+        self.git(seed, "push", "-q", "origin", "main")
+        self.git(self.base, "fetch", "-q", "upstream")
+        a = self.claim()
+        wt = Path(self.branch(a, "hermes/a")["active"]["worktree"])
+        self.assertTrue(self.git(wt, "submodule", "status").startswith("-"))  # never initialised
+        self.assertEqual(self.done(a)["worktree_removed"], True)
+
     def test_a_directory_at_the_worktree_path_is_kept(self):
         a = self.claim()
         path = self.personal / ".worktrees/tally" / a["active"]["task_id"]

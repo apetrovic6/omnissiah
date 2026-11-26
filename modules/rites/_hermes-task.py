@@ -738,7 +738,7 @@ def uncommitted(cfg, path):
     return len(out.splitlines())
 
 
-def snapshot(cfg, path, name, label):
+def snapshot(cfg, path, name, label, parents=()):
     """Commit everything uncommitted in a worktree (ignored files aside) to refs/hermes/wip/<name>.
 
     A private index, so the worktree's own index and HEAD stay as they were; the commit's parent
@@ -759,7 +759,8 @@ def snapshot(cfg, path, name, label):
         step("read-tree", "HEAD")
         step("add", "-A")
         tree = step("write-tree")
-        commit = step("commit-tree", tree, "-p", "HEAD", "-m", f"hermes wip: {label}")
+        extra = [arg for sha in parents for arg in ("-p", sha)]
+        commit = step("commit-tree", tree, "-p", "HEAD", *extra, "-m", f"hermes wip: {label}")
         step("update-ref", ref, commit, "")  # "" as the old value: only if the ref doesn't exist yet
     finally:
         index.unlink(missing_ok=True)
@@ -1088,7 +1089,10 @@ def keep_aside(cfg, project, path, linked=False):
     locked, so its admin dir (index, HEAD, a submodule's objects) is never pruned."""
     base = base_path(cfg, project)
     if linked:
-        run_git(cfg, base, "worktree", "lock", "--reason", "kept aside by the Hermes task tools", str(path))
+        lock = run_git(cfg, base, "worktree", "lock", "--reason", "kept aside by the Hermes task tools", str(path))
+        if lock.returncode != 0:
+            # Unlocked, a later prune could drop its admin dir (index, HEAD, submodule objects): don't move it.
+            raise Refusal(f"Could not lock {path} to keep it aside, so nothing was moved; ask manjo to check it.")
     target = move_into(cfg, path, KEPT)
     if linked:
         run_git(cfg, base, "worktree", "repair", str(target))
@@ -1130,8 +1134,17 @@ def risks(cfg, path):
     submodules = run_git(cfg, path, "submodule", "status")
     status = git_lines(cfg, path, "status", "--porcelain", "--untracked-files=all")
     flags = git_lines(cfg, path, "ls-files", "-v")
+    # Commits the worktree's HEAD reflog names that no ref holds (an amend, a detached commit left
+    # behind): the reflog goes with the admin dir, so their tips are saved to the wip ref.
+    reflog = sorted(set(git_lines(cfg, path, "reflog", "show", "--format=%H", "HEAD")))
+    unheld = [line.split() for line in git_lines(cfg, path, "rev-list", "--parents", *reflog, "--not", "--branches",
+                                                 "--remotes", "--tags")] if reflog else []
+    inner = {parent for row in unheld for parent in row[1:]}
     return {
-        "submodules": os.path.lexists(paths[0]) or submodules.returncode != 0 or bool(submodules.stdout.strip()),
+        # Only initialised submodules have objects here; a "-" line in `submodule status` was never checked out.
+        "submodules": (os.path.lexists(paths[0]) or submodules.returncode != 0
+                       or any(not line.startswith("-") for line in submodules.stdout.splitlines() if line.strip())),
+        "reflog_tips": [row[0] for row in unheld if row[0] not in inner],
         "detached": run_git(cfg, path, "symbolic-ref", "-q", "HEAD").returncode != 0,
         "in_progress": [name for name, state in zip(IN_PROGRESS, paths[1:]) if os.path.lexists(state)],
         # Commits only this worktree's HEAD (and its reflog, which goes with it) holds.
@@ -1145,7 +1158,7 @@ def risks(cfg, path):
     }
 
 
-def remove_tree(cfg, project, path, *, clear, now, wip_name, label, reservation=None):
+def remove_tree(cfg, project, path, *, clear, now, wip_name, label, reservation=None, branch="<branch>"):
     """Remove a worktree directory; returns (wip_ref, kept, removed).
 
     Deletes only a linked worktree of the project's base clone, and only once nothing in it would be
@@ -1188,8 +1201,9 @@ def remove_tree(cfg, project, path, *, clear, now, wip_name, label, reservation=
         if found["in_progress"]:  # before `detached`: a rebase detaches HEAD
             raise Refusal(f"{path}: a {'/'.join(found['in_progress'])} is in progress; finish or abort it first.")
         if found["detached"]:
-            raise Refusal(f"{path}: HEAD is not on a branch. Put what you need on the task's branch and check it "
-                          "out, or ask manjo.")
+            raise Refusal(f"{path}: HEAD is not on a branch. Keep its commits on a branch first "
+                          f"(git switch -c '{branch}-wip', or cherry-pick them onto {branch}); don't just check the "
+                          "branch out. Or ask manjo.")
         if found["unreachable"]:
             raise Refusal(f"{path} has commits that no branch, remote or tag holds; ask manjo.")
         if found["changes"]:
@@ -1197,14 +1211,12 @@ def remove_tree(cfg, project, path, *, clear, now, wip_name, label, reservation=
                           "or ask manjo for 'clear task'.")
         if found["hidden"]:
             return None, keep_aside(cfg, project, path, linked=True), False
-        trash(cfg, project, path)
-        return None, None, True
-    if found["submodules"] or found["nested"] or found["hidden"]:
+    elif found["submodules"] or found["nested"] or found["hidden"]:
         return None, keep_aside(cfg, project, path, linked=True), False
     ref = None
-    if found["changes"] or found["unreachable"] or found["in_progress"]:
+    if found["reflog_tips"] or (clear and (found["changes"] or found["unreachable"] or found["in_progress"])):
         try:
-            ref = snapshot(cfg, path, wip_name, label)
+            ref = snapshot(cfg, path, wip_name, label, parents=found["reflog_tips"])
         except Refusal:
             return None, keep_aside(cfg, project, path, linked=True), False
     trash(cfg, project, path)
@@ -1229,7 +1241,22 @@ def drop_pushed_branch(cfg, project, branch):
     if branch == PENDING or not (base / ".git").exists():
         return False
     remote = run_git(cfg, base, "rev-parse", "-q", "--verify", f"refs/remotes/{PR_REMOTE}/{branch}^{{commit}}")
-    return remote.returncode == 0 and drop_branch_at(cfg, base, branch, remote.stdout.strip())
+    if remote.returncode != 0:
+        return False
+    sha = remote.stdout.strip()
+    # The remote-tracking ref can be stale (the branch deleted on the forge since the last fetch):
+    # ask the remote itself, and keep the branch on any doubt.
+    try:
+        live = subprocess.run([cfg.git, "-C", str(base), "ls-remote", "--exit-code", PR_REMOTE, f"refs/heads/{branch}"],
+                              capture_output=True, text=True, env=git_env({"GIT_TERMINAL_PROMPT": "0"}),
+                              timeout=20, check=False)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    ref = f"refs/heads/{branch}"
+    rows = [line.split("\t") for line in live.stdout.splitlines()]
+    if live.returncode != 0 or [row for row in rows if row[-1] == ref] != [[sha, ref]]:
+        return False
+    return drop_branch_at(cfg, base, branch, sha)
 
 
 def recover(cfg, task, now):
@@ -1295,7 +1322,7 @@ def release(cfg, store, task, now, *, clear):
     if task["worktree"] is not None and not task["legacy"]:
         ref, kept, removed = remove_tree(
             cfg, task["project"], task["worktree"], clear=clear, now=now, wip_name=task["task_id"],
-            label=f"task {task['task_id']} ({task['branch']})", reservation=task["reservation"])
+            label=f"task {task['task_id']} ({task['branch']})", reservation=task["reservation"], branch=task["branch"])
         if not clear and kept is None:
             deleted = drop_pushed_branch(cfg, task["project"], task["branch"])
     store.tasks.remove(task)
@@ -1308,9 +1335,9 @@ def cmd_done(cfg, store, now, origin, started_at):
     if task["preparing"]:
         raise Refusal("This task's worktree is still being created; retry in a moment, or ask manjo for "
                       "'clear task' if that persists.")
-    _, kept, removed, deleted = release(cfg, store, task, now, clear=False)
+    ref, kept, removed, deleted = release(cfg, store, task, now, clear=False)
     return reply(cfg, store, now, "done", None, task_id=task["task_id"], project=task["project"],
-                 branch=task["branch"], worktree_removed=removed, kept=kept, branch_deleted=deleted)
+                 branch=task["branch"], worktree_removed=removed, kept=kept, branch_deleted=deleted, wip_ref=ref)
 
 
 def cmd_clear(cfg, store, now, origin, target):
