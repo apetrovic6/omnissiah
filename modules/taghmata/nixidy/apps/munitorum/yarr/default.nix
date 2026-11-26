@@ -45,6 +45,12 @@
         description = "Indexer Management";
         mediaLibrary = false;
       })
+      (arr {
+        name = "bazarr";
+        port = 6767;
+        description = "Subtitle manager";
+        dbEnv = "bazarr";
+      })
     ];
 
     # Passed to the applications above as the `yarr` module argument.
@@ -146,6 +152,15 @@
                 login = true;
                 superuser = false;
                 passwordSecret.name = "pg-lidarr-password";
+              }
+
+              {
+                name = "bazarr";
+                ensure = "present";
+                comment = "Bazarr User";
+                login = true;
+                superuser = false;
+                passwordSecret.name = "pg-bazarr-password";
               }
             ];
 
@@ -293,6 +308,21 @@
             spec = {
               name = "lidarr-logs";
               owner = "lidarr";
+              cluster.name = "${db-cluster-name}";
+            };
+          }
+
+          {
+            name = "db-bazarr";
+
+            metadata = {
+              annotations = {
+                "argocd.argoproj.io/sync-options" = "Prune=false";
+              };
+            };
+            spec = {
+              name = "bazarr";
+              owner = "bazarr";
               cluster.name = "${db-cluster-name}";
             };
           }

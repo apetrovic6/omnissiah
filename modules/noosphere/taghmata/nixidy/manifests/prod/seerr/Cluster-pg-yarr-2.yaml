@@ -60,6 +60,13 @@ spec:
         passwordSecret:
           name: pg-lidarr-password
         superuser: false
+      - comment: Bazarr User
+        ensure: present
+        login: true
+        name: bazarr
+        passwordSecret:
+          name: pg-bazarr-password
+        superuser: false
   monitoring:
     customQueriesConfigMap:
       - key: queries
