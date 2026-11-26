@@ -237,6 +237,9 @@ class FakeForge:
         self.tasks = []
         self.runs = []
         self.keys = [{"id": 3, "title": "read-only mirror", "read_only": True}]
+        # What GET <runners>/<id> reports for a runner without its own "status": "active" models a
+        # slot runner that holds its task (it sends UpdateLog every second).
+        self.runner_status = "active"
 
         class Handler(BaseHTTPRequestHandler):
             def respond(handler):
@@ -326,6 +329,11 @@ class FakeForge:
                 return 400, {"error": "unexpected registration payload"}, {}
             runner_id = self.add_runner(payload["name"])
             return 201, {"id": runner_id, "uuid": uuid_for(runner_id), "token": TOKEN}, {}
+        if method == "GET" and re.fullmatch(re.escape(self.runners_path) + r"/[0-9]+", path):
+            row = self.runners.get(int(path.rsplit("/", 1)[1]))
+            if row is None:
+                return 404, {"error": "runner not found"}, {}
+            return 200, {"status": self.runner_status} | row, {}
         if method == "DELETE" and path.startswith(self.runners_path + "/"):
             runner_id = int(path.rsplit("/", 1)[1])
             return (204 if self.runners.pop(runner_id, None) is not None else 404), None, {}
@@ -1944,6 +1952,70 @@ class TrustedJobTests(unittest.TestCase):
         self.assertFalse(self.trust_dir.exists())
         self.assertFalse(self.credential_dir.exists())
 
+    def test_a_job_taken_by_another_runner_gets_no_delivery_or_egress(self):
+        """`nix` is shared with the node host runners: the claimed job can run elsewhere (PR 12 review L1)."""
+        self.build(egress=True)
+        self.boot()
+        self.forge.runner_status = "idle"
+        self.pick_up()  # Running, but this slot's runner only polls FetchTask.
+        message = "target running; this slot's pickup unconfirmed (runner 100 idle); nothing delivered"
+        self.assertEqual({}, self.delivered())
+        self.assertEqual([], self.lookups())
+        self.assertNotIn("deliver", self.verbs())
+        self.assertNotIn("egress", self.verbs())
+        self.assertEqual([], self.system.egress_calls("start"))
+        self.assertIn(message, self.logs.getvalue())
+        self.assertNotIn("trusted: run", self.logs.getvalue())
+        for status in ("offline", "idle"):
+            self.forge.runner_status = status
+            self.tick(D.POLL)
+        self.assertEqual(1, self.logs.getvalue().count("pickup unconfirmed"))  # Logged once per run.
+        self.assertEqual({}, self.delivered())
+        # Gone (deleted once its task ended) is not a pickup either.
+        runner = self.forge.runners.pop(100)
+        self.tick(D.POLL)
+        self.assertEqual({}, self.delivered())
+        self.forge.runners[100] = runner
+        # The runner then reports its task: deliver, then open egress.
+        self.forge.runner_status = "active"
+        self.tick(D.POLL)
+        self.assertEqual({"ncps-netrc": NETRC, "ci-signing-key": SIGNING_KEY}, self.delivered())
+        self.assertEqual(["deliver", "egress"], [verb for verb in self.verbs() if verb in ("deliver", "egress")])
+        self.assertIn("trusted: run #7 (push); delivered CI upload credentials", self.logs.getvalue())
+        # Confirmed once is enough: a later idle report does not withdraw.
+        self.forge.runner_status = "idle"
+        self.tick(D.BUSY_POLL)
+        self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+
+    def test_a_confirmed_pickup_is_not_rechecked_before_a_deferred_delivery(self):
+        self.boot()
+        self.trust_dir.chmod(0o755)
+        self.pick_up()
+        self.assertIn("delivery pending: trust directory has unexpected ownership or mode", self.logs.getvalue())
+        self.forge.runner_status = "idle"  # Between two UpdateLog calls; the pickup was already seen.
+        self.trust_dir.chmod(0o700)
+        self.tick(D.POLL)
+        self.assertEqual({"ncps-netrc": NETRC, "ci-signing-key": SIGNING_KEY}, self.delivered())
+        self.assertEqual(1, sum(path == RUNNERS + "/100" for path in self.forge.paths("GET")))
+
+    def test_an_unconfirmed_pickup_gives_up_untrusted_at_the_trust_deadline(self):
+        self.boot()
+        self.forge.runner_status = "idle"
+        self.pick_up()
+        self.tick(D.TRUST_DEADLINE)
+        self.assertIn("untrusted: trust lookup gave up after 10 min (trust lookup deadline reached)", self.logs.getvalue())
+        self.forge.runner_status = "active"
+        self.tick(D.POLL)
+        self.assertEqual({}, self.delivered())
+        self.assertEqual([], self.lookups())
+
+    def test_a_mismatched_runner_status_row_is_not_a_pickup(self):
+        self.boot()
+        self.forge.runners[100]["uuid"] = uuid_for(999)
+        self.pick_up()
+        self.assertEqual({}, self.delivered())
+        self.assertIn("trust lookup pending: Forgejo runner status: invalid or mismatched runner", self.logs.getvalue())
+
     def test_sccache_delivery_is_late_trusted_and_pool_opt_in(self):
         for opted_in, fork in ((True, False), (True, True), (False, False)):
             with self.subTest(opted_in=opted_in, fork=fork):
@@ -2411,6 +2483,10 @@ class TrustedJobTests(unittest.TestCase):
         # Review probe F1: an allowlisted repo without trust.users is now a configuration error.
         with self.assertRaises(ValueError):
             D.Pool("monolith-softworks", **(ORG_POOL | {"trust": ORG_POOL["trust"] | {"users": []}}))
+        # sccache is for trusted runs only: a pool without a trust allowlist can't opt in.
+        D.Pool("ugalabugala", sccache=True, **PILOT_POOL)
+        with self.assertRaises(ValueError):
+            D.Pool("ugalabugala", sccache=True, **(PILOT_POOL | {"trust": {"repos": {}, "users": []}}))
         # Review probe F1b: an org member's push is refused, and so is the schedule it registers.
         self.assertEqual({}, self.org_round({"trigger_user": {"id": 555, "login": "org-member"}}))
         self.assertIn("push user not in the trust allowlist", self.logs.getvalue())
@@ -3421,6 +3497,14 @@ class SlotctlTests(unittest.TestCase):
                 self.assertEqual(0, self.slotctl("--slot", self.SLOT, verb, SLOT_RUN, config=self.egress)[0])
                 self.assertFalse(delivered.exists())
                 self.assertFalse(temporary.exists())
+
+    def test_deliver_writes_the_upload_pair_first_in_order_then_sccache(self):
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "stage", SLOT_RUN, payload=self.STAGE, config=self.egress)[0])
+        self.system.set(active="active")
+        payload = self.DELIVER | {"sccache-credentials": base64.b64encode(SCCACHE_CREDENTIALS).decode()}
+        with patch.object(S.os, "rename", wraps=os.rename) as rename:
+            self.assertEqual(0, self.slotctl("--slot", self.SLOT, "deliver", SLOT_RUN, payload=payload, config=self.egress)[0])
+        self.assertEqual(["ncps-netrc", "ci-signing-key", "sccache-credentials"], [call.args[1] for call in rename.call_args_list])
 
     def test_egress_needs_a_trusted_host_a_running_vm_and_delivered_credentials(self):
         args = ("--slot", self.SLOT)

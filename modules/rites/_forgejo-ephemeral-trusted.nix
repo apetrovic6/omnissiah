@@ -55,7 +55,10 @@
 #   (routers/api/v1/shared/runners.go:73-92), so nothing reliable is known
 #   before pickup. A repo absent from the pool's trust.repos stays untrusted
 #   with no repo lookups. There is no up-front repository verification. After
-#   pickup (job status `running`, `task_id` set), the mapping is exact:
+#   pickup (job status `running`, `task_id` set, and this slot's own runner
+#   row `active`, so another runner sharing the label didn't take the job:
+#   Forgejo sets it only on that runner's UpdateTask/UpdateLog), the mapping
+#   is exact:
 #     job.task_id -> GET /repos/<owner>/<repo>/actions/tasks (task.run_number)
 #     -> GET /repos/<owner>/<repo>/actions/runs?run_number=N (unique per repo).
 #   Task and run must agree on head_sha/commit_sha and workflow_id. Only these

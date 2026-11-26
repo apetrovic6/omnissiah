@@ -40,15 +40,32 @@
 #                     The overlay also holds Nix's build dir.
 #     var             GiB for /var (workspace, TMPDIR, CARGO_HOME).
 #
-# takeover (HOM-32 PR 12, operator flip; README "Ryza takeover"): the
-# argument below. Off, everything is as before. On, the ugalabugala and
-# noosphere-user pools take the `nix`, `nix-vm` and `nix-eph` labels for
-# the owner's whole queue with a trust allowlist, ryza gets three std slots,
-# and its persistent `nix-vm` guests and their CI credentials are gone. The
-# fleet module asserts the preconditions (forgejo-runner-ephemeral.nix).
-# Flip it here, never per machine: dispatcher and slot host must agree.
-# Fixtures import this file with `{takeover = true;}`.
-{takeover ? false}: let
+# The takeover (HOM-32 PR 12, operator flip; README "Ryza takeover"): the
+# arguments below. Flip them here, never per machine: dispatcher and slot
+# host must agree. Fixtures import this file with their own arguments.
+#   takeover          off: everything as before. On: the ugalabugala and
+#                     noosphere-user pools serve `takeoverLabels` for the
+#                     owner's whole queue with a trust allowlist, ryza runs
+#                     `ryzaSlots` std slots, and its persistent `nix-vm`
+#                     guests and their CI credentials are gone.
+#   takeoverLabels    ["nix-vm" "nix-eph"] (only the slots serve them), or
+#                     with "nix" as well, shared with the node host runners
+#                     until PR 13. Taking `nix` needs trustedJobs with
+#                     trusted egress, or `untrustedTakeover` (asserted).
+#   untrustedTakeover the operator's acknowledgement that, with `nix` taken
+#                     and trust or trusted egress off, pilot's master publish
+#                     fails and slot-run master builds don't reach ncps.
+#   ryzaSlots         2 or 3. Each std slot's slice is 2 vCPU / 5 GiB; with
+#                     Hermes's caps (gateway 6, dashboard 2 GiB) 2 slots
+#                     commit 18 of ryza's 24 GiB and 3 commit 23. Use 3 only
+#                     with `nix`, and check memory pressure after.
+# The fleet module asserts the preconditions (forgejo-runner-ephemeral.nix).
+{
+  takeover ? false,
+  takeoverLabels ? ["nix-vm" "nix-eph"],
+  untrustedTakeover ? false,
+  ryzaSlots ? 2,
+}: let
   std = index: {
     inherit index;
     vcpu = 2;
@@ -65,7 +82,7 @@ in {
     trustedJobs = false;
     # Provision the shared Garage key only with the remote dispatcher.
     sccacheCi = false;
-    inherit takeover;
+    inherit takeover takeoverLabels untrustedTakeover;
   };
   sccacheCiKey = rec {
     generatorName = "sccache-ci-garage-key";
@@ -90,19 +107,24 @@ in {
         then ["ryza-ci-ugalabugala" "ryza-ci-noosphere"]
         else []
       );
-    # Three std slots take the nix-vm guests' 6 vCPU / 14 GiB: 6 vCPU of
-    # quota and 15 GiB of slices on ryza's 8 vCPU / 24 GiB, down from 8 and
-    # 19 GiB with the guests, leaving 2 vCPU and 9 GiB for the host and
-    # Hermes. A fourth would commit all 8 vCPU and 20 GiB.
+    # The slots take the nix-vm guests' 6 vCPU / 14 GiB. Today ryza
+    # commits 14 + 5 (ryza-eph-1) + 8 (Hermes) = 27 GiB of caps on 24 GiB;
+    # after the takeover 2 slots make it 18 (6 GiB left at peak for the
+    # kernel, Blocky, tor, nix-daemon and sshd) and 3 make it 23 (about 1).
+    # Caps, not reservations: the guests balloon.
     slots =
       {ryza-eph-1 = std 1;}
       // (
-        if takeover
+        if !takeover
+        then {}
+        else if ryzaSlots == 2
+        then {ryza-eph-2 = std 2;}
+        else if ryzaSlots == 3
         then {
           ryza-eph-2 = std 2;
           ryza-eph-3 = std 3;
         }
-        else {}
+        else throw "_ci-slots.nix: ryzaSlots must be 2 or 3."
       );
   };
 }

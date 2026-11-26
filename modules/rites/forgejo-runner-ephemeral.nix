@@ -32,32 +32,49 @@ in {
       then hostName == fleet.host
       else hostsSlots;
     active = hostsSlots || dispatches;
-    # HOM-32 PR 12 (README "Ryza takeover"): the user pools take every label
-    # the workflows use, for the owner's whole queue.
+    # HOM-32 PR 12 (README "Ryza takeover"): the user pools serve these
+    # labels for the owner's whole queue (_ci-slots.nix).
     takeover = fleet.takeover or false;
-    takeoverLabels = ["nix" "nix-vm" "nix-eph"];
-    # This repository (manjo/omnissiah) is in that queue. Its workflows must
-    # be off the slot labels first: machines.yml's 5 h builds, pushes and
-    # ntfy can't run in an untrusted 65-minute slot (PR 11: nix-machines).
-    # Fixtures pass their own texts (specialArgs.ciRepoWorkflows).
-    workflowDir = "${self}/.forgejo/workflows";
-    repoWorkflows =
-      args.ciRepoWorkflows or (lib.mapAttrs (name: _: builtins.readFile "${workflowDir}/${name}")
-        (lib.filterAttrs (_: type: type == "regular") (builtins.readDir workflowDir)));
-    # Every label a `runs-on:` line names. An empty value (a block list) or
-    # an expression counts as a slot label: fail closed.
-    runsOn = text:
-      lib.concatMap (line: let
-        value = builtins.match "[[:space:]]*(- )?runs-on:[[:space:]]*([^#]*).*" line;
-        labels = builtins.filter (label: label != "") (lib.splitString " " (builtins.replaceStrings ["[" "]" "," "\"" "'" "\t"] [" " " " " " " " " " " "] (builtins.elemAt value 1)));
-      in
-        lib.optionals (value != null) (
-          if labels == [] || lib.hasInfix "\${{" (builtins.elemAt value 1)
-          then ["nix"]
-          else labels
-        ))
-      (lib.splitString "\n" text);
-    slotWorkflows = builtins.attrNames (lib.filterAttrs (_: text: lib.any (label: builtins.elem label takeoverLabels) (runsOn text)) repoWorkflows);
+    takeoverLabels = fleet.takeoverLabels or ["nix-vm" "nix-eph"];
+    takesNix = builtins.elem "nix" takeoverLabels;
+    validLabels = lib.any (set: lib.sort builtins.lessThan takeoverLabels == set) [["nix-eph" "nix-vm"] ["nix" "nix-eph" "nix-vm"]];
+    # manjo/omnissiah is in that queue, and machines.yml's 5 h builds,
+    # pushes and ntfy can't run in an untrusted 65-minute slot: it must be
+    # off the served labels (PR 11 moves it to nix-machines). Only this one
+    # file: another omnissiah workflow on a slot label just runs in a slot,
+    # and must not make the dispatcher and slot hosts undeployable.
+    # Fixtures pass their own text (specialArgs.ciMachinesWorkflow, null =
+    # missing).
+    machinesPath = "${self}/.forgejo/workflows/machines.yml";
+    machinesYml =
+      args.ciMachinesWorkflow or (
+        if builtins.pathExists machinesPath
+        then builtins.readFile machinesPath
+        else null
+      );
+    machinesLines = lib.splitString "\n" (builtins.replaceStrings ["\r"] [""] (
+      if machinesYml == null
+      then ""
+      else machinesYml
+    ));
+    # Only `runs-on: <label>` (optionally `- ` and a comment) is understood.
+    # Any other line naming runs-on, or a quoted key with an escape (it could
+    # spell runs-on), fails closed, so YAML this can't read (lists, block
+    # scalars, flow mappings, aliases, expressions) is refused. A merge key
+    # copies a mapping whose own runs-on line is checked here too.
+    strictRunsOn = line: builtins.match "[ ]*(- )?runs-on: ([A-Za-z0-9._-]+)[ ]*(#.*)?" line;
+    unreadable = line:
+      strictRunsOn line
+      == null
+      && (lib.hasInfix "runs-on" line
+        || builtins.match "[ ]*(- )?[\"'][^\"']*\\\\.*" line != null);
+    machinesLabels = lib.concatMap (line: let
+      m = strictRunsOn line;
+    in
+      lib.optional (m != null) (builtins.elemAt m 1))
+    machinesLines;
+    machinesUnreadable = lib.concatLists (lib.imap1 (n: line: lib.optional (unreadable line) (toString n)) machinesLines);
+    machinesOnSlots = lib.intersectLists machinesLabels takeoverLabels;
     takeoverHosts = builtins.attrNames inventory;
     repo = owner: name: {inherit owner name;};
   in {
@@ -98,19 +115,28 @@ in {
             message = "forgejoEphemeral: the takeover needs the remote dispatcher (HOM-32 PR 7), so the slot host keeps no PAT or pool.";
           }
           {
-            # The inventory decision (README "Ryza takeover"): with trust off
-            # every slot run is untrusted. pilot's master publish then fails
-            # (Harbor is trusted egress only), and no master build reaches ncps.
-            assertion = fleet.trustedJobs;
-            message = "forgejoEphemeral: the takeover requires dispatcher.trustedJobs = true: default-branch runs of pilot (Harbor), rust-app-template (sccache) and every repo's ncps uploads need trusted delivery (README \"Ryza takeover\").";
+            assertion = validLabels;
+            message = "forgejoEphemeral: takeoverLabels must be [\"nix-vm\" \"nix-eph\"] or [\"nix\" \"nix-vm\" \"nix-eph\"] (_ci-slots.nix).";
           }
           {
-            assertion = lib.all (machine: (inventory.${machine}.egress.trusted or null) != null) takeoverHosts;
-            message = "forgejoEphemeral: the takeover requires egress.trusted on every slot host (${lib.concatStringsSep ", " takeoverHosts}): pilot's master publish needs harbor.noosphere.uk.";
+            # The inventory decision (README "Ryza takeover"). Only a `nix` job
+            # breaks untrusted: pilot's master publish (Harbor is reachable
+            # from the trusted source only). Turning trust or trusted egress
+            # off later needs only the acknowledgement, never a code edit.
+            assertion = !takesNix || fleet.untrustedTakeover or false || (fleet.trustedJobs && lib.all (machine: (inventory.${machine}.egress.trusted or null) != null) takeoverHosts);
+            message = "forgejoEphemeral: taking `nix` requires dispatcher.trustedJobs with egress.trusted on every slot host (${lib.concatStringsSep ", " takeoverHosts}), or untrustedTakeover = true: untrusted, pilot's master publish to Harbor fails and slot-run master builds don't reach ncps (README \"Ryza takeover\").";
           }
           {
-            assertion = slotWorkflows == [];
-            message = "forgejoEphemeral: the takeover dispatches manjo/omnissiah's whole queue; first move ${lib.concatStringsSep ", " slotWorkflows} off ${lib.concatStringsSep "/" takeoverLabels} (machines.yml runs-on nix-machines, HOM-32 PR 11).";
+            assertion = machinesYml != null && machinesUnreadable == [] && machinesOnSlots == [];
+            message =
+              "forgejoEphemeral: the takeover dispatches manjo/omnissiah's whole queue, so machines.yml must be readable and off ${lib.concatStringsSep "/" takeoverLabels} (HOM-32 PR 11: nix-machines); "
+              + (
+                if machinesYml == null
+                then ".forgejo/workflows/machines.yml is missing."
+                else if machinesUnreadable != []
+                then "unreadable runs-on form on line ${lib.concatStringsSep ", " machinesUnreadable}; use `runs-on: <label>`."
+                else "it runs on ${lib.concatStringsSep ", " machinesOnSlots}."
+              );
           }
           {
             # The label rule (forgejo-runner.nix): nothing else may take these

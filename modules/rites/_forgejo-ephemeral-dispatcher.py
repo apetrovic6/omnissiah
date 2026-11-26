@@ -61,8 +61,8 @@ UUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 # Trusted-job credential delivery (HOM-31).
 ACTIONS_USER = -2  # Forgejo's "forgejo-actions" user, the trigger user of every scheduled run.
 REPO_NAME = re.compile(r"[A-Za-z0-9._-]{1,100}")
-TRUST_FILES = ("ncps-netrc", "ci-signing-key")  # Write order: the guest hook needs both.
-TRUST_SOURCES = {"ncps-netrc": "trusted-ncps-netrc", "ci-signing-key": "trusted-ci-signing-key"}
+TRUST_FILES = ("ncps-netrc", "ci-signing-key")  # The upload pair; slotctl writes it in this order.
+TRUST_SOURCES = {name: f"trusted-{name}" for name in TRUST_FILES}
 SCCACHE_FILE = "sccache-credentials"
 # What slotctl observe may report as a unit's last result (slotctl folds anything else into "other result").
 RESULTS = ("success", "timeout", "exit-code", "signal", "core-dump", "resources", "start-limit-hit", "other result")
@@ -72,6 +72,7 @@ TRUST_SHAPES = {
     SCCACHE_FILE: re.compile(rb"\[default\]\naws_access_key_id = GK[0-9a-f]{24}\naws_secret_access_key = [0-9a-f]{64}\n"),
 }
 TRUST_DEADLINE = 10 * 60
+RUNNER_STATUSES = ("offline", "idle", "active")
 TASK_PAGES = 5
 NO_RUN = "none"
 MAX_RUN_RESPONSE = 8 * 1024 * 1024  # One run, but its event_payload carries PR bodies and commit lists.
@@ -384,6 +385,26 @@ class Forgejo:
         if not runner_id_ok(runner):
             raise ApiError("Forgejo register runner: invalid ID or UUID; reconciling by name")
         return runner, result.get("token")
+
+    def runner_status(self, runner):
+        """Forgejo's status for this slot's runner, or None once the runner is gone.
+
+        "active" means the runner called UpdateTask or UpdateLog within the last 10 s
+        (Forgejo v15.0.12 routers/api/actions/runner/interceptor.go:48-51, models/actions/runner.go:73-111).
+        Only a runner that holds a task makes those calls; a busy forgejo-runner sends UpdateLog
+        every report interval (1 s by default) even without new rows.
+        """
+        try:
+            row, _ = self._request("runner status", "GET", f"{self.pool.runners_path}/{runner['id']}", (200,))
+        except HttpError as error:
+            if error.status == 404:
+                return None
+            raise
+        if not isinstance(row, dict) or row.get("id") != runner["id"] or row.get("uuid") != runner["uuid"]:
+            raise ApiError("Forgejo runner status: invalid or mismatched runner")
+        if row.get("status") not in RUNNER_STATUSES:
+            raise ApiError("Forgejo runner status: unknown status")
+        return row["status"]
 
     def delete(self, runner):
         status, _ = self._request("delete runner", "DELETE", f"{self.pool.runners_path}/{runner['id']}", (204, 404))
@@ -1521,9 +1542,11 @@ class Queue:
     def _settle_trust(self, job, owner, account):
         """Deliver the CI upload credentials only to a slot whose exact run is trusted.
 
-        Every boot is untrusted. Resolution waits for the slot's runner to take the job (status running,
-        task_id set), then follows task_id -> task -> run_number -> run, cross-checks task and run, and
-        rechecks job and run just before writing. Errors retry until TRUST_DEADLINE after pickup, then give up.
+        Every boot is untrusted. Resolution waits for the job to run (status running, task_id set) and for
+        this slot's runner to be "active", the only proof that the task runs here rather than on another
+        runner serving the label. Then it follows task_id -> task -> run_number -> run, cross-checks task
+        and run, and rechecks job and run just before writing. Errors retry until TRUST_DEADLINE after
+        pickup, then give up.
         """
         active = self.store.data["active"]
         if self.verdict is None or self.verdict["name"] != active["name"]:
@@ -1548,6 +1571,25 @@ class Queue:
         if verdict["since"] is None:
             verdict["since"] = self.monotonic()
         remaining = verdict["since"] + TRUST_DEADLINE - self.monotonic()
+        if not verdict.get("pickup"):
+            # A label shared with other runners (`nix` on the node host runners) lets one of them take
+            # the claimed job: it is running, but not here. Then this VM runs nothing until the
+            # bounded pickup ends; deliver nothing and open no egress for it.
+            try:
+                if remaining <= 0:
+                    raise ApiError("trust lookup deadline reached")
+                with self.api.within(remaining):
+                    status = self.api.runner_status(active["runner"])
+            except ApiError as error:
+                self._defer(verdict, f"trust lookup pending: {error}", error)
+                return
+            if status != "active":
+                # Retried each poll; at TRUST_DEADLINE the deadline check above gives up untrusted.
+                if not verdict.get("unconfirmed"):
+                    verdict["unconfirmed"] = True
+                    self._log(f"target running; this slot's pickup unconfirmed (runner {active['runner']['id']} {status or 'gone'}); nothing delivered")
+                return
+            verdict["pickup"] = True
         try:
             if remaining <= 0:
                 raise ApiError("trust lookup deadline reached")
