@@ -1127,7 +1127,7 @@ source-restricted SSH forced command. It handles systemd units, staged
 runner credentials, disk images and the trust share on the slot host.
 Each call names a slot and one verb (`observe`, `check-space`, `start`,
 `stop`, `reset-failed`, `stop-support`, `stage`, `scrub`, `deliver`,
-`withdraw`). The module compiles the per-host config, which holds the paths,
+`withdraw`, `egress trusted`). The module compiles the per-host config, which holds the paths,
 into slotctl. slotctl has no option to point elsewhere, and repeated or
 abbreviated options are refused, so a caller can only pick a declared slot
 and a verb. Secrets travel on stdin.
@@ -1634,9 +1634,8 @@ slot's root-owned state directory so queue identities and trust user pins
 are preserved. Pause the new host and deploy slot hosts first so they
 replace the old source/key, then deploy the new dispatcher. Repeat the
 SSH and job checks above before unpausing. Nothing follows this setting
-for **guest egress**: Cerberus's Caddy guard, the forge and ncps address
-pins, and the slot firewall's DNS/HTTPS exceptions must be migrated
-separately before retiring Cerberus.
+for **guest egress**: that is the separate `guard` setting, see "What
+moves with Cerberus" under trusted slot egress below.
 
 **Rotate a PAT.** Pause and wait for cleanup to converge with the old
 PAT as above. Create its replacement with the required scopes, regenerate
@@ -1811,6 +1810,130 @@ trust directories are gone. Set `dispatcher.trustedJobs = false` without
 changing `dispatcher.remote` or `dispatcher.host`. Deploy both ends,
 check `--trusted-jobs` and the share are gone, then unpause the same
 dispatcher. After verification rotate the PATs to remove `read:repository`.
+
+#### Trusted slot egress (HOM-32 PR 8, opt-in)
+
+Trusted jobs need Garage S3 (sccache, PR 10), Harbor and ntfy. Cerberus's
+Caddy answers 403 to all three for a slot's untrusted source (`ryza-eph`,
+`192.168.1.249`). Trust is known only after pickup, so a trusted run
+switches to a second source mid-job. Off by default:
+`hosts.<host>.egress.trusted = null` in `modules/rites/_ci-slots.nix` means
+no address, no unit, no NAT rule, no Caddy matcher, no extra guest pins
+and no `--trusted-egress` flag.
+
+With it set (Ryza: `ryza-eph-trusted`, `192.168.1.240` in the
+[network chart](modules/cartographa/_chart.nix)):
+
+- **Address.** The slot host carries the address as a /32 on its uplink.
+  networkd uses `DuplicateAddressDetection=ipv4`: it probes (RFC 5227,
+  like `arping -D`) before it adds or re-adds the address, and drops it on
+  a conflict. It never keeps an address another device holds.
+- **Switch.** Only after a successful `deliver` does the dispatcher call
+  slotctl `egress trusted RUN` (Nix passes `--trusted-egress` when the slot
+  host has the address). With `trustedJobs` off there is no delivery, so
+  it never calls it. slotctl refuses unless the host has trusted egress,
+  the slot delivers, the VM is running with no job queued, and both
+  credentials are in the trust share. Then it starts the root oneshot
+  `forgejo-ephemeral-trusted-egress@<slot>`. The oneshot checks that the
+  /32 is still on the uplink and runs `arping -q -D -c 2 -w 3 -I <uplink>
+  <address>`. Then it inserts, first in the chain and above the guard's
+  default SNAT rule:
+  `POSTROUTING -s <slot-ip>/32 -d <guard>/32 -p tcp --dport 443 -o <uplink> -j SNAT --to-source <trusted>`.
+  The filter chains don't change. DNS and public HTTPS keep the untrusted
+  source; only HTTPS to the guard moves.
+- **End.** `ExecStop` deletes the rule and the flows NATed through it
+  (`conntrack -D --orig-src <slot-ip> --reply-dst <trusted>`). The unit
+  stops with the VM (`BindsTo`), on slotctl `withdraw` (also at every
+  dispatcher start) and on `scrub`. It restarts with the slot's firewall
+  guard and follows its reloads, so it stays first. The VM's preflight
+  refuses to boot while the unit is up or has a job queued.
+- **Caddy on the guard.** `@blockedEphemeral` (every untrusted source) is
+  unchanged: `forge.ugalabugala.org`, `ncps.noosphere.uk`,
+  `forge.noosphere.uk`. `@blockedEphemeralTrusted` (every trusted source)
+  allows those plus `s3.main.garage.noosphere.uk` (path-style S3 only, no
+  bucket subdomains), `harbor.noosphere.uk` and `ntfy.ugalabugala.org`.
+  Guests pin all six to the guard. From the untrusted source the last
+  three still get 403.
+- **Refusals** are fixed slotctl codes. `egress-address-conflict` (another
+  host answered the probe) and `egress-address-missing` (networkd dropped
+  the /32) hold for the rest of the run, which keeps its credentials: ncps
+  uploads still work, but S3, Harbor and ntfy don't. The dispatcher logs
+  `trusted egress refused for this run: …; it stays on the untrusted source`
+  once. Other failures (`egress-failed`, `egress-not-delivered`, …) are
+  retried at each busy poll and logged once per message as
+  `trusted egress pending: …`.
+
+**Duplicate-address guard and the router.** The router's DHCP pool can't
+be inspected. On 2026-11-26, ARP from Ryza got no answer for .240–.242 and
+.244–.247, and .243 is keksic. So the block .240–.247 (minus .243) is kept
+for slot SNAT sources, and the slot host probes before each use instead of
+trusting the pool. Someone with router access should exclude .240–.247
+from DHCP. Until then, a device that is leased .240 only makes trusted
+egress refuse; that device keeps its address.
+
+**Enable (operator only).**
+
+1. On Ryza, check the address: `sudo arping -D -c 3 -I ens18 192.168.1.240`
+   must exit 0 (`Received 0 response(s)`). If anything answers, choose
+   another free address from the block for `ryza-eph-trusted` in the chart.
+2. Set `hosts.ryza.egress.trusted = "ryza-eph-trusted";` in
+   `modules/rites/_ci-slots.nix`. Leave `dispatcher` unchanged.
+3. Deploy **Cerberus first**, so the matcher exists before any slot can use
+   the address: `clan machines update cerberus`. Check that `caddy.service`
+   is active, and that `grep -A3 '@blockedEphemeral' /etc/caddy/caddy_config`
+   shows both matchers: `remote_ip 192.168.1.249` with exactly the three
+   names above, and `remote_ip 192.168.1.240` with exactly the six. The
+   dispatcher restarts with `--trusted-egress` (`systemctl cat
+   forgejo-ephemeral-dispatcher@ryza-eph-1.service`).
+4. Pause on Cerberus (`sudo touch /run/forgejo-ephemeral/pause`), wait for
+   the slot to go idle, then `clan machines update ryza`. On Ryza check:
+   `ip -4 -o address show dev ens18` lists `192.168.1.240/32`,
+   `systemctl status forgejo-ephemeral-trusted-egress@ryza-eph-1` is
+   inactive, and `sudo iptables -t nat -S POSTROUTING` has no
+   `--to-source 192.168.1.240` rule. Unpause.
+5. Check the address and both matchers from Ryza's host (not a slot), with
+   trust still off:
+
+   ```sh
+   r=(--resolve s3.main.garage.noosphere.uk:443:192.168.1.105 --resolve harbor.noosphere.uk:443:192.168.1.105)
+   curl -sS -o /dev/null -w '%{http_code}\n' "${r[@]}" --interface 192.168.1.249 https://s3.main.garage.noosphere.uk/  # 403 (Caddy)
+   curl -sS "${r[@]}" --interface 192.168.1.240 https://s3.main.garage.noosphere.uk/  # Garage S3 XML; AccessDenied means reachable
+   curl -sS -o /dev/null -w '%{http_code}\n' "${r[@]}" --interface 192.168.1.240 https://harbor.noosphere.uk/api/v2.0/ping  # 200
+   ```
+
+   The SNAT switch from inside a slot needs a delivered trusted run, so it
+   waits for the trust flip (`trustedJobs`, above). Don't start the unit by
+   hand to test it. It binds to the VM: an untrusted job would get the
+   trusted source, and with the VM down the VM preflight refuses anyway.
+6. After the trust flip, extend the trusted `workflow_dispatch` probe
+   (trusted step 4 above). After delivery, `curl -sS
+   https://s3.main.garage.noosphere.uk/` must return S3 XML and `curl -sS -o
+   /dev/null -w '%{http_code}\n' https://harbor.noosphere.uk/api/v2.0/ping`
+   must return 200. Cerberus's journal logs `trusted egress: the run now
+   leaves from the slot host's trusted source`. While the job runs,
+   `sudo iptables -t nat -S POSTROUTING` on Ryza lists the trusted rule
+   first. The same curls in a reviewed fork PR probe get Caddy's 403.
+   After the VM stops there's no `192.168.1.240` rule, `sudo conntrack -L
+   --orig-src 10.99.2.2 --reply-dst 192.168.1.240` is empty, and the unit
+   is inactive. On a conflict, the unit's journal says `another host
+   answers ARP for 192.168.1.240 on ens18; not taking the address`.
+
+**Rollback.** Set `egress.trusted = null` and deploy **Ryza first**: that
+stops the unit (its `ExecStop` removes the rule and flows) and removes the
+address. Only then deploy Cerberus, which removes the matcher and the flag.
+In the opposite order the trusted source would briefly face Caddy with no
+matcher, as an ordinary LAN client.
+
+**What moves with Cerberus.** One setting, `guard` in
+`modules/rites/_ci-slots.nix`, names the machine slot guests may reach on
+the LAN. It sets the guests' DNS server and host pins, the slot firewall's
+DNS/HTTPS exceptions and the trusted SNAT rule's destination. Moving
+it also means moving what that machine serves: the Caddy matchers
+(`machines/cerberus/proxy.nix`; evaluation fails if `guard` names another
+machine), the forge, the ncps relay, and the `*.noosphere.uk` relay to
+Garage S3 and Harbor, plus ntfy. The slot SNAT addresses stay with their
+slot hosts. The dispatcher role (`dispatcher.host`, with the PAT vars and
+the slotctl SSH key) moves separately.
 
 ### Hermes on Cerberus Forgejo
 

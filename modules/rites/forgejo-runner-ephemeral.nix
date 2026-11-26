@@ -9,13 +9,14 @@
   }: let
     inherit (config.networking) hostName;
     # Fixtures supply the same replacement fleet data to each evaluation
-    # via specialArgs. Machine modules cannot override these settings.
+    # via specialArgs (also read by the guard's Caddy, proxy.nix). Machine
+    # modules cannot override these settings.
     fleet = args.ciDispatcher or self.lib.ciDispatcher;
     inventory = lib.mapAttrs (_: entry:
       if fleet.remote
       then entry // {dispatcher = fleet.host;}
       else entry)
-    self.lib.ciSlots;
+    (args.ciSlots or self.lib.ciSlots);
     cfg = config.services.imperium.forgejoEphemeral;
     hostsSlots = builtins.hasAttr hostName inventory;
     dispatches =
@@ -204,7 +205,18 @@
         }
       ])
       cfg.pools);
-    inherit (self.lib.hosts) cerberus;
+    # The one LAN host guests reach: DNS and HTTPS through its Caddy guard.
+    guardAddress = self.lib.hosts.${self.lib.ciGuard};
+    # Names only trusted runs may reach through the guard (README "Trusted
+    # slot egress"). Caddy on the guard lists the same six, proxy.nix.
+    trustedEgressHosts = ["s3.main.garage.noosphere.uk" "harbor.noosphere.uk" "ntfy.ugalabugala.org"];
+    egressUnitFor = slot: "forgejo-ephemeral-trusted-egress@${slot}";
+    trustedSource = machine: let
+      name = inventory.${machine}.egress.trusted or null;
+    in
+      if name == null
+      then null
+      else self.lib.lan.${name};
     allSlotNames = lib.concatMap (entry: builtins.attrNames entry.slots) (builtins.attrValues inventory);
     # The live pilot keeps its fw_cfg paths. New/remote slots have their own
     # writable credential parent, including the root-only slot run marker.
@@ -318,6 +330,8 @@
       gateway = "${subnet}.1";
       address = "${subnet}.2";
       egress = cfg.egressAddress;
+      trustedEgress = cfg.egressTrustedAddress;
+      egressUnit = egressUnitFor slot;
       persistentPaths = inaccessibleVMs slot;
       guard = "forgejo-ephemeral-firewall${suffix}";
       outChain = "${hostName}-eph-out${suffix}";
@@ -357,9 +371,9 @@
         -A ${outChain} ! -s ${address} -j DROP
         -A ${outChain} ! -o ${uplink} -j DROP
         -A ${outChain} -m conntrack --ctstate INVALID -j DROP
-        -A ${outChain} -d ${cerberus} -p udp --dport 53 -j ACCEPT
-        -A ${outChain} -d ${cerberus} -p tcp --dport 53 -j ACCEPT
-        -A ${outChain} -d ${cerberus} -p tcp --dport 443 -j ACCEPT
+        -A ${outChain} -d ${guardAddress} -p udp --dport 53 -j ACCEPT
+        -A ${outChain} -d ${guardAddress} -p tcp --dport 53 -j ACCEPT
+        -A ${outChain} -d ${guardAddress} -p tcp --dport 443 -j ACCEPT
         ${lib.concatMapStringsSep "\n" (net: "-A ${outChain} -d ${net} -j DROP") nonPublic}
         -A ${outChain} -p tcp --dport 443 -j ACCEPT
         -A ${outChain} -j DROP
@@ -394,6 +408,74 @@
           apply iptables filter 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
             'FORWARD -i ${tap} -j ${outChain}' 'FORWARD -o ${tap} -j ${inChain}'
         }
+      '';
+      # Trusted egress (README "Trusted slot egress"): only HTTPS to the guard
+      # leaves from the second source, above the guard's default SNAT rule.
+      # The filter chains are unchanged. Exit codes 10 and 11 are slotctl's
+      # egress-address-conflict and egress-address-missing refusals.
+      egressRule = "POSTROUTING -s ${address}/32 -d ${guardAddress}/32 -p tcp --dport 443 -o ${uplink} -j SNAT --to-source ${trustedEgress}";
+      egressCommon = ''
+        set -u -o pipefail
+        read -r -a rule <<< ${lib.escapeShellArg egressRule}
+        remove_rule() {
+          while iptables -w -t nat -C "''${rule[@]}" 2>/dev/null; do
+            iptables -w -t nat -D "''${rule[@]}" || return 1
+          done
+        }
+        # Above the guard's SNAT for this slot, which it inserts first in the chain.
+        insert_rule() {
+          remove_rule && iptables -w -t nat -I "''${rule[0]}" 1 "''${rule[@]:1}"
+        }
+      '';
+      egressStart = pkgs.writeShellScript "${slot}-trusted-egress-start" ''
+        ${egressCommon}
+        # networkd probes before it (re)adds the /32 (DuplicateAddressDetection)
+        # and drops it on a conflict, so a missing address means don't use it.
+        if [[ -z "$(ip -4 -o address show dev ${uplink} to ${trustedEgress}/32)" ]]; then
+          echo "trusted egress refused for ${slot}: ${trustedEgress} is not on ${uplink}; networkd drops it on an address conflict" >&2
+          exit 11
+        fi
+        # Probe again before every use: never take an address another host answers for.
+        status=0
+        arping -q -D -c 2 -w 3 -I ${uplink} ${trustedEgress} || status=$?
+        if (( status == 1 )); then
+          echo "trusted egress refused for ${slot}: another host answers ARP for ${trustedEgress} on ${uplink}; not taking the address" >&2
+          exit 10
+        elif (( status != 0 )); then
+          echo "trusted egress refused for ${slot}: duplicate address probe for ${trustedEgress} failed (arping exit $status)" >&2
+          exit 1
+        fi
+        insert_rule || exit 1
+        echo "trusted egress for ${slot} via ${trustedEgress}"
+      '';
+      # The guard's reload re-inserts its own rule first; go back above it.
+      egressReload = pkgs.writeShellScript "${slot}-trusted-egress-reload" ''
+        ${egressCommon}
+        insert_rule
+      '';
+      # Established flows keep their NAT binding: drop the ones NATed to the
+      # trusted source, so nothing outlives the rule.
+      egressStop = pkgs.writeShellScript "${slot}-trusted-egress-stop" ''
+        ${egressCommon}
+        remove_rule || exit 1
+        conntrack -D --orig-src ${address} --reply-dst ${trustedEgress} >/dev/null 2>&1 || true
+        remaining=$(conntrack -L --orig-src ${address} --reply-dst ${trustedEgress} 2>/dev/null || true)
+        if [[ -n "$remaining" ]]; then
+          echo "trusted egress for ${slot}: conntrack entries via ${trustedEgress} remain" >&2
+          exit 1
+        fi
+      '';
+      # Never let a VM boot while its egress unit is up or queued: binding to
+      # the VM, a stray start would otherwise pull the VM up with it.
+      egressPreflight = pkgs.writeShellScript "${slot}-trusted-egress-preflight" ''
+        set -eu
+        systemctl=${lib.getExe' pkgs.systemd "systemctl"}
+        state=$("$systemctl" show --property=ActiveState --value ${egressUnit}.service)
+        job=$("$systemctl" show --property=Job --value ${egressUnit}.service)
+        if [[ ( "$state" != inactive && "$state" != failed ) || -n "$job" ]]; then
+          echo "refusing to boot ${slot}: ${egressUnit} is $state''${job:+ with job $job}" >&2
+          exit 1
+        fi
       '';
       # Every directory a slot unit names as a mandatory namespace path, in
       # creation order (parents first). The eval check
@@ -439,18 +521,21 @@
         install=${lib.getExe' pkgs.coreutils "install"}
         ${lib.concatMapStringsSep "\n" installLine slotDirs}
       '';
-      slotctlEntry = {
-        vm_dir = vmDir;
-        credential_dir = credDir;
-        # Cleanup still needs this path when delivery is disabled.
-        trust_dir = trustDir;
-        deliver = cfg.trustedJobs.enable;
-        fixed_pilot = fixedPilot;
-        user = slotUser;
-        group = slotUser;
-        min_free_bytes = (class.overlayGiB + spec.var + 10) * 1024 * 1024 * 1024;
-        expiry_minutes = expiryMinutes;
-      };
+      slotctlEntry =
+        {
+          vm_dir = vmDir;
+          credential_dir = credDir;
+          # Cleanup still needs this path when delivery is disabled.
+          trust_dir = trustDir;
+          deliver = cfg.trustedJobs.enable;
+          fixed_pilot = fixedPilot;
+          user = slotUser;
+          group = slotUser;
+          min_free_bytes = (class.overlayGiB + spec.var + 10) * 1024 * 1024 * 1024;
+          expiry_minutes = expiryMinutes;
+        }
+        # Only with a second source: `egress trusted` and its cleanup in withdraw/scrub.
+        // lib.optionalAttrs (trustedEgress != null) {trusted_egress = true;};
       preflight = pkgs.writeShellScript "${slot}-preflight" ''
         set -eu
         # WorkingDirectory is optional so privileged stop hooks can clean a failed start.
@@ -520,13 +605,17 @@
           useNetworkd = true;
           useDHCP = false;
           enableIPv6 = false;
-          hosts.${cerberus} = [forgeHosts.ugalabugala cacheHost] ++ lib.optional (!fixedPilot) forgeHosts.noosphere;
+          # Untrusted sources get the guard's 403 for the trusted-only names.
+          hosts.${guardAddress} =
+            [forgeHosts.ugalabugala cacheHost]
+            ++ lib.optional (!fixedPilot) forgeHosts.noosphere
+            ++ lib.optionals (trustedEgress != null) trustedEgressHosts;
         };
         systemd.network.networks."10-uplink" = {
           matchConfig.MACAddress = mac;
           address = ["${address}/24"];
           gateway = ["${gateway}"];
-          dns = [cerberus];
+          dns = [guardAddress];
           networkConfig.IPv6AcceptRA = false;
         };
         microvm = {
@@ -670,7 +759,7 @@
         exit "$status"
       '';
     in {
-      inherit spec slotDirs prepareDirs slotctlEntry sandbox remoteProperties remoteAction dependencies vm controlDir trustDir;
+      inherit spec slotDirs prepareDirs slotctlEntry sandbox remoteProperties remoteAction dependencies vm controlDir trustDir egressRule egressUnit;
       inherit (class) runnerMinutes;
       users.groups.${slotUser} = {};
       users.users.${slotUser} = {
@@ -711,86 +800,109 @@
         MemorySwapMax = 0;
         IOWeight = 20;
       };
-      systemd.services = {
-        ${installer} = {
-          unitConfig = {
-            RequiresMountsFor = [config.microvm.stateDir];
-            # Re-run before every VM, dispatcher and support-unit start, so
-            # repeated manual restarts must not trip start-limit-hit.
-            StartLimitIntervalSec = 0;
+      systemd.services =
+        {
+          ${installer} = {
+            unitConfig = {
+              RequiresMountsFor = [config.microvm.stateDir];
+              # Re-run before every VM, dispatcher and support-unit start, so
+              # repeated manual restarts must not trip start-limit-hit.
+              StartLimitIntervalSec = 0;
+            };
+            serviceConfig = {
+              # Both the installer and its pre-start must be able to start with no slot directory.
+              WorkingDirectory = lib.mkForce "/";
+              ExecStartPre = ["+${prepareDirs}"];
+            };
+            script = lib.mkBefore ''
+              cd -- ${lib.escapeShellArg controlDir}
+            '';
           };
-          serviceConfig = {
-            # Both the installer and its pre-start must be able to start with no slot directory.
-            WorkingDirectory = lib.mkForce "/";
-            ExecStartPre = ["+${prepareDirs}"];
+          ${guard} = {
+            description = "Restrict traffic on the Forgejo one-job tap";
+            after = ["firewall.service"];
+            requires = ["firewall.service"];
+            path = [config.networking.firewall.package pkgs.coreutils];
+            reloadIfChanged = true;
+            script = guardScript + "\napply_rules start\n";
+            reload = guardScript + "\napply_rules start\n";
+            preStop = guardScript + "\napply_rules stop\n";
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+            };
           };
-          script = lib.mkBefore ''
-            cd -- ${lib.escapeShellArg controlDir}
-          '';
+          ${vm} = {
+            # A oneshot without RemainAfterExit: every start re-runs it.
+            requires = ["${installer}.service"];
+            bindsTo = ["${guard}.service"];
+            after = ["${guard}.service"];
+            serviceConfig = {
+              Slice = slice;
+              User = slotUser;
+              Group = slotUser;
+              # Optional, so namespace setup and chdir cannot fail before the
+              # first ExecStartPre or in the '+' stop hooks; preflight checks it.
+              # QEMU only reads the credentials (fw_cfg), so credDir is not
+              # listed: its bind mount made the scrub's rmdir fail with EBUSY.
+              WorkingDirectory = "-${vmDir}";
+              ProtectSystem = "strict";
+              ReadWritePaths = ["-${vmDir}"];
+              ProtectHome = true;
+              PrivateTmp = true;
+              # The pre-created TAP carries frames via /dev/net/tun, not IP sockets.
+              RestrictAddressFamilies = ["AF_UNIX"];
+              IPAddressDeny = "any";
+              InaccessiblePaths = persistentPaths;
+              NoNewPrivileges = true;
+              Restart = "no";
+              RuntimeMaxSec = "${toString class.hostMinutes}min";
+              TimeoutStartSec = "${toString vmStartSeconds}s";
+              TimeoutStopSec = "${toString vmStopSeconds}s";
+              ExecStartPre = ["+${prepareDirs}" preflight] ++ lib.optional (trustedEgress != null) "+${egressPreflight}";
+              ExecStopPost = ["+${scrub}"];
+              LimitCORE = 0;
+            };
+          };
+          "microvm-set-booted@${slot}" = {
+            overrideStrategy = "asDropin";
+            requires = ["${installer}.service"];
+            serviceConfig = {
+              User = "root";
+              Group = "root";
+            };
+          };
+          "microvm-virtiofsd@${slot}" = {
+            requires = ["${installer}.service"];
+            serviceConfig = {
+              Slice = slice;
+              RestrictAddressFamilies = ["AF_UNIX"];
+              IPAddressDeny = "any";
+            };
+          };
+        }
+        // lib.optionalAttrs (trustedEgress != null) {
+          ${egressUnit} = {
+            description = "Trusted egress source for Forgejo one-job slot ${slot}";
+            # Started only by slotctl `egress trusted`, after delivery to a running VM.
+            # Stops with the VM (BindsTo), and restarts with the guard, whose
+            # stop/start reorders the NAT chain; follows its reloads too.
+            bindsTo = ["${vm}.service"];
+            partOf = ["${guard}.service"];
+            after = ["${vm}.service" "${guard}.service"];
+            unitConfig.ReloadPropagatedFrom = ["${guard}.service"];
+            path = [config.networking.firewall.package pkgs.iproute2 pkgs.iputils pkgs.conntrack-tools];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              ExecStart = egressStart;
+              ExecReload = egressReload;
+              ExecStop = egressStop;
+              TimeoutStartSec = "20s";
+              TimeoutStopSec = "20s";
+            };
+          };
         };
-        ${guard} = {
-          description = "Restrict traffic on the Forgejo one-job tap";
-          after = ["firewall.service"];
-          requires = ["firewall.service"];
-          path = [config.networking.firewall.package pkgs.coreutils];
-          reloadIfChanged = true;
-          script = guardScript + "\napply_rules start\n";
-          reload = guardScript + "\napply_rules start\n";
-          preStop = guardScript + "\napply_rules stop\n";
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-        };
-        ${vm} = {
-          # A oneshot without RemainAfterExit: every start re-runs it.
-          requires = ["${installer}.service"];
-          bindsTo = ["${guard}.service"];
-          after = ["${guard}.service"];
-          serviceConfig = {
-            Slice = slice;
-            User = slotUser;
-            Group = slotUser;
-            # Optional, so namespace setup and chdir cannot fail before the
-            # first ExecStartPre or in the '+' stop hooks; preflight checks it.
-            # QEMU only reads the credentials (fw_cfg), so credDir is not
-            # listed: its bind mount made the scrub's rmdir fail with EBUSY.
-            WorkingDirectory = "-${vmDir}";
-            ProtectSystem = "strict";
-            ReadWritePaths = ["-${vmDir}"];
-            ProtectHome = true;
-            PrivateTmp = true;
-            # The pre-created TAP carries frames via /dev/net/tun, not IP sockets.
-            RestrictAddressFamilies = ["AF_UNIX"];
-            IPAddressDeny = "any";
-            InaccessiblePaths = persistentPaths;
-            NoNewPrivileges = true;
-            Restart = "no";
-            RuntimeMaxSec = "${toString class.hostMinutes}min";
-            TimeoutStartSec = "${toString vmStartSeconds}s";
-            TimeoutStopSec = "${toString vmStopSeconds}s";
-            ExecStartPre = ["+${prepareDirs}" preflight];
-            ExecStopPost = ["+${scrub}"];
-            LimitCORE = 0;
-          };
-        };
-        "microvm-set-booted@${slot}" = {
-          overrideStrategy = "asDropin";
-          requires = ["${installer}.service"];
-          serviceConfig = {
-            User = "root";
-            Group = "root";
-          };
-        };
-        "microvm-virtiofsd@${slot}" = {
-          requires = ["${installer}.service"];
-          serviceConfig = {
-            Slice = slice;
-            RestrictAddressFamilies = ["AF_UNIX"];
-            IPAddressDeny = "any";
-          };
-        };
-      };
     };
     slotctlSlots = lib.mapAttrs (_: data: data.slotctlEntry) localSlots;
     slotctlConfig = pkgs.writeText "${hostName}-slotctl.json" (builtins.toJSON {slots = slotctlSlots;});
@@ -905,7 +1017,9 @@
               "--untrusted-limit ${toString untrustedLimitSeconds}"
               "--vm-deadline ${toString vmDeadline}"
             ]
-            ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs");
+            ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs"
+            # The slot host has a second source; used only for delivered runs.
+            ++ lib.optional (trustedSource machine != null) "--trusted-egress");
           LoadCredential = lib.optional (!local) "slotctl-ssh-key:${config.clan.core.vars.generators.${sshGenerator}.files.id_ed25519.path}";
           StateDirectory = state;
           RuntimeDirectory = runtime;
@@ -1032,6 +1146,18 @@
           else null;
         description = "Dedicated SNAT source of this host's slots. The host's uplink must carry it as a /32.";
       };
+      egressTrustedAddress = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        readOnly = true;
+        default =
+          if hosted
+          then trustedSource hostName
+          else null;
+        description = ''
+          Second SNAT source of this host's slots, used only by delivered trusted runs, or null.
+          The host's uplink must carry it as a /32 with IPv4 duplicate address detection.
+        '';
+      };
       internal = lib.mkOption {
         internal = true;
         readOnly = true;
@@ -1045,7 +1171,13 @@
             localSlots;
           remotePropertyNames = lib.mapAttrs (_: data: builtins.attrNames data.remoteProperties) localSlots;
           remoteActions = lib.mapAttrs (_: data: data.remoteAction) localSlots;
-          inherit slotctlSlots sshClients poolsFile;
+          egress = lib.mapAttrs (_: data:
+            lib.optionalAttrs (cfg.egressTrustedAddress != null) {
+              unit = data.egressUnit;
+              rule = data.egressRule;
+            })
+          localSlots;
+          inherit slotctlSlots sshClients poolsFile trustedEgressHosts forcedCommand;
           inherit untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
         };
         description = "Slot, pool, and transport details for checks.";
@@ -1105,6 +1237,16 @@
             # The label rule (forgejo-runner.nix) requires a compatible toolset.
             assertion = lib.all (p: builtins.elem p (slotToolset pkgs)) (ciToolset pkgs);
             message = "forgejoEphemeral: the slot's PATH must carry the whole shared CI toolset (_ci-toolset.nix).";
+          }
+          {
+            # Caddy on the guard tells the two apart only by source address.
+            assertion =
+              cfg.egressTrustedAddress
+              == null
+              || (cfg.egressTrustedAddress
+                != cfg.egressAddress
+                && !(builtins.elem cfg.egressTrustedAddress (builtins.attrValues self.lib.hosts)));
+            message = "forgejoEphemeral: ${hostName}'s trusted egress source must be its own chart address, not the untrusted source or a host.";
           }
         ];
         users = slotDefinitions (data: data.users);

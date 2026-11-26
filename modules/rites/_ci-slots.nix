@@ -5,11 +5,24 @@
 # (machines/cerberus/proxy.nix) and by the slot hosts' network config, so none
 # of them evaluates another machine's configuration.
 #
+#   guard             machine that slot guests may reach on the LAN: their DNS
+#                     resolver and the HTTPS endpoint whose Caddy limits each
+#                     slot source to its allowed names
+#                     (machines/<guard>/proxy.nix). It also fronts the forge,
+#                     ncps, Garage S3, Harbor and ntfy names the guests pin.
+#                     Moves with cerberus, separately from the dispatcher.
+#
 #   uplink            the host interface slot traffic is source-NATed out of
 #   egress.untrusted  chart name (`self.lib.lan.<name>`) of the dedicated SNAT
-#                     address of this host's slots. Caddy on cerberus tells slot
-#                     traffic apart by it, so it is never a DNS host and the
-#                     router must not lease it.
+#                     address of this host's slots. Caddy on the guard tells
+#                     slot traffic apart by it, so it is never a DNS host and
+#                     the router must not lease it.
+#   egress.trusted    null, or the chart name of a second SNAT address that
+#                     only trusted runs use, after their credentials were
+#                     delivered (forgejo-ephemeral-trusted-egress@<slot>). The
+#                     guard's Caddy lets it reach Garage S3, Harbor and ntfy
+#                     besides the forges and ncps. null: no address, unit,
+#                     rule, Caddy matcher or extra guest host pins.
 #   legacyVMs         stopped microVMs whose state is still on this host. The
 #                     slot units cannot see their directories, nor those of any
 #                     other microVM declared on the host.
@@ -33,9 +46,12 @@
     # Separate operator opt-in; applies to the dispatcher and its slots.
     trustedJobs = false;
   };
+  guard = "cerberus";
   hosts.ryza = {
     uplink = "ens18";
     egress.untrusted = "ryza-eph";
+    # "ryza-eph-trusted" once the hand steps in the README are done.
+    egress.trusted = null;
     # The pre-HOM-29 single guest; its images may still be on disk.
     legacyVMs = ["ryza-ci"];
     slots.ryza-eph-1 = {

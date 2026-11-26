@@ -13,6 +13,7 @@ in {
     # The nix-eph fleet settings and slot inventory.
     ciDispatcher = ci.dispatcher;
     ciSlots = ci.hosts;
+    ciGuard = ci.guard;
 
     # Generators for sops-encrypted cluster and OpenTofu secrets, see
     # ./_sops-generators.nix.

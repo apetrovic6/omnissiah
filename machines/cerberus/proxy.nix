@@ -1,6 +1,6 @@
 # Caddy hosts for things that are not services of this machine: the NAS,
 # Proxmox, and the wildcard forwards to the cluster and to keksic.
-{
+args @ {
   self,
   lib,
   config,
@@ -8,6 +8,21 @@
   ...
 }: let
   inherit (self.lib) mkRevProxyVHost mkDomain;
+  # The slot inventory (modules/rites/_ci-slots.nix); fixtures pass their own.
+  slotHosts = builtins.attrValues (args.ciSlots or self.lib.ciSlots);
+  sources = kind: map (host: self.lib.lan.${host.egress.${kind}}) (builtins.filter (host: (host.egress.${kind} or null) != null) slotHosts);
+  trustedSources = sources "trusted";
+  # Trusted runs only (README "Trusted slot egress"): the untrusted names
+  # plus Garage S3 (path style), Harbor and ntfy.
+  # Empty without trusted sources, so the snippet stays byte-identical.
+  trustedMatcher = lib.optionalString (trustedSources != []) (lib.concatMapStrings (line: "\n" + line) [
+    ""
+    "  @blockedEphemeralTrusted {"
+    "    remote_ip ${lib.concatStringsSep " " trustedSources}"
+    "    not host ${mkDomain "forge"} ncps.${config.noosphere.domain} forge.${config.noosphere.domain} s3.main.garage.${config.noosphere.domain} harbor.${config.noosphere.domain} ${mkDomain "ntfy"}"
+    "  }"
+    "  respond @blockedEphemeralTrusted 403"
+  ]);
 in {
   # TODO: Setup services so that they listen on localhost
 
@@ -27,6 +42,14 @@ in {
     }
   ];
 
+  # Slot guests reach only this host on the LAN (guard in _ci-slots.nix).
+  assertions = [
+    {
+      assertion = self.lib.ciGuard == config.networking.hostName;
+      message = "The nix-eph egress guard (_ci-slots.nix guard = \"${self.lib.ciGuard}\") must carry this Caddy guard; move it with the setting.";
+    }
+  ];
+
   services.imperium.caddy = {
     enable = true;
     openFirewall = true;
@@ -40,7 +63,8 @@ in {
     # Check the socket peer before any site handler can proxy or respond.
     globalConfig = "order invoke first";
     # @blockedEphemeral matches every nix-eph slot host's untrusted source
-    # address (modules/rites/_ci-slots.nix).
+    # address (modules/rites/_ci-slots.nix), @blockedEphemeralTrusted the
+    # trusted ones, if any.
     extraConfig = ''
       &(stygies-access) {
         @blocked {
@@ -51,10 +75,10 @@ in {
 
         # Protect the slot source even if Ryza is on a different generation.
         @blockedEphemeral {
-          remote_ip ${lib.concatMapStringsSep " " (host: self.lib.lan.${host.egress.untrusted}) (builtins.attrValues self.lib.ciSlots)}
+          remote_ip ${lib.concatStringsSep " " (sources "untrusted")}
           not host ${mkDomain "forge"} ncps.${config.noosphere.domain} forge.${config.noosphere.domain}
         }
-        respond @blockedEphemeral 403
+        respond @blockedEphemeral 403${trustedMatcher}
       }
     '';
   };
