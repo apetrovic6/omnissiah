@@ -37,8 +37,8 @@
           hash = "sha256-4YaFJfGo7NPRGS51musdgGTtDTeYUtkkZYjDW7ISgHE=";
         };
         "trozz/pocketid" = {
-          version = "2.3.0";
-          hash = "sha256-MEMEPn5PerMIh+CfFYyEqM0142RyfT4Eoq/gu4ijFTQ=";
+          version = "2.5.0";
+          hash = "sha256-YsQLxyZg1iBYIFylo1RBtgpLdr7EOUNtqibbp+niNlo=";
         };
         "bpg/proxmox" = {
           version = "0.122.0";
