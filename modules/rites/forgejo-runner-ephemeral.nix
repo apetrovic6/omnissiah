@@ -1,4 +1,80 @@
 {self, ...}: {
+  # Shared by the base-tagged NixOS machines. Assign the inventory and pools
+  # here so changing the dispatcher host moves the whole role at once.
+  flake.nixosModules.forgejo-ephemeral-fleet = {
+    config,
+    lib,
+    ...
+  }: let
+    inherit (config.networking) hostName;
+    inherit (config.services.imperium.forgejoEphemeral) remoteDispatcher;
+    inventory = lib.mapAttrs (_: entry:
+      if remoteDispatcher.enable
+      then entry // {dispatcher = remoteDispatcher.host;}
+      else entry)
+    self.lib.ciSlots;
+    hostsSlots = builtins.hasAttr hostName inventory;
+    dispatches =
+      if remoteDispatcher.enable
+      then hostName == remoteDispatcher.host
+      else hostsSlots;
+  in {
+    imports = [self.nixosModules.forgejo-runner-ephemeral];
+
+    options.services.imperium.forgejoEphemeral.remoteDispatcher = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        # Operator cutover: prepare the dispatcher vars before deploying this as true.
+        default = false;
+        description = "Move the one-job dispatcher off the slot host.";
+      };
+      host = lib.mkOption {
+        type = lib.types.str;
+        default = "cerberus";
+        description = "Base-tagged NixOS machine that runs all dispatcher instances after cutover.";
+      };
+    };
+
+    config = lib.mkMerge [
+      {services.imperium.forgejoEphemeral.inventory = lib.mkDefault inventory;}
+      (lib.mkIf (hostsSlots || dispatches) {
+        services.imperium.forgejoEphemeral.enable = true;
+        services.imperium.forgejoEphemeral.trustedJobs.enable = lib.mkDefault remoteDispatcher.enable;
+      })
+      (lib.mkIf dispatches {
+        services.imperium.forgejoEphemeral.pools = {
+          ugalabugala = {
+            forge = "ugalabugala";
+            scope.user = "manjo";
+            labels = ["nix-eph"];
+            dispatch = [9];
+            trust = {
+              repos."9" = {
+                owner = "manjo";
+                name = "rust-app-template";
+              };
+              users = ["manjo"];
+            };
+          };
+          noosphere-user = {
+            forge = "noosphere";
+            scope.user = "manjo";
+            labels = ["nix-eph"];
+            # manjo/auspex, manjo/mushroom-farmer
+            dispatch = [221 188];
+          };
+          noosphere-org = {
+            forge = "noosphere";
+            scope.org = "monolith-softworks";
+            labels = ["nix-eph"];
+            # This non-public org's entire queue is dispatched untrusted.
+            dispatch = "owner";
+          };
+        };
+      })
+    ];
+  };
+
   flake.nixosModules.forgejo-runner-ephemeral = {
     config,
     lib,
@@ -136,7 +212,7 @@
         ]
         ++ lib.optional local "-${credentials}/${name}-trust"
         ++ lib.optional (credentials != credParent) "-${credentials}")
-      (builtins.filter (name: name != slot) (builtins.attrNames config.microvm.vms ++ (host.legacyVMs or [])));
+      (builtins.filter (name: name != slot) (lib.unique (builtins.attrNames config.microvm.vms ++ (host.legacyVMs or []))));
     slotCapabilities = ["CAP_CHOWN" "CAP_FOWNER" "CAP_DAC_OVERRIDE"];
     commonSandbox = {
       ProtectSystem = "strict";
@@ -182,6 +258,10 @@
     };
     pickupSeconds = 5 * 60;
     reportingMarginMinutes = 5;
+    untrustedLimitSeconds = 65 * 60;
+    # Slot-host fail-safe starts at boot submission, not observed pickup.
+    expiryBootMarginMinutes = 5;
+    expiryMinutes = (untrustedLimitSeconds + pickupSeconds) / 60 + expiryBootMarginMinutes;
     vmStartSeconds = 90;
     vmStopSeconds = 30;
     classFor = spec: let
@@ -353,6 +433,7 @@
         user = slotUser;
         group = slotUser;
         min_free_bytes = (class.overlayGiB + spec.var + 10) * 1024 * 1024 * 1024;
+        expiry_minutes = expiryMinutes;
       };
       preflight = pkgs.writeShellScript "${slot}-preflight" ''
         set -eu
@@ -805,6 +886,7 @@
               "--pools ${poolsFile}"
               "--state-dir ${stateDirs.${slot}} --pause-file /run/${runtime}/pause"
               "--host-pause-file ${runRoot}/pause --claim-states ${claimStates}"
+              "--untrusted-limit ${toString untrustedLimitSeconds}"
               "--vm-deadline ${toString vmDeadline}"
             ]
             ++ lib.optional cfg.trustedJobs.enable "--trusted-jobs");
@@ -946,7 +1028,9 @@
             })
             localSlots;
           remotePropertyNames = lib.mapAttrs (_: data: builtins.attrNames data.remoteProperties) localSlots;
+          remoteActions = lib.mapAttrs (_: data: data.remoteAction) localSlots;
           inherit slotctlSlots sshClients poolsFile;
+          inherit untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
         };
         description = "Slot, pool, and transport details for checks.";
       };

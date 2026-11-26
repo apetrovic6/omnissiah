@@ -37,8 +37,7 @@ in {
         gens = config.clan.core.vars.generators;
       in {
         options.services.imperium.ciCredentials = {
-          # reliquary-ncps declares the netrc wherever this module is imported.
-          enable = lib.mkEnableOption "the CI signing key on this machine";
+          enable = lib.mkEnableOption "the CI signing key and ncps upload netrc on this machine";
           signingKey = lib.mkOption {
             type = lib.types.str;
             readOnly = true;

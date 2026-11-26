@@ -71,7 +71,6 @@ LOCK_ROOT = Path("/run/forgejo-slotctl")
 LOCK_WAIT = 2.0
 MAX_COMMAND = 1024
 MAX_RUN = 113  # eph- + 12 hex + '-' + max 63-char slot + '-' + 32 hex
-EXPIRY_MINUTES = 75
 UNIT_NOT_INSTALLED = 5  # systemctl's LSB exit status for StopUnit on a missing unit.
 CODES = (
     "systemctl-failed",
@@ -131,7 +130,7 @@ def support_units(slot):
 
 
 class Systemctl:
-    def __init__(self, slot, run, path, lock_fds, systemd_run_path, python_path):
+    def __init__(self, slot, run, path, lock_fds, systemd_run_path, python_path, expiry_minutes):
         self.slot = slot
         self.vm = f"microvm@{slot}.service"
         self.support = support_units(slot)
@@ -139,6 +138,7 @@ class Systemctl:
         self.run = run
         self.path, self.lock_fds = path, lock_fds
         self.systemd_run_path, self.python_path = systemd_run_path, python_path
+        self.expiry_minutes = expiry_minutes
 
     def _system_command(self, argv, *, missing_ok=False):
         try:
@@ -205,7 +205,7 @@ class Systemctl:
         self._system_command((
             self.systemd_run_path, "--system", "--quiet", "--collect",
             f"--unit={self.expiry_unit(run_name)}",
-            f"--on-active={EXPIRY_MINUTES}min",
+            f"--on-active={self.expiry_minutes}min",
             "--timer-property=AccuracySec=1us", "--timer-property=RemainAfterElapse=no",
             "--service-type=exec", "--expand-environment=no",
             "--property=Restart=on-failure", "--property=RestartMode=direct",
@@ -478,6 +478,7 @@ def load_config(path, slot):
         "user",
         "group",
         "min_free_bytes",
+        "expiry_minutes",
     }:
         raise UsageError
     paths = (entry["vm_dir"], entry["credential_dir"], entry["trust_dir"])
@@ -487,7 +488,7 @@ def load_config(path, slot):
         raise UsageError
     if not matches(SLOT_NAME, entry["user"]) or not matches(SLOT_NAME, entry["group"]):
         raise UsageError
-    if type(entry["min_free_bytes"]) is not int or entry["min_free_bytes"] <= 0:
+    if any(type(entry[key]) is not int or entry[key] <= 0 for key in ("min_free_bytes", "expiry_minutes")):
         raise UsageError
     return entry
 
@@ -671,7 +672,7 @@ def main(
             raise SlotError("slot-lock") from None
         lock_fd = acquire_lock(parent, args.slot)
         lock_fds = (lock_fd,) if args.hold_fd is None else (args.hold_fd, lock_fd)
-        systemctl = Systemctl(args.slot, run, systemctl_path, lock_fds, systemd_run_path, python_path)
+        systemctl = Systemctl(args.slot, run, systemctl_path, lock_fds, systemd_run_path, python_path, entry["expiry_minutes"])
         if args.verb in RUN_VERBS or args.verb in ("observe", "expire"):
             try:
                 marker_parent = os.open(Path(entry["credential_dir"]).parent, DIR_FLAGS)

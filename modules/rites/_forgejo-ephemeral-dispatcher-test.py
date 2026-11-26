@@ -45,6 +45,7 @@ LIST = RUNNERS + "?visible=false&page={}&limit=50"
 SLOT_RUN = f"eph-{'0' * 12}-ryza-{'a' * 32}"
 VM = "microvm@ryza-eph-1.service"
 STD_DEADLINE, LARGE_DEADLINE = 11820, 22620
+UNTRUSTED_LIMIT = 65 * 60
 REPO, OWNER = 17, 42
 PAT = "synthetic-dispatcher-pat-not-a-secret"
 TOKEN = "synthetic-ephemeral-runner-token-not-a-secret"
@@ -95,7 +96,8 @@ def protection(branch="master", **fields):
 def make_queue(pool, forge, slot, state_dirs, claim_root, clock, pat_file, trust=None, *, vm_deadline=STD_DEADLINE):
     return D.Queue(
         D.Forgejo(pool, pat_file, forge.connect), slot, D.Store(state_dirs[D.SLOT], pool.state_file),
-        D.Claims(claim_root, state_dirs, pool), clock.monotonic, clock.wall, vm_deadline=vm_deadline, trust=trust,
+        D.Claims(claim_root, state_dirs, pool), clock.monotonic, clock.wall, vm_deadline=vm_deadline,
+        untrusted_limit=UNTRUSTED_LIMIT, trust=trust,
     )
 
 
@@ -152,7 +154,7 @@ def create_slot_lock(root, slot):
     (root / f"{slot}.lock").touch(mode=0o600)
 
 
-def write_slotctl_config(path, slot, vm_dir, credential_dir, trust_dir=None, *, deliver=False, fixed_pilot=False, min_free_bytes=1):
+def write_slotctl_config(path, slot, vm_dir, credential_dir, trust_dir=None, *, deliver=False, fixed_pilot=False, min_free_bytes=1, expiry_minutes=75):
     """What the slot module generates per host, pointed at temporary directories and the current user."""
     entry = {
         "vm_dir": str(vm_dir),
@@ -163,6 +165,7 @@ def write_slotctl_config(path, slot, vm_dir, credential_dir, trust_dir=None, *, 
         "user": pwd.getpwuid(os.getuid()).pw_name,
         "group": grp.getgrgid(os.getgid()).gr_name,
         "min_free_bytes": min_free_bytes,
+        "expiry_minutes": expiry_minutes,
     }
     path.write_text(json.dumps({"slots": {slot: entry}}))
     return path
@@ -923,7 +926,7 @@ class DispatcherTests(unittest.TestCase):
         self.system.set(active="active")
         self.leave_images()
         self.restart()
-        self.tick(D.UNTRUSTED_LIMIT - 1)
+        self.tick(UNTRUSTED_LIMIT - 1)
         self.assertEqual([], self.system.mutations("stop"))
         self.forge.reply_once("GET", USER, 503)
         self.tick(1)
@@ -2110,7 +2113,7 @@ class TrustedJobTests(unittest.TestCase):
         self.boot()
         self.pick_up()
         self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
-        self.tick(D.UNTRUSTED_LIMIT + 5 * 60)
+        self.tick(UNTRUSTED_LIMIT + 5 * 60)
         self.dispatcher.withdraw()  # What main() does before a new dispatcher runs.
         self.assertEqual({}, self.delivered())
         self.restart()
@@ -2128,7 +2131,7 @@ class TrustedJobTests(unittest.TestCase):
     def test_revalidation_timeout_cannot_be_reset_by_further_restarts(self):
         self.boot()
         self.pick_up()
-        self.tick(D.UNTRUSTED_LIMIT)
+        self.tick(UNTRUSTED_LIMIT)
         self.restart()
         self.dispatcher.withdraw()
         self.forge.reply_once("GET", USER, 503)
@@ -2147,7 +2150,7 @@ class TrustedJobTests(unittest.TestCase):
     def test_restart_refuses_different_task_even_if_it_has_an_eligible_run(self):
         self.boot()
         self.pick_up()
-        self.tick(D.UNTRUSTED_LIMIT)
+        self.tick(UNTRUSTED_LIMIT)
         self.restart()
         self.dispatcher.withdraw()
         self.forge.tasks = [task(task_id=72)]
@@ -2248,7 +2251,7 @@ class TrustedJobTests(unittest.TestCase):
         self.restart()
         self.pause.touch()
         self.forge.reply_once("GET", USER, 503)
-        self.tick(D.UNTRUSTED_LIMIT - 1)
+        self.tick(UNTRUSTED_LIMIT - 1)
         self.assertEqual([], self.system.mutations("stop"))
         self.tick(1)
         self.assertEqual(1, len(self.system.mutations("stop")))
@@ -2261,7 +2264,7 @@ class TrustedJobTests(unittest.TestCase):
         self.boot()
         self.forge.reply_once("GET", JOBS, 503)
         self.tick(D.POLL)
-        self.pick_up(advance=D.UNTRUSTED_LIMIT - D.POLL - 1)
+        self.pick_up(advance=UNTRUSTED_LIMIT - D.POLL - 1)
         self.assertEqual([], self.system.mutations("stop"))
         self.tick(1)
         self.assertEqual(1, len(self.system.mutations("stop")))
@@ -2274,7 +2277,7 @@ class TrustedJobTests(unittest.TestCase):
         self.assertEqual({}, self.delivered())
         self.tick(D.TRUST_DEADLINE)  # Access recovered, but the trust window already closed.
         self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
-        self.tick(D.UNTRUSTED_LIMIT - D.TRUST_DEADLINE - 1)
+        self.tick(UNTRUSTED_LIMIT - D.TRUST_DEADLINE - 1)
         self.assertEqual([], self.system.mutations("stop"))
         self.assertEqual({}, self.delivered())
         self.tick(1)
@@ -2568,7 +2571,7 @@ class SlotConfigurationTests(unittest.TestCase):
         values = {
             "slot": "terra-eph-1", "machine": "terra", "slotctl": "/nix/store/x-forgejo-slotctl",
             "pools": "/pools.json", "state-dir": "/state", "vm-deadline": str(LARGE_DEADLINE),
-            "claim-states": "/claim-states.json",
+            "untrusted-limit": str(UNTRUSTED_LIMIT), "claim-states": "/claim-states.json",
         } | changes
         argv = []
         for key, value in values.items():
@@ -2642,6 +2645,7 @@ class SlotConfigurationTests(unittest.TestCase):
             {"pools": "relative/pools.json"}, {"pools": None}, {"slotctl": "relative/slotctl"},
             {"slot": None}, {"machine": None}, {"slotctl": None}, {"vm-dir": "/vm"},
             {"vm-deadline": None}, {"vm-deadline": "0"}, {"vm-deadline": "370min"},
+            {"untrusted-limit": None}, {"untrusted-limit": "-1"},
         ):
             with self.subTest(changes), self.assertRaises(SystemExit):
                 D.parse_arguments(self.arguments(**changes))
@@ -2736,6 +2740,7 @@ class SlotctlTests(unittest.TestCase):
             ("string-deliver", {"deliver": "true"}),
             ("extra", {"extra": 1}),
             ("bad-space", {"min_free_bytes": 0}),
+            ("bad-expiry", {"expiry_minutes": True}),
         ):
             shapes[name] = self.root / f"{name}.json"
             shapes[name].write_text(json.dumps({"slots": {self.SLOT: {
@@ -2962,17 +2967,18 @@ class SlotctlTests(unittest.TestCase):
 
     def test_watchdog_arms_before_start_and_arm_failure_cannot_boot(self):
         args = ("--slot", self.SLOT)
-        self.assertEqual(0, self.slotctl(*args, "stage", SLOT_RUN, payload=self.STAGE)[0])
+        config = write_slotctl_config(self.config, self.SLOT, self.vm_dir, self.credential_dir, expiry_minutes=77)
+        self.assertEqual(0, self.slotctl(*args, "stage", SLOT_RUN, payload=self.STAGE, config=config)[0])
         self.system.watchdog_arm_fails = True
-        self.assertEqual((1, b"", "watchdog-arm-failed\n"), self.slotctl(*args, "start", SLOT_RUN))
+        self.assertEqual((1, b"", "watchdog-arm-failed\n"), self.slotctl(*args, "start", SLOT_RUN, config=config))
         self.assertEqual([], self.system.mutations("start"))
         self.system.watchdog_arm_fails = False
-        self.assertEqual(0, self.slotctl(*args, "start", SLOT_RUN)[0])
+        self.assertEqual(0, self.slotctl(*args, "start", SLOT_RUN, config=config)[0])
         start = self.system.mutations("start")[0]
         arm = self.system.calls[self.system.calls.index(start) - 1]
         self.assertEqual(SYSTEMD_RUN, arm[0])
         self.assertIn(f"--unit={WATCHDOG}", arm)
-        self.assertIn("--on-active=75min", arm)
+        self.assertIn("--on-active=77min", arm)
         self.assertIn("--property=Restart=on-failure", arm)
         self.assertEqual((sys.executable, "-I", "-B", str(SLOTCTL), *args, "expire", SLOT_RUN), arm[-8:])
 

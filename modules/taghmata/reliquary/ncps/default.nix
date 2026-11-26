@@ -28,8 +28,17 @@
   uploadAuth = "ncps-upload-auth";
   uploadUser = "forgejo-runner";
 in {
-  flake.nixosModules.reliquary-ncps = {pkgs, ...}: {
-    clan.core.vars.generators.${fileName} = {
+  flake.nixosModules.reliquary-ncps = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
+    enabled = config.services.imperium.ciCredentials.enable;
+  in {
+    # Importing CI credential options on a slot-only or non-CI host must
+    # not declare or deploy any ncps vars there.
+    clan.core.vars.generators.${fileName} = lib.mkIf enabled {
       share = true;
 
       files.${fileName}.secret = false;
@@ -77,7 +86,7 @@ in {
     #                         bcrypt htpasswd line, read by Traefik's basicAuth
     #                         middleware in the ncps app. Traefik reads the
     #                         `users` key.
-    clan.core.vars.generators.${uploadAuth} = {
+    clan.core.vars.generators.${uploadAuth} = lib.mkIf enabled {
       share = true;
 
       files.netrc.secret = true;

@@ -12,10 +12,13 @@
 # must not use such paths for writes.
 {ryza}: let
   inherit (ryza.pkgs) lib;
-  inventory = ryza.config.services.imperium.forgejoEphemeral.inventory;
+  local = ryza.extendModules {
+    modules = [{services.imperium.forgejoEphemeral.remoteDispatcher.enable = lib.mkForce false;}];
+  };
+  inventory = local.config.services.imperium.forgejoEphemeral.inventory;
   host = inventory.ryza;
   withPools = pools:
-    ryza.extendModules {
+    local.extendModules {
       modules =
         [
           {
@@ -96,7 +99,7 @@
   patGenerators = machine: builtins.filter (lib.hasPrefix "forgejo-ephemeral-") (builtins.attrNames machine.clan.core.vars.generators);
   dispatcherCredentials = machine: machine.systemd.services.${dispatchTemplate}.serviceConfig.LoadCredential;
   multiPools = poolsFor multiPool;
-  persistent = ryza.extendModules {
+  persistent = local.extendModules {
     modules = [{services.imperium.forgejoEphemeral.enable = lib.mkForce false;}];
   };
   split = enabled.extendModules {
@@ -131,7 +134,7 @@
   trustedSlotctlSlots = trustedConfig.services.imperium.forgejoEphemeral.internal.slotctlSlots;
   configuredSlots = builtins.attrNames c.services.imperium.forgejoEphemeral.inventory.ryza.slots;
   services = c.systemd.services;
-  inherit (c.services.imperium.forgejoEphemeral.internal) slots slotctlSlots remotePropertyNames;
+  inherit (c.services.imperium.forgejoEphemeral.internal) slots slotctlSlots remotePropertyNames untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
   # These service properties are accepted by systemd-run on the slot host.
   # Static-unit-only settings such as JobTimeoutSec must not reach this list.
   transientAllowlist = [
@@ -288,6 +291,9 @@
     assert !(lib.hasInfix "--trusted-jobs" dispatcher.serviceConfig.ExecStart);
     assert lib.hasSuffix " --trusted-jobs" trustedConfig.systemd.services.${dispatchName}.serviceConfig.ExecStart;
     assert deadline.runner * 60 + internal.pickupSeconds + 5 * 60 <= deadline.guest * 60;
+    assert lib.hasInfix " --untrusted-limit ${toString untrustedLimitSeconds} " dispatcher.serviceConfig.ExecStart;
+    assert untrustedLimitSeconds == 65 * 60 && pickupSeconds == 5 * 60 && expiryBootMarginMinutes == 5;
+    assert slotctl.expiry_minutes * 60 == untrustedLimitSeconds + pickupSeconds + expiryBootMarginMinutes * 60;
     assert deadline.guest < deadline.host;
     assert lib.hasInfix "--wait-timeout ${toString internal.pickupSeconds}s" guestRunner.script;
     assert deadline == builtins.removeAttrs expected ["overlayGiB"];
@@ -372,7 +378,7 @@ in
   assert persistent.config.microvm.host.enable;
   assert patGenerators persistent.config == [];
   assert poolsFor c == {ugalabugala = pilot // {maxSlots = 2;};};
-  assert !ryza.config.services.imperium.forgejoEphemeral.trustedJobs.enable;
+  assert !local.config.services.imperium.forgejoEphemeral.trustedJobs.enable;
   assert patGenerators c == ["forgejo-ephemeral-ugalabugala"];
   assert prompt c "ugalabugala" == "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user only)";
   assert lib.all (check: check.assertion) multiPool.assertions;
