@@ -18,6 +18,7 @@
   hermesRepos = [
     "auspex"
     "inanna"
+    "mushroom-farmer"
     "tally"
   ];
   forkCredential = "tofunix-hermes-noosphere-forks";

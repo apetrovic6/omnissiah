@@ -34,6 +34,14 @@ let
       owner = "monolith-softworks";
       room = "!7QOQWeDhddbtgBqxsYPhfNj2rsUePiB2iTeWEiYe010";
     };
+    auspex = {
+      forge = "noosphere";
+      room = "!zq6JSOK1G2Ed96ayYGRGIO5T9c83IgwPQitzkkaI6dk";
+    };
+    mushroom-farmer = {
+      forge = "noosphere";
+      room = "!NjnL0nBC6h_twl-qhOsjeDllIKpgn0WRDGs5tzVZB_E";
+    };
     rust-app-template = {
       forge = "cerberus";
       room = "!qfeHKyEuU37YpF4mms2eyiISUIbyx8ajidvKeQn3b-c";
