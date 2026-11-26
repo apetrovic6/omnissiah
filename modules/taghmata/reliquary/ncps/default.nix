@@ -28,17 +28,9 @@
   uploadAuth = "ncps-upload-auth";
   uploadUser = "forgejo-runner";
 in {
-  flake.nixosModules.reliquary-ncps = {
-    config,
-    lib,
-    pkgs,
-    ...
-  }: let
-    enabled = config.services.imperium.ciCredentials.enable;
-  in {
-    # Importing CI credential options on a slot-only or non-CI host must
-    # not declare or deploy any ncps vars there.
-    clan.core.vars.generators.${fileName} = lib.mkIf enabled {
+  flake.nixosModules.reliquary-ncps = {pkgs, ...}: {
+    key = "omnissiah#nixosModules.reliquary-ncps";
+    clan.core.vars.generators.${fileName} = {
       share = true;
 
       files.${fileName}.secret = false;
@@ -75,7 +67,14 @@ in {
         EOF
       '';
     };
+  };
 
+  flake.nixosModules.reliquary-ncps-upload = {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: {
     # Basic auth on ncps' /upload, so only the Forgejo runners can reach the
     # upload endpoint at all. ncps also rejects an upload not signed by the CI
     # key; this closes the endpoint itself (uploads of junk, load on it).
@@ -86,7 +85,7 @@ in {
     #                         bcrypt htpasswd line, read by Traefik's basicAuth
     #                         middleware in the ncps app. Traefik reads the
     #                         `users` key.
-    clan.core.vars.generators.${uploadAuth} = lib.mkIf enabled {
+    clan.core.vars.generators.${uploadAuth} = lib.mkIf config.services.imperium.ciCredentials.enable {
       share = true;
 
       files.netrc.secret = true;

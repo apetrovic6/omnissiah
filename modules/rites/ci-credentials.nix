@@ -13,7 +13,7 @@
 # too.
 #
 # Basic auth on /upload: the `ncps-upload-auth` generator lives with the
-# Traefik side in taghmata/reliquary/ncps (nixosModules.reliquary-ncps), which
+# Traefik side in taghmata/reliquary/ncps (nixosModules.reliquary-ncps-upload), which
 # this module imports. Only the push hooks get the netrc, not nix as a whole.
 {self, ...}: let
   generator = "nix-ci-signing-key";
@@ -26,7 +26,7 @@ in {
     # once; without one, its options would be declared twice.
     key = "omnissiah#nixosModules.ci-credentials";
     imports = [
-      self.nixosModules.reliquary-ncps
+      self.nixosModules.reliquary-ncps-upload
       ({
         config,
         lib,

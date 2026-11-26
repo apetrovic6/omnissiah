@@ -165,10 +165,10 @@
 #       as today, and the share, which holds keys only while a trusted job is
 #       running. It cannot open trustDir directly.
 #     - virtiofsd runs as root on the slot host inside its own sandbox. An
-#       escape is host root. With the dispatcher remote, the slot host has
-#       no PAT or upload credential sources at rest, only the delivered
-#       files during trusted runs. The second virtiofsd is otherwise the
-#       same kind as the store's.
+#       escape is host root. Remote dispatch takes the PAT and the dispatcher's
+#       upload credential sources off the slot host. Legacy persistent guests
+#       on that host can still have their own CI credentials until retired.
+#       The second virtiofsd is otherwise the same kind as the store's.
 #
 # NOT HERE (HOM-32): sccache on nix-eph (Garage is unreachable from the slot's
 # source address; a read-only key on the shared bucket would expose every

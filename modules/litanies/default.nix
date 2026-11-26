@@ -4,13 +4,15 @@
   ...
 }: let
   cartographa = import ../cartographa/_cartographa.nix;
+  ci = import ../rites/_ci-slots.nix;
 in {
   flake.lib = {
     # The network chart and the vars store, see modules/cartographa.
     inherit (cartographa) lan hosts vips vars lab;
 
-    # The nix-eph slot inventory, see modules/rites/_ci-slots.nix.
-    ciSlots = import ../rites/_ci-slots.nix;
+    # The nix-eph fleet settings and slot inventory.
+    ciDispatcher = ci.dispatcher;
+    ciSlots = ci.hosts;
 
     # Generators for sops-encrypted cluster and OpenTofu secrets, see
     # ./_sops-generators.nix.

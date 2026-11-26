@@ -13,7 +13,11 @@
 {ryza}: let
   inherit (ryza.pkgs) lib;
   local = ryza.extendModules {
-    modules = [{services.imperium.forgejoEphemeral.remoteDispatcher.enable = lib.mkForce false;}];
+    specialArgs.ciDispatcher = {
+      remote = false;
+      host = "";
+      trustedJobs = false;
+    };
   };
   inventory = local.config.services.imperium.forgejoEphemeral.inventory;
   host = inventory.ryza;

@@ -26,11 +26,18 @@
 #                     The overlay also holds Nix's build dir.
 #     var             GiB for /var (workspace, TMPDIR, CARGO_HOME).
 {
-  ryza = {
+  dispatcher = {
+    # Prepare new PATs and a slotctl key before deploying this as true.
+    remote = false;
+    host = "cerberus";
+    # Separate operator opt-in; applies to the dispatcher and its slots.
+    trustedJobs = false;
+  };
+  hosts.ryza = {
     uplink = "ens18";
     egress.untrusted = "ryza-eph";
-    # Stopped persistent guests and the pre-HOM-29 single CI guest.
-    legacyVMs = ["ryza-ci" "ryza-ci-noosphere" "ryza-ci-ugalabugala"];
+    # The pre-HOM-29 single guest; its images may still be on disk.
+    legacyVMs = ["ryza-ci"];
     slots.ryza-eph-1 = {
       index = 1;
       vcpu = 2;

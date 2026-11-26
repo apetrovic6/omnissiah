@@ -12,6 +12,8 @@
     self.nixosModules.nfs
     self.nixosModules.blocky
     self.nixosModules.reliquary-blocky-grafana
+    # Keep the cache serving-key generator even after CI leaves this host.
+    self.nixosModules.reliquary-ncps
     self.nixosModules.scriptorium
     self.nixosModules.librarium
     ./network.nix

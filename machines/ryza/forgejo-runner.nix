@@ -2,26 +2,18 @@
 # or with the agent's logins on this host.
 #
 # On trial under its own label: a workflow opts in with `runs-on: nix-vm`.
-# Once it has proven itself, it takes the shared `nix` label and cerberus's
-# runner goes.
+# It stays on that label until the ephemeral label takeover (HOM-32 PR 12).
 #
 # Registering (after the first deploy's `clan vars generate ryza`):
 #   nix run .#forgejo-runner-register -- ryza
-{
-  config,
-  self,
-  ...
-}: let
-  slotOnly = config.services.imperium.forgejoEphemeral.remoteDispatcher.enable;
-in {
+{self, ...}: {
   imports = [
     self.nixosModules.forgejo-runner-microvm
     self.nixosModules.sccache
   ];
 
   services.imperium.forgejoRunner = {
-    # These guests load the same CI upload credentials we are moving off Ryza.
-    enable = !slotOnly;
+    enable = true;
     isolation = "microvm";
     labels = ["nix-vm:host"];
     # Combined guest budget. Ryza has 24 GiB; the rest is for the agent and
@@ -33,5 +25,5 @@ in {
     microvm.uplink = "ens18";
   };
 
-  services.imperium.sccache.enable = !slotOnly;
+  services.imperium.sccache.enable = true;
 }
