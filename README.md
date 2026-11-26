@@ -1429,7 +1429,13 @@ prompts; its persistent runners and Caddy configuration are unchanged.
 With `remote = true`, the selected `host` (default `cerberus`) takes both
 PATs and the slotctl private key. No persistent Forgejo runner runs on
 the selected host. The flip disables both Cerberus `nix` runners and
-their sccache setup: `nix` capacity remains on Terra, Luna and Sol. Ryza
+their sccache setup: `nix` capacity remains on Terra, Luna and Sol. That
+includes all of `machines.yml` (`update`, `manifests` and the per-machine
+build matrix, up to 300 min each), which then runs only within those
+nodes' runner slices (2 CPU / 4 GiB, Luna 3 GiB) instead of sometimes on
+Cerberus (3 CPU / 8 GiB): large closures can run out of memory there. Run
+one `workflow_dispatch` of `machines.yml` before the flip if in doubt;
+PR 11 moves it to its own label. Ryza
 keeps both `nix-vm` guests, their runner tokens, CI key, ncps netrc and
 sccache key until PR 12. PR 14 removes the remaining persistent runner
 code and registrations. Keep fork approvals manual until persistent
@@ -1449,8 +1455,12 @@ Trust stays off; see the separate opt-in below.
    registrations gone from both forges. Drained Ryza state need not move:
    trust was off, so there are no trust pins. Its retired-handle history
    will not transfer; cancel stale queued attempts you do not want retried.
-   Drain both Cerberus `nix` runners too, and prevent new assignments to
-   them before deployment. Do not stop Ryza's `nix-vm` guests.
+   Drain both Cerberus `nix` runners too: once neither is running a job
+   (the deploy removes them and would cancel one, e.g. a 5-hour
+   `machines.yml` build), run `systemctl stop forgejo-runner-ugalabugala
+   forgejo-runner-noosphere` on Cerberus so queued `nix` jobs go to Terra,
+   Luna and Sol. Their forge rows stay registered (offline) until PR 14.
+   Do not stop Ryza's `nix-vm` guests.
 2. In the operator's working tree, set `dispatcher.remote = true` to
    expose the new generators. Do **not** deploy or publish that flip
    until the vars exist. Create **new** dedicated PATs as `manjo`; do not
@@ -1522,7 +1532,9 @@ capacity; Ryza's `nix-vm` scheduling never changed.
 **Move the dispatcher role again.** Change only `dispatcher.host` in
 `modules/rites/_ci-slots.nix` to a base-tagged NixOS host with a chart
 address. Drain its persistent runners if present; they stop when it
-becomes the dispatcher. Generate its fresh PATs and its own
+becomes the dispatcher. Cerberus's own runners stay off for good once
+`remote = true`, even when the dispatcher moves elsewhere, so moving the
+role to Terra leaves `nix` on Luna and Sol only until PR 13. Generate its fresh PATs and its own
 `forgejo-slotctl-ssh` key (do not copy the old private key). If trust is
 already enabled, ensure the shared CI credentials can deploy there.
 Pause and drain, stop the old dispatcher, and carry over each drained
