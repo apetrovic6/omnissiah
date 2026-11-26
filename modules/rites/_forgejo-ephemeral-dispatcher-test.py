@@ -62,6 +62,10 @@ SIGNING_SECRET = "c3ludGhldGljLXNpZ25pbmcta2V5LW5vdC1hLXNlY3JldC1ub3QtYS1zZWNyZX
 SIGNING_KEY = f"ci.noosphere.uk-1:{SIGNING_SECRET}".encode()
 NETRC_PASSWORD = "0123456789abcdef-synthetic-netrc-password-not-a-secret"
 NETRC = f"machine ncps.noosphere.uk\nlogin forgejo-runner\npassword {NETRC_PASSWORD}\n".encode()
+SCCACHE_SECRET = "0123456789abcdef" * 4
+SCCACHE_CREDENTIALS = (
+    f"[default]\naws_access_key_id = GK{'ab' * 12}\naws_secret_access_key = {SCCACHE_SECRET}\n"
+).encode()
 PILOT_URL = "https://forge.ugalabugala.org"
 NOOSPHERE_URL = "https://forge.noosphere.uk"
 LABEL = "nix-eph"
@@ -1870,7 +1874,7 @@ class TrustedJobTests(unittest.TestCase):
             surface = logs.getvalue() + repr(system.calls) + repr([slotctl.calls for slotctl in slotctls])
             for state_file in state_dir.glob("state.json*"):
                 surface += state_file.read_text()
-            for secret in (PAT, TOKEN, SIGNING_SECRET, NETRC_PASSWORD):
+            for secret in (PAT, TOKEN, SIGNING_SECRET, NETRC_PASSWORD, SCCACHE_SECRET):
                 self.assertNotIn(secret, surface)
 
     def restart(self):
@@ -1939,6 +1943,39 @@ class TrustedJobTests(unittest.TestCase):
         self.tick(D.POLL)
         self.assertFalse(self.trust_dir.exists())
         self.assertFalse(self.credential_dir.exists())
+
+    @unittest.skipUnless(hasattr(D, "SCCACHE_FILE"), "requires the opt-in sccache protocol")
+    def test_sccache_delivery_is_late_trusted_and_pool_opt_in(self):
+        for opted_in, fork in ((True, False), (True, True), (False, False)):
+            with self.subTest(opted_in=opted_in, fork=fork):
+                self.build(pool=D.Pool("ugalabugala", sccache=opted_in, **PILOT_POOL), egress=True)
+                (self.sources / "sccache-credentials").write_bytes(SCCACHE_CREDENTIALS)
+                self.forge.runs[-1]["is_fork_pull_request"] = fork
+                self.boot()
+                self.assertEqual({}, self.delivered())
+                self.assertEqual(GUEST_CREDENTIALS, {p.name for p in self.credential_dir.iterdir()})
+                self.pick_up()
+                expected = {} if fork else {"ncps-netrc": NETRC, "ci-signing-key": SIGNING_KEY}
+                if opted_in and not fork:
+                    expected["sccache-credentials"] = SCCACHE_CREDENTIALS
+                self.assertEqual(expected, self.delivered())
+                self.assertEqual(not fork, bool(self.system.egress_calls("start")))
+                self.system.set()
+                self.tick(D.POLL)
+                self.assertFalse(self.trust_dir.exists())
+
+    @unittest.skipUnless(hasattr(D, "SCCACHE_FILE"), "requires the opt-in sccache protocol")
+    def test_bad_trust_source_is_named_and_blocks_sccache_delivery(self):
+        for source in ("trusted-ncps-netrc", "trusted-ci-signing-key", "sccache-credentials"):
+            with self.subTest(source=source):
+                self.build(pool=D.Pool("ugalabugala", sccache=True, **PILOT_POOL), egress=True)
+                (self.sources / "sccache-credentials").write_bytes(SCCACHE_CREDENTIALS)
+                (self.sources / source).write_bytes(b"invalid credential")
+                self.boot()
+                self.pick_up()
+                self.assertEqual({}, self.delivered())
+                self.assertEqual([], self.system.egress_calls("start"))
+                self.assertIn(f"untrusted: {source} credential missing or malformed; withheld", self.logs.getvalue())
 
     def test_org_trust_allowlist_and_schedule_identity(self):
         repository = {"id": REPO, "name": "inanna", "default_branch": "master", "owner": {"id": ORG_ID, "login": ORG}}
@@ -2916,7 +2953,7 @@ class SlotctlTests(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def tearDown(self):
-        for secret in (TOKEN, SIGNING_SECRET, NETRC_PASSWORD):
+        for secret in (TOKEN, SIGNING_SECRET, NETRC_PASSWORD, SCCACHE_SECRET):
             self.assertNotIn(secret, "".join(self.stderrs) + repr(self.system.calls))
 
     def test_observe_reads_vm_then_support_then_vm_again(self):
@@ -3357,6 +3394,33 @@ class SlotctlTests(unittest.TestCase):
         self.trust_dir.symlink_to(target)
         self.assertEqual((1, b"", "trust-dir-missing\n"), self.slotctl(*deliver, payload=self.DELIVER))
         self.assertEqual([], list(target.iterdir()))
+
+    @unittest.skipUnless(hasattr(S, "SCCACHE_FILE"), "requires the opt-in sccache protocol")
+    def test_sccache_delivery_shape_egress_gate_and_cleanup(self):
+        self.assertEqual(0, self.slotctl("--slot", self.SLOT, "stage", SLOT_RUN, payload=self.STAGE, config=self.egress)[0])
+        self.system.set(active="active")
+        deliver = ("--slot", self.SLOT, "deliver", SLOT_RUN)
+        cache = "sccache-credentials"
+        temporary = self.trust_dir / f".{cache}.tmp"
+        with_key = self.DELIVER | {cache: base64.b64encode(SCCACHE_CREDENTIALS).decode()}
+        self.assertEqual(self.REFUSED, self.slotctl(*deliver, payload=with_key))
+        for malformed in (b"garbage", SCCACHE_CREDENTIALS + b"another = line\n",
+                          SCCACHE_CREDENTIALS.replace(b"GKab", b"XXXa"), SCCACHE_CREDENTIALS[:-2]):
+            payload = with_key | {cache: base64.b64encode(malformed).decode()}
+            self.assertEqual(self.REFUSED, self.slotctl(*deliver, payload=payload, config=self.egress))
+        self.assertEqual([], list(self.trust_dir.iterdir()))
+        for verb in ("withdraw", "scrub"):
+            with self.subTest(verb=verb):
+                self.assertEqual(0, self.slotctl(*deliver, payload=with_key, config=self.egress)[0])
+                delivered = self.trust_dir / cache
+                self.assertEqual(SCCACHE_CREDENTIALS, delivered.read_bytes())
+                self.assertEqual(0o400, stat.S_IMODE(delivered.stat().st_mode))
+                temporary.touch()
+                if verb == "scrub":
+                    self.system.set()
+                self.assertEqual(0, self.slotctl("--slot", self.SLOT, verb, SLOT_RUN, config=self.egress)[0])
+                self.assertFalse(delivered.exists())
+                self.assertFalse(temporary.exists())
 
     def test_egress_needs_a_trusted_host_a_running_vm_and_delivered_credentials(self):
         args = ("--slot", self.SLOT)

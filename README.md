@@ -1112,9 +1112,10 @@ Ryza ships with one slot, `ryza-eph-1`, serving three pools on `nix-eph`:
 assigned slot for one job handle. The guest gets that registration's
 single-use token, UUID and job handle, plus the selected forge URL and
 label. The job can read these files.
-There is no dispatcher PAT, persistent runner secret, sccache key, ncps netrc
-or signing key in the guest (the opt-in trust policy below adds the last
-two, root-only, for exactly resolved trusted runs). The guest shares the
+There is no dispatcher PAT or persistent runner secret in the guest.
+The opt-in trust policy below delivers the signing key and ncps netrc
+root-only, and the optional CI-only sccache key to the job user, only
+after resolving an exact trusted run. The guest shares the
 host Nix store read-only and can use ncps with public verification keys;
 writable store and `/var` images are disposable.
 Treat all host store contents as visible to the job; do not put plaintext
@@ -1701,7 +1702,8 @@ builds to ncps. Fork PRs, AGit PRs (Hermes's included), fork re-runs or
 approvals by manjo, every `pull_request*` event, lookup errors and 403s get
 nothing. The job can still run up to the untrusted 65 min limit, and
 the dispatcher logs the reason. Builds finished before delivery are not
-uploaded. sccache stays off on `nix-eph`. The full rule, the API fields it
+uploaded. sccache remains off unless the pool separately enables it (see below).
+The full rule, the API fields it
 reads and who can read what (host, guest, escaped QEMU/virtiofsd) are in
 `modules/rites/_forgejo-ephemeral-trusted.nix`.
 
@@ -2037,7 +2039,7 @@ ownership and no access to the shared workstation `sccache` bucket.
 The three CI objects render only when the shared import var exists.
 `dispatcher.sccacheCi` defaults to false, so machine updates cannot
 generate the var on merge. The declaration requires remote dispatcher
-mode; PR 10 must require it before consuming the credential.
+mode, which is also required to enable sccache for a pool.
 
 1. In `modules/rites/_ci-slots.nix`, set `dispatcher.sccacheCi = true`.
    Generate the shared var and inspect every changed var before staging:
@@ -2057,8 +2059,11 @@ mode; PR 10 must require it before consuming the credential.
    ```
 
    The next dispatcher-host deploy with this change adds the root-only
-   `/run/secrets/vars/sccache-ci-garage-key/credentials` file; no service
-   consumes it until PR 10.
+   `/run/secrets/vars/sccache-ci-garage-key/credentials` file. No dispatcher
+   loads it until a pool enables sccache. Slot hosts with trusted jobs and
+   trusted egress switch to the sccache-capable slotctl and scrub and add
+   the guest wrapper and environment, but receive no key until a pool
+   enables it and a trusted run is confirmed.
 
 2. Build the render in the Nix store and copy only the three new manifests.
    The pending Garage operator v0.9.0 → v0.9.1 drift is a separate change.
@@ -2154,6 +2159,78 @@ kubectl --context default -n garage-operator delete garagebucket sccache-ci
 ```
 
 The workstation bucket is not part of the rollback.
+
+#### sccache for trusted nix-eph jobs (HOM-32 PR 10, opt-in)
+
+`services.imperium.forgejoEphemeral.pools.<pool>.sccache.enable` defaults
+to `false`. Only after pickup and the HOM-31 trust recheck does the
+dispatcher deliver the optional `sccache-credentials` file. The guest
+publishes it as `/run/ci-sccache/credentials` (`root:forgejo-one-job`,
+`0440`). **It is readable by trusted job code** and grants read and write
+access to the whole CI-only bucket. Enabling sccache on several pools
+lets each pool's trusted code run code in the others' trusted jobs
+through the shared cache. Enabled pools must have the same `trust.users`
+set, and all allowlisted repos must belong to one trust domain. Matching
+logins across forges must be controlled by the same trusted people; Nix
+cannot check that. Use separate buckets and keys for independent trust
+domains. The upload credentials remain root-only.
+
+All jobs boot without the cache credential. The `sccache` wrapper runs
+the compiler directly until the file appears (and does not start a
+server for `sccache` subcommands). Withdraw removes the guest copy; the
+VM stop scrubs the host share, and the guest's `/run` is disposable.
+Withdrawal cannot revoke a key a trusted job has already read.
+
+The runner uses `CARGO_HOME=/var/lib/forgejo-one-job/cargo` in every slot.
+sccache sends path-style S3 requests to
+`https://s3.main.garage.noosphere.uk/sccache-ci/…` in region `main`.
+The guest pins the exact endpoint hostname to the PR 8 guard. Path-style
+keeps Host/SNI on the guard's exact S3 site (not a bucket subdomain).
+Only HTTPS to that guard via the trusted source (Ryza: `.240`) reaches
+Garage; `.249` still gets Caddy's 403. Copying the file does not open
+egress; slotctl opens it separately after delivery.
+
+1. Follow **Trusted slot egress** for every slot host serving the pool;
+   deploy the guard before those hosts. Complete **CI-only sccache
+   bucket** provisioning with remote dispatch and
+   `dispatcher.sccacheCi = true`. Verify the imported key's bucket
+   permissions before enabling jobs. Set `dispatcher.trustedJobs = true`
+   and follow **Trusted nix-eph jobs** for the selected pool's allowlist,
+   branch policy, PAT scopes and upload credentials.
+2. Set `sccache.enable = true;` only in that pool's definition on the
+   configured dispatcher (the built-in pools are in
+   `modules/rites/forgejo-runner-ephemeral.nix`). Pause and drain before
+   deploying. Install the prepared slot host generations first, then
+   deploy the dispatcher with the pool enabled and the decrypted cache
+   var present there. Nothing decrypts that var on the slot hosts.
+3. Unpause. Run the same trusted Rust build twice in fresh slots with
+   the same source, toolchain and options. Before building, wait for
+   `test -r /run/ci-sccache/credentials` to pass and the PR 8 S3 probe
+   to return Garage's XML rather than Caddy's 403. In the dispatcher's
+   slot journal, look for `delivered CI upload credentials and sccache credentials`.
+   For rust-app-template, read `round trip compile cache: N hits, M misses`
+   from `_round-trip-cache-report` and check for hits on the second run.
+   Its private cache server stops at the end of the recipe, so a later
+   `sccache --show-stats` shows a different server. Do not print the
+   credentials. In an untrusted run on the same pool, verify
+   `! test -e /run/ci-sccache/credentials`; the PR 8 probe must still
+   get Caddy's 403.
+
+To roll back, pause and drain, turn off `sccache.enable` in the pool and
+deploy the dispatcher first. Before deploying a slot host with any of
+`sccacheCi`, `trustedJobs`, `egress.trusted` or `remote` turned off, run
+`sudo find /run/microvm-credentials -name '*sccache-credentials*'` on that
+host. It must print nothing. If it finds anything, keep dispatch paused
+and the slot host on its current generation. Verify the affected slots
+are stopped and let the current slotctl scrub them. If cleanup still
+fails, remove only the reported credential files (including temporary
+files) on the stopped slots, resolve any scrub error, then repeat the
+check before deploying. A pool with sccache off can still use the
+existing trusted ncps upload path.
+
+PR 12 makes the sccache cleanup names unconditional in slotctl and the
+host stop scrub, and folds the opt-in protocol into the base Python
+sources so the patch can be dropped.
 
 ### Hermes on Cerberus Forgejo
 

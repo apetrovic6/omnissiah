@@ -100,10 +100,10 @@
 #   timeout or mismatch fails closed. Transient lookup and delivery errors
 #   retry for up to 10 minutes after pickup. Untrusted jobs get no upload
 #   credentials and are stopped at 65 minutes after observed pickup.
-#   The two credential sources are mandatory LoadCredential entries: if either
-#   var is missing, systemd refuses to start the dispatcher, which stops
-#   untrusted dispatch too. This module declares both (ci-credentials.nix), so
-#   a missing one means it was never generated or deployed.
+#   Both upload sources are mandatory LoadCredential entries on the
+#   dispatcher, as is the sccache source if any pool enables it. If any
+#   source was not generated or deployed, systemd refuses to start the
+#   dispatcher, which stops untrusted dispatch too.
 #
 # PRECONDITION: trust.users filters who TRIGGERS a run, never who WROTE the
 #   code it runs. Any default-branch push, by anyone, re-creates the repo's
@@ -145,14 +145,22 @@
 #   Guest: mounted read-only (virtiofsd --readonly, cache=never, no ACLs/xattrs,
 #     ro,nosuid,nodev,noexec) at /run/ci-trust. The guest sees the host's
 #     modes and uids, and the kernel enforces them on virtiofs: Linux v6.18
-#     fs/fuse/virtio_fs.c:1531 sets default_permissions. So only guest root
-#     can read it. In practice that is the nix-daemon's post-build hook, the
-#     only consumer.
+#     fs/fuse/virtio_fs.c:1531 sets default_permissions, so only guest root
+#     can read the share. The nix-daemon's post-build hook uses the upload
+#     files; a separate root service publishes only the sccache credential.
 #   The job's steps run as forgejo-one-job: unprivileged, NoNewPrivileges, not
 #     in nix trusted-users (asserted), so it cannot override post-build-hook,
-#     netrc-file or secret-key-files either. It cannot read the files. A trusted
-#     job can still have anything it builds signed and pushed. That is the
-#     point of "trusted": it grants CI write authority to the allowed code.
+#     netrc-file or secret-key-files either. It cannot read the upload files.
+#     A trusted job can still have anything it builds signed and pushed.
+#     That is the point of "trusted": it grants CI write authority to the allowed code.
+#   The CI-only Garage RW key is readable by trusted job code when its pool
+#   enables sccache: the guest copies it to /run/ci-sccache/credentials
+#   (root:forgejo-one-job, 0440). It is not the workstation bucket key. The
+#   slot boots without it, and Garage is reachable only via trusted egress.
+#   Enabling sccache on several pools lets each pool's trusted code run code
+#   in the others' trusted jobs via shared cache objects. The pools must
+#   have the same trust.users and belong to one trust domain; matching
+#   logins across forges must represent the same trusted people.
 #   Untrusted jobs: the share stays empty for the whole boot. Not even guest
 #     root has anything to read.
 #   Removal: the slot's ExecStopPost trust scrub (ordered first, always
@@ -170,11 +178,7 @@
 #       on that host can still have their own CI credentials until retired.
 #       The second virtiofsd is otherwise the same kind as the store's.
 #
-# NOT HERE (HOM-32): sccache on nix-eph. Garage is reachable only from a slot
-# host's trusted egress source, which a run gets after delivery (`egress
-# trusted`, forgejo-runner-ephemeral.nix); a read-only key on the shared
-# bucket would expose every object, so it waits for a CI-only bucket. The two
-# credentials come from ci-credentials.nix, which this module enables only on
+# The upload credentials come from ci-credentials.nix, enabled only on
 # the dispatcher.
 {
   cfg,
@@ -182,6 +186,7 @@
   dispatch,
   dispatching,
   cacheHost,
+  sccacheSlot,
 }: {
   config,
   lib,
@@ -190,7 +195,9 @@
 }: let
   ccfg = config.services.imperium.ciCredentials;
   guestTrustDir = "/run/ci-trust";
-  names = ["ci-signing-key" "ncps-netrc" ".ci-signing-key.tmp" ".ncps-netrc.tmp"];
+  names =
+    ["ci-signing-key" "ncps-netrc" ".ci-signing-key.tmp" ".ncps-netrc.tmp"]
+    ++ lib.optionals sccacheSlot ["sccache-credentials" ".sccache-credentials.tmp"];
   mkTrustedSlot = slot: {
     vm,
     controlDir,
