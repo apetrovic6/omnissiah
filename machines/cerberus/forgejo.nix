@@ -16,6 +16,9 @@ in {
   # Keep external targets and allow delivery to the Hermes webhook on ryza:8644.
   services.forgejo.settings.webhook.ALLOWED_HOST_LIST = "external,${self.lib.hosts.ryza}";
 
+  # Keep the Forgejo ceiling above the Machines workflow's five-hour build timeout.
+  services.forgejo.settings.actions.ENDLESS_TASK_TIMEOUT = "6h";
+
   services.imperium.forgejo = {
     enable = true;
     package = pkgs.forgejo;

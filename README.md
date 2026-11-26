@@ -1071,9 +1071,10 @@ egress policy still blocks direct access to the Traefik VIP.
 
 ### Forgejo Actions runners
 
-Cerberus, Terra, Luna and Sol run `forgejo-runner-noosphere.service` and
-`forgejo-runner-ugalabugala.service` on the host. On Ryza, the corresponding
-units run in separate `ryza-ci-noosphere` and `ryza-ci-ugalabugala` guests.
+Terra, Luna and Sol run `forgejo-runner-noosphere.service` and
+`forgejo-runner-ugalabugala.service` on the host. Cerberus's host runners
+stay off. On Ryza, the corresponding units run in separate
+`ryza-ci-noosphere` and `ryza-ci-ugalabugala` guests.
 Each unit has one forge token and capacity for one job. On hosts, the
 two runners and their shared `nix-daemon` run under the existing machine
 cap, with one Nix build slot per runner. The Ryza guests each have 3 vCPUs,
@@ -1102,6 +1103,39 @@ replacement pair.
 
 Inspect either Ryza guest's console with
 `journalctl -u microvm@ryza-ci-<forge>.service` on Ryza.
+
+#### Machines workflow (`nix-machines`)
+
+On `forge.ugalabugala.org`, the Machines workflow uses `nix-machines` for
+all three jobs. Terra, Luna and Sol advertise `nix-machines:host` alongside
+`nix:host` on both forges. The runner and Forgejo ceilings are six hours;
+the workflow's build limit is five. `forge.noosphere.uk` runs in the
+taghmata cluster and already has the six-hour ceiling.
+
+**Rollout (operator only):**
+
+1. Deploy Luna, Sol and Terra one at a time (`clan machines update <node>`),
+   with both runner units idle on the node being deployed. The runner
+   units change; the RKE2 units and kubelet reservation do not.
+2. Deploy Cerberus (`clan machines update cerberus`) for the Forgejo setting.
+   Leave its host runners disabled.
+3. In Actions → Runners on both forges, check that each of the three existing
+   runner rows is online and lists `nix` and `nix-machines`. On startup,
+   forgejo-runner 13.2.1 declares the configured label names, and Forgejo 15
+   writes them to the existing runner row. No re-registration is needed:
+   `forgejo-runner-register` uses `--keep-labels`, so rerunning it does not
+   change the row's labels. If a label is missing, check the affected runner
+   unit's journal for a successful declaration with both labels. Fix any
+   config or connection error and restart that unit while idle; recheck the
+   row before dispatching.
+4. On `forge.ugalabugala.org`, open `manjo/omnissiah` → Actions → Machines
+   and dispatch on `master` with `machines: cerberus` and `update: no`.
+   Check that the build ran on Terra, Luna or Sol and **Confirm the
+   closure is in ncps** logged HTTP 200 for the toplevel's `.narinfo`.
+   `update: no` skips the input update, not the manifests job.
+
+Keep `NCPS_NETRC` and `NCPS_SIGNING_KEY` unset in Actions secrets. The
+runner's Nix daemon signs and uploads builds via its post-build hook.
 
 #### Ryza one-job pilot (`nix-eph`)
 
