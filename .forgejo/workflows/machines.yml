@@ -286,8 +286,9 @@ jobs:
       - name: Confirm the closure is in ncps
         env:
           # Keep NCPS_NETRC and NCPS_SIGNING_KEY unset as Actions secrets:
-          # if set, every manjo-push workflow could read them. Uploads use
-          # the runner's nix-daemon post-build-hook, not the workflow fallback.
+          # every non-fork run in this repo can read them (and every non-fork
+          # run in every manjo repo if set at user level). Uploads use the
+          # runner's nix-daemon post-build-hook, not the workflow fallback.
           NCPS_NETRC: ${{ secrets.NCPS_NETRC }}
           NCPS_SIGNING_KEY: ${{ secrets.NCPS_SIGNING_KEY }}
         run: |

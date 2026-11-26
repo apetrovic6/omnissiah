@@ -59,10 +59,10 @@ with `_` are skipped and must be imported explicitly.
 ### The taghmata cluster roles
 
 `stc/taghmata.nix` is one clan service with two roles, assigned by the machine
-tags of the same name in `inventory/machines.nix`. Every node also carries the
-`taghmata` tag, so `clan machines update --tags taghmata` rolls the cluster and
-`--tags fabricator` only the control plane. A machine may hold either role or
-both:
+tags of the same name in `inventory/machines.nix`. The `taghmata` tag
+selects every node; `fabricator` selects the control plane. Neither is a
+safe deployment batch: deploy Kubernetes nodes one at a time and wait for
+recovery before the next. A machine may hold either role or both:
 
 | Roles held | What the machine runs |
 |---|---|
@@ -1114,28 +1114,110 @@ taghmata cluster and already has the six-hour ceiling.
 
 **Rollout (operator only):**
 
-1. Deploy Luna, Sol and Terra one at a time (`clan machines update <node>`),
-   with both runner units idle on the node being deployed. The runner
-   units change; the RKE2 units and kubelet reservation do not.
-2. Deploy Cerberus (`clan machines update cerberus`) for the Forgejo setting.
-   Leave its host runners disabled.
-3. In Actions → Runners on both forges, check that each of the three existing
+Deploy Luna, Sol and Terra from the PR branch **before merging** so the
+new label is ready when the workflow switches. If already merged, deploy
+from `master`. Either way, finish the node deploys before the next Machines
+cron (for this rollout, 2026-11-28 at 04:00 UTC). Without a matching runner,
+jobs wait; Forgejo's `cancel_abandoned_jobs` cancels jobs waiting over 24 hours.
+
+1. On `forge.ugalabugala.org`, check `manjo/omnissiah` → Settings → Actions
+   → Secrets and `manjo`'s user Settings → Actions → Secrets. Delete
+   `NCPS_NETRC` and `NCPS_SIGNING_KEY` from both scopes if present, and leave
+   them unset. PR 15 rotates both credentials to cover any past exposure.
+2. Deploy Luna, Sol and Terra in that order, following the
+   [one-node-at-a-time rule](#the-taghmata-cluster-roles). On those nodes,
+   this PR changes only the runner units, but the live generation can
+   differ. From the checkout of the revision to deploy, run this in Bash
+   for each node (change `node` for the next one):
+
+   ```bash
+   node=luna
+   flake="git+file://$PWD?rev=$(git rev-parse HEAD)"
+   toplevel=$(nix build --no-link --print-out-paths \
+     "$flake#nixosConfigurations.$node.config.system.build.toplevel")
+   target="root@$(nix eval --raw "$flake#lib.hosts.$node")"
+
+   links='
+   set -eu
+   for path in etc/systemd/system/rke2-server.service etc/systemd/system/rke2-agent.service kernel; do
+     printf "%s: " "$path"
+     if [ "$path" = kernel ] || [ -L "$1/$path" ]; then
+       readlink "$1/$path"
+     else
+       echo "(absent)"
+     fi
+   done'
+   candidate=$(sh -s -- "$toplevel" <<<"$links") &&
+     live=$(ssh "$target" sh -s -- /run/current-system <<<"$links") &&
+     diff -u --label live --label candidate \
+       <(printf '%s\n' "$live") <(printf '%s\n' "$candidate")
+   ```
+
+   No diff means the RKE2 unit targets and kernel match. If a target
+   differs, treat the switch as an RKE2 restart. Do not switch if the
+   comparison failed to read either generation.
+
+   When both runner units are idle, stop them before switching so they
+   cannot pick up another job:
+
+   ```sh
+   ssh "$target" systemctl stop forgejo-runner-ugalabugala forgejo-runner-noosphere &&
+     clan machines update --flake "$flake" "$node"
+   ```
+
+   After the switch, check each unit separately and start it if needed:
+
+   ```sh
+   ssh "$target" '
+     set -e
+     for unit in forgejo-runner-ugalabugala forgejo-runner-noosphere; do
+       systemctl is-active --quiet "$unit" || systemctl start "$unit"
+       systemctl is-active "$unit"
+       invocation=$(systemctl show --property=InvocationID --value "$unit")
+       journalctl --no-pager "_SYSTEMD_INVOCATION_ID=$invocation" |
+         grep -F "with labels: [nix nix-machines], ephemeral: false, declared successfully"
+     done'
+   ```
+
+   Before moving to the next node, wait for `Ready` and healthy etcd on
+   every endpoint. If rebooting for a kernel change, run these after the
+   reboot. Stop the rollout if either check fails.
+
+   ```sh
+   kubectl --context default wait --for=condition=Ready "node/$node" --timeout=10m &&
+     kubectl --context default -n kube-system exec "etcd-$node" -c etcd -- \
+       etcdctl --endpoints=https://127.0.0.1:2379 \
+       --cacert=/var/lib/rancher/rke2/server/tls/etcd/server-ca.crt \
+       --cert=/var/lib/rancher/rke2/server/tls/etcd/server-client.crt \
+       --key=/var/lib/rancher/rke2/server/tls/etcd/server-client.key \
+       endpoint health --cluster
+   ```
+3. Deploy Cerberus (`clan machines update --flake "$flake" cerberus`) for the
+   Forgejo setting. Leave its host runners disabled. This restarts
+   `forgejo.service`; deploy when no Machines build is near its end.
+   On Cerberus, check the live config:
+
+   ```sh
+   grep -A3 '^\[actions\]' /mnt/nas/git/custom/conf/app.ini
+   ```
+
+   Expect `ENDLESS_TASK_TIMEOUT = 6h` (spacing around `=` may vary).
+4. In Actions → Runners on both forges, check that each of the three existing
    runner rows is online and lists `nix` and `nix-machines`. On startup,
    forgejo-runner 13.2.1 declares the configured label names, and Forgejo 15
    writes them to the existing runner row. No re-registration is needed:
    `forgejo-runner-register` uses `--keep-labels`, so rerunning it does not
-   change the row's labels. If a label is missing, check the affected runner
-   unit's journal for a successful declaration with both labels. Fix any
-   config or connection error and restart that unit while idle; recheck the
-   row before dispatching.
-4. On `forge.ugalabugala.org`, open `manjo/omnissiah` → Actions → Machines
+   change the row's labels. If a label is missing, fix the affected unit's
+   config or connection error, restart it while idle, and recheck the row.
+   If deploying from the PR branch, merge the PR after this check passes.
+5. On `forge.ugalabugala.org`, open `manjo/omnissiah` → Actions → Machines
    and dispatch on `master` with `machines: cerberus` and `update: no`.
    Check that the build ran on Terra, Luna or Sol and **Confirm the
    closure is in ncps** logged HTTP 200 for the toplevel's `.narinfo`.
    `update: no` skips the input update, not the manifests job.
 
-Keep `NCPS_NETRC` and `NCPS_SIGNING_KEY` unset in Actions secrets. The
-runner's Nix daemon signs and uploads builds via its post-build hook.
+The runner's Nix daemon signs and uploads builds via its post-build hook.
+PR 14 removes the workflow's `nix copy` fallback.
 
 #### Ryza one-job pilot (`nix-eph`)
 
