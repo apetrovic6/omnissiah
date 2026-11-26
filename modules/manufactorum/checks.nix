@@ -640,7 +640,9 @@
           assert lib.subtractLists (load prepared) (load cc) == ["sccache-credentials:${source}"];
           assert lib.subtractLists (load cc) (load prepared) == [];
           # One dispatcher program with or without the pool opt-in (HOM-32 PR 12).
-          assert lib.all (cfg: lib.hasInfix " -I -B ${../rites/_forgejo-ephemeral-dispatcher.py} " (exec cfg)) [cc prepared];
+          assert lib.all (cfg:
+            lib.hasInfix (builtins.unsafeDiscardStringContext " -I -B ${../rites/_forgejo-ephemeral-dispatcher.py} ")
+            (builtins.unsafeDiscardStringContext (exec cfg))) [cc prepared];
           assert (config cc).pools.ugalabugala.sccache.enable;
           assert lib.all (pool: !(config cc).pools.${pool}.sccache.enable) ["noosphere-user" "noosphere-org"];
           assert vars.share && vars.files.credentials.secret && vars.files.credentials.owner == "root" && vars.files.credentials.mode == "0400";
