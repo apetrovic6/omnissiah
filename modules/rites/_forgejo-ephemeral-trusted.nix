@@ -32,14 +32,16 @@
 #   checks apply to any org the account can access.
 #   Public only rejects non-public orgs on the org routes and private repos
 #   on the repository lookup routes. Owner-scoped runner job listings filter
-#   by owner, not by repository visibility (shared/runners.go). With
-#   `read:repository`, ordinary repo GETs can read accessible public repos,
-#   not just trusted ones; the deploy-key and branch protection lists also
-#   require repo admin. A broader visibility PAT can reach non-public
-#   resources where the account has permission. `read:repository` does not
-#   grant ordinary repo writes, but does not negate account SSH-key or
-#   org-owner authority. GET /users/<login> (trust user pinning) needs only
-#   the user scope; Public only hides non-public users from it.
+#   by owner, not by repository visibility (shared/runners.go).
+#   `read:repository` covers repo lookups. The deploy-key list, branch
+#   protection list and collaborator permissions require repo admin.
+#   Org team members need `read:organization` (already covered by
+#   `write:organization`) and team access; the org owner can read every
+#   team. A broader-visibility PAT can reach non-public resources where
+#   the account has permission. `read:repository` does not grant ordinary
+#   repo writes or negate account SSH-key or org-owner authority.
+#   GET /users/<login> (trust user pinning) needs only the user scope;
+#   Public only hides non-public users from it.
 #   In particular, DELETE /repos/<owner>/<repo> uses the owner's scope
 #   (`write:user` or `write:organization`) and checks delete permission,
 #   not `write:repository`. That route does not use checkTokenPublicOnly;
@@ -69,15 +71,12 @@
 #   in trust.users qualifies, or, where trust.repos.<id>.schedules is set, a
 #   schedule triggered by forgejo-actions (-2). trust.repos needs trust.users
 #   (asserted in Nix and in the dispatcher's Pool).
-#   trust.users entries other than the PAT account are pinned to their account
-#   ID at first use (GET /users/<login>, user scope) and kept in the slot's
-#   dispatcher state next to owner_id. A slot without a pin adopts its peers'
-#   (and refuses if they disagree) before fetching. Forgejo frees a renamed
-#   or deleted login at once (USERNAME_COOLDOWN_PERIOD defaults to 0), so a
-#   new account with the same login gets "ID differs from the pinned trust
-#   user". To accept a legitimately recreated account, remove its entry from
-#   trust_ids in that pool's state file on every slot while the dispatchers
-#   are stopped.
+#   On the first idle poll with trust enabled, every configured trust user
+#   is pinned to its account ID (GET /user for the PAT account, otherwise
+#   GET /users/<login>, user scope). Pins are kept next to owner_id, shared
+#   across slots, and never replaced by reassigned logins. To replace a
+#   legitimately recreated account, remove its login from trust.users and
+#   restart every dispatcher to prune the old pin before adding it back.
 #   A dispatch accepts any ref git resolves ("pull/5/head", a PR head SHA,
 #   another branch, a tag): none of those is the default branch, so none is
 #   trusted. Pushes to other branches aren't trusted either. Residual: a tag
@@ -99,8 +98,8 @@
 #   still trusted.
 #   Any error (including 403 from missing scope, visibility or repo permission),
 #   timeout or mismatch fails closed. Transient lookup and delivery errors
-#   retry for up to 10 minutes after pickup. Untrusted jobs keep running;
-#   only the credentials are withheld. The reason is logged.
+#   retry for up to 10 minutes after pickup. Untrusted jobs get no upload
+#   credentials and are stopped at 65 minutes after observed pickup.
 #   The two credential sources are mandatory LoadCredential entries: if either
 #   var is missing, systemd refuses to start the dispatcher, which stops
 #   untrusted dispatch too. This module declares both (ci-credentials.nix), so
@@ -112,10 +111,10 @@
 #   and a trusted push or dispatch runs whatever earlier writers left on the
 #   default branch. So a repository belongs in trust.repos only if nobody
 #   outside trust.users can write its default branch:
-#     - no other collaborator, and no team, with write or admin on the repo.
-#       For an org repo that includes the Owners team and every team granted
-#       the repo (or all repos); "org member" means a member of any such team.
-#       A member of only read teams can't write and doesn't count;
+#     - the personal repo owner and every write or admin collaborator must
+#       be in trust.users. For an org repo, every member of every team with
+#       access (including the Owners team and read-only teams) must be in
+#       trust.users too;
 #     - a branch protection rule named exactly like the default branch whose
 #       push allowlist (if pushes are enabled) and merge allowlist are both on,
 #       name only trust.users and no team, with no unprotected file patterns
@@ -124,12 +123,13 @@
 #       to write access); the push allowlist has no admin bypass (CanUserPush);
 #     - no write deploy key, and not a pull mirror (a mirror sync pushes as
 #       the repo owner, services/mirror/mirror_pull.go).
-#   The dispatcher checks the last two points on every resolution (the first
-#   one is what keeps them true, since repo admins can edit the rule):
-#   GET /repos/<owner>/<repo>/branch_protections (read:repository, repo admin)
-#   must show that rule; with no exact-name rule, two of them, a team, a
-#   non-trust user or any other gap the run is untrusted, and an unreadable
-#   list follows the same 10-minute fail-closed path as the deploy keys.
+#   The dispatcher checks all of these on trust resolution. Forgejo omits
+#   stale team allowlist entries from its branch protection API, but the
+#   enforcement code still matches their IDs by membership. The dispatcher
+#   therefore checks actual access via /repos/<owner>/<repo>/collaborators
+#   (and /<login>/permission), /repos/<owner>/<repo>/teams, and
+#   /teams/<id>/members. An unreadable list follows the same 10-minute
+#   fail-closed path as branch protection and deploy keys.
 #   Glob rules are not evaluated: exact names win over globs in Forgejo.
 #   Residuals: the check sees today's writers, not who wrote the branch
 #   before; audit the default branch when adding a repo or loosening a rule.

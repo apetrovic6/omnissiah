@@ -52,7 +52,7 @@ HOST_PAUSE_FILE = Path("/run/forgejo-ephemeral/pause")
 CLAIM_ROOT = Path("/run/forgejo-ephemeral/claims")
 REQUEST_TIMEOUT = 10
 MAX_RESPONSE = 2 * 1024 * 1024
-VM_DEADLINE = 90 + 75 * 60 + 30  # Informational only; systemd enforces the actual deadlines.
+UNTRUSTED_LIMIT = 65 * 60  # From first observed pickup; persisted across dispatcher restarts.
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 CLAIM_NAME = re.compile(r"[0-9a-f]{12}")
 TOKEN = re.compile(r"[!-~]{1,4096}")
@@ -226,7 +226,7 @@ def expired(_signum, _frame):
 class Forgejo:
     def __init__(self, pool, pat_file, connect=None):
         self.pool, self.pat_file = pool, pat_file
-        self.pat = None
+        self.pat = self.deadline = None
         # Direct connections only: no environment proxy, redirects or URL-valued inputs.
         self.connect = connect or (lambda: http.client.HTTPSConnection(pool.host, timeout=REQUEST_TIMEOUT))
 
@@ -242,15 +242,30 @@ class Forgejo:
             self.pat = pat.decode("ascii")
         return "token " + self.pat
 
+    @contextmanager
+    def within(self, seconds):
+        previous = self.deadline
+        deadline = time.monotonic() + seconds
+        self.deadline = deadline if previous is None else min(deadline, previous)
+        try:
+            yield
+        finally:
+            self.deadline = previous
+
     def _request(self, operation, method, path, accepted, payload=None, limit=MAX_RESPONSE):
         headers = {"Authorization": self._authorization(), "Accept": "application/json"}
         body = None
         if payload is not None:
             headers["Content-Type"] = "application/json"
             body = json.dumps(payload).encode()
+        timeout = REQUEST_TIMEOUT
+        if self.deadline is not None:
+            timeout = min(timeout, self.deadline - time.monotonic())
+            if timeout <= 0:
+                raise ApiError("trust lookup deadline reached")
         # A socket timeout alone permits an arbitrarily slow trickle of response bytes.
         previous = signal.signal(signal.SIGALRM, expired)
-        signal.setitimer(signal.ITIMER_REAL, REQUEST_TIMEOUT)
+        signal.setitimer(signal.ITIMER_REAL, timeout)
         try:
             with closing(self.connect()) as connection:
                 connection.request(method, "/api/v1" + path, body, headers)
@@ -390,6 +405,65 @@ class Forgejo:
             raise ApiError("Forgejo trust user: unexpected account metadata")
         return user["id"]
 
+    def _access_rows(self, operation, path):
+        seen, total = set(), None
+        for page in range(1, 21):
+            rows, headers = self._request(operation, "GET", f"{path}?page={page}&limit=50", (200,))
+            count = headers.get("X-Total-Count", "")
+            if not isinstance(rows, list) or not re.fullmatch(r"[0-9]{1,6}", count):
+                raise ApiError(f"Forgejo {operation}: invalid access list or pagination")
+            if total is not None and int(count) != total:
+                raise ApiError(f"Forgejo {operation}: list changed during pagination")
+            total = int(count)
+            for row in rows:
+                if not isinstance(row, dict) or not positive(row.get("id")) or row["id"] in seen:
+                    raise ApiError(f"Forgejo {operation}: invalid or duplicate account")
+                seen.add(row["id"])
+                yield row
+            if len(seen) == total:
+                return
+            if not rows or len(seen) > total:
+                raise ApiError(f"Forgejo {operation}: inconsistent pagination")
+        raise ApiError(f"Forgejo {operation}: access list exceeds 20 pages")
+
+    def writer_gap(self, path, trust_ids):
+        """Check actual access: Forgejo hides stale team allowlist entries in branch protections."""
+        def login_for(operation, row):
+            login = row.get("login")
+            if not matches(LOGIN_NAME, login):
+                raise ApiError(f"Forgejo {operation}: invalid account login")
+            return login.lower()
+
+        for row in self._access_rows("collaborators", f"{path}/collaborators"):
+            login = login_for("collaborators", row)
+            body, _ = self._request(
+                "collaborator permission", "GET", f"{path}/collaborators/{login}/permission", (200,)
+            )
+            permission = body.get("permission") if isinstance(body, dict) else None
+            user = body.get("user") if isinstance(body, dict) else None
+            if (
+                permission not in ("none", "read", "write", "admin", "owner") or not isinstance(user, dict)
+                or not positive(user.get("id")) or user["id"] != row["id"]
+                or login_for("collaborator permission", user) != login
+            ):
+                raise ApiError("Forgejo collaborator permission: unexpected access mode or account")
+            if permission in ("write", "admin", "owner") and trust_ids.get(login) != row["id"]:
+                return "repository has a write or admin collaborator outside trust.users"
+        if self.pool.kind == "org":
+            teams, _ = self._request("repository teams", "GET", f"{path}/teams", (200,))
+            if not isinstance(teams, list) or not teams:
+                raise ApiError("Forgejo repository teams: missing organization teams")
+            seen = set()
+            for team in teams:
+                if not isinstance(team, dict) or not positive(team.get("id")) or team["id"] in seen:
+                    raise ApiError("Forgejo repository teams: invalid or duplicate team")
+                team_id = team["id"]
+                seen.add(team_id)
+                for row in self._access_rows("team members", f"/teams/{team_id}/members"):
+                    if trust_ids.get(login_for("team members", row)) != row["id"]:
+                        return "repository team has a member outside trust.users"
+        return None
+
     def branch_protections(self, path):
         """All branch protection rules (GET /repos/{o}/{r}/branch_protections: one unpaginated list).
 
@@ -469,10 +543,10 @@ class Forgejo:
         return body["workflow_runs"][0]
 
 
-def trusted_run(run, repo_id, owner, account, pool, trust_ids):
+def trusted_run(run, repo_id, owner, pool, trust_ids):
     """None when the run is trusted, else a fixed reason. Fields are server-set; nothing the job controls.
 
-    trust_ids maps each resolved trust.users login to its pinned account ID (Queue._trust_ids).
+    trust_ids maps configured logins to account IDs pinned at startup.
 
     Forgejo v15.0.12 semantics:
     - is_fork_pull_request is true for fork PRs AND for every AGit PR (models/issues/pull.go:473-488). Re-runs
@@ -524,10 +598,8 @@ def trusted_run(run, repo_id, owner, account, pool, trust_ids):
         return "awaiting approval"
     on_default = run["prettyref"] == repository["default_branch"]
     login = user.get("login")
-    listed = positive(user["id"]) and matches(LOGIN_NAME, login) and login.lower() in pool.trust_users
-    # Only the PAT account is checked live (GET /user); every other login is pinned on first use.
-    pinned = account if listed and login.lower() == pool.login else trust_ids.get(login.lower()) if listed else None
-    denied = None if listed and user["id"] == pinned else "not in the trust allowlist" if pinned is None else (
+    pinned = trust_ids.get(login.lower()) if matches(LOGIN_NAME, login) else None
+    denied = None if user["id"] == pinned else "not in the trust allowlist" if pinned is None else (
         "ID differs from the pinned trust user; reconcile the account before trusting it"
     )
     if event == "push" and trigger_event == "push":
@@ -889,10 +961,11 @@ class Store:
             return True
         if (
             not isinstance(active, dict)
-            or active.keys() != {"handle", "name", "runner", "phase", "queued_at"}
+            or active.keys() - {"picked_up_at"} != {"handle", "name", "runner", "phase", "queued_at"}
             or not handle_ok(active["handle"])
             or not matches(name, active["name"])
             or active["phase"] not in ("intent", "registered", "start", "cleanup", "release")
+            or ("picked_up_at" in active and (active["phase"] != "start" or not timestamp(active["picked_up_at"])))
         ):
             return False
         if active["phase"] == "intent":
@@ -980,6 +1053,28 @@ class Claims:
             for digest in claims:
                 self._create(fd, digest)
 
+    def pin_user(self, store, login, lookup):
+        def reconcile(candidate=None):
+            with self._locked():
+                pins = store.data.get("trust_ids", {})
+                ids = {pins.get(login)} | {
+                    Store(directory, self.pool.state_file, slot=slot).data.get("trust_ids", {}).get(login)
+                    for slot, directory in self.states.items() if slot != SLOT
+                }
+                ids.discard(None)
+                if len(ids) > 1:
+                    raise ApiError(f"slots pinned trust user {login} to different accounts; reconcile the account")
+                account = next(iter(ids), candidate)
+                if account is not None and login not in pins:
+                    store.save(trust_ids=pins | {login: account})
+                    log(f"pinned trust user {login} to account {account}", self.pool)
+                return account
+
+        # No forge requests under the pool claim lock. Re-read peer pins before
+        # publishing, so concurrent startup cannot write conflicting first IDs.
+        account = reconcile()
+        return account if account is not None else reconcile(lookup())
+
     def reserve(self, store, jobs):
         with self._locked() as fd:
             claims, blocked = self._ledger(store)
@@ -1042,25 +1137,34 @@ class Trust:
 class Queue:
     """One pool's API and durable registration lifecycle on this slot."""
 
-    def __init__(self, api, slot, store, claims, monotonic=time.monotonic, wall=time.time, *, trust=None):
+    def __init__(self, api, slot, store, claims, monotonic=time.monotonic, wall=time.time, *, vm_deadline, trust=None):
         self.api, self.slot, self.store = api, slot, store
         self.pool = api.pool
         self.monotonic, self.wall = monotonic, wall
         self.trust = trust
+        self.vm_deadline = vm_deadline
         self.claims = claims
         self.claims.recover(store)
+        pins = store.data.get("trust_ids", {})
+        keep = {login: account for login, account in pins.items() if login in self.pool.trust_users}
+        if keep != pins:
+            store.save(trust_ids=keep)
+        self.pins_after = 0
+        self.pins_ready = False
+        self.pins_error = None
         if trust is None and (self.pool.trust_repos or self.pool.trust_users):
             self._log("trust allowlist configured but trusted jobs are off; no run gets CI upload credentials")
         self.api_after = self.api_delay = 0
         self.inventory_after = self.busy_after = 0
         self.busy_misses = 0
         self.observed = None
-        self.stop_queued = None  # (slot run name, monotonic time) of the last cancellation stop
-        self.reset_pending = False  # reset-failed still owed for a cancellation stop that timed out
+        self.last_waiting_at = None
+        self.stop_queued = None  # (slot run name, monotonic time) of the last dispatcher stop
+        self.reset_pending = False  # reset-failed still owed for a stop that timed out
         self.identity_verified = False
         self.deadline_logged = False
         # In memory only: after a restart the delivered files are withdrawn (main) and the run is re-resolved.
-        self.verdict = None  # {"name", "state": pending|delivered|untrusted, "since": pickup first seen}
+        self.verdict = None  # {"name", "state": pending|delivered|untrusted, "since": first resolution attempt}
         # Slot-local backoff for requests that never reached systemd. A peer
         # can still take the job once we delete the unused registration.
         self.pre_start_retries = {}
@@ -1091,6 +1195,10 @@ class Queue:
 
     def monitor(self):
         now = self.monotonic()
+        remaining = self._until_untrusted_limit()
+        if remaining <= 0:
+            self._stop("untrusted job reached its 65 min limit")
+            return POLL
         if now >= self.busy_after:
             queued_at = self.store.data["active"]["queued_at"]
             interval = BUSY_POLL_FAST if self.wall() - queued_at < BUSY_FAST_WINDOW else BUSY_POLL
@@ -1098,11 +1206,20 @@ class Queue:
                 interval = POLL  # Deliver soon after pickup: builds before delivery aren't uploaded.
             self.busy_after = now + interval
             try:
-                self._remote(False)
+                with self.api.within(remaining):
+                    self._remote(False)
             except ApiError as error:
                 self.busy_misses = 0
                 self._log(error)
-        return max(0, min(POLL, self.busy_after - self.monotonic()))
+        return max(0, min(POLL, self.busy_after - self.monotonic(), self._until_untrusted_limit()))
+
+    def _until_untrusted_limit(self):
+        active = self.store.data["active"]
+        if self.verdict is not None and self.verdict["name"] == active["name"] and self.verdict["state"] == "delivered":
+            return float("inf")
+        # If the forge never reports pickup, the start time is the safe
+        # fallback; a broken API must not grant the longer trusted budget.
+        return active.get("picked_up_at", active["queued_at"]) + UNTRUSTED_LIMIT - self.wall()
 
     def idle_jobs(self):
         if self.monotonic() >= self.api_after:
@@ -1128,8 +1245,9 @@ class Queue:
                 self.deadline_logged = False
                 self.busy_after = 0
                 self.busy_misses = 0
+                self.last_waiting_at = active["queued_at"]
                 self._log(f"monitoring VM for runner {active['runner']['id']}; systemd owns its deadline")
-            if self.wall() >= active["queued_at"] + VM_DEADLINE and not self.deadline_logged:
+            if self.wall() >= active["queued_at"] + self.vm_deadline and not self.deadline_logged:
                 self.deadline_logged = True
                 self._log("VM is still busy past its recorded deadline estimate; inspect the systemd unit")
             return False
@@ -1180,6 +1298,7 @@ class Queue:
             self._log(f"VM start not submitted; local files scrubbed for unused runner {active['runner']['id']}")
         else:
             cleanup = active | {"phase": "cleanup", "queued_at": None}
+            cleanup.pop("picked_up_at", None)
             self.store.save(active=cleanup)
             self._log(f"VM idle ({result}); local files scrubbed for runner {active['runner']['id']}")
         return True
@@ -1196,6 +1315,15 @@ class Queue:
             if any(row["owner_id"] == owner and matches(NAME, row["name"]) for row in self._inventory()):
                 raise ApiError(f"{self.pool.state_file} absent but a dispatcher-named runner exists; reconcile before enabling dispatch")
             self.store.save(owner_id=owner)
+        if idle and self.trust is not None and not self.pins_ready and self.monotonic() >= self.pins_after:
+            self.pins_after = self.monotonic() + BUSY_POLL
+            try:
+                with self.api.within(REQUEST_TIMEOUT):
+                    self._pin_trust_users(account, resolve=True)
+            except ApiError as error:
+                if str(error) != self.pins_error:
+                    self._log(f"startup trust pins incomplete: {error}")
+                self.pins_error = str(error)
         if idle and data["active"] is not None:
             active = data["active"]
             self.api.delete(active["runner"])
@@ -1228,8 +1356,19 @@ class Queue:
         self._observe_queue(seen, inventory_ok)
         if not idle:
             self._check_cancelled(seen)
-            if self.trust is not None:
-                self._settle_trust(jobs, owner, account)
+            active = self.store.data["active"]
+            target = next((job for job in jobs if job["handle"] == active["handle"]), None)
+            if target is not None and target["status"] == "waiting" and target["task_id"] == 0:
+                self.last_waiting_at = self.wall()
+            elif self._is_picked_up(target):
+                if "picked_up_at" not in active:
+                    now = self.wall()
+                    timely = now - self.last_waiting_at <= BUSY_POLL + 3 * REQUEST_TIMEOUT
+                    # A poll after an outage must not give an already-running job a fresh 65 minutes.
+                    picked_up_at = now if timely else self.last_waiting_at
+                    self.store.save(active=active | {"picked_up_at": picked_up_at})
+                if self.trust is not None and self._until_untrusted_limit() > 0:
+                    self._settle_trust(target, owner, account)
             return
         data = self.store.data
         blocked = set(data["retired"]) | data["ambiguous"].keys()
@@ -1242,21 +1381,23 @@ class Queue:
         ]
 
     def _check_cancelled(self, seen):
-        active = self.store.data["active"]
-        if active["handle"] in seen:
+        if self.store.data["active"]["handle"] in seen:
             self.busy_misses = 0
         else:
             self.busy_misses += 1
-            # Once per slot run: the unit stays deactivating for up to TimeoutStopSec, and every
-            # further poll would queue (and log) the same stop. Re-queue only if the slot is somehow
-            # still busy after STOP_RETRY, which outlasts the 30 s stop timeout and its SIGKILL.
-            stopped = self.stop_queued
-            if stopped is not None and stopped[0] == active["name"] and self.monotonic() - stopped[1] < STOP_RETRY:
-                return
-            if self.busy_misses >= 2 and not self.slot.observe().vm_idle:
-                self.slot.stop(active["name"])
-                self.stop_queued = (active["name"], self.monotonic())
-                self._log(f"queued VM stop: runner {active['runner']['id']} target absent from consecutive job polls")
+            if self.busy_misses >= 2:
+                self._stop("target absent from consecutive job polls")
+
+    def _stop(self, reason):
+        active = self.store.data["active"]
+        # Don't log and queue the same stop while systemd is still deactivating.
+        stopped = self.stop_queued
+        if stopped is not None and stopped[0] == active["name"] and self.monotonic() - stopped[1] < STOP_RETRY:
+            return
+        if not self.slot.observe().vm_idle:
+            self.slot.stop(active["name"])
+            self.stop_queued = (active["name"], self.monotonic())
+            self._log(f"queued VM stop: runner {active['runner']['id']} {reason}")
 
     def _resolving(self):
         if self.trust is None:
@@ -1268,7 +1409,7 @@ class Queue:
             verdict["since"] is None or self.monotonic() - verdict["since"] < TRUST_DEADLINE
         )
 
-    def _settle_trust(self, jobs, owner, account):
+    def _settle_trust(self, job, owner, account):
         """Deliver the CI upload credentials only to a slot whose exact run is trusted.
 
         Every boot is untrusted. Resolution waits for the slot's runner to take the job (status running,
@@ -1281,9 +1422,6 @@ class Queue:
         verdict = self.verdict
         if verdict["state"] != "pending":
             return
-        job = self._picked_up(jobs, active["handle"])
-        if job is None:
-            return
         repo_id = job["repo_id"]
         repo = self.pool.trust_repos.get(repo_id)
         if repo is None:
@@ -1293,17 +1431,24 @@ class Queue:
         path = f"/repos/{repo['owner']}/{repo['name']}"
         if verdict["since"] is None:
             verdict["since"] = self.monotonic()
+        remaining = verdict["since"] + TRUST_DEADLINE - self.monotonic()
         try:
-            reason, run = self._resolve(job, path, owner, account)
-            if reason is None:
-                # Recheck: still the same attempt, still running on the same task, still the same trusted run.
-                again = self._picked_up(self.api.jobs(owner), active["handle"])
-                if again is None or any(again[key] != job[key] for key in ("id", "repo_id", "attempt", "task_id")):
-                    raise ApiError("job changed before delivery")
-                rerun = self.api.run_by_number(path, run["index_in_repo"])
-                if rerun["id"] != run["id"]:
-                    raise ApiError("run changed before delivery")
-                reason = trusted_run(rerun, repo_id, owner, account, self.pool, self._trust_ids(rerun))
+            if remaining <= 0:
+                raise ApiError("trust lookup deadline reached")
+            with self.api.within(remaining):
+                trust_ids = self._pin_trust_users(account)
+                reason, run = self._resolve(job, path, owner, trust_ids)
+                if reason is None:
+                    # Still the same attempt, running on the same task, and the same trusted run.
+                    again = next((row for row in self.api.jobs(owner) if row["handle"] == active["handle"]), None)
+                    if not self._is_picked_up(again) or any(again[key] != job[key] for key in ("id", "repo_id", "attempt", "task_id")):
+                        raise ApiError("job changed before delivery")
+                    rerun = self.api.run_by_number(path, run["index_in_repo"])
+                    if rerun["id"] != run["id"]:
+                        raise ApiError("run changed before delivery")
+                    reason = trusted_run(rerun, repo_id, owner, self.pool, trust_ids)
+                    if self.monotonic() - verdict["since"] >= TRUST_DEADLINE:
+                        raise ApiError("trust lookup deadline reached")
         except ApiError as error:
             self._defer(verdict, f"trust lookup pending: {error}", error)
             return
@@ -1334,45 +1479,40 @@ class Queue:
             self._log(message)
 
     @staticmethod
-    def _picked_up(jobs, handle):
-        job = next((job for job in jobs if job["handle"] == handle), None)
-        if job is None or job["status"] != "running" or job["task_id"] == 0:
-            return None
-        return job
+    def _is_picked_up(job):
+        return job is not None and job["status"] == "running" and job["task_id"] > 0
 
-    def _trust_ids(self, run):
-        """Pinned account IDs of trust.users, resolving the run's trigger user on first sight.
+    def _pin_trust_users(self, account, *, resolve=False):
+        if not self.pins_ready:
+            error = None
+            for login in sorted(self.pool.trust_users):
+                try:
+                    def lookup():
+                        if not resolve:
+                            raise ApiError(self.pins_error or "trust user has no idle-poll pin")
+                        return account if login == self.pool.login else self.api.user(login)
 
-        A login's ID is persisted with owner_id: taken from a peer slot that already pinned it, else fetched once.
-        A later account under the same login (Forgejo frees renamed and deleted names at once:
-        USERNAME_COOLDOWN_PERIOD defaults to 0) does not match.
-        """
-        pinned = self.store.data.get("trust_ids", {})
-        user = run.get("trigger_user") if isinstance(run, dict) else None
-        login = user.get("login") if isinstance(user, dict) else None
-        if matches(LOGIN_NAME, login):
-            login = login.lower()
-            if login in self.pool.trust_users and login != self.pool.login and login not in pinned:
-                peers = {
-                    Store(directory, self.pool.state_file, slot=slot).data.get("trust_ids", {}).get(login)
-                    for slot, directory in self.claims.states.items() if slot != SLOT
-                } - {None}
-                if len(peers) > 1:
-                    raise ApiError(f"slots pinned trust user {login} to different accounts; reconcile dispatcher state")
-                pinned = {name: value for name, value in pinned.items() if name in self.pool.trust_users}
-                pinned[login] = peers.pop() if peers else self.api.user(login)
-                self.store.save(trust_ids=pinned)
-                self._log(f"pinned trust user {login} to account {pinned[login]}")
-        return pinned
+                    pinned = self.claims.pin_user(self.store, login, lookup)
+                    if login == self.pool.login and pinned != account:
+                        raise ApiError("PAT account ID differs from the pinned trust user; reconcile the account")
+                except ApiError as failure:
+                    error = failure
+            if error is not None:
+                raise error
+            self.pins_ready = True
+        pins = self.store.data.get("trust_ids", {})
+        if self.pool.login in pins and pins[self.pool.login] != account:
+            raise ApiError("PAT account ID differs from the pinned trust user; reconcile the account")
+        return pins
 
-    def _resolve(self, job, path, owner, account):
+    def _resolve(self, job, path, owner, trust_ids):
         """(None, run) for a trusted run, else (reason, run). Lookup failures raise ApiError."""
         repository = self.api.repository(path, job["repo_id"], owner)
         task = self.api.task(path, job["task_id"])
         run = self.api.run_by_number(path, task["run_number"])
         if run.get("commit_sha") != task["head_sha"] or run.get("workflow_id") != task["workflow_id"]:
             return "task and run disagree", run
-        reason = trusted_run(run, job["repo_id"], owner, account, self.pool, self._trust_ids(run))
+        reason = trusted_run(run, job["repo_id"], owner, self.pool, trust_ids)
         if reason is not None:
             return reason, run
         # A pull mirror's sync pushes as the repository owner (services/mirror/mirror_pull.go SyncPushCommits).
@@ -1380,6 +1520,10 @@ class Queue:
             return "repository is a pull mirror", run
         if not self.api.deploy_keys_read_only(path):
             return "repository has a write deploy key", run
+        if self.pool.kind == "user" and trust_ids.get(self.pool.owner) != owner:
+            return "repository owner is outside trust.users", run
+        if gap := self.api.writer_gap(path, trust_ids):
+            return gap, run
         branch = run["repository"]["default_branch"]
         return protection_gap(self.api.branch_protections(path), branch, self.pool.trust_users), run
 
@@ -1643,6 +1787,7 @@ def parse_arguments(argv=None):
     # Every slot setting is required: a dispatcher must never fall back to another slot's identity.
     parser.add_argument("--slot", required=True, help="the slot's microVM name, e.g. ryza-eph-1")
     parser.add_argument("--machine", required=True, help="the slot host's name")
+    parser.add_argument("--vm-deadline", type=int, required=True, help="estimated host VM deadline in seconds")
     transport = parser.add_mutually_exclusive_group(required=True)
     transport.add_argument("--slotctl", type=Path, help="the local slot agent")
     transport.add_argument("--ssh-command", type=Path, help="the pinned SSH wrapper for the remote slot agent")
@@ -1653,6 +1798,8 @@ def parse_arguments(argv=None):
     parser.add_argument("--host-pause-file", type=Path, default=HOST_PAUSE_FILE)
     parser.add_argument("--trusted-jobs", action="store_true", help="deliver CI upload credentials to trusted runs")
     args = parser.parse_args(argv)
+    if not positive(args.vm_deadline):
+        parser.error("--vm-deadline must be positive")
     for path in (args.slotctl or args.ssh_command, args.pools, args.state_dir, args.claim_states, args.pause_file, args.host_pause_file):
         if not path.is_absolute():
             parser.error("dispatcher paths must be absolute")
@@ -1709,7 +1856,8 @@ def main():
             queues = [
                 Queue(
                     Forgejo(pool, credentials / f"forgejo-pat-{pool.forge}" if credentials is not None else None),
-                    slot, Store(args.state_dir, pool.state_file), Claims(CLAIM_ROOT, states, pool), trust=trust,
+                    slot, Store(args.state_dir, pool.state_file), Claims(CLAIM_ROOT, states, pool),
+                    vm_deadline=args.vm_deadline, trust=trust,
                 )
                 for pool in pools
             ]

@@ -15,6 +15,7 @@ import io
 import json
 import os
 import pwd
+import re
 import shlex
 import stat
 import subprocess
@@ -43,6 +44,7 @@ JOBS = RUNNERS + "/jobs?labels=nix-eph"
 LIST = RUNNERS + "?visible=false&page={}&limit=50"
 SLOT_RUN = f"eph-{'0' * 12}-ryza-{'a' * 32}"
 VM = "microvm@ryza-eph-1.service"
+STD_DEADLINE, LARGE_DEADLINE = 11520, 22320
 REPO, OWNER = 17, 42
 PAT = "synthetic-dispatcher-pat-not-a-secret"
 TOKEN = "synthetic-ephemeral-runner-token-not-a-secret"
@@ -51,6 +53,7 @@ REPOSITORY = f"/api/v1/repos/manjo/{REPO_NAME}"
 TASKS = REPOSITORY + "/actions/tasks?status=running&page={}&limit=50"
 KEYS = REPOSITORY + "/keys?page={}&limit=50"
 PROTECTIONS = REPOSITORY + "/branch_protections"
+COLLABORATORS = REPOSITORY + "/collaborators?page={}&limit=50"
 RUN = REPOSITORY + "/actions/runs?run_number={}&limit=50"
 HERMES = 77
 # Synthetic, shaped like the real files (nix-store --generate-binary-cache-key; reliquary-ncps netrc).
@@ -89,10 +92,10 @@ def protection(branch="master", **fields):
     } | fields
 
 
-def make_queue(pool, forge, slot, state_dirs, claim_root, clock, pat_file, trust=None):
+def make_queue(pool, forge, slot, state_dirs, claim_root, clock, pat_file, trust=None, *, vm_deadline=STD_DEADLINE):
     return D.Queue(
         D.Forgejo(pool, pat_file, forge.connect), slot, D.Store(state_dirs[D.SLOT], pool.state_file),
-        D.Claims(claim_root, state_dirs, pool), clock.monotonic, clock.wall, trust=trust,
+        D.Claims(claim_root, state_dirs, pool), clock.monotonic, clock.wall, vm_deadline=vm_deadline, trust=trust,
     )
 
 
@@ -211,6 +214,10 @@ class FakeForge:
             "id": REPO, "name": repo_name, "owner": {"id": self.owner_id, "login": scope or "manjo"}, "mirror": False,
         }
         self.protections = [protection()]
+        self.collaborators = []
+        self.permissions = {}
+        self.teams = [{"id": 123}] if scope else []
+        self.members = {123: [{"id": OWNER, "login": "manjo"}]}
         self.users = {}
         self.tasks = []
         self.runs = []
@@ -324,6 +331,24 @@ class FakeForge:
             return 200, self.keys[(page - 1) * 50 : page * 50], {"X-Total-Count": str(len(self.keys))}
         if method == "GET" and path == self.repository_path + "/branch_protections":
             return 200, self.protections, {}
+        if method == "GET" and path == self.repository_path + "/teams":
+            return 200, self.teams, {}
+        if method == "GET":
+            url = urlsplit(path)
+            if url.path == self.repository_path + "/collaborators":
+                rows = self.collaborators
+            elif match := re.fullmatch(r"/api/v1/teams/(\d+)/members", url.path):
+                rows = self.members[int(match[1])]
+            elif url.path.startswith(self.repository_path + "/collaborators/") and url.path.endswith("/permission"):
+                login = url.path.split("/")[-2]
+                user = next(row for row in self.collaborators if row["login"].lower() == login)
+                return 200, {"permission": self.permissions[login], "user": user}, {}
+            else:
+                rows = None
+            if rows is not None:
+                query = parse_qs(url.query)
+                end = int(query["page"][0]) * self.page_size
+                return 200, rows[end - self.page_size : end], {"X-Total-Count": str(len(rows))}
         if method == "GET" and path.startswith("/api/v1/users/") and path[len("/api/v1/users/"):] in self.users:
             return 200, self.users[path[len("/api/v1/users/"):]], {}
         if method == "GET" and path.startswith(self.repository_path + "/actions/runs?"):
@@ -862,24 +887,28 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual([], self.forge.paths("POST"))
         self.assertEqual([], self.system.mutations())
 
-    def test_unavailable_api_leaves_hard_timeout_to_systemd(self):
+    def test_no_pickup_evidence_does_not_grant_a_longer_budget(self):
         self.forge.jobs = [job()]
         self.tick()
         self.system.set(active="active")
-        self.forge.reply_once("GET", JOBS, 503)
         self.leave_images()
         self.restart()
-        self.tick(D.VM_DEADLINE + 1)
+        self.tick(D.UNTRUSTED_LIMIT - 1)
+        self.assertEqual([], self.system.mutations("stop"))
+        self.forge.reply_once("GET", USER, 503)
+        self.tick(1)
         self.assertTrue(self.credential_dir.exists())
         self.assertTrue((self.vm_dir / "var.img").exists())
         self.assertEqual([], self.forge.paths("DELETE"))
-        self.assertEqual([], self.system.mutations("stop"))
-        self.assertIn("past its recorded deadline", self.logs.getvalue())
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.assertIn("untrusted job reached its 65 min limit", self.logs.getvalue())
         self.system.set(active="deactivating", pending="8", result="timeout")
         self.tick(7)
         self.assertTrue(self.credential_dir.exists())
         self.system.set(active="failed", result="timeout")
+        self.forge.jobs = []
         self.tick(7)
+        self.tick(D.POLL)  # The first cleanup API request fails; retry it.
         self.assert_scrubbed()
         self.assertEqual([RUNNERS + "/100"], self.forge.paths("DELETE"))
         self.assertIn("VM idle (timeout)", self.logs.getvalue())
@@ -1725,6 +1754,7 @@ class TrustedJobTests(unittest.TestCase):
         self.enterContext(contextlib.redirect_stderr(self.logs))
         self.surfaces.append((self.logs, self.system, self.state_dir, self.slotctls))
         self.trusted = trusted
+        self.vm_deadline = STD_DEADLINE
         self.restart()
 
     def tearDown(self):
@@ -1740,7 +1770,7 @@ class TrustedJobTests(unittest.TestCase):
         self.slotctls.append(slotctl)
         queue = make_queue(
             self.pool, self.forge, slot, {D.SLOT: self.state_dir}, self.state_dir.parent, self.clock, self.pat_file,
-            trust=D.Trust(self.sources) if self.trusted else None,
+            trust=D.Trust(self.sources) if self.trusted else None, vm_deadline=self.vm_deadline,
         )
         self.dispatcher = D.Dispatcher([queue], self.clock.monotonic, pause=self.pause)
 
@@ -1789,12 +1819,12 @@ class TrustedJobTests(unittest.TestCase):
             info = path.stat()
             self.assertEqual((0o400, os.getuid()), (stat.S_IMODE(info.st_mode), info.st_uid))
         self.assertEqual(
-            [REPOSITORY, TASKS.format(1), RUN.format(7), KEYS.format(1), PROTECTIONS, RUN.format(7)], self.lookups()
+            [REPOSITORY, TASKS.format(1), RUN.format(7), KEYS.format(1), COLLABORATORS.format(1), PROTECTIONS, RUN.format(7)], self.lookups()
         )
         self.assertEqual(polls + 2, self.forge.paths("GET").count(JOBS))  # The poll plus the pre-delivery recheck.
         self.assertIn("trusted: run #7 (push); delivered CI upload credentials", self.logs.getvalue())
         self.assert_settled_cadence()
-        self.assertEqual(6, len(self.lookups()))
+        self.assertEqual(7, len(self.lookups()))
         self.assertEqual([], self.system.mutations("stop"))
         self.system.set()
         self.tick(D.POLL)
@@ -2120,14 +2150,63 @@ class TrustedJobTests(unittest.TestCase):
         self.assertEqual(lookups, len(self.lookups()))
         self.assertEqual({}, self.delivered())
 
-    def test_gate_off_never_looks_up_or_delivers(self):
+    def test_gate_off_stops_65_minutes_after_pickup_even_after_restart_and_api_failure(self):
         self.build(trusted=False)
         self.assertIn("trust allowlist configured but trusted jobs are off", self.logs.getvalue())
         self.boot()
-        self.pick_up()
-        self.tick(D.BUSY_POLL_FAST)
+        self.tick(3 * 60 - D.BUSY_POLL_FAST)  # Still waiting shortly before the pickup poll.
+        self.pick_up(advance=D.BUSY_POLL_FAST)
+        self.restart()
+        self.pause.touch()
+        self.forge.reply_once("GET", USER, 503)
+        self.tick(D.UNTRUSTED_LIMIT - 1)
+        self.assertEqual([], self.system.mutations("stop"))
+        self.tick(1)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+        self.assertIn("untrusted job reached its 65 min limit", self.logs.getvalue())
         self.assertEqual([], self.lookups())
         self.assertFalse(self.trust_dir.exists())
+
+    def test_late_pickup_observation_does_not_restart_the_untrusted_budget(self):
+        self.build(trusted=False)
+        self.boot()
+        self.forge.reply_once("GET", JOBS, 503)
+        self.tick(D.POLL)
+        self.pick_up(advance=D.UNTRUSTED_LIMIT - D.POLL - 1)
+        self.assertEqual([], self.system.mutations("stop"))
+        self.tick(1)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+
+    def test_pending_trust_becomes_untrusted_then_stops_at_pickup_limit(self):
+        self.boot()
+        self.forge.reply_once("GET", COLLABORATORS.format(1), 403)
+        self.pick_up()
+        self.assertIn("trust lookup pending: Forgejo collaborators: HTTP 403", self.logs.getvalue())
+        self.assertEqual({}, self.delivered())
+        self.tick(D.TRUST_DEADLINE)  # Access recovered, but the trust window already closed.
+        self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
+        self.tick(D.UNTRUSTED_LIMIT - D.TRUST_DEADLINE - 1)
+        self.assertEqual([], self.system.mutations("stop"))
+        self.assertEqual({}, self.delivered())
+        self.tick(1)
+        self.tick(D.POLL)
+        self.assertEqual(1, len(self.system.mutations("stop")))
+
+    def test_trusted_slot_uses_its_class_deadline_estimate_not_the_untrusted_cap(self):
+        for estimate in (STD_DEADLINE, LARGE_DEADLINE):
+            with self.subTest(estimate=estimate):
+                self.build()
+                self.vm_deadline = estimate
+                self.restart()
+                self.boot()
+                self.pick_up()
+                self.tick(estimate - D.POLL - 1)
+                self.assertNotIn("past its recorded deadline", self.logs.getvalue())
+                self.assertEqual([], self.system.mutations("stop"))
+                self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+                self.tick(1)
+                self.assertIn("past its recorded deadline", self.logs.getvalue())
+                self.assertEqual([], self.system.mutations("stop"))  # The estimate is diagnostic; systemd enforces it.
 
     SCHEDULE = {"trigger_event": "schedule", "ScheduleID": 9, "trigger_user": {"id": -2, "login": "forgejo-actions"}}
 
@@ -2229,8 +2308,68 @@ class TrustedJobTests(unittest.TestCase):
         self.pick_up()
         self.assertIn("trust lookup pending: Forgejo repository: unexpected repository metadata", self.logs.getvalue())
 
+    def test_only_pinned_collaborators_may_have_write_or_admin(self):
+        for permission in ("read", "write", "admin"):
+            with self.subTest(permission=permission):
+                self.build()
+                self.forge.page_size = 1
+                self.forge.collaborators = [{"id": OWNER, "login": "manjo"}, {"id": HERMES, "login": "Hermes"}]
+                self.forge.permissions = {"manjo": "write", "hermes": permission}
+                self.boot()
+                self.pick_up()
+                if permission == "read":
+                    self.assertEqual({"ncps-netrc", "ci-signing-key"}, set(self.delivered()))
+                else:
+                    self.assertEqual({}, self.delivered())
+                    self.assertIn("repository has a write or admin collaborator outside trust.users", self.logs.getvalue())
+
+    def test_org_team_members_must_match_pins_even_when_protection_lists_no_team(self):
+        for member in ({"id": HERMES, "login": "hermes"}, {"id": HERMES, "login": "manjo"}):
+            with self.subTest(member=member):
+                self.build(pool=D.Pool("monolith-softworks", **ORG_POOL), scope=ORG, repo_name="inanna")
+                self.forge.teams += [{"id": 124, "permission": "read"}]
+                self.forge.members[124] = [member]
+                self.forge.runs = [run(repository=self.forge.repository | {"default_branch": "master"})]
+                waiting = job(owner_id=ORG_ID)
+                self.forge.jobs = [waiting]
+                self.tick()
+                self.system.set(active="active")
+                self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+                self.tick(D.POLL)
+                self.assertEqual({}, self.delivered())
+                self.assertIn("repository team has a member outside trust.users", self.logs.getvalue())
+
+    def test_org_team_member_api_error_fails_closed(self):
+        self.build(pool=D.Pool("monolith-softworks", **ORG_POOL), scope=ORG, repo_name="inanna")
+        self.forge.reply_once("GET", "/api/v1/teams/123/members?page=1&limit=50", 403)
+        self.forge.runs = [run(repository=self.forge.repository | {"default_branch": "master"})]
+        waiting = job(owner_id=ORG_ID)
+        self.forge.jobs = [waiting]
+        self.tick()
+        self.system.set(active="active")
+        self.forge.jobs = [waiting | {"status": "running", "task_id": 71}]
+        self.tick(D.POLL)
+        self.assertIn("trust lookup pending: Forgejo team members: HTTP 403", self.logs.getvalue())
+        self.tick(D.TRUST_DEADLINE)
+        self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
+        self.assertEqual({}, self.delivered())
+
+    def test_idle_startup_pins_every_login_and_restart_prunes_removed_users(self):
+        pool = D.Pool("ugalabugala", **(PILOT_POOL | {"trust": PILOT_POOL["trust"] | {"users": ["manjo", "Hermes"]}}))
+        self.build(pool=pool)
+        self.forge.users = {"hermes": {"id": HERMES, "login": "Hermes"}}
+        self.pause.touch()
+        self.tick()
+        state = self.state_dir / pool.state_file
+        self.assertEqual({"manjo": OWNER, "hermes": HERMES}, json.loads(state.read_text())["trust_ids"])
+        self.assertIn("/api/v1/users/hermes", self.forge.paths("GET"))
+        self.assertEqual([], self.forge.paths("POST"))
+        self.pool = D.Pool("ugalabugala", **PILOT_POOL)
+        self.restart()
+        self.assertEqual({"manjo": OWNER}, json.loads(state.read_text())["trust_ids"])
+
     def test_trust_users_are_pinned_by_account_id(self):
-        # Review probe F2: PAT account noosphere-ci, trust.users = [manjo]. The first manjo run pins manjo's ID.
+        # The idle poll pins manjo before any trigger, even when the PAT belongs to another account.
         identity = {"login": "noosphere-ci", "id": 4242}
         self.build(pool=D.Pool("monolith-softworks", **(ORG_POOL | {"login": "noosphere-ci"})), scope=ORG, repo_name="inanna")
         self.forge.identity = identity
@@ -2313,11 +2452,16 @@ class TrustedJobTests(unittest.TestCase):
         identity = {"login": "noosphere-ci", "id": 4242}
         self.assertEqual({}, self.org_round({}, login="noosphere-ci", identity=identity))
         self.assertIn("trust lookup pending: Forgejo trust user: HTTP 404", self.logs.getvalue())
+        # Becoming visible mid-job must not turn that job into the pin's first use.
+        self.forge.users["manjo"] = {"id": OWNER, "login": "manjo"}
+        self.tick(D.POLL)
+        self.assertEqual({}, self.delivered())
         self.tick(D.TRUST_DEADLINE)
         self.assertIn("untrusted: trust lookup gave up after 10 min", self.logs.getvalue())
         self.assertEqual({}, self.delivered())
         state = json.loads((self.state_dir / self.pool.state_file).read_text())
         self.assertNotIn("trust_ids", state)
+        self.assertEqual(1, self.forge.paths("GET").count("/api/v1/users/manjo"))
 
 
 class SlotConfigurationTests(unittest.TestCase):
@@ -2334,7 +2478,7 @@ class SlotConfigurationTests(unittest.TestCase):
     def arguments(self, **changes):
         values = {
             "slot": "terra-eph-1", "machine": "terra", "slotctl": "/nix/store/x-forgejo-slotctl",
-            "pools": "/pools.json", "state-dir": "/state",
+            "pools": "/pools.json", "state-dir": "/state", "vm-deadline": str(LARGE_DEADLINE),
             "claim-states": "/claim-states.json",
         } | changes
         argv = []
@@ -2356,6 +2500,7 @@ class SlotConfigurationTests(unittest.TestCase):
     def test_arguments_configure_one_slot(self):
         args = D.parse_arguments(self.arguments())
         self.assertEqual(Path("/nix/store/x-forgejo-slotctl"), args.slotctl)
+        self.assertEqual(LARGE_DEADLINE, args.vm_deadline)
         self.assertEqual(("terra-eph-1", "terra"), (D.SLOT, D.MACHINE))
         self.assertEqual("microvm@terra-eph-1.service", D.VM)
         self.assertIn("microvm-virtiofsd@terra-eph-1.service", D.SUPPORT)
@@ -2407,6 +2552,7 @@ class SlotConfigurationTests(unittest.TestCase):
             {"slot": "ryza/eph-1"}, {"slot": "Ryza-eph-1"}, {"slot": "eph@1"}, {"machine": "ry za"},
             {"pools": "relative/pools.json"}, {"pools": None}, {"slotctl": "relative/slotctl"},
             {"slot": None}, {"machine": None}, {"slotctl": None}, {"vm-dir": "/vm"},
+            {"vm-deadline": None}, {"vm-deadline": "0"}, {"vm-deadline": "370min"},
         ):
             with self.subTest(changes), self.assertRaises(SystemExit):
                 D.parse_arguments(self.arguments(**changes))
