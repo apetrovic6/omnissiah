@@ -91,6 +91,7 @@
     "linuxserver/docker-sonarr" # lscr.io/linuxserver/sonarr
     "linuxserver/docker-prowlarr" # lscr.io/linuxserver/prowlarr
     "linuxserver/docker-sabnzbd" # lscr.io/linuxserver/sabnzbd
+    "linuxserver/docker-bazarr" # lscr.io/linuxserver/bazarr
 
     # Storage & Registries
     "goharbor/harbor" # docker.io/goharbor/*

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: bazarr
+  name: bazarr
+  namespace: yarr
+spec:
+  selector:
+    matchLabels:
+      app: bazarr
+  template:
+    metadata:
+      labels:
+        app: bazarr
+    spec:
+      containers:
+        - env:
+            - name: PUID
+              value: "1031"
+            - name: PGID
+              value: "65537"
+            - name: POSTGRES_ENABLED
+              value: "true"
+            - name: POSTGRES_HOST
+              value: pg-yarr-2-rw
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DATABASE
+              value: bazarr
+            - name: POSTGRES_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: pg-bazarr-password
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: pg-bazarr-password
+          image: lscr.io/linuxserver/bazarr:latest
+          name: bazarr
+          ports:
+            - containerPort: 6767
+          volumeMounts:
+            - mountPath: /config
+              name: config
+            - mountPath: /data
+              name: data
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: bazarr-pvc
+        - name: data
+          nfs:
+            path: /volume1/data/
+            server: 192.168.1.61

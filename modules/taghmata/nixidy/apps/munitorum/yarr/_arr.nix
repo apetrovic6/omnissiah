@@ -15,6 +15,10 @@
   # Mounts the NAS media share and runs as its owner. Off for prowlarr, which
   # only manages indexers.
   mediaLibrary ? true,
+  # How the database connection is passed. "servarr" is the *arr style
+  # (<prefix>__POSTGRES__*, with a separate -logs database); "bazarr" is
+  # Bazarr's POSTGRES_* variables and a single database.
+  dbEnv ? "servarr",
   lib,
 }: {
   yarr,
@@ -23,6 +27,62 @@
   ...
 }: let
   domain = config.noosphere.domain;
+
+  secretEnv = envName: key: {
+    name = envName;
+    valueFrom.secretKeyRef = {
+      name = "pg-${name}-password";
+      inherit key;
+    };
+  };
+
+  dbEnvs = {
+    servarr = [
+      {
+        name = "${envPrefix}__POSTGRES__HOST";
+        value = "${yarr.dbClusterName}-rw";
+      }
+      {
+        name = "${envPrefix}__POSTGRES__PORT";
+        value = "5432";
+      }
+      (secretEnv "${envPrefix}__POSTGRES__USER" "username")
+      (secretEnv "${envPrefix}__POSTGRES__PASSWORD" "password")
+      {
+        name = "${envPrefix}__POSTGRES__MAINDB";
+        value = "${name}";
+      }
+      {
+        name = "${envPrefix}__POSTGRES__LOGDB";
+        value = "${name}-logs";
+      }
+      {
+        name = "${envPrefix}__SERVER__PORT";
+        value = toString port;
+      }
+    ];
+
+    bazarr = [
+      {
+        name = "POSTGRES_ENABLED";
+        value = "true";
+      }
+      {
+        name = "POSTGRES_HOST";
+        value = "${yarr.dbClusterName}-rw";
+      }
+      {
+        name = "POSTGRES_PORT";
+        value = "5432";
+      }
+      {
+        name = "POSTGRES_DATABASE";
+        value = "${name}";
+      }
+      (secretEnv "POSTGRES_USERNAME" "username")
+      (secretEnv "POSTGRES_PASSWORD" "password")
+    ];
+  };
 in {
   applications.${name} = {
     resources.persistentVolumeClaims."${name}-pvc" = {
@@ -105,46 +165,7 @@ in {
                   value = "65537";
                 }
               ]
-              ++ [
-                {
-                  name = "${envPrefix}__POSTGRES__HOST";
-                  value = "${yarr.dbClusterName}-rw";
-                }
-                {
-                  name = "${envPrefix}__POSTGRES__PORT";
-                  value = "5432";
-                }
-                {
-                  name = "${envPrefix}__POSTGRES__USER";
-                  valueFrom.secretKeyRef = {
-                    name = "pg-${name}-password";
-                    key = "username";
-                  };
-                }
-
-                {
-                  name = "${envPrefix}__POSTGRES__PASSWORD";
-
-                  valueFrom.secretKeyRef = {
-                    name = "pg-${name}-password";
-                    key = "password";
-                  };
-                }
-
-                {
-                  name = "${envPrefix}__POSTGRES__MAINDB";
-                  value = "${name}";
-                }
-
-                {
-                  name = "${envPrefix}__POSTGRES__LOGDB";
-                  value = "${name}-logs";
-                }
-                {
-                  name = "${envPrefix}__SERVER__PORT";
-                  value = toString port;
-                }
-              ];
+              ++ dbEnvs.${dbEnv};
 
             ports = [{containerPort = port;}];
           }

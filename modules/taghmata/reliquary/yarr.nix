@@ -25,6 +25,20 @@
           username = "$username";
           password = "$password";
         };
-      }) ["lidarr" "prowlarr" "radarr" "seerr" "sonarr"]));
+      }) ["lidarr" "prowlarr" "radarr" "seerr" "sonarr"])
+      // {
+        # Nothing to type in: the role is always `bazarr` and the password is
+        # generated. Hex so it needs no escaping anywhere it ends up.
+        pg-bazarr-sopssecret = {
+          namespace = "yarr";
+          secretName = "pg-bazarr-password";
+          labels."cnpg.io/reload" = "true";
+          random.password = "-hex 32";
+          data = {
+            username = "bazarr";
+            password = "$password";
+          };
+        };
+      });
   };
 }

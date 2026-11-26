@@ -1,0 +1,12 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: db-bazarr
+  namespace: yarr
+spec:
+  cluster:
+    name: pg-yarr-2
+  name: bazarr
+  owner: bazarr
