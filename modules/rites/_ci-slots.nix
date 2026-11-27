@@ -120,10 +120,10 @@ in {
     remote = true;
     host = "cerberus";
     # Separate operator opt-in; applies to the dispatcher and its slots.
-    trustedJobs = false;
+    trustedJobs = true;
     # Flip on Ryza before rolling out node slots (which always use this policy).
     # Off at merge to preserve the live Ryza service and slice definitions.
-    protectStdSlots = false;
+    protectStdSlots = true;
     # Provision the shared Garage key only with the remote dispatcher.
     sccacheCi = false;
     inherit takeover takeoverLabels untrustedTakeover;
@@ -148,8 +148,8 @@ in {
       ryza = {
         uplink = "ens18";
         egress.untrusted = "ryza-eph";
-        # "ryza-eph-trusted" once the hand steps in the README are done.
-        egress.trusted = null;
+        # Trusted runs SNAT to .240 (README "Trusted slot egress").
+        egress.trusted = "ryza-eph-trusted";
         # The pre-HOM-29 single guest; its images may still be on disk. After
         # the takeover also the two retired `nix-vm` guests, until their state
         # is removed by hand (README "Ryza takeover").
