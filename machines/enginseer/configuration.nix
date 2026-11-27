@@ -15,7 +15,7 @@ in {
     # package-only port); the two must never be imported together. To go back,
     # revert the commit that swapped them, or boot the previous generation.
     self.inputs.magos.nixosModules.nixarchy
-    ./strata.nix
+    ./llama-swap.nix
   ];
 
   magos.nixarchy = {
@@ -70,6 +70,10 @@ in {
   #   hardware.nvidia.prime.sync.enable = true;
 
   nixpkgs.config.permittedInsecurePackages = ["electron-39.8.10"];
+
+  # RTX 4070 Laptop (Ada). Build CUDA packages (llama.cpp in ./llama-swap.nix)
+  # for this card only, not nixpkgs' every-generation default.
+  nixpkgs.config.cudaCapabilities = ["8.9"];
 
   boot.loader.grub.devices = [diskId];
 
