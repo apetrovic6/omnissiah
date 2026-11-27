@@ -41,8 +41,8 @@
   llamaServer = lib.getExe' llamaCpp "llama-server";
 
   # Inkling 2 (arch `inkling2`) needs ggml-org/llama.cpp#32704 (merged
-  # 2026-11-21) plus the Inkling graph work after it; pinned to master of
-  # 2026-11-25. Without #32704 the NVFP4 scales in unsloth's quants are not
+  # 2026-11-21) plus the Inkling graph work after it, and #33063 (CUDA flash
+  # attention with indexed bias); pinned to master of 2026-11-27. Without #32704 the NVFP4 scales in unsloth's quants are not
   # dequantized correctly and stock llama.cpp produces gibberish. Used ONLY by
   # the inkling entry so the other models stay on the nixpkgs build. Drop this
   # once a nixpkgs llama-cpp bump contains the PR.
@@ -58,12 +58,12 @@
     buildInputs = old.buildInputs ++ [pkgs.cudaPackages.cuda_nvml_dev];
     npmDeps = null;
     preConfigure = "";
-    version = "0-unstable-2026-11-25";
+    version = "0-unstable-2026-11-27";
     src = pkgs.fetchFromGitHub {
       owner = "ggml-org";
       repo = "llama.cpp";
-      rev = "244640b7f26e2a7301b27a24edc4f7feaf97d52f";
-      hash = "sha256-snOPbwPbWEG4LuWbW75+leBNQT+a2YnZhw2ZGFfnnjc=";
+      rev = "15fcfc7357f8de73671d39e7d8c594e1beb3052d";
+      hash = "sha256-CI1o2H6f1QEE3WR8Nc9121IiUxz+zwPI2vZnt2FrPjE=";
     };
   });
 
@@ -170,31 +170,37 @@ in {
         # is mostly eaten by an agent harness's system prompt and tool schemas.
         #
         # PLACED BY HAND, against the advice on mkModel above -- measured
-        # 2026-11-25 on llama.cpp master 244640b7, GPU1 only. The loop core
+        # 2026-11-25 and 2026-11-27 on llama.cpp master, GPU1 only. The loop core
         # (physical layers 6-17) runs three times per token, so its experts are
         # worth three times the VRAM of the rest; auto-fit does not know that
         # and spreads them evenly (ggml-org/llama.cpp#33040). -ot sends the
         # experts of every OTHER layer to RAM. The fused tensor is
         # ffn_gate_up_exps -- a pattern for ffn_up_exps matches nothing.
         #
-        # The limit is the COMPUTE buffer, not weights or KV: CUDA has no kernel
-        # for the compact-bias flash attention Inkling needs yet (#32740 is the
-        # ggml contract only; Vulkan #32898 and Metal #32808 are open), so the
-        # global layers' attention scores are materialized and the buffer
-        # scales with ctx x ubatch -- 12.9GB at 128K/ub512. With layers 6-17
-        # resident (7.8GB) only ~32K context fits. Op offload makes it worse:
-        # it stages each RAM layer on the GPU, so moving a layer out frees
-        # ~547MB of weights and adds the same back as compute.
+        # Until #33063 (CUDA flash attention with indexed bias, merged
+        # 2026-11-26) the global layers' attention scores were materialized and
+        # the compute buffer scaled with ctx x ubatch: 12.9GB at 128K/ub512.
+        # Since then it is ~1.1-1.3GB at 128K, and the limit is plain VRAM:
+        # layers 6-17 (7.8GB) + 1.2GB KV still miss by 0.65-0.8GB, so the loop
+        # core loses layers 6-7 to RAM. Op offload still does not fit: it stages
+        # each RAM layer on the GPU and wants 1.5-2.5GB more.
         #
-        # Same 20.6K-token prompt, tok/s, cold prefill / decode cold, warm:
+        # Same 20.6K-token prompt, 128K ctx, tok/s, cold prefill / decode
+        # cold, warm:
         #
-        #   old pin, auto-fit, ub128 (2026-11-21)    ~54-60 / 10-15
-        #   layers 9-17 on GPU, 128K, ub64, no op    80.8 / 18.5, 16.6   <- this
-        #   layers 6-17 on GPU, 32K, ub128, op on   110.8 / 19.8, 25.4
+        #   old pin, auto-fit, ub128 (2026-11-21)        ~54-60 / 10-15
+        #   2026-11-25 build, layers 9-17, ub64, no op    80.8 / 18.5, 16.6
+        #   2026-11-27 build, layers 9-17, ub64, no op   116.7 / 24.6, 22.3
+        #                     layers 9-17, ub256, no op  110.3 / 21.8, 22.5
+        #                     layers 8-17, ub256, no op  139.7 / 26.5, 27.3  <- this
+        #                     layers 7-17, ub256, no op  145.7 / 23.8, 25.1
+        #                     -cmoe --moe-cache-mib 5120  50.4 / 12.0, 12.4
         #
-        # (llama-bench at 2K context, where the buffer does not bite: 394 / 29.7
-        # with layers 6-17 and op offload.) 128K wins for agent use. Re-measure
-        # when CUDA gets compact-bias FA: 6-17 + op offload at 128K is the prize.
+        # 7-17 uses 9.6 of 9.9GB -- too tight to deploy. llama.cpp's hot-expert
+        # cache (-cmoe --moe-cache-mib) loses badly to fixed placement here:
+        # pinning the looped layers matters more than caching popular experts,
+        # and with op offload on it asks for 7.7GB of staging whatever the cache
+        # size (#32910). Re-measure when the MMA kernel (#33193) lands.
         #
         #   -ctk/-ctv q4_0       overrides mkModel's q8_0 (last flag wins):
         #                        1.15GB instead of 2.2GB at 128K.
@@ -214,8 +220,8 @@ in {
             "--no-mmproj-offload"
             "--device CUDA1"
             "--n-gpu-layers 99"
-            "--override-tensor 'blk\\.([0-8]|1[89]|2[0-3])\\.ffn_(gate_up|down)_exps\\.weight=CPU'"
-            "--ubatch-size 64"
+            "--override-tensor 'blk\\.([0-7]|1[89]|2[0-3])\\.ffn_(gate_up|down)_exps\\.weight=CPU'"
+            "--ubatch-size 256"
             "--no-op-offload"
             "--cache-type-k q4_0"
             "--cache-type-v q4_0"
