@@ -2682,6 +2682,13 @@ three nodes, and consider a tighter absolute threshold there (Garage has
 no alerting of its own, and 30 minutes at 3 % is late for a disk that
 also holds Garage's data).
 
+Those alerts fire far below the slot's own 280 GiB floor. If ncps or
+unbounded Garage buckets push `/mnt/storage` under 280 GiB, the large
+slot quietly stops claiming: the dispatcher logs `pre-claim check-space
+failed: disk-space-low` once and nothing alerts, so `nix-machines` jobs
+just queue. When large jobs queue, check `df -h /mnt/storage` on the
+nodes first.
+
 Longhorn is most likely **not** on `/mnt/storage`, despite the disko
 comment: the longhorn-manager DaemonSet mounts the hostPath
 `/var/lib/longhorn/` (rendered `longhorn/DaemonSet-longhorn-manager.yaml`),
@@ -3120,10 +3127,13 @@ No RKE2 restart is expected.
 
    ```bash
    while :; do
-     summary=$(ssh "$target" 'nix-store --gc --max-freed 20G 2>&1 | tail -n 1') || break
+     # Measure the chunk itself: the 10-minute windows start before it.
+     for n in luna sol terra; do fsync_p99 "$n" & done
+     sleep 5
+     summary=$(ssh "$target" 'nix-store --gc --max-freed 20G 2>&1 | tail -n 1') || { wait; break; }
      printf '%s\n' "$summary"   # "N store paths deleted, X MiB freed"
      ssh "$target" systemctl start rke2-clean-dangling-store-links
-     for n in luna sol terra; do fsync_p99 "$n" & done; wait
+     wait   # p99 and the before/after leader counts cover the chunk
      read -rp 'All three p99 within the canary limits and no leader change? [y/N] ' ok
      [[ $ok == y ]] || break
      [[ $summary == "0 store paths deleted"* ]] && break
@@ -3131,7 +3141,10 @@ No RKE2 restart is expected.
    ```
 
    Stop on the canary's limits (any p99 bound above `0.016` s, more
-   than one bucket above baseline, or a leader change) and resume later.
+   than one bucket above baseline, or a `leader` count on stderr that
+   rose from the window's start to its end) and resume later. If a chunk
+   ever runs longer than the 600 s window, lengthen the window in
+   `fsync_p99`, not the chunk size.
    Verify no private CI output remains and `df -B1 --output=avail
    /mnt/storage` gives at least `300647710720` bytes (280 GiB: the
    images, 10 GiB margin and 100 GiB for Garage and swap; the slot
