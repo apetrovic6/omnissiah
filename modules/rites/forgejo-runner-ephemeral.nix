@@ -1704,7 +1704,11 @@ in {
             ++ lib.optional hasOrg "write:organization"
             ++ lib.optional cfg.trustedJobs.enable "read:repository";
           # Public only rejects non-public orgs on the org routes; user queues work with it.
-          publicOnly = lib.optionalString (!hasOrg) "Public only; ";
+          # It also disables repo-admin endpoints (Forgejo's public-repos authorization
+          # reducer has AllowAdminOverride = false), so the trust checks' deploy-key,
+          # branch protection and collaborator lists answer 403: with trust on, never
+          # Public only.
+          publicOnly = lib.optionalString (!hasOrg && !cfg.trustedJobs.enable) "Public only; ";
           scopesText = lib.concatStringsSep " and " scopes + lib.optionalString (scopes == ["write:user"]) " only";
         in
           lib.nameValuePair generator {

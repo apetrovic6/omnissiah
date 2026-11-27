@@ -491,10 +491,10 @@ in
         users = ["manjo"];
       };
     }))).extra.trust.repos."7".schedules;
-  # Review L3: Public only unless the forge has an org pool; read:repository only with trust on.
+  # Review L3: Public only unless the forge has an org pool or trust is on; read:repository only with trust on.
   assert prompt (withPool noosphereUser) "noosphere" == "Forgejo dispatcher PAT for manjo on forge.noosphere.uk (Public only; write:user only)";
   assert prompt multiPool "noosphere" == "Forgejo dispatcher PAT for noosphere-ci on forge.noosphere.uk (write:user and write:organization)";
-  assert prompt trustedConfig "ugalabugala" == "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (Public only; write:user and read:repository)";
+  assert prompt trustedConfig "ugalabugala" == "Forgejo dispatcher PAT for manjo on forge.ugalabugala.org (write:user and read:repository)";
   assert !dynamicSlot.fixed_pilot;
   assert dynamicGuest.microvm.credentialFiles == lib.genAttrs dynamicCredentials (id: "${dynamicSlot.credential_dir}/${id}");
   assert lib.sort builtins.lessThan dynamicRunner.serviceConfig.LoadCredential == dynamicCredentials;
