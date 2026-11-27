@@ -2262,11 +2262,11 @@
         "wrapper-modules": "wrapper-modules"
       },
       "locked": {
-        "lastModified": 1795714528,
-        "narHash": "sha256-hx3lVYuA6DHpfsFnaBbCLqYfcyQRjoNLLBQFIz5oPd4=",
+        "lastModified": 1795798955,
+        "narHash": "sha256-DvBVJivZ/4QWh5M1znooH5AEIjYhVJLapaLQ79j1EHI=",
         "owner": "apetrovic6",
         "repo": "magos",
-        "rev": "04d799179917cb61ab42c76692ab33011c87d26b",
+        "rev": "92971ee37105d6bc4a3b9be201386c7b72fbf1d2",
         "type": "github"
       },
       "original": {
@@ -4320,16 +4320,16 @@
     "strata": {
       "flake": false,
       "locked": {
-        "lastModified": 1795139626,
-        "narHash": "sha256-P6V8EDElMtohpT60Ya94Hb2ebUz1ZjzJbb8O/L12ybE=",
+        "lastModified": 1795609947,
+        "narHash": "sha256-NgirO05es3iS5ya4cJfK/PqUzlLJOhllQ6XYQvzG/0k=",
         "owner": "Niko1221",
         "repo": "Strata",
-        "rev": "12d491da4a6904eb49aaa6f2f63ec4b1a17582e3",
+        "rev": "b28ca95e3e6847f2d5e317994f253b66716deeaa",
         "type": "github"
       },
       "original": {
         "owner": "Niko1221",
-        "ref": "v0.2.17",
+        "ref": "v0.2.22",
         "repo": "Strata",
         "type": "github"
       }

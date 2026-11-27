@@ -1,5 +1,12 @@
-# CUDA inference for the original and expert-pruned Coder Flash-Next packs.
-# Model preparation remains imperative; Nix owns the engine, config and service.
+# Strata models served through llama-swap (docs/LLAMA_SWAP.md upstream): each
+# model is one llama-swap entry that starts `strata-server` for one run config,
+# so llama-swap -- not one Strata process per model -- decides what holds the
+# GPU, and asking for one model unloads the other.
+#
+# Model preparation remains imperative (packs, GGUFs, MTP heads and .strata
+# files are downloaded by hand into dataDir); Nix owns the engines, the run
+# configs and the llama-swap entries. Pair with a llama-swap host config that
+# binds the model directory into the service (see machines/phalanx).
 {self, ...}: {
   flake.nixosModules.strata = {
     config,
@@ -12,237 +19,260 @@
     strata = pkgs.callPackage ./_package.nix {
       src = self.inputs.strata;
     };
-    home = config.users.users.${cfg.user}.home;
-    stateDir = "${home}/.local/state/strata";
-    tag = lib.optionalString (cfg.family == "coder") "coder-" + cfg.quant;
-    configName = "strata-${lib.toLower tag}";
-    shard = i: "${cfg.dataDir}/models/${tag}/Qwen3.8-Flash-Next-GSQ-RCO-${cfg.quant}-0000${toString i}-of-00002.gguf";
-    engineConfig = pkgs.writeText "${configName}.json" (builtins.toJSON {
-      exe = "${strata.engine}/libexec/strata/strata";
+
+    # llama-swap runs as a DynamicUser with ProtectSystem=strict; its
+    # StateDirectory is the only place it can write. The server writes its
+    # settings beside --config, the engine its log, and the shape engines a
+    # tokenizer (vocab.json) generated from the .strata file on first start.
+    # All of it is regenerable, so nothing here needs persisting.
+    stateDir = "/var/lib/llama-swap/strata";
+    engineExe = name: "${strata.engine}/libexec/strata/${name}";
+
+    # One llama-swap entry: link the store config into the writable state dir,
+    # then exec the server on llama-swap's port. `exec` so llama-swap's SIGTERM
+    # reaches the server, which stops its engine and frees the GPU.
+    mkEntry = {
+      name,
+      runConfig,
+      ttl,
+    }: let
+      configFile = pkgs.writeText "${name}.json" (builtins.toJSON runConfig);
+      launcher = pkgs.writeShellScript "strata-${name}" ''
+        set -eu
+        mkdir -p ${stateDir}/${name}/tokenizer
+        # Neither HOME nor XDG_* exist for a DynamicUser; keep anything the
+        # server writes under its own state.
+        export HOME=${stateDir} XDG_CONFIG_HOME=${stateDir}/.config XDG_CACHE_HOME=${stateDir}/.cache
+        ln -sfn ${configFile} ${stateDir}/${name}.json
+        exec ${lib.getExe strata.server} --engine strata --config ${stateDir}/${name}.json --port "$1"
+      '';
+    in {
+      inherit ttl;
+      cmd = "${launcher} \${PORT}";
+      # /health answers only once the model is loaded.
+      checkEndpoint = "/health";
+    };
+
+    # ---- Qwen3.8-Flash-Next (ISTA-DASLab packs), the `strata` engine ----
+    q = cfg.qwen;
+    tag = lib.optionalString (q.family == "coder") "coder-" + q.quant;
+    shard = i: "${cfg.dataDir}/models/${tag}/Qwen3.8-Flash-Next-GSQ-RCO-${q.quant}-0000${toString i}-of-00002.gguf";
+    pack = "${cfg.dataDir}/packs/${lib.toLower tag}";
+    qwenConfig = {
+      exe = engineExe "strata";
       args =
         [
           "--pack"
-          cfg.pack
+          pack
           "--native"
-          cfg.native
+          (shard 1)
           "--ple-gguf"
-          cfg.ple
+          (shard 2)
           "--expert-profile"
-          cfg.expertProfile
+          "${strata.src}/terminal/data/expert-profile${lib.optionalString (q.family == "coder") "-coder"}.bin"
           "--expert-cache"
           "auto"
           "--prefill"
-          cfg.prefill
+          q.prefill
           "--spec"
-          (toString cfg.specTokens)
+          (toString q.specTokens)
           "--spec-min-p"
           "0.5"
           "--mtp"
-          cfg.mtp
+          "${cfg.dataDir}/mtp/rt"
           "--max-context"
-          (toString cfg.maxContext)
+          (toString q.maxContext)
           "--kv"
-          cfg.kvType
+          q.kvType
           "--kv-resident"
-          (toString cfg.kvResident)
+          (toString q.kvResident)
         ]
-        ++ cfg.extraArgs;
-      # The server copies this into the engine's environment (serve/server.py,
-      # "engine settings the config carries"). Set via the config rather than
-      # the unit's Environment= so it is visible beside the args it tunes.
-      env = cfg.engineEnv;
-      cwd = stateDir;
-      tokenizer = "${cfg.pack}/tokenizer";
-      model_name = cfg.modelName;
-      log = "${stateDir}/${configName}.log";
+        ++ q.extraArgs;
+      # The server copies this into the engine's environment.
+      env = q.engineEnv;
+      cwd = "${stateDir}/${q.modelName}";
+      tokenizer = "${pack}/tokenizer";
+      model_name = q.modelName;
+      log = "${stateDir}/${q.modelName}/engine.log";
       lib_dirs = [];
-      inherit (cfg) port gpu;
+      inherit (cfg) gpu;
       gpus_asked = true;
-    });
-  in {
-    imports = [self.nixosModules.impermanence];
+    };
 
+    # ---- Inkling 2 Mini (.strata pack), the `strata-inkling` shape engine ----
+    ink = cfg.inkling;
+    inkDir = "${cfg.dataDir}/models/inkling-2-mini";
+    inklingConfig = {
+      exe = engineExe "strata-inkling";
+      # serve/inkling_kind.py routes by this.
+      arch = "inkling2_loop";
+      args =
+        [
+          "--native"
+          "${inkDir}/Inkling-2-Mini-${ink.pack}.strata"
+          "--max-context"
+          (toString ink.maxContext)
+        ]
+        ++ lib.optionals ink.vision ["--vision" "${inkDir}/Inkling-2-Mini-Vision.strata"]
+        ++ lib.optionals (ink.drafting == "dspark") ["--dspark" "${inkDir}/mtp.safetensors"];
+      inherit (ink) drafting;
+      cwd = "${stateDir}/${ink.modelName}";
+      # Writable: the server generates vocab.json here from the pack's
+      # manifest (serve/server.py _ensure_shape_tokenizer).
+      tokenizer = "${stateDir}/${ink.modelName}/tokenizer";
+      model_name = ink.modelName;
+      log = "${stateDir}/${ink.modelName}/engine.log";
+      lib_dirs = [];
+      inherit (cfg) gpu;
+      gpus_asked = true;
+    };
+  in {
     options.services.imperium.strata = {
-      enable = mkEnableOption "the Strata CUDA inference user service";
-      user = mkOption {
-        type = types.str;
-        description = "Existing user whose home contains the model data and service state.";
-      };
-      family = mkOption {
-        type = types.enum ["qwen" "coder"];
-        default = "qwen";
-        description = "Original Flash-Next or its expert-pruned GSQ-RCO Coder variant.";
-      };
-      quant = mkOption {
-        type = types.enum ["Q2_0" "IQ2_XS" "IQ3_XXS" "IQ3_S" "IQ1_M"];
-        default =
-          if cfg.family == "coder"
-          then "IQ1_M"
-          else "IQ3_XXS";
-        description = "Prepared ISTA-DASLab quantization; Coder requires IQ1_M.";
-      };
-      modelName = mkOption {
-        type = types.str;
-        default = "qwen3.8-flash-next-${lib.toLower tag}";
-        description = "Model ID advertised by the API; clients must use this name.";
-      };
+      enable = mkEnableOption "Strata models as llama-swap entries";
       dataDir = mkOption {
         type = types.str;
-        default = "${home}/models/strata-data";
-        description = "Persistent directory populated by upstream model preparation, not by Nix.";
-      };
-      pack = mkOption {
-        type = types.str;
-        default = "${cfg.dataDir}/packs/${lib.toLower tag}";
-        description = "Prepared engine pack directory, including its tokenizer subdirectory.";
-      };
-      native = mkOption {
-        type = types.str;
-        default = shard 1;
-        description = "First GGUF shard containing the native model weights.";
-      };
-      ple = mkOption {
-        type = types.str;
-        default = shard 2;
-        description = "GGUF shard containing the n-gram lookup table.";
-      };
-      mtp = mkOption {
-        type = types.str;
-        default = "${cfg.dataDir}/mtp/rt";
-        description = "Prepared MTP draft head directory.";
-      };
-      expertProfile = mkOption {
-        type = types.str;
-        default = "${strata.src}/terminal/data/expert-profile${lib.optionalString (cfg.family == "coder") "-coder"}.bin";
-        description = "Expert usage profile matching the model's expert count.";
+        description = ''
+          Model data populated by hand (packs, models, mtp), as the llama-swap
+          service sees it -- i.e. under its bind mount, not the host path.
+        '';
       };
       gpu = mkOption {
         type = types.ints.unsigned;
         default = 0;
         description = "Physical NVIDIA GPU index. CUDA build targets come from nixpkgs.config.cudaCapabilities.";
       };
-      port = mkOption {
-        type = types.port;
-        default = 8000;
-        description = "Local API port; no firewall port is opened.";
+
+      qwen = {
+        enable = mkEnableOption "Qwen3.8-Flash-Next on the strata engine" // {default = true;};
+        family = mkOption {
+          type = types.enum ["qwen" "coder"];
+          default = "qwen";
+          description = "Original Flash-Next or its expert-pruned GSQ-RCO Coder variant.";
+        };
+        quant = mkOption {
+          type = types.enum ["Q2_0" "IQ2_XS" "IQ3_XXS" "IQ3_S" "IQ1_M"];
+          default =
+            if q.family == "coder"
+            then "IQ1_M"
+            else "IQ3_XXS";
+          description = "Prepared ISTA-DASLab quantization; Coder requires IQ1_M.";
+        };
+        modelName = mkOption {
+          type = types.str;
+          default = "qwen3.8-flash-next-${lib.toLower tag}";
+          description = "Model ID, both the llama-swap entry and the API's; clients must use this name.";
+        };
+        maxContext = mkOption {
+          type = types.ints.positive;
+          default = 32768;
+          description = "Maximum token context allocated by the engine.";
+        };
+        kvResident = mkOption {
+          type = types.ints.positive;
+          default = lib.min q.maxContext 32768;
+          description = "Token count of the GPU-resident KV window.";
+        };
+        kvType = mkOption {
+          type = types.enum ["int8" "q4_0" "k8v4"];
+          default = "int8";
+          description = "Engine KV cache precision.";
+        };
+        prefill = mkOption {
+          type = types.str;
+          default = "auto";
+          description = "Engine prompt chunk size (auto or an explicit token count).";
+        };
+        specTokens = mkOption {
+          type = types.ints.unsigned;
+          default = 4;
+          description = "Number of speculative MTP draft tokens; zero disables speculation.";
+        };
+        ttl = mkOption {
+          type = types.ints.unsigned;
+          default = 3600;
+          description = "Idle seconds before llama-swap unloads the model.";
+        };
+        extraArgs = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          description = "Additional engine arguments for host-specific tuning.";
+        };
+        engineEnv = mkOption {
+          type = types.attrsOf types.str;
+          default = {};
+          example = {STRATA_ROUTE_TAIL_SKIP = "7";};
+          description = "Environment variables (STRATA_* switches) passed to the engine process.";
+        };
       };
-      maxContext = mkOption {
-        type = types.ints.positive;
-        default = 32768;
-        description = "Maximum token context allocated by the engine.";
-      };
-      kvResident = mkOption {
-        type = types.ints.positive;
-        default = lib.min cfg.maxContext 32768;
-        description = "Token count of the GPU-resident KV window.";
-      };
-      kvType = mkOption {
-        type = types.enum ["int8" "q4_0" "k8v4"];
-        default = "int8";
-        description = "Engine KV cache precision.";
-      };
-      prefill = mkOption {
-        type = types.str;
-        default = "auto";
-        description = "Engine prompt chunk size (auto or an explicit token count).";
-      };
-      specTokens = mkOption {
-        type = types.ints.unsigned;
-        default = 4;
-        description = "Number of speculative MTP draft tokens; zero disables speculation.";
-      };
-      lazy = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Load the engine only when an inference request arrives.";
-      };
-      idleUnload = mkOption {
-        type = types.ints.unsigned;
-        default = 3600;
-        description = "Idle seconds before unloading the engine; zero disables idle unloading.";
-      };
-      minFreeVramMiB = mkOption {
-        type = types.ints.unsigned;
-        default = 2048;
-        description = "Minimum free GPU memory before accepting a cold model load.";
-      };
-      extraArgs = mkOption {
-        type = types.listOf types.str;
-        default = [];
-        description = "Additional engine arguments for host-specific tuning.";
-      };
-      engineEnv = mkOption {
-        type = types.attrsOf types.str;
-        default = {};
-        example = {STRATA_ROUTE_TAIL_SKIP = "7";};
-        description = "Environment variables (STRATA_* switches) passed to the engine process.";
+
+      inkling = {
+        enable = mkEnableOption "Inkling 2 Mini on the strata-inkling engine";
+        pack = mkOption {
+          type = types.enum ["SQ-10" "SQ-15" "SQ-20"];
+          default = "SQ-15";
+          description = "Strata's own .strata build, in dataDir/models/inkling-2-mini.";
+        };
+        modelName = mkOption {
+          type = types.str;
+          default = "inkling-2-mini-${lib.toLower ink.pack}";
+          description = "Model ID, both the llama-swap entry and the API's.";
+        };
+        maxContext = mkOption {
+          type = types.ints.positive;
+          default = 131072;
+          description = "Maximum token context; the engine offloads global KV to host RAM when VRAM is short.";
+        };
+        vision = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Load Inkling-2-Mini-Vision.strata for image input.";
+        };
+        drafting = mkOption {
+          type = types.enum ["off" "dspark"];
+          default = "off";
+          description = "DSpark speculative decoding (needs mtp.safetensors).";
+        };
+        ttl = mkOption {
+          type = types.ints.unsigned;
+          default = 900;
+          description = "Idle seconds before llama-swap unloads the model.";
+        };
       };
     };
 
     config = mkIf cfg.enable {
-      # What must survive a reboot on a machine with an ephemeral root
-      # (rites/impermanence.nix): upstream's setup keeps its data_dir setting in
-      # .config/strata and re-prompts for it when that is gone, and the engine
-      # log, settings and the linked config are in .local/state/strata.
-      #
-      # The model data is not listed. It is tens of gigabytes under dataDir,
-      # which by default sits in the user's own ~/models; whoever owns that
-      # directory keeps it.
-      services.imperium.impermanence.users.${cfg.user}.directories = [
-        ".config/strata"
-        ".local/state/strata"
-      ];
-
       assertions = [
         {
-          assertion = (cfg.family == "coder") == (cfg.quant == "IQ1_M");
+          assertion = (q.family == "coder") == (q.quant == "IQ1_M");
           message = "Strata: IQ1_M is exclusive to the Coder family; Coder requires IQ1_M.";
         }
         {
-          assertion = cfg.kvResident <= cfg.maxContext;
+          assertion = q.kvResident <= q.maxContext;
           message = "Strata: kvResident must not exceed maxContext.";
+        }
+        {
+          assertion = config.services.llama-swap.enable;
+          message = "Strata: models are served through llama-swap; enable services.llama-swap.";
         }
       ];
 
-      systemd.user.services.strata = {
-        description = "Strata inference engine (${cfg.modelName})";
-        wantedBy = ["default.target"];
-        # NixOS user units are visible to every account, but only this user
-        # owns these model files and should start the listener.
-        unitConfig.ConditionUser = cfg.user;
-        path = [config.hardware.nvidia.package.bin];
-        serviceConfig = {
-          Type = "simple";
-          StateDirectory = "strata";
-          WorkingDirectory = stateDir;
-          # The server writes settings beside --config. Keep that directory
-          # writable while the generated config itself stays in the store.
-          ExecStartPre = lib.escapeShellArgs [
-            "${pkgs.coreutils}/bin/ln"
-            "-sfn"
-            engineConfig
-            "${stateDir}/${configName}.json"
-          ];
-          ExecStart = lib.escapeShellArgs ([
-              (lib.getExe strata.server)
-              "--engine"
-              "strata"
-              "--config"
-              "${stateDir}/${configName}.json"
-              "--port"
-              (toString cfg.port)
-            ]
-            ++ lib.optional cfg.lazy "--lazy"
-            ++ [
-              "--idle-unload"
-              (toString cfg.idleUnload)
-              "--min-free-vram-mib"
-              (toString cfg.minFreeVramMiB)
-            ]);
-          Restart = "on-failure";
-          RestartSec = 10;
+      services.llama-swap.settings.models =
+        lib.optionalAttrs q.enable {
+          ${q.modelName} = mkEntry {
+            name = q.modelName;
+            runConfig = qwenConfig;
+            inherit (q) ttl;
+          };
+        }
+        // lib.optionalAttrs ink.enable {
+          ${ink.modelName} = mkEntry {
+            name = ink.modelName;
+            runConfig = inklingConfig;
+            inherit (ink) ttl;
+          };
         };
-      };
+
+      systemd.services.llama-swap.serviceConfig.StateDirectory = "llama-swap";
     };
   };
 }

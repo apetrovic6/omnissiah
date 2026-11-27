@@ -192,7 +192,7 @@
     # Pinned to a release tag, not main -- main moves through rc branches daily.
     # To update: bump the tag here, then `nix flake update strata`.
     strata = {
-      url = "github:Niko1221/Strata/v0.2.17";
+      url = "github:Niko1221/Strata/v0.2.22";
       flake = false;
     };
 
