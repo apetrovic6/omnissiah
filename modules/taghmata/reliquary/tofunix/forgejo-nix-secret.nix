@@ -17,7 +17,7 @@
       # to the template's ADVISORY_PR_TOKEN secret, which the nightly advisory
       # job uses to push to that fork (rust-app-template RT-122).
       tofunix-advisory-bot-forgejo = {
-        prompts.forgejo-token.description = "Cerberus PAT belonging to advisory-bot (all repositories, write:repository, read:user)";
+        prompts.forgejo-token.description = "Cerberus PAT belonging to advisory-bot (all repositories, write:repository, read:user, read:organization)";
         data.forgejo_token = "$forgejo_token";
       };
       tofunix-hermes-noosphere-password = {
