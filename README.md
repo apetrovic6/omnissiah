@@ -1745,9 +1745,12 @@ capacity; Ryza's `nix-vm` scheduling never changed.
 address. Drain its persistent runners if present; they stop when it
 becomes the dispatcher. Cerberus's own runners stay off for good once
 `remote = true`, even when the dispatcher moves elsewhere, so moving the
-role to Terra leaves `nix` on Luna and Sol only until PR 13. Generate its fresh PATs and its own
-`forgejo-slotctl-ssh` key (do not copy the old private key). If trust is
-already enabled, ensure the shared CI credentials can deploy there.
+role to Terra requires explicitly staging its host runner off (with
+trust and trusted egress, or the per-node acknowledgement described
+below). A node hosting an active slot cannot be the dispatcher.
+Generate fresh PATs and a `forgejo-slotctl-ssh` key for the new
+dispatcher (do not copy the old private key). If trust is already
+enabled, ensure the shared CI credentials can deploy there.
 Pause and drain, stop the old dispatcher, and carry over each drained
 slot's root-owned state directory so queue identities and trust user pins
 are preserved.
@@ -2398,9 +2401,9 @@ With `takeover = true`:
   `sccache-garage-key` on Ryza. The guests' state directories stay hidden
   from the slots (`legacyVMs`) until you remove them.
 
-The slots then serve `nix-vm` alone. `nix-machines` (PR 11) is on no pool,
-and a guest registers only its job's own label, so no `machines.yml` job
-lands on a std slot.
+Ryza serves `nix-vm` and `nix-eph` by default, not `nix-machines`.
+A guest registers only its job's own label. The Machines workflow can
+run on large node slots, never on these std slots.
 
 **Capacity.** Each std slot's slice is 2 vCPU / 5 GiB (guest memory plus
 QEMU and virtiofsd). Hermes is capped at 6 GiB (gateway) plus 2 GiB
@@ -2484,8 +2487,8 @@ and no sccache.
   - So taking `nix` is asserted to need either `trustedJobs` with
     `egress.trusted` on every slot host (Ryza: `ryza-eph-trusted`), or
     `untrustedTakeover = true`, your acknowledgement of the table's
-    "breaks" and "degrades" rows. Take it in PR 13, when the node runners
-    go, unless you want it sooner.
+    "breaks" and "degrades" rows. PR 13 adds `nix` on large slots
+    independently; there is no need to add it to Ryza's labels.
 
 **Stolen jobs.** When a node runner takes a job a slot claimed, the job is
 `running` but not in the slot. The dispatcher delivers trust only after
@@ -2607,8 +2610,9 @@ auto-merges of fork PRs in these repos.
   - `systemctl status hermes-gateway blocky` shows both still running.
 
   If memory pressure shows up with 3 slots, go back to 2.
-- Both forges' runner lists show no `ryza` row. Only `eph-*` rows for busy
-  slots and the node and Cerberus rows remain.
+- Both forges' runner lists show no `ryza` or `cerberus` persistent row.
+  Expect `eph-*` rows for busy slots and persistent rows only for nodes
+  not yet retired by the large-slot rollout below.
 
 **Rollback.**
 
@@ -2636,6 +2640,304 @@ auto-merges of fork PRs in these repos.
 
 This puts the shared keys back on the host that runs Hermes. PR 15 rotates
 them anyway.
+
+#### Large slots on Luna, Sol and Terra (HOM-32 PR 13, operator only)
+
+Merge alone changes no machine. Roll out **Luna → Sol → Terra**, completing
+each node before starting the next. Terra holds the cluster SOPS age key.
+The live starting point is PR 11's host runners and the PR 12 Ryza takeover
+(two std slots, `nix-vm` and `nix-eph`, trust and trusted egress initially
+off). The dispatcher and egress guard are both on Cerberus today, but are
+separate roles. Check `dispatcher.host` and `guard` in
+[`_ci-slots.nix`](modules/rites/_ci-slots.nix) before deploying.
+
+| Node | Large slot | Guest / host slice memory | Untrusted / trusted SNAT |
+|---|---|---|---|
+| Luna | `luna-eph-1` | 3 / 4 GiB | `192.168.1.241` / `192.168.1.242` |
+| Sol | `sol-eph-1` | 4 / 5 GiB | `192.168.1.244` / `192.168.1.245` |
+| Terra | `terra-eph-1` | 4 / 5 GiB | `192.168.1.246` / `192.168.1.247` |
+
+Each node gets one 2-vCPU slot with 150 + 20 GiB sparse images; allow at
+least 180 GiB free on the image filesystem (including 10 GiB margin).
+Kubelet's `system-reserved` stays byte-identical; the slice's extra GiB
+covers QEMU and virtiofsd, not extra Kubernetes allocatable capacity.
+Large slots replace both user pools' (`ugalabugala` and `noosphere-user`)
+labels with `nix` and `nix-machines`, preserving both forges' former
+host-runner labels. The org pool keeps `nix-eph`. Std slots retain PR 12's
+labels by default. The dispatcher selects a job using the slot's pool
+labels; only a large slot can take a 300-minute Machines build. A host
+runner on another node can still take it until that node is retired.
+
+**Prepare.** Complete [Trusted slot egress](#trusted-slot-egress-hom-32-pr-8-opt-in)
+and [Trusted nix-eph jobs](#trusted-nix-eph-jobs-hom-31-opt-in) on Ryza
+first, from pinned revisions, including the PAT, live Caddy and trusted
+upload checks. Globally pause and drain before **any** switch that
+touches dispatchers, including the first PR 8 guard switch if guard and
+dispatcher share a host. Audit `manjo/omnissiah` against the trust
+preconditions there, including default-branch contents and protection,
+writers, and deploy keys. Omnissiah schedules are opted into trust only
+when a node slot is enabled and still go through the same checks. The
+Machines workflow needs trust for ncps upload and the closure check;
+`update` can push `flake.lock` using its workflow credentials, and the
+manifests job also uses ntfy, which needs trusted egress.
+
+The router DHCP pool is **unknown**. ARP silence is not a reservation.
+Exclude the dedicated addresses from DHCP as soon as router access is
+available, including Ryza `.240` and `.249`; `.243` belongs to keksic.
+Before enabling a node, run `sudo arping -D -c 3 -I enp1s0 <address>` on
+that node for each of its two addresses while they are not assigned.
+Stop on a reply or probe error. The node adds the /32s to its existing
+networkd `enp1s0` network with IPv4 duplicate-address detection. Each
+slot start also checks and probes its untrusted source; the PR 8
+trusted-egress unit separately checks/probes the trusted source and
+withdraws its rule if that address disappears. Do not bypass a refusal.
+
+**Pin and check every switch.** Use separate reviewed, committed
+revisions for stage, enable and, if needed, rollback. Keep all earlier
+nodes' live settings in each revision; do not deploy a moving branch,
+the dirty checkout, or use a pre-rollout revision for a partial rollback.
+From the repository root in Bash, set `rev` to the exact approved commit
+SHA for the step (update it at each revision change) and `node` to `luna`,
+`sol` or `terra`:
+
+```bash
+flake="git+file://$PWD?rev=$rev&shallow=1"
+slot="$node-eph-1"
+allocatable() {
+  kubectl --context default get "node/$node" -o json | jq -eS '.status.allocatable'
+}
+```
+
+Run `before=$(allocatable)` once before staging each node, or before
+starting a standalone rollback; stop if it cannot be read. Keep that
+baseline across the stage and enable revisions.
+For **each** stage, enable or rollback switch, run the
+[PR 11 OK/STOP drift check](#machines-workflow-nix-machines) with the
+same `node` and `flake` above; skip its example assignments to those
+variables. Compare the RKE2 service links, `registries.yaml` and kernel
+to the live generation. Proceed only on `OK`; on `STOP`, resolve read
+errors or schedule the drift separately as an RKE2 change. Switch the
+one node with `clan machines update --flake "$flake" "$node"`. Immediately
+run PR 11's `kubectl wait` for `Ready` and `etcdctl endpoint health
+--cluster` commands, then compare `allocatable` to `before`:
+
+```bash
+after=$(allocatable) && diff -u <(printf '%s\n' "$before") <(printf '%s\n' "$after")
+```
+
+Stop on any failure or difference; never start the next node while a
+node or etcd endpoint is unhealthy. For guard/dispatcher-only switches
+on Cerberus, still require the same cluster health and unchanged
+allocatable on the rollout node before continuing. Do not switch another
+RKE2 host as part of the same operation.
+
+**Stage one node (no slot yet).**
+
+1. In the `nodes` argument of `_ci-slots.nix`, commit the entry below,
+   substituting the current node name. Keep the fleet's verified
+   `dispatcher.trustedJobs = true`.
+
+   ```nix
+   nodes ? {
+     luna = { hostRunnerEnabled = false; slotsEnabled = false; trustedEgress = true; };
+   },
+   ```
+
+   Absent entries keep their host runners and no slot. Disabling a
+   runner even at this stage requires `dispatcher.trustedJobs` plus
+   `trustedEgress`, or that node's explicit `untrustedTakeover = true`.
+   Do not use the override for this rollout: without trust there is no
+   CI upload and the Machines closure check fails; without trusted
+   egress, Harbor, Garage S3 and ntfy are blocked. The flag accepts a
+   service degradation, not a passing canary.
+2. Drain both host runners. In both forges' Actions views, wait for
+   their active jobs to finish (or cancel them). Prevent new jobs from
+   starting during the handoff; once idle stop both units and confirm
+   neither is running:
+   `ssh "$target" systemctl stop forgejo-runner-ugalabugala forgejo-runner-noosphere`
+   (`target` comes from PR 11's drift check). Switch the node from the
+   pinned stage revision and run the health and allocatable checks.
+   Verify the two host units and the node slot are absent. The runner's
+   `storeCache` overrides and `nix-prune-generations` timer are gone;
+   the ordinary `nix-gc` timer is back.
+3. Delete the **persistent** runner row named `$node` on **each** forge,
+   from manjo's **User settings → Actions → Runners** (or **Site
+   Administration → Actions → Runners**). Match the UUID to
+   `vars/per-machine/$node/forgejo-runner-ugalabugala/uuid/value` on
+   `forge.ugalabugala.org` and the `forgejo-runner-noosphere/uuid/value`
+   under the same node on `forge.noosphere.uk`. Confirm both exact rows
+   are gone. Delete, don't rotate or touch any `eph-*` rows. Commit the
+   removal of the two matching per-machine vars:
+
+   ```bash
+   git rm -r -- "vars/per-machine/$node/forgejo-runner-ugalabugala" \
+     "vars/per-machine/$node/forgejo-runner-noosphere"
+   ```
+
+   Keep shared credentials for hosts that still declare them. Review
+   obsolete recipient links separately; deleting links or ciphertext
+   does not revoke keys a host already read (PR 15 rotates them).
+4. On the staged node, as root, review GC roots
+   (`sudo nix-store --gc --print-roots`), including user profiles,
+   result links, pinned outputs and retained system closures. A slot
+   reads the **entire** host store; GC cannot remove rooted private CI
+   output or plaintext secrets. Audit what the retained closures
+   reference and remove obsolete roots before enabling. If an essential
+   root retains private output, **stop** until the exposure is resolved.
+   With operator approval to delete old generations (rollback will
+   use a pinned rebuild rather than a deleted generation), run
+   `sudo nix-collect-garbage -d` on the node. Verify no private CI
+   output remains and `df -B1 --output=avail /var/lib/microvms` on the
+   intended filesystem gives at least `193273528320` bytes (180 GiB;
+   use its containing mount if the directory doesn't exist yet).
+
+**Enable and isolate the canary.**
+
+1. Commit `slotsEnabled = true` for just this node on top of the stage
+   and var-cleanup commits, and pin this enable revision. Globally
+   pause the dispatcher (`sudo install -d -m 0700 /run/forgejo-ephemeral`
+   then `sudo touch /run/forgejo-ephemeral/pause`) and complete all the
+   [drain checks](#ryza-one-job-pilot-nix-eph) under **Pause before
+   maintenance**. Keep this flag through the guard and dispatcher
+   switches; restore it after a reboot before allowing dispatch.
+2. Switch the guard first, then the dispatcher if separate, both using
+   `clan machines update --flake "$flake" <host>` from the enable
+   revision (one Cerberus switch today). Before switching the node,
+   confirm `caddy.service` is active and inspect the live guard config
+   (`grep -A3 '@blockedEphemeral' /etc/caddy/caddy_config` and
+   `grep -A2 '^s3.main.garage.noosphere.uk' /etc/caddy/caddy_config`).
+   The new untrusted source must be in `@blockedEphemeral`, limited to
+   both forges and ncps; its trusted source must be in
+   `@blockedEphemeralTrusted`, limited to those three plus the exact S3,
+   Harbor and ntfy hosts in PR 8. The S3 site's source allowlist must
+   include the trusted source and exclude the untrusted one. Keep all
+   existing restrictions. Verify the new
+   `forgejo-ephemeral-dispatcher@$slot.service` is paused, carries
+   `--trusted-jobs` and `--trusted-egress`, and uses the intended slot
+   host. Do not start the guest or its trusted-egress unit by hand.
+3. Switch only the current node from that same pinned revision, using
+   the drift, health and allocatable gates above. Verify the /32s on
+   `ip -4 -o address show dev enp1s0`, and check
+   `forgejo-ephemeral-firewall.service` and the tap's rules during the
+   canary. With the dispatcher still paused, use the PR 8
+   `curl --interface` checks, substituting the node's two sources:
+   the forge and ncps endpoints must work, and the guard must return
+   403 to untrusted requests for Harbor, S3 and ntfy. Verify trusted
+   Harbor and S3 reach their intended upstreams. Stop if any check
+   fails; a rendered matcher alone does not prove the live policy.
+4. To make pickup deterministic, set the `--pause-file` on **every
+   other** dispatcher instance before removing the global pause. Also
+   drain and temporarily stop any remaining host runners that serve
+   the canary's labels on its forge. Host runners do not honor the pause
+   file. Record the units/flags changed so only those are restored
+   after the canary. Check for competing pending jobs before approval,
+   and verify the exact slot name and attempt in the dispatcher
+   journal; a green run on a different runner proves nothing.
+
+**Reviewed fork probe, on this slot only.** In the dispatched upstream
+pilot repo, manually approve a fully reviewed fork PR using
+`pull_request`, `runs-on: nix`, no secrets, no checkout of other
+unreviewed code and no broader approval changes. Reuse the
+[Ryza isolation probe](#ryza-one-job-pilot-nix-eph) with dynamic routing
+enabled; keep the credential, mount, forge/ncps, direct VIP and Caddy
+403 checks. Replace the host control endpoints with known listeners for
+this node. Add the following step, filling in the primary node LAN IP
+(`nix eval --raw "$flake#lib.hosts.$node"`) and the IP/port of a
+known listening pod from `kubectl --context default get pods -A -o wide`.
+Use a current pod IP (not a Service or a host-network pod).
+
+```bash
+set -euo pipefail
+# Set NODE_IP, POD_IP and POD_PORT to the reviewed literal values.
+: "${NODE_IP:?}" "${POD_IP:?}" "${POD_PORT:?}"
+for endpoint in "10.43.0.1 443" "$NODE_IP 2379" "$NODE_IP 10250" \
+                "192.168.1.251 443" "$POD_IP $POD_PORT"; do
+  read -r ip port <<<"$endpoint"
+  rc=0
+  timeout 4 bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$ip" "$port" || rc=$?
+  case "$rc" in
+    1|124) printf 'TCP blocked: %s:%s\n' "$ip" "$port" ;;
+    *) printf 'Isolation check failed (%s): %s:%s\n' "$rc" "$ip" "$port" >&2; exit 1 ;;
+  esac
+done
+```
+
+From a permitted **non-slot** source before and after the run, prove TCP
+connects to every very same IP/port (use the node or a permitted cluster
+probe for cluster-only targets). Check that the pod is still Ready and
+listening. A refused connection on both sources, a dead pod, an
+unreachable endpoint from the control, or a TLS/authentication error
+after the slot connects is **not** proof of isolation. In the guest,
+require the successful direct HTTPS requests through the guard from the
+existing probe, plus Caddy 403 on forbidden pinned vhosts. Do not dump
+credentials. Require the dispatcher to report an untrusted fork
+verdict with credentials withheld and verify runner and image cleanup.
+
+**Why both firewall layers matter.** The slot enters the host from its
+tap. IPv4 PREROUTING (kube-proxy NAT) can DNAT the ClusterIP, NodePort or
+MetalLB VIP *before* routing chooses INPUT or FORWARD. The node's mangle
+INPUT and FORWARD hooks run after that DNAT but before Calico or
+kube-proxy filter-chain accepts. The tap guard drops DNATed flows and
+also enforces the existing private-destination, port and output-interface
+restrictions there. Direct node etcd/kubelet traffic takes INPUT; a
+routed pod takes FORWARD even without translation. IPv6 from the tap is
+dropped early too. The ordinary filter allowlist and POSTROUTING SNAT
+still apply; permitted guard traffic is restricted further by Caddy.
+Use the live probe, not a later filter rule or a firewall unit's status
+alone, as the isolation gate.
+
+**Trusted acceptance.** Keeping the canary isolated, dispatch **Machines**
+on `forge.ugalabugala.org` → `manjo/omnissiah` as manjo on the protected
+default branch, `machines: enginseer`, `update: no`. Check that the
+`nix-machines` build lands on this large slot, that its journal records
+trusted credential delivery and PR 8 trusted egress, and that **Confirm
+the closure is in ncps** logs HTTP 200 for the Enginseer toplevel narinfo.
+Confirm the upload for this run in the hook log (or verify a fresh
+output and its `ci.noosphere.uk-1` signature as in the Ryza trust
+probe; a previously cached closure alone is not proof of upload).
+Afterwards confirm the VM, credentials and images are gone, its
+registration is deleted, and the trusted-egress unit, rule and flows are
+gone (PR 8 cleanup checks with this slot's IP/source). Repeat Ready,
+etcd and allocatable checks under/after load; stop on regression.
+Restore the drained host runners and only the per-slot pauses you set
+when both canaries pass. Then proceed to the next node.
+
+**Rollback one node.** Pause immediately on the dispatcher, drain
+globally, and verify registration, VM/support, image, trust and PR 8 rule
+and flow cleanup **before** removing any units. Leave Caddy's matchers
+in place until both slot sources are gone from the node. Commit a
+rollback revision for just this node with `slotsEnabled = false`,
+`trustedEgress = false`, `hostRunnerEnabled = true` and
+`untrustedTakeover = false`; retain the other live nodes' gates.
+
+If the persistent rows or vars were deleted, prepare the replacement
+before switching. In a clean checkout of the rollback configuration,
+generate missing vars (`CLAN_NO_COMMIT=1 clan vars generate "$node"
+--generator forgejo-runner-ugalabugala`, then the same for
+`forgejo-runner-noosphere`). If a deleted row's vars still exist,
+regenerate that forge's vars with `--regenerate` instead. Use fresh
+credentials for deleted rows; don't restore revoked tokens from Git.
+If recipient links were removed, use
+`CLAN_NO_COMMIT=1 clan vars fix "$node" --generator <generator>` for
+`nix-ci-signing-key`, `ncps-upload-auth` and `sccache-garage-key` as
+needed, and verify the node can decrypt the shared vars. Commit the var
+changes and pin the resulting revision. From a clean checkout of that
+same SHA run `nix run .#forgejo-runner-register -- "$node"` before the
+switch (the helper reads the working checkout); skip re-enrollment
+only for intact identities. Don't start the restored runners while
+unreviewed fork jobs are queued on their labels.
+
+Run the pinned PR 11 drift gate and switch the node **first**, then run
+Ready, etcd and allocatable checks. Verify both /32s and the slot are
+gone, and both restored runner units declare `nix` and `nix-machines`
+on the correct rows. Switch the still-paused dispatcher/guard from that
+same revision, now safe to remove this slot's matcher sources and
+dispatcher instance. Verify remaining sources, dispatchers and cluster
+health before unpausing. Persistent runner credentials are again
+available to jobs on that node: keep fork approvals manual and fully
+reviewed. If disabling trust separately while any other node runner is
+off, first restore those runners or explicitly acknowledge degradation
+with `untrustedTakeover = true` for each affected node.
 
 ### Hermes on Cerberus Forgejo
 
