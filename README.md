@@ -1882,7 +1882,11 @@ build of `master`. Ryza's `rust-app-template` pool has it off.
    dispatcher verdict and the slot-side `deliver` and trust share.
    Enroll replacement PATs with **`read:repository`** in addition to
    the dispatch scopes on both forges; regenerate their vars on the
-   active dispatcher host. Keep Public only for the public pilot.
+   active dispatcher host. **Not Public only**, even for public repos: a
+   Public only PAT cannot use repo-admin endpoints (Forgejo's public-repos
+   authorization reducer disables admin override), so the deploy-key,
+   branch protection and collaborator checks answer 403 and trust never
+   resolves (`trust lookup pending: Forgejo deploy keys: HTTP 403`).
    Repository protection, deploy-key and collaborator probes require
    repo admin; org team member reads are included in the required
    `write:organization` scope.
