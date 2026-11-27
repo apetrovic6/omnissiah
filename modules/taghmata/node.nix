@@ -36,6 +36,8 @@
 
     services.imperium.forgejoRunner = {
       enable = true;
+      # Both forges: keep general CI and accept the long Machines jobs.
+      labels = ["nix:host" "nix-machines:host"];
       # 1.6 TB of free disk: keep CI's store until it gets tight.
       storeCache = {
         minFree = 200;

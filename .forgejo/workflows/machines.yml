@@ -6,14 +6,11 @@
 # A second job re-renders the cluster manifests against the new lock and puts
 # the result in a pull request; it never pushes them to master itself.
 #
-# Jobs run on the NixOS host runners (`nix:host`, modules/rites/forgejo-runner.nix)
-# so they build against the host's /nix/store. Those runners' nix-daemon already
-# signs every build with the `nix-ci-signing-key` clan var and PUTs it to
-# https://ncps.noosphere.uk/upload from its post-build-hook, so a plain
-# `nix build` is what fills the cache. The last step proves the toplevel actually
-# reached ncps and fails the job if the hook's push died silently; the explicit
-# `nix copy` there is the fallback for a runner without the hook, and it needs
-# NCPS_NETRC + NCPS_SIGNING_KEY as Actions secrets (see that step).
+# Jobs run on the terra, luna and sol host runners (`nix-machines:host`), so
+# they build against the host's /nix/store. The runners' nix-daemon signs
+# builds with the `nix-ci-signing-key` clan var and uploads them to
+# https://ncps.noosphere.uk/upload from its post-build-hook. The last step
+# checks that the toplevel reached ncps and fails if the upload did not work.
 #
 # Runner hosts substitute from ncps themselves (stc/base.nix): a warm cache
 # turns these builds into downloads, a cold one (every fresh flake.lock) is real
@@ -40,7 +37,7 @@ on:
 
 concurrency:
   # A scheduled run must not overlap the previous one: they would race on the
-  # flake.lock push and duplicate builds across the four runners.
+  # flake.lock push and duplicate builds across the runners.
   group: machines-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
@@ -55,7 +52,7 @@ permissions:
 jobs:
   update:
     name: Update flake inputs
-    runs-on: nix
+    runs-on: nix-machines
     timeout-minutes: 120
     outputs:
       machines: ${{ steps.out.outputs.machines }}
@@ -223,7 +220,7 @@ jobs:
   manifests:
     name: Render manifests into a pull request
     needs: update
-    runs-on: nix
+    runs-on: nix-machines
     timeout-minutes: 60
     env:
       CI_PUSH_TOKEN: ${{ secrets.CI_PUSH_TOKEN }}
@@ -254,7 +251,7 @@ jobs:
   build:
     name: Build ${{ matrix.machine }}
     needs: update
-    runs-on: nix
+    runs-on: nix-machines
     # 5h. A cold closure -- every fresh flake.lock, on runners capped at 2 cpus
     # and max-jobs 1 -- put phalanx (Strata + llama.cpp built from source) and
     # enginseer (~50 GB closure) past the 3h that forgejo-runner and Forgejo
@@ -288,15 +285,10 @@ jobs:
 
       - name: Confirm the closure is in ncps
         env:
-          # Optional, and deliberately not required: on the four runner hosts
-          # the daemon's post-build-hook has already pushed everything. Fill
-          # them in (Repository → Settings → Actions → Secrets) only to let this
-          # workflow push by itself:
-          #   NCPS_NETRC       from `clan vars get shared ncps-upload-auth/netrc`
-          #   NCPS_SIGNING_KEY from `clan vars get shared nix-ci-signing-key/key`
-          # ncps stores an upload only when its narinfo is signed by the CI key
-          # (config.signing.trustedUploadKeys in apps/scriptorium/ncps), so both are needed
-          # together.
+          # Keep NCPS_NETRC and NCPS_SIGNING_KEY unset as Actions secrets:
+          # every non-fork run in this repo can read them (and every non-fork
+          # run in every manjo repo if set at user level). Uploads use the
+          # runner's nix-daemon post-build-hook, not the workflow fallback.
           NCPS_NETRC: ${{ secrets.NCPS_NETRC }}
           NCPS_SIGNING_KEY: ${{ secrets.NCPS_SIGNING_KEY }}
         run: |
