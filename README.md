@@ -2511,7 +2511,7 @@ maintenance"). To turn trust or trusted egress off, change only data in
 1. `dispatcher.remote = true` (PR 7).
 2. `takeoverLabels` is one of the two sets above.
 3. With `nix`: trust plus trusted egress, or `untrustedTakeover`.
-4. `.forgejo/workflows/machines.yml` exists and runs on no served label.
+4. `.forgejo/workflows/machines.yml` exists and runs on no std label.
    Only `runs-on: <label>`, optionally with a leading `- ` and a comment, is
    understood. Any other line naming `runs-on` and any quoted key with an
    escape fails closed. A merge key copies a mapping whose own `runs-on`
@@ -2747,9 +2747,10 @@ RKE2 host as part of the same operation.
    runner even at this stage requires `dispatcher.trustedJobs` plus
    `trustedEgress`, or that node's explicit `untrustedTakeover = true`.
    Do not use the override for this rollout: without trust there is no
-   CI upload and the Machines closure check fails; without trusted
-   egress, Harbor, Garage S3 and ntfy are blocked. The flag accepts a
-   service degradation, not a passing canary.
+   CI upload, the Machines closure check fails on a cache miss, and
+   the dispatcher stops the untrusted job after 65 minutes. Without
+   trusted egress, Harbor, Garage S3 and ntfy are blocked. The flag
+   accepts a service degradation, not a passing canary.
 2. Drain both host runners. In both forges' Actions views, wait for
    their active jobs to finish (or cancel them). Prevent new jobs from
    starting during the handoff; once idle stop both units and confirm
@@ -2815,6 +2816,7 @@ RKE2 host as part of the same operation.
    `forgejo-ephemeral-dispatcher@$slot.service` is paused, carries
    `--trusted-jobs` and `--trusted-egress`, and uses the intended slot
    host. Do not start the guest or its trusted-egress unit by hand.
+   Startup may refuse the slot SSH command until the node is switched.
 3. Switch only the current node from that same pinned revision, using
    the drift, health and allocatable gates above. Verify the /32s on
    `ip -4 -o address show dev enp1s0`, and check
@@ -2825,6 +2827,9 @@ RKE2 host as part of the same operation.
    403 to untrusted requests for Harbor, S3 and ntfy. Verify trusted
    Harbor and S3 reach their intended upstreams. Stop if any check
    fails; a rendered matcher alone does not prove the live policy.
+   After the node switch, use the pinned SSH `observe` check from the
+   remote dispatcher rollout for this slot. Require idle, no staged
+   run, and no recurring dispatcher restarts before unpausing.
 4. To make pickup deterministic, set the `--pause-file` on **every
    other** dispatcher instance before removing the global pause. Also
    drain and temporarily stop any remaining host runners that serve
@@ -2901,6 +2906,12 @@ gone (PR 8 cleanup checks with this slot's IP/source). Repeat Ready,
 etcd and allocatable checks under/after load; stop on regression.
 Restore the drained host runners and only the per-slot pauses you set
 when both canaries pass. Then proceed to the next node.
+
+After Terra passes, add `nix` to Ryza's `takeoverLabels` as described
+in [Ryza takeover](#ryza-takeover-hom-32-pr-12-operator-flip). With trust
+and trusted egress already verified, pause and drain, then switch Ryza
+and the dispatcher from the same pinned revision. This restores general
+`nix` capacity on every user-pool slot; `nix-machines` remains large only.
 
 **Rollback one node.** Pause immediately on the dispatcher, drain
 globally, and verify registration, VM/support, image, trust and PR 8 rule

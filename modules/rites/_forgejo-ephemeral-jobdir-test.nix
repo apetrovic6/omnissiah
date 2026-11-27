@@ -10,7 +10,10 @@
 # startup by the required installer or the ordered tmpfiles service.
 # An optional '-' path missing at start stays read-only, so the dispatcher
 # must not use such paths for writes.
-{ryza}: let
+{
+  ryza,
+  nodeHosts ? {},
+}: let
   inherit (ryza.pkgs) lib;
   local = ryza.extendModules {
     specialArgs.ciDispatcher = {
@@ -374,6 +377,42 @@
       tmpfilesSlot = settings.${control} or null;
       tmpfilesRules = builtins.filter (lib.hasInfix "microvm-credentials") c.systemd.tmpfiles.rules;
     };
+  nodeJobdir = node: cfg: let
+    slot = "${node}-eph-1";
+    internal = cfg.services.imperium.forgejoEphemeral.internal;
+    installer = cfg.systemd.services."install-microvm-${slot}";
+    vm = cfg.systemd.services."microvm@${slot}";
+    guest = cfg.microvm.vms.${slot}.config.config;
+    details = internal.slots.${slot};
+    entry = internal.slotctlSlots.${slot};
+    remote = internal.remoteActions.${slot}.text;
+    dirs = map (dir: dir.path) details.slotDirs;
+    paths = [entry.vm_dir (builtins.dirOf entry.credential_dir)];
+  in
+    assert installer.serviceConfig.WorkingDirectory == "/";
+    assert lib.head installer.serviceConfig.ExecStartPre == "+${details.prepareDirs}";
+    assert builtins.elem "install-microvm-${slot}.service" vm.requires;
+    assert builtins.elem "+${details.prepareDirs}" vm.serviceConfig.ExecStartPre;
+    assert lib.any (lib.hasInfix "egress-address-preflight") vm.serviceConfig.ExecStartPre;
+    assert lib.all (path: builtins.elem path dirs && lib.hasInfix path remote) paths;
+    assert lib.hasInfix "--property=Requires=install-microvm-${slot}.service forgejo-ephemeral-firewall.service" remote;
+    assert lib.all (name: builtins.elem name transientAllowlist) internal.remotePropertyNames.${slot};
+    assert guest.microvm.vcpu
+    == 2
+    && guest.microvm.mem
+    == (
+      if node == "luna"
+      then 3072
+      else 4096
+    );
+    assert details.runnerMinutes == 360 && vm.serviceConfig.RuntimeMaxSec == "375min";
+    assert lib.last guest.fileSystems."/nix/.ro-store".options == "ro";
+    assert entry.deliver && entry.trusted_egress && !entry.fixed_pilot;
+    assert lib.all (name: builtins.elem name guest.systemd.services.forgejo-one-job.serviceConfig.LoadCredential) ["forgejo-url" "runner-label"]; {
+      inherit dirs;
+      inherit (vm.serviceConfig) RuntimeMaxSec;
+      inherit (details) runnerMinutes;
+    };
   results = lib.mapAttrs checkSlot slots;
   uniqueBy = field:
     lib.length (lib.unique (lib.mapAttrsToList (_: slot: slot.${field}) results)) == lib.length (builtins.attrNames slots);
@@ -553,6 +592,7 @@ in
   ["ryza-eph-1" "ryza-eph-2"]; {
     egressDrv = egressed.system.build.toplevel.drvPath;
     hostDrv = c.system.build.toplevel.drvPath;
+    nodes = lib.mapAttrs nodeJobdir nodeHosts;
     pools = multiPools;
     slots = results;
   }

@@ -19,6 +19,7 @@ in {
     # via specialArgs (also read by the guard's Caddy, proxy.nix). Machine
     # modules cannot override these settings.
     fleet = args.ciDispatcher or self.lib.ciDispatcher;
+    nodes = args.ciNodes or self.lib.ciNodes;
     inherit (self.lib) sccacheCiKey;
     inventory = lib.mapAttrs (_: entry:
       if fleet.remote
@@ -38,6 +39,26 @@ in {
     takeoverLabels = fleet.takeoverLabels or ["nix-vm" "nix-eph"];
     takesNix = builtins.elem "nix" takeoverLabels;
     validLabels = lib.any (set: lib.sort builtins.lessThan takeoverLabels == set) [["nix-eph" "nix-vm"] ["nix" "nix-eph" "nix-vm"]];
+    nodeConfigured = name: state: state.slotsEnabled || !state.hostRunnerEnabled || (fleet.remote && fleet.host == name);
+    nodeChecks = lib.concatLists (lib.mapAttrsToList (machine: state: let
+      trusted = fleet.trustedJobs && state.trustedEgress && (!state.slotsEnabled || (inventory.${machine}.egress.trusted or null) != null);
+    in
+      lib.optionals (hostName == machine || (dispatches && nodeConfigured machine state)) [
+        {
+          assertion = !state.slotsEnabled || (!state.hostRunnerEnabled && fleet.remote && takeover && builtins.hasAttr machine inventory);
+          message = "forgejoEphemeral: ${machine} large slots require hostRunnerEnabled = false and the remote Ryza takeover fleet.";
+        }
+        {
+          assertion = state.hostRunnerEnabled || trusted || state.untrustedTakeover;
+          message = "forgejoEphemeral: retiring ${machine}'s host runner requires dispatcher.trustedJobs and node trustedEgress, or untrustedTakeover = true: Machines builds do not upload to ncps (Confirm fails on a miss), jobs stop after 65 min, and trusted endpoints including Harbor and ntfy are denied.";
+        }
+        {
+          assertion = hostName != machine || config.services.imperium.forgejoRunner.enable == state.hostRunnerEnabled;
+          message = "forgejoEphemeral: ${machine}'s host runner gate must match the shared node data in _ci-slots.nix (including on the dispatcher host).";
+        }
+      ])
+    nodes);
+    largeActive = lib.any (state: state.slotsEnabled) (builtins.attrValues nodes);
     # manjo/omnissiah is in that queue, and machines.yml's 5 h builds,
     # pushes and ntfy can't run in an untrusted 65-minute slot: it must be
     # off the served labels (PR 11 moves it to nix-machines). Only this one
@@ -75,7 +96,7 @@ in {
     machinesLines;
     machinesUnreadable = lib.concatLists (lib.imap1 (n: line: lib.optional (unreadable line) (toString n)) machinesLines);
     machinesOnSlots = lib.intersectLists machinesLabels takeoverLabels;
-    takeoverHosts = builtins.attrNames inventory;
+    takeoverHosts = builtins.attrNames (lib.filterAttrs (machine: _: !(builtins.hasAttr machine nodes)) inventory);
     repo = owner: name: {inherit owner name;};
   in {
     imports = [self.nixosModules.forgejo-runner-ephemeral];
@@ -89,6 +110,7 @@ in {
 
     config = lib.mkMerge [
       {services.imperium.forgejoEphemeral.inventory = lib.mkDefault inventory;}
+      {assertions = nodeChecks;}
       (lib.mkIf active {
         services.imperium.forgejoEphemeral.enable = true;
         services.imperium.forgejoEphemeral.trustedJobs.enable = lib.mkDefault fleet.trustedJobs;
@@ -139,9 +161,13 @@ in {
               );
           }
           {
+            assertion = !largeActive || lib.unique machinesLabels == ["nix-machines"];
+            message = "forgejoEphemeral: every Machines job must use nix-machines when large node slots are enabled.";
+          }
+          {
             # The label rule (forgejo-runner.nix): nothing else may take these
             # labels on a slot host, nor keep the guests' CI credentials.
-            assertion = !(hostsSlots && (config.services.imperium.forgejoRunner.enable or false));
+            assertion = !(hostsSlots && !(builtins.hasAttr hostName nodes) && (config.services.imperium.forgejoRunner.enable or false));
             message = "forgejoEphemeral: the takeover retires ${hostName}'s persistent runner; remove it from the machine (machines/${hostName}/forgejo-runner.nix).";
           }
         ];
@@ -180,8 +206,8 @@ in {
                   "30" = repo "manjo" "pilot";
                   "8" = repo "manjo" "fishing";
                   "7" = repo "manjo" "nopresh";
-                  # Only machines.yml, on nix-machines (PR 11): no slot runs until PR 13.
-                  "1" = repo "manjo" "omnissiah";
+                  # The default-branch cron updates the lock and needs uploads.
+                  "1" = repo "manjo" "omnissiah" // lib.optionalAttrs largeActive {schedules = true;};
                 };
               users = ["manjo"];
             };
@@ -296,16 +322,24 @@ in {
       generator = "forgejo-ephemeral-${forge}";
       credential = "forgejo-pat-${forge}";
     });
-    poolsFile = pkgs.writeText "${hostName}-forgejo-ephemeral-pools.json" (builtins.toJSON (
-      lib.mapAttrs (_: pool:
-        {
-          inherit (pool) forge scope labels dispatch maxSlots trust;
-          host = forgeHosts.${pool.forge};
-          inherit (forgeSettings.${pool.forge}) login;
-        }
-        // lib.optionalAttrs pool.sccache.enable {sccache = true;})
-      cfg.pools
-    ));
+    writePools = labelOverrides:
+      pkgs.writeText "${hostName}-forgejo-ephemeral-pools.json" (builtins.toJSON (
+        lib.mapAttrs (name: pool:
+          {
+            inherit (pool) forge scope dispatch maxSlots trust;
+            labels = labelOverrides.${name} or pool.labels;
+            host = forgeHosts.${pool.forge};
+            inherit (forgeSettings.${pool.forge}) login;
+          }
+          // lib.optionalAttrs pool.sccache.enable {sccache = true;})
+        cfg.pools
+      ));
+    poolsFile = writePools {};
+    largePoolsFile = writePools (fleet.largeLabels or {});
+    classPoolsFile = slot: machine:
+      if inventory.${machine}.slots.${slot}.class == "large"
+      then largePoolsFile
+      else poolsFile;
     poolAssertions = lib.concatLists (lib.mapAttrsToList (name: pool: let
         scopeKind =
           if pool.scope ? user
@@ -365,13 +399,20 @@ in {
         }
       ])
       cfg.pools);
+    classPoolAssertions = [
+      {
+        assertion = lib.all (pool: !(builtins.elem "nix-machines" pool.labels)) pools;
+        message = "forgejoEphemeral: nix-machines is exclusive to the large class label overrides.";
+      }
+    ];
     # The one LAN host guests reach: DNS and HTTPS through its Caddy guard.
     # Fixtures may move it (specialArgs.ciGuard), like the fleet data.
     guardAddress = self.lib.hosts.${args.ciGuard or self.lib.ciGuard};
-    # Every slot SNAT source: unique, and the trusted ones no other chart
-    # address (Caddy on the guard tells slots apart only by source).
-    trustedNames = lib.concatMap (entry: lib.optional ((entry.egress.trusted or null) != null) entry.egress.trusted) (builtins.attrValues inventory);
-    egressAddresses = map (name: self.lib.lan.${name}) (map (entry: entry.egress.untrusted) (builtins.attrValues inventory) ++ trustedNames);
+    # Every slot SNAT source must be unique and its own chart address:
+    # Caddy on the guard tells slots apart only by source.
+    egressNames = lib.concatMap (entry:
+      [entry.egress.untrusted] ++ lib.optional ((entry.egress.trusted or null) != null) entry.egress.trusted)
+    (builtins.attrValues inventory);
     vipPool = builtins.match "([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)-([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)" self.lib.vips.pool;
     inVipPool = addr: let
       parts = builtins.match "([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)" addr;
@@ -384,7 +425,7 @@ in {
       && last >= lib.toInt (builtins.elemAt vipPool 1)
       && last <= lib.toInt (builtins.elemAt vipPool 3);
     chartStrings = attrs: builtins.filter builtins.isString (builtins.attrValues attrs);
-    trustedSourceFree = name: let
+    egressSourceFree = name: let
       addr = self.lib.lan.${name};
     in
       !(builtins.elem addr (chartStrings self.lib.hosts ++ chartStrings (builtins.removeAttrs self.lib.lan [name]) ++ chartStrings self.lib.vips))
@@ -508,6 +549,8 @@ in {
       # The link to the guest, numbered by the slot's index (_ci-slots.nix).
       tap = "vm-eph-${toString spec.index}";
       inherit (host) uplink;
+      # The cluster node also has Calico and kube-proxy rules in filter/nat.
+      nodeSlot = builtins.hasAttr hostName (args.ciNodes or self.lib.ciNodes);
       mac = "02:00:00:c1:00:${lib.fixedWidthString 2 "0" (lib.toLower (lib.toHexString (spec.index + 2)))}";
       subnet = "10.99.${toString (spec.index + 1)}";
       gateway = "${subnet}.1";
@@ -539,6 +582,10 @@ in {
       ];
       # Install outside the stock firewall/NAT chains. Their reload flushes
       # those chains non-atomically; this tap's restrictions must stay in force.
+      guardChainTable =
+        if nodeSlot
+        then ''"$cmd" = iptables && "$table" != nat''
+        else ''"$cmd/$table" = iptables/filter'';
       guardScript = ''
         set -eu -o pipefail
         apply() {
@@ -547,14 +594,14 @@ in {
           local -a hooks=( "$@" ) words
           {
             printf '*%s\n' "$table"
-            if [[ "$action" = start && "$cmd/$table" = iptables/filter ]]; then
+            if [[ "$action" = start && ${guardChainTable} ]]; then
               printf ':%s - [0:0]\n' ${outChain} ${inChain}
               cat <<'RULES'
         -F ${outChain}
         -F ${inChain}
         -A ${outChain} ! -s ${address} -j DROP
         -A ${outChain} ! -o ${uplink} -j DROP
-        -A ${outChain} -m conntrack --ctstate INVALID -j DROP
+        -A ${outChain} -m conntrack --ctstate INVALID -j DROP${lib.optionalString nodeSlot "\n-A ${outChain} -m conntrack --ctstate DNAT -j DROP"}
         -A ${outChain} -d ${guardAddress} -p udp --dport 53 -j ACCEPT
         -A ${outChain} -d ${guardAddress} -p tcp --dport 53 -j ACCEPT
         -A ${outChain} -d ${guardAddress} -p tcp --dport 443 -j ACCEPT
@@ -574,9 +621,9 @@ in {
                 printf -- '-I %s\n' "$hook"
               fi
             done
-            if [[ "$action" = stop && "$cmd/$table" = iptables/filter ]]; then
+            if [[ "$action" = stop && ${guardChainTable} ]]; then
               for chain in ${outChain} ${inChain}; do
-                if iptables -w -S "$chain" >/dev/null 2>&1; then
+                if iptables -w ${lib.optionalString nodeSlot ''-t "$table" ''}-S "$chain" >/dev/null 2>&1; then
                   printf -- '-F %s\n-X %s\n' "$chain" "$chain"
                 fi
               done
@@ -586,12 +633,27 @@ in {
         }
         apply_rules() {
           local action="$1"
-          apply iptables nat 'POSTROUTING -s ${address}/32 -o ${uplink} -j SNAT --to-source ${egress}'
+          ${lib.optionalString nodeSlot ''
+          # mangle INPUT/FORWARD run after PREROUTING DNAT but before
+          # filter. A later filter ACCEPT from Calico cannot undo a drop.
+          apply iptables mangle 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
+            'FORWARD -i ${tap} -j ${outChain}' 'FORWARD -o ${tap} -j ${inChain}'
+          apply ip6tables mangle 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
+            'FORWARD -i ${tap} -j DROP' 'FORWARD -o ${tap} -j DROP'
+        ''}apply iptables nat 'POSTROUTING -s ${address}/32 -o ${uplink} -j SNAT --to-source ${egress}'
           apply ip6tables filter 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
             'FORWARD -i ${tap} -j DROP' 'FORWARD -o ${tap} -j DROP'
           apply iptables filter 'INPUT -i ${tap} -j DROP' 'OUTPUT -o ${tap} -j DROP' \
             'FORWARD -i ${tap} -j ${outChain}' 'FORWARD -o ${tap} -j ${inChain}'
         }
+      '';
+      egressAddressPreflight = pkgs.writeShellScript "${slot}-egress-address-preflight" ''
+        set -eu
+        address=$(${lib.getExe' pkgs.iproute2 "ip"} -4 -o address show dev ${uplink} to ${egress}/32)
+        if [[ -z "$address" ]] || ! ${lib.getExe' pkgs.iputils "arping"} -q -D -c 2 -w 3 -I ${uplink} ${egress}; then
+          echo "slot ${slot}: untrusted SNAT address ${egress} missing or failed duplicate-address probe on ${uplink}" >&2
+          exit 1
+        fi
       '';
       # Trusted egress (README "Trusted slot egress"): only HTTPS to the guard
       # leaves from the second source, above the guard's default SNAT rule.
@@ -1152,7 +1214,10 @@ in {
               RuntimeMaxSec = "${toString class.hostMinutes}min";
               TimeoutStartSec = "${toString vmStartSeconds}s";
               TimeoutStopSec = "${toString vmStopSeconds}s";
-              ExecStartPre = ["+${prepareDirs}" preflight] ++ lib.optional (trustedEgress != null) "+${egressPreflight}";
+              ExecStartPre =
+                ["+${prepareDirs}" preflight]
+                ++ lib.optional nodeSlot "+${egressAddressPreflight}"
+                ++ lib.optional (trustedEgress != null) "+${egressPreflight}";
               ExecStopPost = ["+${scrub}"];
               LimitCORE = 0;
             };
@@ -1323,7 +1388,7 @@ in {
               (lib.getExe pkgs.python3)
               "-I -B ${./_forgejo-ephemeral-dispatcher.py}"
               "--slot ${slot} --machine ${machine} ${transport}"
-              "--pools ${poolsFile}"
+              "--pools ${classPoolsFile slot machine}"
               "--state-dir ${stateDirs.${slot}} --pause-file /run/${runtime}/pause"
               "--host-pause-file ${runRoot}/pause --claim-states ${claimStates}"
               "--untrusted-limit ${toString untrustedLimitSeconds}"
@@ -1448,7 +1513,7 @@ in {
           };
         });
         default = {};
-        description = "Forgejo queues served by every slot on the dispatcher. Configure only on the dispatcher.";
+        description = "Forgejo queues on this dispatcher. The large class can override the accepted labels.";
       };
       egressAddress = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -1494,6 +1559,7 @@ in {
             })
           localSlots;
           inherit slotctlSlots sshClients poolsFile trustedEgressHosts forcedCommand;
+          inherit largePoolsFile;
           inherit untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
         };
         description = "Slot, pool, and transport details for checks.";
@@ -1544,7 +1610,7 @@ in {
               message = "forgejoEphemeral: slot indexes on ${hostName} must be unique and between 1 and 253.";
             }
           ]
-          ++ lib.optionals dispatching poolAssertions;
+          ++ lib.optionals dispatching (poolAssertions ++ classPoolAssertions);
         systemd.tmpfiles.rules = lib.optional dispatching "d ${runRoot} 0700 root root - -";
       })
       (lib.mkIf (cfg.enable && hosted) {
@@ -1560,8 +1626,8 @@ in {
           }
           {
             # Caddy on the guard tells slot sources apart only by address.
-            assertion = allUnique egressAddresses && lib.all trustedSourceFree trustedNames;
-            message = "forgejoEphemeral: slot SNAT sources must be unique across slot hosts, and each trusted one its own chart address: no host, other lan entry or VIP.";
+            assertion = lib.all egressSourceFree egressNames && allUnique (map (name: self.lib.lan.${name}) egressNames);
+            message = "forgejoEphemeral: slot SNAT sources must be unique across slot hosts and each its own chart address: no host, other lan entry or VIP.";
           }
         ];
         users = slotDefinitions (data: data.users);

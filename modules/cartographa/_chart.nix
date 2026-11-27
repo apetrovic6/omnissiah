@@ -18,6 +18,14 @@ rec {
     # router's DHCP pool can't be checked, so Ryza probes for a duplicate
     # before using it, and the pool should exclude the block.
     ryza-eph-trusted = "192.168.1.240";
+    # Large CI slots: untrusted/trusted pairs, not DNS hosts. Keep them
+    # out of DHCP; the nodes perform IPv4 DAD before binding either /32.
+    luna-eph = "192.168.1.241";
+    luna-eph-trusted = "192.168.1.242";
+    sol-eph = "192.168.1.244";
+    sol-eph-trusted = "192.168.1.245";
+    terra-eph = "192.168.1.246";
+    terra-eph-trusted = "192.168.1.247";
     # The LAN's resolvers: Blocky on each, identical configs
     # (modules/rites/blocky.nix), the only resolvers that know the
     # split-horizon names. On three independent machines (cerberus and ryza
