@@ -1,7 +1,9 @@
 # The always-on agent (modules/rites/hermes.nix), on the host side of ryza.
-# Each forge gets its own CI microVM (./forgejo-runner.nix), so jobs never
-# share a kernel with the logins in /var/lib/hermes. Guest RAM totals 14 of
-# Ryza's 24 GiB before QEMU overhead; the Hermes gateway is capped at 6.
+# CI runs in microVMs, so jobs never share a kernel with the logins in
+# /var/lib/hermes: today two persistent guests (./forgejo-runner.nix, 14 GiB)
+# plus the one-job slot ryza-eph-1 (5 GiB slice); after the HOM-32 takeover
+# two or three one-job slots (10 or 15 GiB, modules/rites/_ci-slots.nix).
+# Hermes is capped at 6 GiB (gateway) plus 2 GiB (dashboard), of Ryza's 24.
 #
 # API keys: the DeepSeek and Qwen keys pi already uses (shared var
 # pi-api-keys), by default. Hermes-only ones go in `secrets`, one prompt each:

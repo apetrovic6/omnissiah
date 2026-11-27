@@ -57,11 +57,14 @@ STATES_IDLE = ("inactive", "failed")
 STATES_BUSY = ("active", "activating", "deactivating", "reloading", "refreshing")
 IMAGES = ("nix-store-overlay.img", "var.img")
 CREDENTIALS = ("runner-uuid", "runner-token", "job-handle", "forgejo-url", "runner-label")
-TRUST_FILES = ("ncps-netrc", "ci-signing-key")  # Write order: the guest hook needs both.
-TRUST_NAMES = TRUST_FILES + tuple(f".{name}.tmp" for name in TRUST_FILES)
+TRUST_FILES = ("ncps-netrc", "ci-signing-key")  # Written first, in this order; then the optional sccache file.
+SCCACHE_FILE = "sccache-credentials"
+TRUST_NAMES = (*TRUST_FILES, SCCACHE_FILE)
+TRUST_NAMES += tuple(f".{name}.tmp" for name in TRUST_NAMES)
 TRUST_SHAPES = {
     "ci-signing-key": re.compile(rb"[A-Za-z0-9._-]{1,255}:[A-Za-z0-9+/]{20,400}={0,2}\n?"),
     "ncps-netrc": re.compile(rb"machine ncps\.noosphere\.uk\nlogin [!-~]{1,255}\npassword [!-~]{1,4096}\n?"),
+    SCCACHE_FILE: re.compile(rb"\[default\]\naws_access_key_id = GK[0-9a-f]{24}\naws_secret_access_key = [0-9a-f]{64}\n"),
 }
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 SLOT_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
@@ -325,7 +328,9 @@ class SlotFiles:
         self.staging = credentials.with_name(f".{credentials.name}.staging")
         self.uid, self.gid = uid, gid
         # Root-only (0700 root, files 0400 root): virtiofsd (root) serves it; QEMU's user never reads it.
-        # Always cleaned (scrub, withdraw), so turning delivery off never strands delivered keys.
+        # Always cleaned (scrub, withdraw), the sccache names included even where this host
+        # never delivers them, so turning delivery off never strands delivered keys. Builds
+        # before HOM-32 PR 12 lack those names: drain and scrub before rolling back past it.
         self.trust_dir = trust_dir
         # Whether this slot's guest has the trust share: then stage creates it and deliver may fill it.
         self.deliver_enabled = deliver
@@ -394,7 +399,9 @@ class SlotFiles:
             info = os.fstat(fd)
             if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
                 raise SlotError("trust-dir-unsafe")
-            for name in TRUST_FILES:
+            for name in (*TRUST_FILES, SCCACHE_FILE):
+                if name not in secrets:
+                    continue
                 temporary = f".{name}.tmp"
                 try:
                     os.unlink(temporary, dir_fd=fd)
@@ -498,10 +505,15 @@ class Slot:
             raise failure
 
     def deliver(self, payload, run_name):
-        if not isinstance(payload, dict) or payload.keys() != set(TRUST_FILES):
+        if not isinstance(payload, dict):
+            raise UsageError
+        names = set(TRUST_FILES)
+        if payload.keys() != names and not (
+            self.files.trusted_egress and payload.keys() == names | {SCCACHE_FILE}
+        ):
             raise UsageError
         secrets = {}
-        for name in TRUST_FILES:
+        for name in payload:
             try:
                 value = base64.b64decode(payload[name], validate=True)
             except (TypeError, ValueError, binascii.Error):

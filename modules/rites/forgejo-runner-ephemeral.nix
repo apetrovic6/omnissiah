@@ -32,6 +32,51 @@ in {
       then hostName == fleet.host
       else hostsSlots;
     active = hostsSlots || dispatches;
+    # HOM-32 PR 12 (README "Ryza takeover"): the user pools serve these
+    # labels for the owner's whole queue (_ci-slots.nix).
+    takeover = fleet.takeover or false;
+    takeoverLabels = fleet.takeoverLabels or ["nix-vm" "nix-eph"];
+    takesNix = builtins.elem "nix" takeoverLabels;
+    validLabels = lib.any (set: lib.sort builtins.lessThan takeoverLabels == set) [["nix-eph" "nix-vm"] ["nix" "nix-eph" "nix-vm"]];
+    # manjo/omnissiah is in that queue, and machines.yml's 5 h builds,
+    # pushes and ntfy can't run in an untrusted 65-minute slot: it must be
+    # off the served labels (PR 11 moves it to nix-machines). Only this one
+    # file: another omnissiah workflow on a slot label just runs in a slot,
+    # and must not make the dispatcher and slot hosts undeployable.
+    # Fixtures pass their own text (specialArgs.ciMachinesWorkflow, null =
+    # missing).
+    machinesPath = "${self}/.forgejo/workflows/machines.yml";
+    machinesYml =
+      args.ciMachinesWorkflow or (
+        if builtins.pathExists machinesPath
+        then builtins.readFile machinesPath
+        else null
+      );
+    machinesLines = lib.splitString "\n" (builtins.replaceStrings ["\r"] [""] (
+      if machinesYml == null
+      then ""
+      else machinesYml
+    ));
+    # Only `runs-on: <label>` (optionally `- ` and a comment) is understood.
+    # Any other line naming runs-on, or a quoted key with an escape (it could
+    # spell runs-on), fails closed, so YAML this can't read (lists, block
+    # scalars, flow mappings, aliases, expressions) is refused. A merge key
+    # copies a mapping whose own runs-on line is checked here too.
+    strictRunsOn = line: builtins.match "[ ]*(- )?runs-on: ([A-Za-z0-9._-]+)[ ]*(#.*)?" line;
+    unreadable = line:
+      strictRunsOn line
+      == null
+      && (lib.hasInfix "runs-on" line
+        || builtins.match "[ ]*(- )?[\"'][^\"']*\\\\.*" line != null);
+    machinesLabels = lib.concatMap (line: let
+      m = strictRunsOn line;
+    in
+      lib.optional (m != null) (builtins.elemAt m 1))
+    machinesLines;
+    machinesUnreadable = lib.concatLists (lib.imap1 (n: line: lib.optional (unreadable line) (toString n)) machinesLines);
+    machinesOnSlots = lib.intersectLists machinesLabels takeoverLabels;
+    takeoverHosts = builtins.attrNames inventory;
+    repo = owner: name: {inherit owner name;};
   in {
     imports = [self.nixosModules.forgejo-runner-ephemeral];
 
@@ -63,6 +108,44 @@ in {
           }
         ];
       })
+      (lib.mkIf (takeover && active) {
+        assertions = [
+          {
+            assertion = fleet.remote;
+            message = "forgejoEphemeral: the takeover needs the remote dispatcher (HOM-32 PR 7), so the slot host keeps no PAT or pool.";
+          }
+          {
+            assertion = validLabels;
+            message = "forgejoEphemeral: takeoverLabels must be [\"nix-vm\" \"nix-eph\"] or [\"nix\" \"nix-vm\" \"nix-eph\"] (_ci-slots.nix).";
+          }
+          {
+            # The inventory decision (README "Ryza takeover"). Only a `nix` job
+            # breaks untrusted: pilot's master publish (Harbor is reachable
+            # from the trusted source only). Turning trust or trusted egress
+            # off later needs only the acknowledgement, never a code edit.
+            assertion = !takesNix || fleet.untrustedTakeover or false || (fleet.trustedJobs && lib.all (machine: (inventory.${machine}.egress.trusted or null) != null) takeoverHosts);
+            message = "forgejoEphemeral: taking `nix` requires dispatcher.trustedJobs with egress.trusted on every slot host (${lib.concatStringsSep ", " takeoverHosts}), or untrustedTakeover = true: untrusted, pilot's master publish to Harbor fails and slot-run master builds don't reach ncps (README \"Ryza takeover\").";
+          }
+          {
+            assertion = machinesYml != null && machinesUnreadable == [] && machinesOnSlots == [];
+            message =
+              "forgejoEphemeral: the takeover dispatches manjo/omnissiah's whole queue, so machines.yml must be readable and off ${lib.concatStringsSep "/" takeoverLabels} (HOM-32 PR 11: nix-machines); "
+              + (
+                if machinesYml == null
+                then ".forgejo/workflows/machines.yml is missing."
+                else if machinesUnreadable != []
+                then "unreadable runs-on form on line ${lib.concatStringsSep ", " machinesUnreadable}; use `runs-on: <label>`."
+                else "it runs on ${lib.concatStringsSep ", " machinesOnSlots}."
+              );
+          }
+          {
+            # The label rule (forgejo-runner.nix): nothing else may take these
+            # labels on a slot host, nor keep the guests' CI credentials.
+            assertion = !(hostsSlots && (config.services.imperium.forgejoRunner.enable or false));
+            message = "forgejoEphemeral: the takeover retires ${hostName}'s persistent runner; remove it from the machine (machines/${hostName}/forgejo-runner.nix).";
+          }
+        ];
+      })
       (lib.mkIf (fleet.remote && dispatches) (lib.optionalAttrs (options.services.imperium ? forgejoRunner) {
         services.imperium.forgejoRunner.enable = lib.mkForce false;
       }))
@@ -76,26 +159,56 @@ in {
       })
       (lib.mkIf dispatches {
         services.imperium.forgejoEphemeral.pools = {
+          # Repo ids from the forges' API (anonymous, 2026-11-26). A trusted
+          # repo also needs the README's branch protection, or its runs
+          # stay untrusted (the dispatcher checks on every resolution).
           ugalabugala = {
             forge = "ugalabugala";
             scope.user = "manjo";
-            labels = ["nix-eph"];
-            dispatch = [9];
+            labels =
+              if takeover
+              then takeoverLabels
+              else ["nix-eph"];
+            dispatch =
+              if takeover
+              then "owner"
+              else [9];
             trust = {
-              repos."9" = {
-                owner = "manjo";
-                name = "rust-app-template";
-              };
+              repos =
+                {"9" = repo "manjo" "rust-app-template";}
+                // lib.optionalAttrs takeover {
+                  "30" = repo "manjo" "pilot";
+                  "8" = repo "manjo" "fishing";
+                  "7" = repo "manjo" "nopresh";
+                  # Only machines.yml, on nix-machines (PR 11): no slot runs until PR 13.
+                  "1" = repo "manjo" "omnissiah";
+                };
               users = ["manjo"];
             };
           };
-          noosphere-user = {
-            forge = "noosphere";
-            scope.user = "manjo";
-            labels = ["nix-eph"];
-            # manjo/auspex, manjo/mushroom-farmer
-            dispatch = [221 188];
-          };
+          noosphere-user =
+            {
+              forge = "noosphere";
+              scope.user = "manjo";
+              labels =
+                if takeover
+                then takeoverLabels
+                else ["nix-eph"];
+              # manjo/auspex, manjo/mushroom-farmer
+              dispatch =
+                if takeover
+                then "owner"
+                else [221 188];
+            }
+            // lib.optionalAttrs takeover {
+              trust = {
+                repos = {
+                  "221" = repo "manjo" "auspex";
+                  "188" = repo "manjo" "mushroom-farmer";
+                };
+                users = ["manjo"];
+              };
+            };
           noosphere-org = {
             forge = "noosphere";
             scope.org = "monolith-softworks";
@@ -161,19 +274,6 @@ in {
     # protocol once the fleet prerequisites are present; only the dispatcher
     # opts each pool into receiving the file.
     sccacheSlot = sccacheProvisioned && cfg.trustedJobs.enable && cfg.egressTrustedAddress != null;
-    # Preserve the deployed programs byte-for-byte while the feature is off.
-    # Build and test both variants from the same source, not a forked copy.
-    sccacheSources = pkgs.applyPatches {
-      name = "forgejo-ephemeral-sccache-sources";
-      src = lib.fileset.toSource {
-        root = ./.;
-        fileset = lib.fileset.unions [./_forgejo-ephemeral-dispatcher.py ./_forgejo-slotctl.py];
-      };
-      patches = [./_forgejo-ephemeral-sccache.patch];
-      # Blank context lines omit their optional leading space (GNU diff
-      # --suppress-blank-empty), so trimming trailing whitespace is safe.
-      patchFlags = ["-p1" "--fuzz=0"];
-    };
     # Keep the existing guest and VM units byte-identical on the pilot.
     # Remote slots and any other label/forge selection need boot credentials.
     fixedPilot =
@@ -1118,11 +1218,9 @@ in {
     slotctlConfig = pkgs.writeText "${hostName}-slotctl.json" (builtins.toJSON {slots = slotctlSlots;});
     # Both entry points use the same source with host paths baked in. The
     # caller can choose a declared slot and verb, never the config or systemctl.
-    slotctlSource =
-      if sccacheSlot
-      then "${sccacheSources}/_forgejo-slotctl.py"
-      else ./_forgejo-slotctl.py;
-    slotctlScript = pkgs.replaceVars slotctlSource {
+    # One program whether or not sccache is delivered: it always knows (and
+    # scrubs) the sccache names, and accepts that file only with trusted egress.
+    slotctlScript = pkgs.replaceVars ./_forgejo-slotctl.py {
       config = slotctlConfig;
       systemctl = lib.getExe' pkgs.systemd "systemctl";
       systemd_run = lib.getExe' pkgs.systemd "systemd-run";
@@ -1201,10 +1299,6 @@ in {
       vmDeadline = vmStartSeconds + class.hostMinutes * 60 + vmStopSeconds;
       state = stateName slot machine;
       runtime = runtimeName slot machine;
-      dispatcherSource =
-        if sccacheActive
-        then "${sccacheSources}/_forgejo-ephemeral-dispatcher.py"
-        else ./_forgejo-ephemeral-dispatcher.py;
       deps = lib.optionals local data.dependencies;
       transport =
         if local
@@ -1227,7 +1321,7 @@ in {
         // {
           ExecStart = lib.concatStringsSep " " ([
               (lib.getExe pkgs.python3)
-              "-I -B ${dispatcherSource}"
+              "-I -B ${./_forgejo-ephemeral-dispatcher.py}"
               "--slot ${slot} --machine ${machine} ${transport}"
               "--pools ${poolsFile}"
               "--state-dir ${stateDirs.${slot}} --pause-file /run/${runtime}/pause"
@@ -1251,7 +1345,7 @@ in {
       # forgejo-runner-microvm.nix loads it once.
       self.inputs.microvm.nixosModules.host
       self.nixosModules.ci-credentials
-      (import ./_forgejo-ephemeral-trusted.nix {inherit cfg localSlots dispatch dispatching cacheHost sccacheSlot;})
+      (import ./_forgejo-ephemeral-trusted.nix {inherit cfg localSlots dispatch dispatching cacheHost;})
     ];
 
     options.services.imperium.forgejoEphemeral = {
@@ -1401,7 +1495,6 @@ in {
           localSlots;
           inherit slotctlSlots sshClients poolsFile trustedEgressHosts forcedCommand;
           inherit untrustedLimitSeconds pickupSeconds expiryBootMarginMinutes;
-          inherit sccacheSources;
         };
         description = "Slot, pool, and transport details for checks.";
       };
