@@ -21,6 +21,7 @@
   autoAddDriverRunpath,
   python3,
   writeShellApplication,
+  zstd,
   src,
 }: let
   # setup.py wants CUDA 13.0 (MIN_DRIVER 580, and the ready-made engine is
@@ -28,7 +29,7 @@
   cudaPackages = cudaPackages_13_0;
 
   # project(strata VERSION x.y.z) -- the engine's own version, which is not the
-  # release tag (v0.2.17 ships engine 0.1.63).
+  # release tag (v0.2.22 ships engine 0.1.69).
   engineVersion = let
     m = builtins.match ''.*project\(strata VERSION ([0-9.]+).*'' (builtins.readFile "${src}/engine/CMakeLists.txt");
   in
@@ -58,6 +59,9 @@
       cuda_cudart
       cuda_cccl
       libcublas
+      # strata-hy4 reads zstd-compressed .strata manifests; without a system
+      # zstd it falls back to a bundled decoder.
+      zstd
     ];
 
     # setup.py's flags for a local CUDA build (build_engine), minus the paths
@@ -75,6 +79,10 @@
       (lib.cmakeBool "STRATA_BUILD_TESTS" false)
       (lib.cmakeBool "STRATA_Q6K_EXPERTS" true)
       (lib.cmakeBool "STRATA_PORTABLE" true)
+      # The shape engines (0.2.18+): strata-inkling (Inkling 2 Mini) defaults
+      # ON, strata-hy4 (Tencent Hy4-Flash) is opt-in.
+      (lib.cmakeBool "STRATA_BUILD_INKLING" true)
+      (lib.cmakeBool "STRATA_BUILD_HY4" true)
       # The vendored ggml wraps every compile in ccache/sccache when one is on
       # PATH (setup.py passes this too).
       (lib.cmakeBool "GGML_CCACHE" false)
@@ -82,12 +90,13 @@
       (lib.cmakeFeature "CMAKE_CUDA_ARCHITECTURES" cudaPackages.flags.cmakeCudaArchitecturesString)
     ];
 
-    # Only the engine target, as setup.py builds it; the default target pulls
-    # in the benches and tools. `cmake --build`, not `ninja`: the generator is
+    # Only the engine targets, as setup.py builds them (setup.py builds the
+    # shape engines in a separate tree; one tree is fine here). The default
+    # target pulls in the benches and tools. `cmake --build`, not `ninja`: the generator is
     # the cmake hook's choice, not this file's.
     buildPhase = ''
       runHook preBuild
-      cmake --build . --target strata -j$NIX_BUILD_CORES
+      cmake --build . --target strata strata-inkling strata-hy4 -j$NIX_BUILD_CORES
       runHook postBuild
     '';
 
@@ -98,6 +107,8 @@
     installPhase = ''
       runHook preInstall
       install -Dm755 strata $out/libexec/strata/strata
+      install -Dm755 src/inkling2/strata-inkling $out/libexec/strata/strata-inkling
+      install -Dm755 strata-hy4 $out/libexec/strata/strata-hy4
       if [ -e libstrata_kq.so ]; then
         install -Dm755 libstrata_kq.so $out/libexec/strata/libstrata_kq.so
       fi

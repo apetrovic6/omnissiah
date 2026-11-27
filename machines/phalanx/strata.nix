@@ -34,11 +34,17 @@
 {self, ...}: {
   imports = [self.nixosModules.strata];
 
+  # Served through llama-swap (./llama-swap.nix) since 2026-11-27: one entry per
+  # Strata model, so llama-swap decides what holds GPU1 and asking for one
+  # model unloads the other. The paths below are the service's view of
+  # ~/models (its BindReadOnlyPaths).
   services.imperium.strata = {
     enable = true;
-    user = "apetrovic";
-    family = "qwen";
-    quant = "IQ3_XXS";
+    dataDir = "/models/strata-data";
+    gpu = 1;
+
+    qwen.family = "qwen";
+    qwen.quant = "IQ3_XXS";
 
     # ROUTE TAIL SKIP: ON, measured 2026-11-21 on v0.2.17. When an expert the
     # router ranked 7th or lower for every token in the window is not cached
@@ -53,10 +59,9 @@
     # About +20-25% decode, more than upstream's +8% on 2x A4000 -- plausibly
     # because a 10GB card misses more experts, so there is more to skip.
     # Prefill unchanged (~1060-1130 tok/s). Set "0" to compare quality.
-    engineEnv.STRATA_ROUTE_TAIL_SKIP = "7";
-    gpu = 1;
-    maxContext = 262144;
-    idleUnload = 3600;
+    qwen.engineEnv.STRATA_ROUTE_TAIL_SKIP = "7";
+    qwen.maxContext = 262144;
+    qwen.ttl = 3600;
 
     # ONLY ONE GPU, AND THAT IS MEASURED, NOT AN OVERSIGHT. The engine config
     # carries "gpu": 1 -- physical card 1, the idle one; card 0 drives DP-2 and is
@@ -124,5 +129,31 @@
     # vm.nr_hugepages is the WRONG fix for the same idea: it would reserve ~40 GiB
     # permanently, which cannot be reclaimed while the model is unloaded and so
     # defeats --idle-unload entirely.
+
+    # INKLING 2 MINI on Strata's own engine (strata-inkling, 0.2.19+), SQ-15
+    # pack, replacing the llama.cpp route in ./llama-swap.nix. Measured
+    # 2026-11-27, GPU1, 128K ctx, the same 20.6K-token prompt, tok/s:
+    #
+    #                                         prefill (cold)   decode
+    #   llama.cpp, layers 8-17 on GPU, ub256      139.7        26.5-27.3
+    #   strata-inkling SQ-15, drafting off        657-730      16.1-16.7
+    #   strata-inkling SQ-15, DSpark on           725          11.9-12.0
+    #
+    # Strata reads 5x faster and writes 1.6x slower. Agent turns are mostly
+    # reading, so it wins there: yesterday's 45.5K-read / 3.4K-written pi
+    # session is ~4.5 min here against ~7.5 on llama.cpp. The engine keeps
+    # 1,555 of 3,072 experts in VRAM and computes the rest on the CPU (its
+    # launch probe: CPU 20 ms/token, copying to the card 43 ms).
+    #
+    # Left off, measured: DSpark (35% of drafts accepted, decode 12 tok/s --
+    # Strata's own default is off), 32K context (decode unchanged: the expert
+    # pool, not the KV, fills the card) and STRATA_INK_DEC_PCIE_SHARE (no
+    # effect; STRATA_INK_EXACT picks the lane).
+    inkling = {
+      enable = true;
+      pack = "SQ-15";
+      maxContext = 131072;
+      drafting = "off";
+    };
   };
 }
