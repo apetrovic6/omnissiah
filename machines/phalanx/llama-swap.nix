@@ -40,8 +40,9 @@
   llamaCpp = (pkgs.llama-cpp.override {cudaSupport = true;}).overrideAttrs {doCheck = false;};
   llamaServer = lib.getExe' llamaCpp "llama-server";
 
-  # Inkling 2 (arch `inkling2`) needs ggml-org/llama.cpp#32704, still open as
-  # of 2026-11-21: without it the NVFP4 scales in unsloth's quants are not
+  # Inkling 2 (arch `inkling2`) needs ggml-org/llama.cpp#32704 (merged
+  # 2026-11-21) plus the Inkling graph work after it; pinned to master of
+  # 2026-11-25. Without #32704 the NVFP4 scales in unsloth's quants are not
   # dequantized correctly and stock llama.cpp produces gibberish. Used ONLY by
   # the inkling entry so the other models stay on the nixpkgs build. Drop this
   # once a nixpkgs llama-cpp bump contains the PR.
@@ -57,12 +58,12 @@
     buildInputs = old.buildInputs ++ [pkgs.cudaPackages.cuda_nvml_dev];
     npmDeps = null;
     preConfigure = "";
-    version = "0-unstable-pr32704";
+    version = "0-unstable-2026-11-25";
     src = pkgs.fetchFromGitHub {
       owner = "ggml-org";
       repo = "llama.cpp";
-      rev = "2a28df0f9bd55c4975b6bffb35229a6020720f13";
-      hash = "sha256-VoBt+gGvfbNWVK9su2ErnaiNVPMlq7aRNUqUQbn1dx4=";
+      rev = "244640b7f26e2a7301b27a24edc4f7feaf97d52f";
+      hash = "sha256-snOPbwPbWEG4LuWbW75+leBNQT+a2YnZhw2ZGFfnnjc=";
     };
   });
 
@@ -167,27 +168,40 @@ in {
         # not fully disable thinking -- cap output tokens client-side.
         # Card claims up to 1M context. 131072, not unsloth's 32768 example: 32K
         # is mostly eaten by an agent harness's system prompt and tool schemas.
-        # KV IS cheap (only 8 of 48 layer passes are global, 2.2GB at 128K q8_0)
-        # but the COMPUTE buffer is not -- the global layers' scratch scales
-        # with ctx x ubatch. At the default ubatch 512 and 128K it is ~13.5GB,
-        # auto-fit cannot place a single layer, and the model silently runs
-        # CPU-only (~7 tok/s, nvidia-smi shows nothing loaded). Hence:
         #
-        #   --ubatch-size 128  compute buffer ~3.2GB; 256 is already worse
-        #                      (fewer layers fit; 5.8 tok/s measured).
-        #   --no-op-offload    op offload stages RAM-resident experts on the
-        #                      GPU for prompt batches and wants a 6.5-10.4GB
-        #                      buffer (on CUDA0 regardless of --main-gpu). It
-        #                      OOMs at every ctx size on these cards.
-        #   --device CUDA1     card 0 drives the display, and Strata also lives
-        #                      on card 1. Both cards measured faster
-        #                      (68 / 15.1 vs 54 / 10.3 tok/s prefill / decode)
-        #                      at the cost of ~3GB of the desktop card.
+        # PLACED BY HAND, against the advice on mkModel above -- measured
+        # 2026-11-25 on llama.cpp master 244640b7, GPU1 only. The loop core
+        # (physical layers 6-17) runs three times per token, so its experts are
+        # worth three times the VRAM of the rest; auto-fit does not know that
+        # and spreads them evenly (ggml-org/llama.cpp#33040). -ot sends the
+        # experts of every OTHER layer to RAM. The fused tensor is
+        # ffn_gate_up_exps -- a pattern for ffn_up_exps matches nothing.
         #
-        # Measured 2026-11-21, CUDA1 only, 1417-token prompt: prefill 54 tok/s,
-        # decode 10.3 tok/s. Prefill is the weak spot -- experts live in RAM
-        # and run prompt batches on the CPU -- so a long first agent turn is
-        # slow; the prefix cache covers later ones.
+        # The limit is the COMPUTE buffer, not weights or KV: CUDA has no kernel
+        # for the compact-bias flash attention Inkling needs yet (#32740 is the
+        # ggml contract only; Vulkan #32898 and Metal #32808 are open), so the
+        # global layers' attention scores are materialized and the buffer
+        # scales with ctx x ubatch -- 12.9GB at 128K/ub512. With layers 6-17
+        # resident (7.8GB) only ~32K context fits. Op offload makes it worse:
+        # it stages each RAM layer on the GPU, so moving a layer out frees
+        # ~547MB of weights and adds the same back as compute.
+        #
+        # Same 20.6K-token prompt, tok/s, cold prefill / decode cold, warm:
+        #
+        #   old pin, auto-fit, ub128 (2026-11-21)    ~54-60 / 10-15
+        #   layers 9-17 on GPU, 128K, ub64, no op    80.8 / 18.5, 16.6   <- this
+        #   layers 6-17 on GPU, 32K, ub128, op on   110.8 / 19.8, 25.4
+        #
+        # (llama-bench at 2K context, where the buffer does not bite: 394 / 29.7
+        # with layers 6-17 and op offload.) 128K wins for agent use. Re-measure
+        # when CUDA gets compact-bias FA: 6-17 + op offload at 128K is the prize.
+        #
+        #   -ctk/-ctv q4_0       overrides mkModel's q8_0 (last flag wins):
+        #                        1.15GB instead of 2.2GB at 128K.
+        #   --no-mmproj-offload  the vision encoder wants ~700MB and GPU1 has
+        #                        ~580 left, so images are encoded on the CPU.
+        #   --device CUDA1       card 0 drives the display. Strata shares card 1
+        #                        but loads lazily; both cannot be up at once.
         #
         # Keep in sync with the llama-swap provider (contextWindow) in magos
         # modules/features/pi/default.nix and modules/features/omp/default.nix.
@@ -197,9 +211,14 @@ in {
           ctxSize = 131072;
           extraFlags = builtins.concatStringsSep " " [
             "--mmproj ${sandboxModelsDir}/Inkling-2-Mini/mmproj-F16.gguf"
+            "--no-mmproj-offload"
             "--device CUDA1"
-            "--ubatch-size 128"
+            "--n-gpu-layers 99"
+            "--override-tensor 'blk\\.([0-8]|1[89]|2[0-3])\\.ffn_(gate_up|down)_exps\\.weight=CPU'"
+            "--ubatch-size 64"
             "--no-op-offload"
+            "--cache-type-k q4_0"
+            "--cache-type-v q4_0"
             "--temp 1.0"
             "--top-p 1.0"
             "--top-k 0"
