@@ -13,6 +13,10 @@
 #                     Moves with cerberus, separately from the dispatcher.
 #
 #   uplink            the host interface slot traffic is source-NATed out of
+#   egress.interface  absent: the SNAT addresses sit on `uplink` (Ryza, by
+#                     networkd). The nodes: a routeless dummy that
+#                     forgejo-ephemeral-snat.service creates (taghmata/node.nix),
+#                     so the cluster uplink's addresses never change.
 #   egress.untrusted  chart name (`self.lib.lan.<name>`) of the dedicated SNAT
 #                     address of this host's slots. Caddy on the guard tells
 #                     slot traffic apart by it, so it is never a DNS host and
@@ -34,7 +38,9 @@
 #                     02:00:00:c1:00:<index + 2, hex>, subnet
 #                     10.99.<index + 1>.0/24 (10.99.0 and 10.99.1 belong to the
 #                     persistent CI guests, forgejo-runner-microvm.nix)
-#     vcpu, memory    guest size, memory in GiB. The host slice allows one GiB
+#     vcpu, memory    guest size, memory in GiB. A node slot leaves memory out:
+#                     it is the node's forgejoRunner.resources.memory
+#                     (asserted). The host slice allows one GiB
 #                     more for QEMU and virtiofsd.
 #     class           std (50 GiB overlay, 3 h runner) or large (150 GiB, 6 h).
 #                     The overlay also holds Nix's build dir.
@@ -78,32 +84,34 @@
     class = "std";
     var = 20;
   };
-  nodeMemory = {
-    luna = 3;
-    sol = 4;
-    terra = 4;
-  };
+  nodeNames = ["luna" "sol" "terra"];
   nodeState = {
     hostRunnerEnabled ? true,
     slotsEnabled ? false,
     trustedEgress ? false,
     untrustedTakeover ? false,
   }: {inherit hostRunnerEnabled slotsEnabled trustedEgress untrustedTakeover;};
-  nodeStates = assert builtins.all (name: builtins.hasAttr name nodeMemory) (builtins.attrNames nodes);
-    builtins.mapAttrs (name: _: nodeState (nodes.${name} or {})) nodeMemory;
+  nodeStates = assert builtins.all (name: builtins.elem name nodeNames) (builtins.attrNames nodes);
+    builtins.listToAttrs (map (name: {
+        inherit name;
+        value = nodeState (nodes.${name} or {});
+      })
+      nodeNames);
   nodeHosts = builtins.mapAttrs (name: state: {
     uplink = "enp1s0";
+    egress.interface = "dummy-ci-snat";
     egress.untrusted = "${name}-eph";
     egress.trusted =
       if state.trustedEgress
       then "${name}-eph-trusted"
       else null;
-    slots."${name}-eph-1" =
-      (std 1)
-      // {
-        memory = nodeMemory.${name};
-        class = "large";
-      };
+    slots."${name}-eph-1" = {
+      index = 1;
+      vcpu = 2;
+      class = "large";
+      var = 20;
+      # memory: the CI share kubelet already reserves (system-reserved).
+    };
   }) (builtins.removeAttrs nodeStates (builtins.filter (name: !nodeStates.${name}.slotsEnabled) (builtins.attrNames nodeStates)));
 in {
   nodes = nodeStates;
@@ -113,6 +121,9 @@ in {
     host = "cerberus";
     # Separate operator opt-in; applies to the dispatcher and its slots.
     trustedJobs = false;
+    # Flip on Ryza before rolling out node slots (which always use this policy).
+    # Off at merge to preserve the live Ryza service and slice definitions.
+    protectStdSlots = false;
     # Provision the shared Garage key only with the remote dispatcher.
     sccacheCi = false;
     inherit takeover takeoverLabels untrustedTakeover;

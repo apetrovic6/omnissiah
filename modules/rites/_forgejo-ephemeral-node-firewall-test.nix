@@ -1,4 +1,4 @@
-# Exercise the enabled Luna guard without starting a production machine, slot, or cluster.
+# Exercise generated Luna scripts in a veth model, not a live Kubernetes dataplane.
 {
   self,
   pkgs,
@@ -8,22 +8,26 @@
     nodes.luna = {
       hostRunnerEnabled = false;
       slotsEnabled = true;
-      untrustedTakeover = true;
+      trustedEgress = true;
     };
   };
   luna = self.nixosConfigurations.luna.extendModules {
     specialArgs = {
       ciSlots = data.hosts;
-      ciDispatcher = data.dispatcher;
+      # The rollout state: trust on, both SNAT addresses claimed.
+      ciDispatcher = data.dispatcher // {trustedJobs = true;};
       ciNodes = data.nodes;
     };
   };
   guard = luna.config.systemd.services.forgejo-ephemeral-firewall;
+  snat = luna.config.systemd.services.forgejo-ephemeral-snat;
   # Take only the script options, not ExecStart or the production system closure.
-  guardCommands = [
+  serviceCommands = [
     (pkgs.writeShellScriptBin "guard-start" guard.script)
     (pkgs.writeShellScriptBin "guard-reload" guard.reload)
     (pkgs.writeShellScriptBin "guard-stop" guard.preStop)
+    (pkgs.writeShellScriptBin "snat-start" snat.script)
+    (pkgs.writeShellScriptBin "snat-stop" snat.preStop)
   ];
   socketFixture = pkgs.writeText "firewall-fixture.py" ''
     import selectors
@@ -67,16 +71,19 @@ in
       networking.firewall.enable = false;
       environment.systemPackages =
         [luna.config.networking.firewall.package pkgs.iproute2 pkgs.python3]
-        ++ guardCommands;
+        ++ serviceCommands;
       environment.etc."firewall-fixture.py".source = socketFixture;
     };
 
     testScript = ''
+      import json
+
       firewall.start()
 
       node = "${self.lib.hosts.luna}"
       guard = "${self.lib.hosts.${data.guard}}"
-      snat = "192.168.1.241"
+      snat = "${self.lib.lan.luna-eph}"
+      trusted_snat = "${self.lib.lan.luna-eph-trusted}"
       cluster = "10.43.0.1"
       local_service = "10.43.0.2"
       vip = "192.168.1.251"
@@ -92,7 +99,9 @@ in
       public_alias = "11.0.0.3"
       tap = "vm-eph-1"
       uplink = "enp1s0"
+      snat_device = "dummy-ci-snat"
       ip = "${lib.getExe' pkgs.iproute2 "ip"}"
+      arping = "${lib.getExe' pkgs.iputils "arping"}"
       python = "${lib.getExe pkgs.python3} /etc/firewall-fixture.py"
 
       def run(ns, *commands):
@@ -126,7 +135,6 @@ in
           "ip link set cali0 up",
           f"ip addr add {gateway}/24 dev {tap}",
           f"ip addr add {node}/24 dev {uplink}",
-          f"ip addr add {snat}/32 dev {uplink}",
           f"ip addr add 11.0.0.1/24 dev {uplink}",
           "ip addr add 10.42.1.1/24 dev cali0",
           "sysctl -w net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1",
@@ -155,6 +163,15 @@ in
           f"ip addr add {pod}/24 dev pod0",
           "ip route add default via 10.42.1.1",
       )
+
+      def uplink_addresses():
+          return run("host", f"ip -4 -o addr show dev {uplink}")
+
+      original_uplink_addresses = uplink_addresses()
+
+      def check_no_snat_device():
+          firewall.fail(f"{ip} -n host link show dev {snat_device}")
+          assert uplink_addresses() == original_uplink_addresses
 
       # Approximate kube-proxy's PREROUTING DNAT. The public-shaped alias
       # DNATs to an otherwise *allowed* destination, testing the DNAT fence
@@ -222,6 +239,23 @@ in
       place_accepts(create=True)
       with subtest("Without the guard, listeners and translated paths work"):
           exercise(active=False)
+      with subtest("LAN duplicate prevents SNAT address setup"):
+          run("lan", f"ip addr add {snat}/32 dev lan0")
+          try:
+              status, output = firewall.execute(f"{ip} netns exec host snat-start 2>&1")
+              assert status != 0 and f"duplicate-address probe for {snat} on {uplink} failed" in output, output
+              check_no_snat_device()
+          finally:
+              run("lan", f"ip addr del {snat}/32 dev lan0")
+      with subtest("SNAT setup binds both /32s to the dummy and answers ARP on enp1s0"):
+          run("host", "snat-start")
+          assert uplink_addresses() == original_uplink_addresses
+          (device,) = json.loads(run("host", f"ip -d -j -4 addr show dev {snat_device}"))
+          assert device["linkinfo"]["info_kind"] == "dummy"
+          assert {(addr["local"], addr["prefixlen"]) for addr in device["addr_info"]} == {
+              (snat, 32), (trusted_snat, 32),
+          }
+          run("lan", f"{arping} -c 1 -w 3 -I lan0 -s {guard} {snat}")
       with subtest("Start isolates the slot even after competing filter verdicts move ahead"):
           run("host", "guard-start")
           check_egress(snat)
@@ -234,5 +268,8 @@ in
       with subtest("Stop removes the guard without touching kube-proxy or Calico rules"):
           run("host", "guard-stop")
           exercise(active=False)
+      with subtest("Stopping SNAT removes its dummy without changing enp1s0"):
+          run("host", "snat-stop")
+          check_no_snat_device()
     '';
   }

@@ -7,12 +7,20 @@
   flake.nixosModules.taghmata-node = args @ {
     config,
     lib,
+    pkgs,
     ...
   }: let
     inherit (config.networking) hostName;
     state = (args.ciNodes or self.lib.ciNodes).${hostName};
     runner = config.services.imperium.forgejoRunner;
     slot = config.services.imperium.forgejoEphemeral;
+    host = slot.inventory.${hostName};
+    inherit (host) uplink;
+    inherit (host.egress) interface;
+    snatAddresses = builtins.filter (address: address != null) [slot.egressAddress slot.egressTrustedAddress];
+    ip = lib.getExe' pkgs.iproute2 "ip";
+    arping = lib.getExe' pkgs.iputils "arping";
+    cleanup = "rke2-clean-dangling-store-links";
   in {
     imports = [
       self.nixosModules.forgejo-runner
@@ -29,14 +37,102 @@
         }
       ];
     };
-    # Extend the existing networkd match; do not replace the node's primary
-    # address, routes, or NIC ownership as part of the slot rollout.
-    systemd.network.networks."40-enp1s0" = lib.mkIf state.slotsEnabled {
-      networkConfig.IPv4DuplicateAddressDetectionTimeoutSec = "3s";
-      addresses = map (address: {
-        Address = "${address}/32";
-        DuplicateAddressDetection = "ipv4";
-      }) (builtins.filter (address: address != null) [slot.egressAddress slot.egressTrustedAddress]);
+    # Deliberately no addresses on enp1s0 beyond the node's primary /24.
+    # Calico first-found excludes ^dummy.*; this device has no default route
+    # so k3s's default-route-interface address lookup also excludes it.
+    systemd.network.networks = lib.mkIf state.slotsEnabled {
+      "10-${interface}" = {
+        matchConfig.Name = interface;
+        linkConfig.Unmanaged = true;
+      };
+    };
+    systemd.services.forgejo-ephemeral-snat = lib.mkIf state.slotsEnabled {
+      description = "Claim the CI SNAT addresses on ${interface}";
+      wantedBy = ["multi-user.target"];
+      wants = ["network-online.target"];
+      after = ["network-online.target"];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        OOMScoreAdjust = 1000;
+      };
+      script = ''
+        set -eu
+        # A dummy cannot perform link-layer ACD on the LAN. Probe on the
+        # physical interface before binding, and require weak-host ARP.
+        for dev in all ${uplink}; do
+          for key in arp_ignore arp_filter; do
+            if [[ $(<"/proc/sys/net/ipv4/conf/$dev/$key") != 0 ]]; then
+              echo "CI SNAT needs $key=0 on $dev to answer LAN ARP for the dummy addresses" >&2
+              exit 1
+            fi
+          done
+        done
+        for address in ${lib.escapeShellArgs snatAddresses}; do
+          if ! ${arping} -q -D -c 2 -w 3 -I ${uplink} "$address"; then
+            echo "CI SNAT refused: ARP duplicate-address probe for $address on ${uplink} failed" >&2
+            exit 1
+          fi
+        done
+        # Only this unit creates the dummy; drop a leftover of an unclean stop.
+        ${ip} link delete ${interface} 2>/dev/null || true
+        ${ip} link add ${interface} type dummy
+        trap '${ip} link delete ${interface}' EXIT
+        ${ip} link set ${interface} up
+        for address in ${lib.escapeShellArgs snatAddresses}; do
+          ${ip} -4 address add "$address/32" dev ${interface}
+        done
+        trap - EXIT
+      '';
+      preStop = ''
+        if ${ip} link show dev ${interface} >/dev/null 2>&1; then
+          ${ip} link delete ${interface}
+        fi
+      '';
+    };
+
+    # Job images live on the second NVMe (_node-disko.nix), not the root
+    # device holding the RKE2 etcd datastore. Never fall back to the root.
+    microvm.stateDir = lib.mkIf state.slotsEnabled "/mnt/storage/microvms";
+    # mkIf on the whole unit: a nested one would still declare an empty unit.
+    systemd.services."install-microvm-${hostName}-eph-1" = lib.mkIf state.slotsEnabled {
+      unitConfig.AssertPathIsMountPoint = "/mnt/storage";
+    };
+
+    # Tmpfiles installs RKE2's links into the store (nixpkgs
+    # services/cluster/rancher) but never removes those of deleted entries.
+    # Once the automatic GC is back (from the stage on, taghmata runner
+    # storeCache off), it collects their targets, and a single dangling
+    # manifest stalls the deploy controller for every bundled chart
+    # (README "Large slots on Luna, Sol and Terra"). Only removes links,
+    # never touches rke2-server; the controller picks up the next pass.
+    systemd.services.${cleanup} = lib.mkIf config.nix.gc.automatic {
+      description = "Remove dangling RKE2 links to collected Nix store paths";
+      after = ["nix-gc.service"];
+      serviceConfig.Type = "oneshot";
+      path = [pkgs.findutils];
+      script = ''
+        set -eu
+        rke2=/var/lib/rancher/rke2
+        for dir in "$rke2/server/manifests" "$rke2/server/static/charts" "$rke2/agent/images" "$rke2/agent/etc/containerd"; do
+          [[ -d "$dir" ]] || continue
+          # Print before deleting: %l reads the link.
+          find -P "$dir" -xdev -mindepth 1 -type l -lname '/nix/store/*' -xtype l \
+            -printf 'Removed dangling RKE2 store link: %p -> %l\n' -delete
+        done
+      '';
+    };
+    systemd.timers.${cleanup} = lib.mkIf config.nix.gc.automatic {
+      description = "Remove dangling RKE2 store links after any garbage collection";
+      wantedBy = ["timers.target"];
+      timerConfig = {
+        # Also catches manual nix-collect-garbage and min-free collection.
+        OnBootSec = "5min";
+        OnUnitActiveSec = "15min";
+      };
+    };
+    systemd.services.nix-gc = lib.mkIf config.nix.gc.automatic {
+      unitConfig.OnSuccess = ["${cleanup}.service"];
     };
     networking.defaultGateway = {
       address = self.lib.lan.gateway;

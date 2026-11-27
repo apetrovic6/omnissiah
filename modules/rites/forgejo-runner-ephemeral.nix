@@ -525,7 +525,18 @@ in {
         inherit guestMinutes;
         hostMinutes = guestMinutes + 5;
       };
-    mkSlot = slot: spec: let
+    # The bare-metal cluster nodes (_ci-slots.nix `nodes`), with Calico and
+    # kube-proxy rules in filter/nat and RKE2's memory reservation.
+    nodeHost = builtins.hasAttr hostName (args.ciNodes or self.lib.ciNodes);
+    mkSlot = slot: declared: let
+      nodeSlot = nodeHost;
+      # The guest is the CI memory kubelet's system-reserved already holds
+      # back (taghmata/node.nix); asserted below, never declared per slot.
+      reservedMemory = config.services.imperium.forgejoRunner.resources.memory;
+      spec = declared // lib.optionalAttrs nodeSlot {memory = declared.memory or reservedMemory;};
+      protectSlot = nodeSlot || (fleet.protectStdSlots or false);
+      slotOOM = lib.optionalAttrs protectSlot {OOMScoreAdjust = 1000;};
+      snatUnit = "forgejo-ephemeral-snat.service";
       class = classFor spec;
       # Keep index 1's names. Later slices are siblings, not children of
       # forgejo-ephemeral.slice (which has its own quota).
@@ -549,8 +560,8 @@ in {
       # The link to the guest, numbered by the slot's index (_ci-slots.nix).
       tap = "vm-eph-${toString spec.index}";
       inherit (host) uplink;
-      # The cluster node also has Calico and kube-proxy rules in filter/nat.
-      nodeSlot = builtins.hasAttr hostName (args.ciNodes or self.lib.ciNodes);
+      # Ryza binds on the uplink; the nodes answer for a separate dummy.
+      addressInterface = host.egress.interface or uplink;
       mac = "02:00:00:c1:00:${lib.fixedWidthString 2 "0" (lib.toLower (lib.toHexString (spec.index + 2)))}";
       subnet = "10.99.${toString (spec.index + 1)}";
       gateway = "${subnet}.1";
@@ -649,9 +660,9 @@ in {
       '';
       egressAddressPreflight = pkgs.writeShellScript "${slot}-egress-address-preflight" ''
         set -eu
-        address=$(${lib.getExe' pkgs.iproute2 "ip"} -4 -o address show dev ${uplink} to ${egress}/32)
+        address=$(${lib.getExe' pkgs.iproute2 "ip"} -4 -o address show dev ${addressInterface} to ${egress}/32)
         if [[ -z "$address" ]] || ! ${lib.getExe' pkgs.iputils "arping"} -q -D -c 2 -w 3 -I ${uplink} ${egress}; then
-          echo "slot ${slot}: untrusted SNAT address ${egress} missing or failed duplicate-address probe on ${uplink}" >&2
+          echo "slot ${slot}: untrusted SNAT address ${egress} missing from ${addressInterface} or failed duplicate-address probe on ${uplink}" >&2
           exit 1
         fi
       '';
@@ -726,7 +737,7 @@ in {
           [[ "$state" == inactive && -z "$job" ]]
         }
         present() {
-          [[ -n "$("$ip" -4 -o address show dev ${uplink} to ${trustedEgress}/32)" ]]
+          [[ -n "$("$ip" -4 -o address show dev ${addressInterface} to ${trustedEgress}/32)" ]]
         }
       '';
       # Type=notify: ready once the rule is in, then it lives only as long as
@@ -736,12 +747,12 @@ in {
       egressStart = pkgs.writeShellScript "${slot}-trusted-egress-start" ''
         ${egressCommon}
         # Watch first, so a removal right after the check below is still seen.
-        coproc monitor { exec "$ip" -o -4 monitor address dev ${uplink}; }
+        coproc monitor { exec "$ip" -o -4 monitor address dev ${addressInterface}; }
         watch=''${monitor[0]}
         # networkd probes before it (re)adds the /32 (DuplicateAddressDetection)
         # and drops it on a conflict, so a missing address means don't use it.
         if ! present; then
-          echo "trusted egress refused for ${slot}: ${trustedEgress} is not on ${uplink}; networkd drops it on an address conflict" >&2
+          echo "trusted egress refused for ${slot}: ${trustedEgress} is not on ${addressInterface}${lib.optionalString (!nodeSlot) "; networkd drops it on an address conflict"}" >&2
           exit 11
         fi
         # Probe again before every use: never take an address another host answers for.
@@ -770,7 +781,7 @@ in {
               continue
             fi
           fi
-          echo "trusted egress for ${slot} ends: ${trustedEgress} left ${uplink}; back to the untrusted source" >&2
+          echo "trusted egress for ${slot} ends: ${trustedEgress} left ${addressInterface}; back to the untrusted source" >&2
           exit 0
         done
       '';
@@ -1149,13 +1160,20 @@ in {
         linkConfig.RequiredForOnline = "no";
       };
       # The guest's vCPUs, and its memory plus one GiB for QEMU and virtiofsd.
-      systemd.slices.${sliceName}.sliceConfig = {
-        CPUQuota = "${toString (spec.vcpu * 100)}%";
-        MemoryMax = "${toString (spec.memory + 1)}G";
-        MemorySwapMax = 0;
-        IOWeight = 20;
-      };
-      systemd.services =
+      # Protected slots (every node slot; Ryza after `protectStdSlots`) are
+      # throttled above the guest size and are the first OOM victims
+      # (OOMScoreAdjust below): on a node that extra GiB is not reserved.
+      systemd.slices.${sliceName}.sliceConfig =
+        {
+          CPUQuota = "${toString (spec.vcpu * 100)}%";
+          MemoryMax = "${toString (spec.memory + 1)}G";
+          MemorySwapMax = 0;
+          IOWeight = 20;
+        }
+        // lib.optionalAttrs protectSlot {
+          MemoryHigh = "${toString spec.memory}G";
+        };
+      systemd.services = lib.mapAttrs (_: service: service // {serviceConfig = (service.serviceConfig or {}) // slotOOM;}) (
         {
           ${installer} = {
             unitConfig = {
@@ -1175,8 +1193,9 @@ in {
           };
           ${guard} = {
             description = "Restrict traffic on the Forgejo one-job tap";
-            after = ["firewall.service"];
+            after = ["firewall.service"] ++ lib.optional nodeSlot snatUnit;
             requires = ["firewall.service"];
+            bindsTo = lib.optional nodeSlot snatUnit;
             path = [config.networking.firewall.package pkgs.coreutils];
             reloadIfChanged = true;
             script = guardScript + "\napply_rules start\n";
@@ -1277,7 +1296,11 @@ in {
               TimeoutStartSec = "60s";
             };
           };
-        };
+        }
+        // lib.optionalAttrs protectSlot (lib.genAttrs
+          ["microvm-tap-interfaces@${slot}" "microvm-pci-devices@${slot}"]
+          (_: {overrideStrategy = "asDropin";}))
+      );
     };
     slotctlSlots = lib.mapAttrs (_: data: data.slotctlEntry) localSlots;
     slotctlConfig = pkgs.writeText "${hostName}-slotctl.json" (builtins.toJSON {slots = slotctlSlots;});
@@ -1623,6 +1646,10 @@ in {
             # The label rule (forgejo-runner.nix) requires a compatible toolset.
             assertion = lib.all (p: builtins.elem p (slotToolset pkgs)) (ciToolset pkgs);
             message = "forgejoEphemeral: the slot's PATH must carry the whole shared CI toolset (_ci-toolset.nix).";
+          }
+          {
+            assertion = !nodeHost || lib.all (spec: !(spec ? memory) || spec.memory == config.services.imperium.forgejoRunner.resources.memory) (builtins.attrValues (host.slots or {}));
+            message = "forgejoEphemeral: a node slot's memory is services.imperium.forgejoRunner.resources.memory (kubelet's system-reserved); leave it out of _ci-slots.nix.";
           }
           {
             # Caddy on the guard tells slot sources apart only by address.

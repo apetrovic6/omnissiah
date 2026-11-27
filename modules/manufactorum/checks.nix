@@ -858,6 +858,23 @@
           pools = poolsOf cc;
           sliceOf = cfg: name: cfg.systemd.slices.${name}.sliceConfig;
           hidden = cfg: slot: cfg.systemd.services."microvm@${slot}".serviceConfig.InaccessiblePaths;
+          # PR 13 M1 on Ryza's std slots: only after the operator's opt-in,
+          # so the merge keeps the live units (OOM victim first, MemoryHigh).
+          protectedRyza = eval "ryza" (on.dispatcher // {protectStdSlots = true;}) on.hosts machinesYml [];
+          ryzaProtection = cfg:
+            map (slot: let
+              index = cfg.services.imperium.forgejoEphemeral.inventory.ryza.slots.${slot}.index;
+              slice = sliceOf cfg "forgejo-ephemeral${lib.optionalString (index != 1) (toString index)}";
+            in {
+              oom = map (unit: cfg.systemd.services.${unit}.serviceConfig.OOMScoreAdjust or null) [
+                "microvm@${slot}"
+                "microvm-virtiofsd@${slot}"
+                "microvm-tap-interfaces@${slot}"
+                "microvm-pci-devices@${slot}"
+              ];
+              high = slice.MemoryHigh or null;
+              inherit (slice) MemoryMax;
+            }) ["ryza-eph-1" "ryza-eph-2"];
           # A persistent nix-vm runner kept on ryza by hand.
           kept = eval "ryza" on.dispatcher on.hosts machinesYml [
             self.nixosModules.forgejo-runner-microvm
@@ -959,8 +976,36 @@
             largePools = load internal.largePoolsFile;
             mesh = nodeEval self.lib.ciGuard (nodeOn node) true;
             matcher = mesh.services.caddy.extraConfig;
-            da = cfg: cfg.systemd.network.networks."40-enp1s0".addresses;
+            # The cluster uplink's rendered networkd file, byte for byte.
+            uplinkFile = cfg: toString cfg.environment.etc."systemd/network/40-enp1s0.network".source;
             addr = kind: self.lib.lan."${node}-eph${kind}";
+            snat = enabled.systemd.services.forgejo-ephemeral-snat;
+            dummy = enabled.services.imperium.forgejoEphemeral.inventory.${node}.egress.interface;
+            # Every per-slot unit the host runs, the slot module's and microvm.nix's.
+            slotUnits = [
+              "microvm@${slot}"
+              "microvm-virtiofsd@${slot}"
+              "microvm-tap-interfaces@${slot}"
+              "microvm-pci-devices@${slot}"
+              "microvm-set-booted@${slot}"
+              "install-microvm-${slot}"
+              "forgejo-ephemeral-firewall"
+              "forgejo-ephemeral-trusted-egress@${slot}"
+              "forgejo-ephemeral-trusted-egress-cleanup@${slot}"
+              "forgejo-ephemeral-snat"
+            ];
+            oom = cfg: name: cfg.systemd.services.${name}.serviceConfig.OOMScoreAdjust or null;
+            cleanupUnit = "rke2-clean-dangling-store-links";
+            hasCleanup = cfg:
+              cfg.systemd.services ? ${cleanupUnit}
+              && cfg.systemd.timers ? ${cleanupUnit}
+              && cfg.systemd.services.nix-gc.unitConfig.OnSuccess == ["${cleanupUnit}.service"];
+            cleanupScript = enabled.systemd.services.${cleanupUnit}.script;
+            # A node slot may not size itself apart from the kubelet reservation.
+            resized = let
+              d = nodeOn node;
+            in
+              nodeEval node (d // {hosts = lib.recursiveUpdate d.hosts {${node}.slots.${slot}.memory = memory + 1;};}) true;
             memory =
               if node == "luna"
               then 3
@@ -983,13 +1028,36 @@
             assert builtins.elem "nix-gc.timer" cutover.added;
             assert !staged.microvm.host.enable && builtins.attrNames enabled.microvm.vms == [slot];
             assert hasCiVar enabled == [] && !enabled.services.imperium.sccache.enable;
-            assert da staged == da beforeNode;
-            assert lib.all (kind:
-              builtins.elem {
-                Address = "${addr kind}/32";
-                DuplicateAddressDetection = "ipv4";
-              } (da enabled)) ["" "-trusted"];
+            # M3/M4: enp1s0's file (so its address list and order) never changes;
+            # both /32s go on a routeless, networkd-unmanaged dummy instead.
+            assert uplinkFile beforeNode == uplinkFile staged && uplinkFile staged == uplinkFile enabled;
+            assert enabled.systemd.network.networks."40-enp1s0".addresses == [];
+            assert dummy == "dummy-ci-snat" && lib.hasPrefix "dummy" dummy && lib.stringLength dummy <= 15;
+            assert enabled.systemd.network.networks."10-${dummy}".linkConfig.Unmanaged;
+            assert !(staged.systemd.services ? forgejo-ephemeral-snat) && !(staged.systemd.network.networks ? "10-${dummy}");
+            assert lib.all (kind: lib.hasInfix (addr kind) snat.script) ["" "-trusted"];
+            assert lib.all (part: lib.hasInfix part snat.script) ["arping -q -D -c 2 -w 3 -I enp1s0" "link add ${dummy} type dummy" "/32\" dev ${dummy}" "arp_ignore arp_filter"];
+            assert lib.hasInfix "link delete ${dummy}" snat.preStop;
+            assert lib.all (unit: builtins.elem "forgejo-ephemeral-snat.service" enabled.systemd.services.forgejo-ephemeral-firewall.${unit}) ["bindsTo" "after"];
             assert lib.all (kind: lib.hasInfix (addr kind) matcher) ["" "-trusted"];
+            # M1: guest = kubelet's CI reservation; throttled above it, capped
+            # one GiB higher, and the first OOM victim on every slot unit.
+            assert enabled.microvm.vms.${slot}.config.config.microvm.mem == memory * 1024;
+            assert enabled.services.imperium.forgejoRunner.resources.memory == memory;
+            assert refuses "a node slot's memory is services.imperium.forgejoRunner.resources.memory" resized;
+            assert lib.all (unit: oom enabled unit == 1000) slotUnits;
+            assert (sliceOf enabled "forgejo-ephemeral").MemoryHigh == "${toString memory}G";
+            assert (sliceOf enabled "forgejo-ephemeral").MemoryMax == "${toString (memory + 1)}G";
+            # M5: images on the second NVMe, never on the etcd root device.
+            assert enabled.microvm.stateDir == "/mnt/storage/microvms" && staged.microvm.stateDir == beforeNode.microvm.stateDir;
+            assert enabled.systemd.services."install-microvm-${slot}".unitConfig.AssertPathIsMountPoint == "/mnt/storage";
+            assert enabled.fileSystems."/mnt/storage".fsType == "ext4" && enabled.fileSystems."/".device != enabled.fileSystems."/mnt/storage".device;
+            # H1: dangling RKE2 store links are cleaned from the stage on (when
+            # the automatic GC returns), never before, never touching rke2.
+            assert !(hasCleanup beforeNode) && !(beforeNode.systemd.services ? ${cleanupUnit}) && !(beforeNode.systemd.services.nix-gc.unitConfig ? OnSuccess);
+            assert hasCleanup staged && hasCleanup enabled;
+            assert !(lib.hasInfix "rke2-server" cleanupScript) && !(lib.hasInfix "systemctl" cleanupScript);
+            assert lib.all (dir: lib.hasInfix "$rke2/${dir}" cleanupScript) ["server/manifests" "server/static/charts" "agent/images" "agent/etc/containerd"];
             assert uses internal.poolsFile "ryza-eph-1" && uses internal.largePoolsFile slot;
             assert lib.all (name: stdPools.${name}.labels == ["nix-vm" "nix-eph"] && largePools.${name}.labels == ["nix" "nix-machines"]) ["ugalabugala" "noosphere-user"];
             assert largePools.noosphere-org == stdPools.noosphere-org;
@@ -998,6 +1066,7 @@
               inherit cutover enrollment;
               inherit (rke2 enabled) units registries kernel flags;
               gc = map gc [beforeNode staged enabled];
+              uplink = map uplinkFile [beforeNode staged enabled];
               toplevels = map (cfg: cfg.system.build.toplevel.drvPath) [beforeNode staged enabled];
               labels = {
                 std = lib.mapAttrs (_: pool: pool.labels) stdPools;
@@ -1034,6 +1103,12 @@
           assert hasCiVar before == ciVars && guestUnits before != [];
           # Default flip with trust off: no trust requirement, PR 11 not needed.
           assert ryzaOk sc ["ryza-eph-1" "ryza-eph-2"];
+          assert !on.dispatcher.protectStdSlots;
+          assert lib.all (s: s.oom == [null null null null] && s.high == null && s.MemoryMax == "5G") (ryzaProtection sc);
+          assert ryzaOk protectedRyza ["ryza-eph-1" "ryza-eph-2"];
+          assert lib.all (s: s.oom == [1000 1000 1000 1000] && s.high == "4G" && s.MemoryMax == "5G") (ryzaProtection protectedRyza);
+          # Ryza keeps its SNAT addresses on its uplink: no dummy, no extra unit.
+          assert !(protectedRyza.systemd.services ? forgejo-ephemeral-snat) && !(on.hosts.ryza.egress ? interface);
           assert cerberusOk cc ["ryza-eph-1" "ryza-eph-2"] ["nix-vm" "nix-eph"];
           assert lib.mapAttrs (_: repo: "${repo.owner}/${repo.name}") pools.ugalabugala.trust.repos
           == {
