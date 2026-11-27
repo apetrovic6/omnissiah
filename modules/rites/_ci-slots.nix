@@ -61,7 +61,7 @@
 #                     with `nix`, and check memory pressure after.
 # The fleet module asserts the preconditions (forgejo-runner-ephemeral.nix).
 {
-  takeover ? false,
+  takeover ? true,
   takeoverLabels ? ["nix-vm" "nix-eph"],
   untrustedTakeover ? false,
   ryzaSlots ? 2,
