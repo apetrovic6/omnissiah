@@ -6,15 +6,13 @@
 # A second job re-renders the cluster manifests against the new lock and puts
 # the result in a pull request; it never pushes them to master itself.
 #
-# Jobs run on the terra, luna and sol host runners (`nix-machines:host`), so
-# they build against the host's /nix/store. The runners' nix-daemon signs
-# builds with the `nix-ci-signing-key` clan var and uploads them to
-# https://ncps.noosphere.uk/upload from its post-build-hook. The last step
-# checks that the toplevel reached ncps and fails if the upload did not work.
+# Jobs use nix-machines. Before HOM-32 PR 13 flips, they run on remaining
+# host runners; afterwards they run in the nodes' large one-job slots.
+# The trusted runner signs builds and uploads them to ncps from its Nix
+# post-build hook. The last step fails if the toplevel is not in ncps.
 #
-# Runner hosts substitute from ncps themselves (stc/base.nix): a warm cache
-# turns these builds into downloads, a cold one (every fresh flake.lock) is real
-# compilation on 2-core/4-GiB runners.
+# Both paths substitute from ncps: a warm cache turns these builds into
+# downloads, but a cold cache still means compilation on 2-core runners.
 
 name: Machines
 

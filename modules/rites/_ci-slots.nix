@@ -13,6 +13,10 @@
 #                     Moves with cerberus, separately from the dispatcher.
 #
 #   uplink            the host interface slot traffic is source-NATed out of
+#   egress.interface  absent: the SNAT addresses sit on `uplink` (Ryza, by
+#                     networkd). The nodes: a routeless dummy that
+#                     forgejo-ephemeral-snat.service creates (taghmata/node.nix),
+#                     so the cluster uplink's addresses never change.
 #   egress.untrusted  chart name (`self.lib.lan.<name>`) of the dedicated SNAT
 #                     address of this host's slots. Caddy on the guard tells
 #                     slot traffic apart by it, so it is never a DNS host and
@@ -34,7 +38,9 @@
 #                     02:00:00:c1:00:<index + 2, hex>, subnet
 #                     10.99.<index + 1>.0/24 (10.99.0 and 10.99.1 belong to the
 #                     persistent CI guests, forgejo-runner-microvm.nix)
-#     vcpu, memory    guest size, memory in GiB. The host slice allows one GiB
+#     vcpu, memory    guest size, memory in GiB. A node slot leaves memory out:
+#                     it is the node's forgejoRunner.resources.memory
+#                     (asserted). The host slice allows one GiB
 #                     more for QEMU and virtiofsd.
 #     class           std (50 GiB overlay, 3 h runner) or large (150 GiB, 6 h).
 #                     The overlay also holds Nix's build dir.
@@ -60,11 +66,16 @@
 #                     commit 18 of ryza's 24 GiB and 3 commit 23. Use 3 only
 #                     with `nix`, and check memory pressure after.
 # The fleet module asserts the preconditions (forgejo-runner-ephemeral.nix).
+#
+# The three bare-metal nodes have independent operator gates (README "Large
+# slots on Luna, Sol and Terra"). An unlisted node keeps its host runner and
+# does not start a slot or claim either SNAT address.
 {
   takeover ? true,
   takeoverLabels ? ["nix-vm" "nix-eph"],
   untrustedTakeover ? false,
   ryzaSlots ? 2,
+  nodes ? {},
 }: let
   std = index: {
     inherit index;
@@ -73,16 +84,55 @@
     class = "std";
     var = 20;
   };
+  nodeNames = ["luna" "sol" "terra"];
+  nodeState = {
+    hostRunnerEnabled ? true,
+    slotsEnabled ? false,
+    trustedEgress ? false,
+    untrustedTakeover ? false,
+  }: {inherit hostRunnerEnabled slotsEnabled trustedEgress untrustedTakeover;};
+  nodeStates = assert builtins.all (name: builtins.elem name nodeNames) (builtins.attrNames nodes);
+    builtins.listToAttrs (map (name: {
+        inherit name;
+        value = nodeState (nodes.${name} or {});
+      })
+      nodeNames);
+  nodeHosts = builtins.mapAttrs (name: state: {
+    uplink = "enp1s0";
+    egress.interface = "dummy-ci-snat";
+    egress.untrusted = "${name}-eph";
+    egress.trusted =
+      if state.trustedEgress
+      then "${name}-eph-trusted"
+      else null;
+    slots."${name}-eph-1" = {
+      index = 1;
+      vcpu = 2;
+      class = "large";
+      var = 20;
+      # memory: the CI share kubelet already reserves (system-reserved).
+    };
+  }) (builtins.removeAttrs nodeStates (builtins.filter (name: !nodeStates.${name}.slotsEnabled) (builtins.attrNames nodeStates)));
 in {
+  nodes = nodeStates;
   dispatcher = {
     # Prepare new PATs and a slotctl key before deploying this as true.
     remote = true;
     host = "cerberus";
     # Separate operator opt-in; applies to the dispatcher and its slots.
     trustedJobs = false;
+    # Flip on Ryza before rolling out node slots (which always use this policy).
+    # Off at merge to preserve the live Ryza service and slice definitions.
+    protectStdSlots = false;
     # Provision the shared Garage key only with the remote dispatcher.
     sccacheCi = false;
     inherit takeover takeoverLabels untrustedTakeover;
+    # Std uses takeoverLabels (or the pilot's labels); large slots replace
+    # the user pool labels without changing scope, claim or credential IDs.
+    largeLabels = {
+      ugalabugala = ["nix" "nix-machines"];
+      noosphere-user = ["nix" "nix-machines"];
+    };
   };
   sccacheCiKey = rec {
     generatorName = "sccache-ci-garage-key";
@@ -92,39 +142,43 @@ in {
     endpointPrefix = "s3.${region}.garage";
   };
   guard = "cerberus";
-  hosts.ryza = {
-    uplink = "ens18";
-    egress.untrusted = "ryza-eph";
-    # "ryza-eph-trusted" once the hand steps in the README are done.
-    egress.trusted = null;
-    # The pre-HOM-29 single guest; its images may still be on disk. After
-    # the takeover also the two retired `nix-vm` guests, until their state
-    # is removed by hand (README "Ryza takeover").
-    legacyVMs =
-      ["ryza-ci"]
-      ++ (
-        if takeover
-        then ["ryza-ci-ugalabugala" "ryza-ci-noosphere"]
-        else []
-      );
-    # The slots take the nix-vm guests' 6 vCPU / 14 GiB. Today ryza
-    # commits 14 + 5 (ryza-eph-1) + 8 (Hermes) = 27 GiB of caps on 24 GiB;
-    # after the takeover 2 slots make it 18 (6 GiB left at peak for the
-    # kernel, Blocky, tor, nix-daemon and sshd) and 3 make it 23 (about 1).
-    # Caps, not reservations: the guests balloon.
-    slots =
-      {ryza-eph-1 = std 1;}
-      // (
-        if !takeover
-        then {}
-        else if ryzaSlots == 2
-        then {ryza-eph-2 = std 2;}
-        else if ryzaSlots == 3
-        then {
-          ryza-eph-2 = std 2;
-          ryza-eph-3 = std 3;
-        }
-        else throw "_ci-slots.nix: ryzaSlots must be 2 or 3."
-      );
-  };
+  hosts =
+    nodeHosts
+    // {
+      ryza = {
+        uplink = "ens18";
+        egress.untrusted = "ryza-eph";
+        # "ryza-eph-trusted" once the hand steps in the README are done.
+        egress.trusted = null;
+        # The pre-HOM-29 single guest; its images may still be on disk. After
+        # the takeover also the two retired `nix-vm` guests, until their state
+        # is removed by hand (README "Ryza takeover").
+        legacyVMs =
+          ["ryza-ci"]
+          ++ (
+            if takeover
+            then ["ryza-ci-ugalabugala" "ryza-ci-noosphere"]
+            else []
+          );
+        # The slots take the nix-vm guests' 6 vCPU / 14 GiB. Today ryza
+        # commits 14 + 5 (ryza-eph-1) + 8 (Hermes) = 27 GiB of caps on 24 GiB;
+        # after the takeover 2 slots make it 18 (6 GiB left at peak for the
+        # kernel, Blocky, tor, nix-daemon and sshd) and 3 make it 23 (about 1).
+        # Caps, not reservations: the guests balloon.
+        slots =
+          {ryza-eph-1 = std 1;}
+          // (
+            if !takeover
+            then {}
+            else if ryzaSlots == 2
+            then {ryza-eph-2 = std 2;}
+            else if ryzaSlots == 3
+            then {
+              ryza-eph-2 = std 2;
+              ryza-eph-3 = std 3;
+            }
+            else throw "_ci-slots.nix: ryzaSlots must be 2 or 3."
+          );
+      };
+    };
 }

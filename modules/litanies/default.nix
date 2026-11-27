@@ -13,6 +13,7 @@ in {
     # The nix-eph fleet settings and slot inventory.
     ciDispatcher = ci.dispatcher;
     ciSlots = ci.hosts;
+    ciNodes = ci.nodes;
     ciGuard = ci.guard;
     inherit (ci) sccacheCiKey;
 

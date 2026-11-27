@@ -5,7 +5,54 @@
     self',
     system,
     ...
-  }: {
+  }: let
+    largeNodes = ["luna" "sol" "terra"];
+    initial = import ../rites/_ci-slots.nix {
+      takeover = false;
+      nodes = {};
+    };
+    historical = initial // {hosts = lib.recursiveUpdate initial.hosts {ryza.egress.trusted = null;};};
+    # Retirement deletes the real runner vars. Historical fixtures still
+    # evaluate those units, using public synthetic UUIDs only when absent.
+    runnerFixtureVars = machine: {
+      clan.core.vars.generators =
+        lib.genAttrs
+        (builtins.filter (name: !builtins.pathExists "${self}/vars/per-machine/${machine}/${name}/uuid/value")
+          ["forgejo-runner-ugalabugala" "forgejo-runner-noosphere"])
+        (_: {files.uuid.value = lib.mkForce "00000000-0000-4000-8000-000000000001";});
+    };
+    fixtureRyza = self.nixosConfigurations.ryza.extendModules {
+      specialArgs = {
+        ciSlots = historical.hosts;
+        ciNodes = historical.nodes;
+      };
+      modules = [(runnerFixtureVars "ryza")];
+    };
+    nodeData = name: state:
+      import ../rites/_ci-slots.nix {
+        takeover = true;
+        takeoverLabels = ["nix-vm" "nix-eph"];
+        ryzaSlots = 2;
+        nodes.${name} = state;
+      };
+    nodeEval = machine: data: trustedJobs:
+      (self.nixosConfigurations.${machine}.extendModules {
+        specialArgs = {
+          ciDispatcher = data.dispatcher // {inherit trustedJobs;};
+          ciSlots = data.hosts;
+          ciNodes = data.nodes;
+        };
+        modules = lib.optional (data.nodes.${machine}.hostRunnerEnabled or false) (runnerFixtureVars machine);
+      }).config;
+    nodeOn = name:
+      nodeData name {
+        hostRunnerEnabled = false;
+        slotsEnabled = true;
+        trustedEgress = true;
+      };
+    nodeHosts = lib.genAttrs largeNodes (node: nodeEval node (nodeOn node) true);
+    nodeDispatchers = lib.genAttrs largeNodes (node: nodeEval self.lib.ciDispatcher.host (nodeOn node) true);
+  in {
     # Every NixOS machine built for this system, so a new machine is
     # covered without being listed here. The Machines workflow
     # (.forgejo/workflows/machines.yml) builds `checks.x86_64-linux`.
@@ -21,12 +68,16 @@
         # never builds the test's enabled variant.
         forgejo-ephemeral-jobdir = pkgs.writeText "forgejo-ephemeral-jobdir.json" (
           builtins.unsafeDiscardStringContext (builtins.toJSON
-            (import ../rites/_forgejo-ephemeral-jobdir-test.nix {inherit (self.nixosConfigurations) ryza;}))
+            (import ../rites/_forgejo-ephemeral-jobdir-test.nix {
+              ryza = fixtureRyza;
+              inherit nodeHosts;
+            }))
         );
+        forgejo-ephemeral-node-firewall = import ../rites/_forgejo-ephemeral-node-firewall-test.nix {inherit self pkgs lib;};
         forgejo-ephemeral-ssh = let
           inherit (self.nixosConfigurations) ryza cerberus;
           inherit (self.lib) ciDispatcher;
-          local = ryza.extendModules {
+          local = fixtureRyza.extendModules {
             specialArgs.ciDispatcher =
               ciDispatcher
               // {
@@ -40,6 +91,17 @@
             specialArgs = {
               ciDispatcher = fleet;
               ciSlots = slots;
+              # A bare-metal dispatcher still cannot keep its host runner.
+              ciNodes =
+                historical.nodes
+                // lib.optionalAttrs (builtins.hasAttr host historical.nodes) {
+                  ${host} =
+                    historical.nodes.${host}
+                    // {
+                      hostRunnerEnabled = false;
+                      untrustedTakeover = true;
+                    };
+                };
             };
             egressOn = slots.ryza.egress.trusted != null;
             # The guard's Caddy, wherever the dispatcher runs (README "Trusted slot egress").
@@ -108,7 +170,7 @@
             public = self.lib.vars.machine host "openssh" "ssh.id_ed25519.pub";
             server = ryza.extendModules {
               inherit specialArgs;
-              modules = [{services.imperium.forgejoEphemeral.dispatcherPublicKeyFile = public;}];
+              modules = [(runnerFixtureVars "ryza") {services.imperium.forgejoEphemeral.dispatcherPublicKeyFile = public;}];
             };
             cc = client.config;
             sc = server.config;
@@ -256,7 +318,7 @@
               trustedJobs = false;
               takeover = false;
             };
-          ciSlots = (import ../rites/_ci-slots.nix {takeover = false;}).hosts;
+          ciSlots = historical.hosts;
           egressSlots = lib.recursiveUpdate ciSlots {ryza.egress.trusted = "ryza-eph-trusted";};
           default = fixture cutover ciSlots;
           moved = fixture (cutover // {host = "terra";}) ciSlots;
@@ -388,6 +450,18 @@
           assert lib.hasInfix " -d ${self.lib.hosts.terra}/32 " movedGuard.services.imperium.forgejoEphemeral.internal.egress.ryza-eph-1.rule;
           assert lib.hasInfix "-d ${self.lib.hosts.terra} -p udp --dport 53 -j ACCEPT" movedGuard.systemd.services.forgejo-ephemeral-firewall.script;
           assert lib.any (check: !check.assertion && lib.hasPrefix ''The nix-eph egress guard (_ci-slots.nix guard = "terra")'' check.message) movedCerberus.assertions;
+          assert lib.all (node: let
+            server = nodeHosts.${node};
+            client = nodeDispatchers.${node};
+            slot = "${node}-eph-1";
+            ssh = client.services.imperium.forgejoEphemeral.internal.sshClients.${node};
+            exec = client.systemd.services."forgejo-ephemeral-dispatcher@${slot}".serviceConfig.ExecStart;
+            authorized = server.users.users.root.openssh.authorizedKeys.keys;
+          in
+            lib.hasInfix (builtins.unsafeDiscardStringContext "--ssh-command ${ssh} ") (builtins.unsafeDiscardStringContext exec)
+            && lib.any (lib.hasInfix ''",restrict,from="${self.lib.hosts.${self.lib.ciDispatcher.host}}" ssh-ed25519 '') authorized
+            && !(server.clan.core.vars.generators ? forgejo-slotctl-ssh))
+          largeNodes;
             pkgs.runCommand "forgejo-ephemeral-ssh" {} ''
               export CREDENTIALS_DIRECTORY="$TMPDIR/credentials"
               export RUNTIME_DIRECTORY="$TMPDIR/runtime"
@@ -577,7 +651,7 @@
         );
         forgejo-ephemeral-sccache = let
           inherit (self.lib) ciDispatcher sccacheCiKey;
-          ciSlots = (import ../rites/_ci-slots.nix {takeover = false;}).hosts;
+          ciSlots = historical.hosts;
           fleet =
             ciDispatcher
             // {
@@ -610,8 +684,9 @@
               specialArgs = {
                 ciDispatcher = fleet;
                 ciSlots = slots;
+                ciNodes = historical.nodes;
               };
-              inherit modules;
+              modules = modules ++ lib.optional (host == "ryza" && !fleet.takeover) (runnerFixtureVars host);
             }).config;
           source = "/run/secrets/vars/${sccacheCiKey.generatorName}/credentials";
           cc =
@@ -717,7 +792,27 @@
         # slots serve the user pools' takeover labels, and the gate refuses
         # each missing precondition. Both label sets, with and without trust.
         forgejo-ephemeral-takeover = let
-          data = args: import ../rites/_ci-slots.nix ({takeover = true;} // args);
+          data = args: let
+            inventory = import ../rites/_ci-slots.nix ({
+                takeover = true;
+                takeoverLabels = ["nix-vm" "nix-eph"];
+                ryzaSlots = 2;
+                nodes = {};
+              }
+              // args);
+          in
+            inventory
+            // {
+              dispatcher =
+                inventory.dispatcher
+                // {
+                  trustedJobs = false;
+                  remote = true;
+                  host = "cerberus";
+                  sccacheCi = false;
+                };
+              hosts = lib.recursiveUpdate inventory.hosts {ryza.egress.trusted = null;};
+            };
           on = data {};
           withNix = data {takeoverLabels = ["nix" "nix-vm" "nix-eph"];};
           withNixAck = data {
@@ -728,16 +823,17 @@
             takeoverLabels = ["nix" "nix-vm" "nix-eph"];
             ryzaSlots = 3;
           };
-          off = import ../rites/_ci-slots.nix {takeover = false;};
+          off = data {takeover = false;};
           trusted = fleet: fleet // {trustedJobs = true;};
           egressOn = hosts: lib.recursiveUpdate hosts {ryza.egress.trusted = "ryza-eph-trusted";};
-          machinesYml = builtins.readFile ../../.forgejo/workflows/machines.yml;
-          pr11 = builtins.replaceStrings ["runs-on: nix\n"] ["runs-on: nix-machines\n"] machinesYml;
+          pr11 = builtins.readFile ../../.forgejo/workflows/machines.yml;
+          machinesYml = builtins.replaceStrings ["runs-on: nix-machines\n"] ["runs-on: nix\n"] pr11;
           eval = host: fleet: slots: workflow: modules:
             (self.nixosConfigurations.${host}.extendModules {
               specialArgs = {
                 ciDispatcher = fleet;
                 ciSlots = slots;
+                ciNodes = historical.nodes;
                 ciMachinesWorkflow = workflow;
               };
               inherit modules;
@@ -745,15 +841,15 @@
           failures = cfg: map (a: a.message) (builtins.filter (a: !a.assertion) cfg.assertions);
           refuses = reason: cfg: lib.any (lib.hasInfix reason) (failures cfg);
           clean = cfg: failures cfg == [] && builtins.isString cfg.system.build.toplevel.drvPath;
-          # The default flip as it would be today: trust off, no trusted
-          # egress, machines.yml still on `nix` (PR 11 not needed).
+          # The PR 12 label flip leaves Machines on host runners even
+          # before PR 11, when the workflow still used `nix`.
           sc = eval "ryza" on.dispatcher on.hosts machinesYml [];
           cc = eval "cerberus" on.dispatcher on.hosts machinesYml [];
           # `nix` taken with trust, trusted egress, PR 11 and 3 slots.
           sc3 = eval "ryza" (trusted threeSlots.dispatcher) (egressOn threeSlots.hosts) pr11 [];
           cc3 = eval "cerberus" (trusted threeSlots.dispatcher) (egressOn threeSlots.hosts) pr11 [];
           # The gate off, whatever the data file's defaults are.
-          before = eval "ryza" off.dispatcher off.hosts null [];
+          before = eval "ryza" off.dispatcher off.hosts null [(runnerFixtureVars "ryza")];
           retiredVMs = ["ryza-ci-ugalabugala" "ryza-ci-noosphere"];
           ciVars = ["forgejo-runner-ugalabugala" "forgejo-runner-noosphere" "nix-ci-signing-key" "ncps-upload-auth" "sccache-garage-key"];
           hasCiVar = cfg: lib.filter (var: cfg.clan.core.vars.generators ? ${var}) ciVars;
@@ -762,6 +858,23 @@
           pools = poolsOf cc;
           sliceOf = cfg: name: cfg.systemd.slices.${name}.sliceConfig;
           hidden = cfg: slot: cfg.systemd.services."microvm@${slot}".serviceConfig.InaccessiblePaths;
+          # PR 13 M1 on Ryza's std slots: only after the operator's opt-in,
+          # so the merge keeps the live units (OOM victim first, MemoryHigh).
+          protectedRyza = eval "ryza" (on.dispatcher // {protectStdSlots = true;}) on.hosts machinesYml [];
+          ryzaProtection = cfg:
+            map (slot: let
+              index = cfg.services.imperium.forgejoEphemeral.inventory.ryza.slots.${slot}.index;
+              slice = sliceOf cfg "forgejo-ephemeral${lib.optionalString (index != 1) (toString index)}";
+            in {
+              oom = map (unit: cfg.systemd.services.${unit}.serviceConfig.OOMScoreAdjust or null) [
+                "microvm@${slot}"
+                "microvm-virtiofsd@${slot}"
+                "microvm-tap-interfaces@${slot}"
+                "microvm-pci-devices@${slot}"
+              ];
+              high = slice.MemoryHigh or null;
+              inherit (slice) MemoryMax;
+            }) ["ryza-eph-1" "ryza-eph-2"];
           # A persistent nix-vm runner kept on ryza by hand.
           kept = eval "ryza" on.dispatcher on.hosts machinesYml [
             self.nixosModules.forgejo-runner-microvm
@@ -806,13 +919,178 @@
             && lib.all (slot: cfg.systemd.services ? "forgejo-ephemeral-dispatcher@${slot}" && builtins.elem "forgejo-ephemeral-dispatcher@${slot}.service" cfg.systemd.services."forgejo-ephemeral-dispatcher@".aliases) slots
             && lib.all (pool: (poolsOf cfg).${pool}.labels == labels && (poolsOf cfg).${pool}.dispatch == "owner") ["ugalabugala" "noosphere-user"]
             && lib.all (pool: pool.maxSlots == lib.length slots && !(builtins.elem "nix-machines" pool.labels)) (builtins.attrValues (poolsOf cfg));
+          stage = node:
+            nodeEval node (nodeData node {
+              hostRunnerEnabled = false;
+              trustedEgress = true;
+            })
+            true;
+          nodeCutover = node: let
+            beforeNode = nodeEval node (nodeData node {}) false;
+            staged = stage node;
+            enabled = nodeHosts.${node};
+            dispatcher = nodeDispatchers.${node};
+            slot = "${node}-eph-1";
+            baseFlags = beforeNode.services.rke2.extraFlags;
+            rke2 = cfg: {
+              units = lib.genAttrs ["rke2-server.service" "rke2-agent.service"] (name:
+                if cfg.systemd.units ? ${name}
+                then toString cfg.systemd.units.${name}.unit
+                else null);
+              registries = toString cfg.environment.etc."rancher/rke2/registries.yaml".source;
+              kernel = toString cfg.system.build.kernel;
+              flags = cfg.services.rke2.extraFlags;
+            };
+            units = cfg: builtins.attrNames cfg.systemd.units;
+            serviceDelta = from: to: {
+              removed = lib.subtractLists (units to) (units from);
+              added = lib.subtractLists (units from) (units to);
+              changed = builtins.filter (
+                name: to.systemd.units ? ${name} && toString from.systemd.units.${name}.unit != toString to.systemd.units.${name}.unit
+              ) (units from);
+            };
+            cutover = serviceDelta beforeNode staged;
+            enrollment = serviceDelta staged enabled;
+            refused = nodeEval node (nodeOn node) false;
+            refusedOnDispatcher = nodeEval self.lib.ciDispatcher.host (nodeOn node) false;
+            noEgress =
+              nodeEval node (nodeData node {
+                hostRunnerEnabled = false;
+                slotsEnabled = true;
+              })
+              true;
+            stagedWithoutTrust = nodeEval node (nodeData node {hostRunnerEnabled = false;}) false;
+            ack =
+              nodeEval node (nodeData node {
+                hostRunnerEnabled = false;
+                slotsEnabled = true;
+                untrustedTakeover = true;
+              })
+              false;
+            overlap = nodeEval node (nodeData node {slotsEnabled = true;}) true;
+            internal = dispatcher.services.imperium.forgejoEphemeral.internal;
+            load = path: builtins.fromJSON path.text;
+            exec = name: builtins.unsafeDiscardStringContext dispatcher.systemd.services."forgejo-ephemeral-dispatcher@${name}".serviceConfig.ExecStart;
+            uses = file: name: lib.hasInfix (builtins.unsafeDiscardStringContext "--pools ${file} ") (exec name);
+            stdPools = load internal.poolsFile;
+            largePools = load internal.largePoolsFile;
+            mesh = nodeEval self.lib.ciGuard (nodeOn node) true;
+            matcher = mesh.services.caddy.extraConfig;
+            # The cluster uplink's rendered networkd file, byte for byte.
+            uplinkFile = cfg: toString cfg.environment.etc."systemd/network/40-enp1s0.network".source;
+            addr = kind: self.lib.lan."${node}-eph${kind}";
+            snat = enabled.systemd.services.forgejo-ephemeral-snat;
+            dummy = enabled.services.imperium.forgejoEphemeral.inventory.${node}.egress.interface;
+            # Every per-slot unit the host runs, the slot module's and microvm.nix's.
+            slotUnits = [
+              "microvm@${slot}"
+              "microvm-virtiofsd@${slot}"
+              "microvm-tap-interfaces@${slot}"
+              "microvm-pci-devices@${slot}"
+              "microvm-set-booted@${slot}"
+              "install-microvm-${slot}"
+              "forgejo-ephemeral-firewall"
+              "forgejo-ephemeral-trusted-egress@${slot}"
+              "forgejo-ephemeral-trusted-egress-cleanup@${slot}"
+              "forgejo-ephemeral-snat"
+            ];
+            oom = cfg: name: cfg.systemd.services.${name}.serviceConfig.OOMScoreAdjust or null;
+            cleanupUnit = "rke2-clean-dangling-store-links";
+            hasCleanup = cfg:
+              cfg.systemd.services ? ${cleanupUnit}
+              && cfg.systemd.timers ? ${cleanupUnit}
+              && cfg.systemd.services.nix-gc.unitConfig.OnSuccess == ["${cleanupUnit}.service"];
+            cleanupScript = enabled.systemd.services.${cleanupUnit}.script;
+            # A node slot may not size itself apart from the kubelet reservation.
+            resized = let
+              d = nodeOn node;
+            in
+              nodeEval node (d // {hosts = lib.recursiveUpdate d.hosts {${node}.slots.${slot}.memory = memory + 1;};}) true;
+            memory =
+              if node == "luna"
+              then 3
+              else 4;
+            gc = cfg: {
+              inherit (cfg.nix.gc) automatic options;
+              storeCache = cfg.services.imperium.forgejoRunner.storeCache;
+              minFree = cfg.nix.settings.min-free or null;
+              maxFree = cfg.nix.settings.max-free or null;
+            };
+          in
+            assert lib.all clean [staged enabled dispatcher ack];
+            assert lib.all (refuses "retiring ${node}'s host runner requires") [refused refusedOnDispatcher noEgress stagedWithoutTrust];
+            assert refuses "large slots require hostRunnerEnabled = false" overlap;
+            assert rke2 beforeNode == rke2 staged && rke2 staged == rke2 enabled;
+            assert lib.last baseFlags == "--kubelet-arg=system-reserved=memory=${toString memory}Gi";
+            assert !beforeNode.nix.gc.automatic && staged.nix.gc.automatic && gc staged == gc enabled;
+            assert staged.services.imperium.forgejoRunner.storeCache == null;
+            assert lib.all (name: builtins.elem name cutover.removed) ["forgejo-runner-ugalabugala.service" "forgejo-runner-noosphere.service" "nix-prune-generations.timer"];
+            assert builtins.elem "nix-gc.timer" cutover.added;
+            assert !staged.microvm.host.enable && builtins.attrNames enabled.microvm.vms == [slot];
+            assert hasCiVar enabled == [] && !enabled.services.imperium.sccache.enable;
+            # M3/M4: enp1s0's file (so its address list and order) never changes;
+            # both /32s go on a routeless, networkd-unmanaged dummy instead.
+            assert uplinkFile beforeNode == uplinkFile staged && uplinkFile staged == uplinkFile enabled;
+            assert enabled.systemd.network.networks."40-enp1s0".addresses == [];
+            assert dummy == "dummy-ci-snat" && lib.hasPrefix "dummy" dummy && lib.stringLength dummy <= 15;
+            assert enabled.systemd.network.networks."10-${dummy}".linkConfig.Unmanaged;
+            assert !(staged.systemd.services ? forgejo-ephemeral-snat) && !(staged.systemd.network.networks ? "10-${dummy}");
+            assert lib.all (kind: lib.hasInfix (addr kind) snat.script) ["" "-trusted"];
+            assert lib.all (part: lib.hasInfix part snat.script) ["arping -q -D -c 2 -w 3 -I enp1s0" "link add ${dummy} type dummy" "/32\" dev ${dummy}" "arp_ignore arp_filter"];
+            assert lib.hasInfix "link delete ${dummy}" snat.preStop;
+            # N3: tied to the uplink device, waits for its IPv4, retries.
+            assert lib.all (unit: builtins.elem "sys-subsystem-net-devices-enp1s0.device" snat.${unit}) ["bindsTo" "after"];
+            assert snat.serviceConfig.Restart == "on-failure" && snat.serviceConfig.RestartSec == 10;
+            assert lib.all (part: lib.hasInfix part snat.script) ["seq 60" "-4 -o address show dev enp1s0 scope global"];
+            assert lib.all (unit: builtins.elem "forgejo-ephemeral-snat.service" enabled.systemd.services.forgejo-ephemeral-firewall.${unit}) ["bindsTo" "after"];
+            assert lib.all (kind: lib.hasInfix (addr kind) matcher) ["" "-trusted"];
+            # M1: guest = kubelet's CI reservation; capped one GiB higher,
+            # throttled only in the last 256 MiB, and the first OOM victim on
+            # every slot unit.
+            assert enabled.microvm.vms.${slot}.config.config.microvm.mem == memory * 1024;
+            assert enabled.services.imperium.forgejoRunner.resources.memory == memory;
+            assert refuses "a node slot's memory is services.imperium.forgejoRunner.resources.memory" resized;
+            assert lib.all (unit: oom enabled unit == 1000) slotUnits;
+            # N1: MemoryHigh only throttles the overhead above the guest.
+            assert (sliceOf enabled "forgejo-ephemeral").MemoryHigh == "${toString (memory * 1024 + 768)}M";
+            assert (sliceOf enabled "forgejo-ephemeral").MemoryMax == "${toString (memory + 1)}G";
+            # M5: images on the second NVMe, never on the etcd root device.
+            assert enabled.microvm.stateDir == "/mnt/storage/microvms" && staged.microvm.stateDir == beforeNode.microvm.stateDir;
+            assert enabled.systemd.services."install-microvm-${slot}".unitConfig.AssertPathIsMountPoint == "/mnt/storage";
+            assert enabled.fileSystems."/mnt/storage".fsType == "ext4" && enabled.fileSystems."/".device != enabled.fileSystems."/mnt/storage".device;
+            # N5: 100 GiB above the images for Garage and swap on that disk.
+            assert enabled.services.imperium.forgejoEphemeral.internal.slotctlSlots.${slot}.min_free_bytes == (150 + 20 + 10 + 100) * 1024 * 1024 * 1024;
+            # N2: the returning timer never catches up on a stale stamp.
+            assert lib.all (cfg: !cfg.nix.gc.persistent && !cfg.systemd.timers.nix-gc.timerConfig.Persistent) [staged enabled];
+            # H1: dangling RKE2 store links are cleaned from the stage on (when
+            # the automatic GC returns), never before, never touching rke2.
+            assert !(hasCleanup beforeNode) && !(beforeNode.systemd.services ? ${cleanupUnit}) && !(beforeNode.systemd.services.nix-gc.unitConfig ? OnSuccess);
+            assert hasCleanup staged && hasCleanup enabled;
+            assert !(lib.hasInfix "rke2-server" cleanupScript) && !(lib.hasInfix "systemctl" cleanupScript);
+            assert lib.all (dir: lib.hasInfix "$rke2/${dir}" cleanupScript) ["server/manifests" "server/static/charts" "agent/images" "agent/etc/containerd"];
+            assert uses internal.poolsFile "ryza-eph-1" && uses internal.largePoolsFile slot;
+            assert lib.all (name: stdPools.${name}.labels == ["nix-vm" "nix-eph"] && largePools.${name}.labels == ["nix" "nix-machines"]) ["ugalabugala" "noosphere-user"];
+            assert largePools.noosphere-org == stdPools.noosphere-org;
+            assert lib.mapAttrs (_: pool: removeAttrs pool ["labels"]) stdPools == lib.mapAttrs (_: pool: removeAttrs pool ["labels"]) largePools;
+            assert largePools.ugalabugala.trust.repos."1".schedules; {
+              inherit cutover enrollment;
+              inherit (rke2 enabled) units registries kernel flags;
+              gc = map gc [beforeNode staged enabled];
+              uplink = map uplinkFile [beforeNode staged enabled];
+              toplevels = map (cfg: cfg.system.build.toplevel.drvPath) [beforeNode staged enabled];
+              labels = {
+                std = lib.mapAttrs (_: pool: pool.labels) stdPools;
+                large = lib.mapAttrs (_: pool: pool.labels) largePools;
+              };
+            };
         in
           # The flake reads the same file; on adds slots and the retired guests.
-          assert import ../rites/_ci-slots.nix {inherit (self.lib.ciDispatcher) takeover takeoverLabels untrustedTakeover;}
+          assert import ../rites/_ci-slots.nix {}
           == {
             dispatcher = self.lib.ciDispatcher;
             hosts = self.lib.ciSlots;
             guard = self.lib.ciGuard;
+            nodes = self.lib.ciNodes;
             inherit (self.lib) sccacheCiKey;
           };
           assert !off.dispatcher.takeover && on.dispatcher.takeover;
@@ -835,6 +1113,14 @@
           assert hasCiVar before == ciVars && guestUnits before != [];
           # Default flip with trust off: no trust requirement, PR 11 not needed.
           assert ryzaOk sc ["ryza-eph-1" "ryza-eph-2"];
+          assert !on.dispatcher.protectStdSlots;
+          assert lib.all (s: s.oom == [null null null null] && s.high == null && s.MemoryMax == "5G") (ryzaProtection sc);
+          # Ryza's free-space floor is unchanged (std overlay + /var + 10 GiB).
+          assert lib.all (spec: sc.services.imperium.forgejoEphemeral.internal.slotctlSlots.${spec}.min_free_bytes == (50 + on.hosts.ryza.slots.${spec}.var + 10) * 1024 * 1024 * 1024) ["ryza-eph-1" "ryza-eph-2"];
+          assert ryzaOk protectedRyza ["ryza-eph-1" "ryza-eph-2"];
+          assert lib.all (s: s.oom == [1000 1000 1000 1000] && s.high == "4864M" && s.MemoryMax == "5G") (ryzaProtection protectedRyza);
+          # Ryza keeps its SNAT addresses on its uplink: no dummy, no extra unit.
+          assert !(protectedRyza.systemd.services ? forgejo-ephemeral-snat) && !(on.hosts.ryza.egress ? interface);
           assert cerberusOk cc ["ryza-eph-1" "ryza-eph-2"] ["nix-vm" "nix-eph"];
           assert lib.mapAttrs (_: repo: "${repo.owner}/${repo.name}") pools.ugalabugala.trust.repos
           == {
@@ -887,7 +1173,7 @@
           assert clean (withMachines withNixAck.dispatcher "jobs:\n  build:\n    runs-on: nix-machines # PR 11\n    steps:\n      - run: echo hello\n");
           assert clean (withMachines withNixAck.dispatcher "jobs:\n  build:\n    - runs-on: nix-machines\n");
           assert clean (withMachines withNixAck.dispatcher "jobs:\r\n  build:\r\n    runs-on: nix-machines\r\n");
-            pkgs.writeText "forgejo-ephemeral-takeover.json" (builtins.toJSON {
+            pkgs.writeText "forgejo-ephemeral-takeover.json" (builtins.unsafeDiscardStringContext (builtins.toJSON {
               slots = builtins.attrNames sc.microvm.vms;
               pools =
                 lib.mapAttrs (_: pool: {
@@ -895,7 +1181,8 @@
                   trusted = builtins.attrNames pool.trust.repos;
                 })
                 pools;
-            });
+              nodes = lib.genAttrs largeNodes nodeCutover;
+            }));
         # The nix-eph dispatcher and slotctl tests (HOM-30..32): a loopback
         # Forgejo, a fake systemctl, slotctl in-process and as a real child.
         # Run with the python3 the slots' host deploys, not a newer one.

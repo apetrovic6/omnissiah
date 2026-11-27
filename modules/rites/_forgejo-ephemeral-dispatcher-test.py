@@ -654,6 +654,33 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(second["handle"], self.state()["active"]["handle"])
         self.assertIn("[noosphere] registering runner for job 3", self.logs.getvalue())
 
+    def test_machines_label_only_reaches_large_slotctl(self):
+        # Return the full queue even to a std poll, so the dispatcher must
+        # reject the mismatched or multi-label jobs before registration.
+        mixed = job(1, "ambiguous-labels", runs_on=["nix", "nix-machines"])
+        machines = job(2, "five-hour-machines", runs_on=["nix-machines"])
+        std = job(3, "std-job", runs_on=["nix-vm"])
+        self.forge.jobs = [machines, mixed, std]
+        self.forge.jobs_path = f"{RUNNERS}/jobs?labels=nix-vm,nix-eph"
+        self.pool = D.Pool("ugalabugala", **(PILOT_POOL | {"labels": ["nix-vm", "nix-eph"]}))
+        self.restart()
+        self.tick()
+        self.assertEqual("std-job", self.state()["active"]["handle"])
+        self.assertEqual("nix-vm", (self.credential_dir / "runner-label").read_text())
+
+        # The same pool name and scope keep a shared claim namespace.
+        # Large also filters the multi-label job even though both labels
+        # are in its pool. Stage the exact long-workflow label, never an alias.
+        self.forge.jobs = [mixed, machines]
+        self.forge.jobs_path = f"{RUNNERS}/jobs?labels=nix,nix-machines"
+        self.pool = D.Pool("ugalabugala", **(PILOT_POOL | {"labels": ["nix", "nix-machines"]}))
+        with self.second_slot() as (large, system):
+            large.tick()
+            cred = self.credential_dir.with_name("ryza-eph-2")
+            self.assertEqual("five-hour-machines", (cred / "job-handle").read_text())
+            self.assertEqual("nix-machines", (cred / "runner-label").read_text())
+            self.assertEqual(1, len(system.mutations("start")))
+
     def test_pool_capacity_is_recovered_from_claims_without_blocking_other_pool(self):
         self.pool = D.Pool("ugalabugala", **(PILOT_POOL | {"maxSlots": 1}))
         org = self.add_pool("monolith-softworks", ORG_POOL, scope=ORG)

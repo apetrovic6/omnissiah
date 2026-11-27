@@ -1745,9 +1745,12 @@ capacity; Ryza's `nix-vm` scheduling never changed.
 address. Drain its persistent runners if present; they stop when it
 becomes the dispatcher. Cerberus's own runners stay off for good once
 `remote = true`, even when the dispatcher moves elsewhere, so moving the
-role to Terra leaves `nix` on Luna and Sol only until PR 13. Generate its fresh PATs and its own
-`forgejo-slotctl-ssh` key (do not copy the old private key). If trust is
-already enabled, ensure the shared CI credentials can deploy there.
+role to Terra requires explicitly staging its host runner off (with
+trust and trusted egress, or the per-node acknowledgement described
+below). A node hosting an active slot cannot be the dispatcher.
+Generate fresh PATs and a `forgejo-slotctl-ssh` key for the new
+dispatcher (do not copy the old private key). If trust is already
+enabled, ensure the shared CI credentials can deploy there.
 Pause and drain, stop the old dispatcher, and carry over each drained
 slot's root-owned state directory so queue identities and trust user pins
 are preserved.
@@ -2398,9 +2401,9 @@ With `takeover = true`:
   `sccache-garage-key` on Ryza. The guests' state directories stay hidden
   from the slots (`legacyVMs`) until you remove them.
 
-The slots then serve `nix-vm` alone. `nix-machines` (PR 11) is on no pool,
-and a guest registers only its job's own label, so no `machines.yml` job
-lands on a std slot.
+Ryza serves `nix-vm` and `nix-eph` by default, not `nix-machines`.
+A guest registers only its job's own label. The Machines workflow can
+run on large node slots, never on these std slots.
 
 **Capacity.** Each std slot's slice is 2 vCPU / 5 GiB (guest memory plus
 QEMU and virtiofsd). Hermes is capped at 6 GiB (gateway) plus 2 GiB
@@ -2484,8 +2487,8 @@ and no sccache.
   - So taking `nix` is asserted to need either `trustedJobs` with
     `egress.trusted` on every slot host (Ryza: `ryza-eph-trusted`), or
     `untrustedTakeover = true`, your acknowledgement of the table's
-    "breaks" and "degrades" rows. Take it in PR 13, when the node runners
-    go, unless you want it sooner.
+    "breaks" and "degrades" rows. PR 13 adds `nix` on large slots
+    independently; there is no need to add it to Ryza's labels.
 
 **Stolen jobs.** When a node runner takes a job a slot claimed, the job is
 `running` but not in the slot. The dispatcher delivers trust only after
@@ -2508,7 +2511,7 @@ maintenance"). To turn trust or trusted egress off, change only data in
 1. `dispatcher.remote = true` (PR 7).
 2. `takeoverLabels` is one of the two sets above.
 3. With `nix`: trust plus trusted egress, or `untrustedTakeover`.
-4. `.forgejo/workflows/machines.yml` exists and runs on no served label.
+4. `.forgejo/workflows/machines.yml` exists and runs on no std label.
    Only `runs-on: <label>`, optionally with a leading `- ` and a comment, is
    understood. Any other line naming `runs-on` and any quoted key with an
    escape fails closed. A merge key copies a mapping whose own `runs-on`
@@ -2607,8 +2610,9 @@ auto-merges of fork PRs in these repos.
   - `systemctl status hermes-gateway blocky` shows both still running.
 
   If memory pressure shows up with 3 slots, go back to 2.
-- Both forges' runner lists show no `ryza` row. Only `eph-*` rows for busy
-  slots and the node and Cerberus rows remain.
+- Both forges' runner lists show no `ryza` or `cerberus` persistent row.
+  Expect `eph-*` rows for busy slots and persistent rows only for nodes
+  not yet retired by the large-slot rollout below.
 
 **Rollback.**
 
@@ -2636,6 +2640,775 @@ auto-merges of fork PRs in these repos.
 
 This puts the shared keys back on the host that runs Hermes. PR 15 rotates
 them anyway.
+
+#### Large slots on Luna, Sol and Terra (HOM-32 PR 13, operator only)
+
+Merge alone changes no machine. Roll out **Luna → Sol → Terra**, completing
+each node before starting the next. Terra holds the cluster SOPS age key.
+The live starting point is PR 11's host runners and the PR 12 Ryza takeover
+(two std slots, `nix-vm` and `nix-eph`, trust and trusted egress initially
+off). The dispatcher and egress guard are both on Cerberus today, but are
+separate roles. Check `dispatcher.host` and `guard` in
+[`_ci-slots.nix`](modules/rites/_ci-slots.nix) before deploying.
+
+| Node | Large slot | Guest / host slice memory | Untrusted / trusted SNAT |
+|---|---|---|---|
+| Luna | `luna-eph-1` | 3 / 4 GiB | `192.168.1.241` / `192.168.1.242` |
+| Sol | `sol-eph-1` | 4 / 5 GiB | `192.168.1.244` / `192.168.1.245` |
+| Terra | `terra-eph-1` | 4 / 5 GiB | `192.168.1.246` / `192.168.1.247` |
+
+Each node gets one 2-vCPU slot with 150 + 20 GiB sparse images. A job
+is claimed only with at least 280 GiB free on `/mnt/storage`: the
+images, a 10 GiB margin, and 100 GiB for the disk's other tenants
+(Garage's local-path data and the 50 GiB swapfile), which keep growing
+during a 5-hour job, partly from that job's own ncps uploads. Slot
+state and images live in `/mnt/storage/microvms`; the slot requires
+the mount so it cannot fall back to the root device holding etcd.
+`IOWeight` is not a bandwidth limit (NVMe uses no IO scheduler), so the
+job's image writes compete with Garage on that disk instead.
+
+The claim-time check does not see growth during the job. A disk-full
+alert for `/mnt/storage` already exists generically: the nodes are
+scraped by kube-prometheus-stack's node-exporter DaemonSet
+(`job="node-exporter"`; `prometheus-stack/nodes.nix` leaves taghmata
+machines to it), and its bundled `NodeFilesystemSpaceFillingUp`
+(15 %/10 % left and predicted to fill) and
+`NodeFilesystemAlmostOutOfSpace` (5 % warning, 3 % critical, `for:
+30m`; rendered `prometheus-grafana/PrometheusRule-prometheus-node-exporter.yaml`)
+match every mount point, so `/mnt/storage` too, and reach ntfy through
+the per-severity receivers. **Follow-up:** confirm in Prometheus that
+`node_filesystem_avail_bytes{mountpoint="/mnt/storage"}` exists for all
+three nodes, and consider a tighter absolute threshold there (Garage has
+no alerting of its own, and 30 minutes at 3 % is late for a disk that
+also holds Garage's data).
+
+Those alerts fire far below the slot's own 280 GiB floor. If ncps or
+unbounded Garage buckets push `/mnt/storage` under 280 GiB, the large
+slot quietly stops claiming: the dispatcher logs `pre-claim check-space
+failed: disk-space-low` once and nothing alerts, so `nix-machines` jobs
+just queue. When large jobs queue, check `df -h /mnt/storage` on the
+nodes first.
+
+Longhorn is most likely **not** on `/mnt/storage`, despite the disko
+comment: the longhorn-manager DaemonSet mounts the hostPath
+`/var/lib/longhorn/` (rendered `longhorn/DaemonSet-longhorn-manager.yaml`),
+nothing in the repo overrides `defaultDataPath`, and the
+prometheus-stack storage comment counts "~1.6TB free on
+/var/lib/longhorn", i.e. the root NVMe that also holds etcd. Check
+before staging:
+
+```bash
+kubectl --context default -n longhorn-system get nodes.longhorn.io \
+  -o jsonpath='{range .items[*]}{.metadata.name}{": "}{range .spec.disks.*}{.path}{" "}{end}{"\n"}{end}'
+```
+
+`/var/lib/longhorn/` means Longhorn replicas share the etcd disk with
+the host store the slot **reads** through virtiofs (the image writes do
+not go there). That makes the read-side etcd gate during the canary
+(etcd WAL fsync latency, below) the one that matters most.
+
+Kubelet's `system-reserved` and allocatable stay unchanged. The guest
+is the node's existing runner memory reservation
+(`services.imperium.forgejoRunner.resources.memory`: 3 GiB on Luna and
+4 GiB on Sol/Terra, the same value as `system-reserved`, asserted at
+evaluation). The slice's `MemoryMax` is 1 GiB above the guest, for QEMU
+and support processes. That extra GiB is **not reserved**; it can put
+pods under pressure. What protects etcd is `MemoryMax` (a hard cap) and
+`OOMScoreAdjust=1000` on the slot VM and every support process, making
+the slot the first target under global OOM rather than etcd (Burstable
+etcd and apiserver pods sit around 930–970). `MemoryHigh` is 256 MiB
+under `MemoryMax` (guest + 768 MiB, e.g. 3840M on Luna): it only
+throttles QEMU, virtiofsd and page-cache overhead in the last 256 MiB
+before the cap. It must stay above the guest size: the guest's memfd is
+charged to the slice and cannot be reclaimed, so with `high` at the
+guest size a guest that has touched its RAM keeps the slice over `high`
+for good and every further charge (virtiofsd's store reads, image
+writes through the page cache) is throttled to a crawl (measured: cold
+reads from about 2 GiB/s to under 1 MiB/s). The canary records the
+slice's `high` events (below). **Follow-up, not in this rollout:** raise
+`system-reserved` by 1 GiB per node, as its own one-node-at-a-time RKE2
+change (it restarts `rke2-server`), so the extra GiB is reserved too.
+Large slots replace both user pools' (`ugalabugala` and `noosphere-user`)
+labels with `nix` and `nix-machines`, preserving both forges' former
+host-runner labels. The org pool keeps `nix-eph`. Std slots retain PR 12's
+labels by default. The dispatcher selects a job using the slot's pool
+labels; only a large slot can take a 300-minute Machines build. A host
+runner on another node can still take it until that node is retired.
+
+**Prepare.** Complete [Trusted slot egress](#trusted-slot-egress-hom-32-pr-8-opt-in)
+and [Trusted nix-eph jobs](#trusted-nix-eph-jobs-hom-31-opt-in) on Ryza
+first, from pinned revisions, including the PAT, live Caddy and trusted
+upload checks. Globally pause and drain before **any** switch that
+touches dispatchers, including the first PR 8 guard switch if guard and
+dispatcher share a host. Audit `manjo/omnissiah` against the trust
+preconditions there, including default-branch contents and protection,
+writers, and deploy keys. Omnissiah schedules are opted into trust only
+when a node slot is enabled and still go through the same checks. The
+Machines workflow needs trust for ncps upload and the closure check;
+`update` can push `flake.lock` using its workflow credentials, and the
+manifests job also uses ntfy, which needs trusted egress.
+
+Before staging the first node, opt Ryza into
+`dispatcher.protectStdSlots = true` in `_ci-slots.nix` (default off so
+the merge does not change Ryza). It is safe to flip now that
+`MemoryHigh` sits above the guest (4864M for Ryza's 4 GiB guests, 5G
+cap); Ryza's slots get `OOMScoreAdjust=1000` and that throttle only.
+With Ryza trust and trusted egress
+verified, also add `nix` to `takeoverLabels` as in
+[Ryza takeover](#ryza-takeover-hom-32-pr-12-operator-flip). Pause and
+drain, switch Ryza and then the dispatcher from the same pinned
+revision, and verify trusted `nix` pickup and upload on Ryza before
+retiring the first node's runners. Do not use `untrustedTakeover`.
+Ryza adds two slots for general `nix`, not `nix-machines`.
+
+**Capacity (expect this).**
+
+Per forge (slots are shared by both forges' user pools):
+
+| Phase | `nix` | `nix-machines` |
+|---|---|---|
+| Today | 3 host runners (one per node) | the same 3 |
+| A node staged (no slot yet) | the other nodes' host runners, plus Ryza's 2 std slots once `nix` is added | the other nodes' host runners |
+| Canary | **only the canary slot** (every other runner on those labels is drained or paused) | **only the canary slot** |
+| After a node | remaining host runners + the node's large slot (+ Ryza's 2 std slots) | remaining host runners + the node's large slot |
+| After Terra | 3 large slots + Ryza's 2 std slots | **3 large slots only**, shared with `nix` |
+
+- Staging removes two runner instances (one per forge) and enabling
+  adds one slot that both user pools share, so each node returns
+  about half its former capacity.
+- During the canary both labels are **out** on that forge except for
+  the canary slot, for as long as the canary and the trusted Machines
+  acceptance take (the Enginseer build alone can take hours). Schedule
+  it when no Machines run or deploy is expected; announce it.
+- After Terra, the 3-day Machines run (13 builds of up to 300 minutes)
+  can hold all three large slots for hours. Untrusted fork PRs on `nix`
+  can also take a large slot for up to 65 minutes each, ahead of a
+  trusted Machines job. A per-label `maxSlots` that reserves a large
+  slot for `nix-machines` is a possible follow-up, not part of this PR.
+- **Recommendation:** add `nix` to Ryza's `takeoverLabels` (above)
+  **before staging Luna**, not after Terra: it costs nothing on the
+  labels' isolation (fork PRs already reach the node host runners on
+  `nix` until they are retired), and it keeps general `nix` capacity
+  while each node is staged and after Terra, when `nix-machines` holds
+  the large slots. If Ryza's trusted egress is not ready, do it at the
+  latest before Terra.
+
+The router DHCP pool is **unknown**. ARP silence is not a reservation.
+Exclude the dedicated addresses from DHCP as soon as router access is
+available, including Ryza `.240` and `.249`; `.243` belongs to keksic.
+Before enabling a node, run `sudo arping -D -c 3 -I enp1s0 <address>` on
+that node for each of its two addresses while they are not assigned.
+Stop on a reply or probe error. `forgejo-ephemeral-snat.service` checks
+`arp_ignore=0` and `arp_filter=0` on both `all` and `enp1s0`, probes on
+physical `enp1s0` **before** assigning the /32s to `dummy-ci-snat`, and
+leaves the physical uplink's configuration and addresses untouched.
+The node answers ARP on `enp1s0` with those sysctls, and iptables
+[`SNAT --to-source`](https://man7.org/linux/man-pages/man8/iptables-extensions.8.html#SNAT)
+does not require the address on the outbound interface. The dummy has
+no routes and is not required for network-online. RKE2
+v1.35.10+rke2r1 (the evaluated `services.rke2.package`) bundles
+rke2-calico v3.32.200 (Calico v3.32.2), whose [first-found
+defaults](https://github.com/projectcalico/calico/blob/v3.32.2/node/pkg/lifecycle/startup/autodetection/autodetection_linux.go)
+exclude `^dummy.*`; [k3s `GetHostnameAndIPs`](https://github.com/k3s-io/k3s/blob/v1.35.0%2Bk3s1/pkg/util/net.go)
+falls back to [apimachinery's default-route address selection](https://github.com/kubernetes/apimachinery/blob/v0.35.0/pkg/util/net/interface.go),
+so it cannot choose this routeless dummy. The [RKE2 Calico chart](https://github.com/rancher/rke2-charts/tree/main/charts/rke2-calico/rke2-calico/v3.32.200)
+sets `firstFound: true` when autodetection is unset, and the repo's
+`rke2-calico` HelmChartConfig only pins the MTU. Slot start and the PR 8 trusted-egress
+preflight check presence on the dummy and probe for duplicates via
+`enp1s0`; trusted egress also watches the dummy and withdraws its rule
+if the address disappears. Ryza keeps its existing uplink behavior.
+Unlike networkd's ACD on Ryza, nothing keeps watching for a conflict
+after the dummy is set up: a device that later takes an address is
+found by the next slot start's probe (and, for the trusted source, the
+probe before every use), not at once. Do not bypass a refusal.
+
+**Pin and check every switch.** Use separate reviewed, committed
+revisions for stage, enable and, if needed, rollback. Keep all earlier
+nodes' live settings in each revision; do not deploy a moving branch,
+the dirty checkout, or use a pre-rollout revision for a partial rollback.
+Before merging, compare the default-off merge candidate to the pinned
+unchanged baseline (`7bbca6d3c7ed7500cf98b2159b7781cf0a71fce8` for this
+review). If the base advances, review and pin the replacement base
+first. From the repository root, set `base_rev` and `merge_rev` to the
+full reviewed SHAs and require all 12 toplevel derivations, including
+Ryza, to match:
+
+```bash
+paths() {
+  nix eval --json "git+file://$PWD?rev=$1&shallow=1#nixosConfigurations" \
+    --apply 'builtins.mapAttrs (_: machine: machine.config.system.build.toplevel.drvPath)' |
+    jq -eS 'select(length == 12)'
+}
+base_paths=$(set -o pipefail; paths "$base_rev") &&
+  merge_paths=$(set -o pipefail; paths "$merge_rev") &&
+  diff -u <(printf '%s\n' "$base_paths") <(printf '%s\n' "$merge_paths")
+```
+
+That equality is only for the merge, not the opt-in revisions. For each
+node, require the pinned live baseline, stage, enable and rollback
+outputs to agree on the RKE2 units and kubelet flags (including
+`system-reserved`), registries, kernel and kernel parameters, and
+`40-enp1s0.network`. Check the pinned candidate against the actual live
+host as well; a fixture comparison is not a live drift check.
+
+From the repository root in Bash, set `rev` to the exact approved commit
+SHA for the step (update it at each revision change) and `node` to `luna`,
+`sol` or `terra`:
+
+```bash
+flake="git+file://$PWD?rev=$rev&shallow=1"
+slot="$node-eph-1"
+allocatable() {
+  kubectl --context default get "node/$node" -o json | jq -eS '.status.allocatable'
+}
+```
+
+Run `before=$(allocatable)` once before staging each node, or before
+starting a standalone rollback; stop if it cannot be read. Keep that
+baseline across the stage and enable revisions.
+For **each** stage, enable or rollback switch, run the
+[PR 11 OK/STOP drift check](#machines-workflow-nix-machines) with the
+same `node` and `flake` above; skip its example assignments to those
+variables. Compare the RKE2 service links, `registries.yaml` and kernel
+to the live generation. Proceed only on `OK`; on `STOP`, resolve read
+errors or schedule the drift separately as an RKE2 change. In the same
+shell (`target` and `toplevel` from that check), compare the candidate
+uplink file and capture the live physical interface immediately before
+the switch:
+
+```bash
+uplink_file=etc/systemd/network/40-enp1s0.network
+uplink_candidate=$(cat "$toplevel/$uplink_file") &&
+  uplink_live=$(ssh "$target" cat "/run/current-system/$uplink_file") &&
+  diff -u <(printf '%s\n' "$uplink_live") <(printf '%s\n' "$uplink_candidate")
+
+uplink_snapshot() {
+  ssh "$target" bash -s <<'EOF'
+set -euo pipefail
+addresses=$(ip -4 -o addr show dev enp1s0)
+printf '%s\n' "$addresses"
+awk 'NR == 1 { ok = ($3 == "inet" && $4 ~ /\/24$/) }
+     END { exit !ok }' <<<"$addresses"
+routes=$(ip route show table all dev enp1s0)
+printf '%s\n' "$routes"
+# Felix (proto 80) never routes via enp1s0 in VXLAN mode: must be 0.
+awk '/ proto 80( |$)/ { n++ } END { print "enp1s0 proto 80 routes:", n+0; exit n > 0 }' <<<"$routes"
+SYSTEMD_COLORS=0 networkctl --no-pager --lines=0 status enp1s0 |
+  awk '$1 == "State:" || $1 == "Online" { print }'
+EOF
+}
+# Pod churn changes this all the time: information only, never diffed.
+felix_routes() {
+  ssh "$target" "ip route show table all | awk '/ proto 80( |\$)/ { n++ } END { print \"all proto 80 routes (info):\", n+0 }'"
+}
+uplink_before=$(uplink_snapshot) && felix_routes
+```
+
+Stop if any comparison or capture fails. Switch the one node with
+`clan machines update --flake "$flake" "$node"`. Immediately capture
+again (also after any reboot); require the primary `/24` first and no
+change in enp1s0's IPv4 addresses, its routes in every table, or its
+networkd State/Online lines (IPv6 addresses and the node-wide Felix
+route count are deliberately left out):
+
+```bash
+uplink_after=$(uplink_snapshot) &&
+  diff -u <(printf '%s\n' "$uplink_before") <(printf '%s\n' "$uplink_after")
+```
+
+On a node with its slot enabled, after the enable switch and after any
+reboot also require
+`ssh "$target" systemctl is-active forgejo-ephemeral-snat` to print
+`active` (and `ip -4 -o addr show dev dummy-ci-snat` to list both /32s).
+The unit waits up to 60 s for enp1s0's IPv4 address, is bound to the
+enp1s0 device and retries every 10 s on failure; `activating` that
+never settles means its ARP probe keeps finding a duplicate (read
+`journalctl -u forgejo-ephemeral-snat`). Until it is active the guard
+cannot start and the slot refuses every job.
+
+Run PR 11's `kubectl wait` for `Ready` and `etcdctl endpoint health
+--cluster` commands, then compare `allocatable` to `before`:
+
+```bash
+after=$(allocatable) && diff -u <(printf '%s\n' "$before") <(printf '%s\n' "$after")
+```
+
+Stop on any failure or difference; never start the next node while a
+node or etcd endpoint is unhealthy. For guard/dispatcher-only switches
+on Cerberus, still require the same cluster health and unchanged
+allocatable on the rollout node before continuing. Do not switch another
+RKE2 host as part of the same operation.
+
+Expected stage diff (the `forgejo-ephemeral-takeover` check lists it per
+node): the two runner units, `forgejo-ci.slice` and
+`nix-prune-generations` go; `nix-gc.timer` and
+`rke2-clean-dangling-store-links.{service,timer}` (see the GC step)
+arrive; `nix-daemon` (min/max-free), `nix-gc` (`OnSuccess=` the cleanup)
+and `systemd-tmpfiles-resetup` change.
+
+Expected host-wide enable diff, besides the slot's own 19 units: KSM
+(`enable-ksm.service`, merging only QEMU's mergeable pages, so pods are
+unaffected, with some `ksmd` CPU cost); `systemd-sysctl` restarts and
+reapplies systemd defaults including `rp_filter=2` to existing
+interfaces such as `cali*` and `vxlan.calico` (udev already does this
+for every new interface), plus IPv4 forwarding (already 1);
+`systemd-modules-load` restarts with `tap` and `vhost_net`; `polkit`
+restarts; `suid-sgid-wrappers` and `systemd-tmpfiles-resetup` re-run;
+`dbus-broker` reloads. Networkd reloads for the new dummy and tap files;
+`40-enp1s0.network` is byte-identical in all three states (asserted).
+`forgejo-ephemeral-snat.service` creates `dummy-ci-snat`. The guard
+requires `firewall.service` and binds to the SNAT unit; any future
+firewall restart (for example an `openFirewall` change) or SNAT unit
+change cycles the guard, and the slot's `BindsTo` stops a running job,
+including a 5-hour Machines build (also true on Ryza for the firewall).
+No RKE2 restart is expected.
+
+**Stage one node (no slot yet).**
+
+1. In the `nodes` argument of `_ci-slots.nix`, commit the entry below,
+   substituting the current node name. Keep the fleet's verified
+   `dispatcher.trustedJobs = true`.
+
+   ```nix
+   nodes ? {
+     luna = { hostRunnerEnabled = false; slotsEnabled = false; trustedEgress = true; };
+   },
+   ```
+
+   Absent entries keep their host runners and no slot. Disabling a
+   runner even at this stage requires `dispatcher.trustedJobs` plus
+   `trustedEgress`, or that node's explicit `untrustedTakeover = true`.
+   Do not use the override for this rollout: without trust there is no
+   CI upload, the Machines closure check fails on a cache miss, and
+   the dispatcher stops the untrusted job after 65 minutes. Without
+   trusted egress, Harbor, Garage S3 and ntfy are blocked. The flag
+   accepts a service degradation, not a passing canary.
+2. Drain both host runners. In both forges' Actions views, wait for
+   their active jobs to finish (or cancel them). Prevent new jobs from
+   starting during the handoff; once idle stop both units and confirm
+   neither is running:
+   `ssh "$target" systemctl stop forgejo-runner-ugalabugala forgejo-runner-noosphere`
+   (`target` comes from PR 11's drift check).
+
+   **Before the stage switch, check RKE2's store links.** The stage
+   brings back the daily `nix-gc` (10 days) and, in the same switch,
+   `rke2-clean-dangling-store-links`, whose timer fires at once and
+   deletes any already-dangling link. That un-sticks a frozen deploy
+   controller and releases every pending chart at once (memory note
+   `rke2-deploy-controller-dangling-symlink`: calico-node restarts on
+   every node). So find out first, while nothing is collected. List the
+   links the nixpkgs RKE2 module's tmpfiles rules create (only these
+   directories: `/var/lib/rancher/rke2` as a whole also holds container
+   snapshots full of unrelated absolute links) and check each target
+   against the live system closure:
+
+   ```bash
+   ssh "$target" bash -s <<'EOF'
+   set -euo pipefail
+   rke2=/var/lib/rancher/rke2
+   closure=$(nix-store -qR /run/current-system)
+   find "$rke2/server/manifests" "$rke2/server/static/charts" "$rke2/agent/images" \
+       "$rke2/agent/etc/containerd" -xdev -type l -lname '/nix/store/*' -printf '%p\t%l\n' 2>/dev/null |
+     while IFS=$'\t' read -r link dest; do
+       path=$(cut -d/ -f1-4 <<<"$dest")
+       if [[ ! -e $dest ]]; then echo "DANGLING $link -> $dest"
+       elif ! grep -qxF -- "$path" <<<"$closure"; then echo "STALE $link -> $dest"
+       else echo "ok $link"
+       fi
+     done
+   EOF
+   ```
+
+   Then run the Addon checksum diagnostic (each Addon's recorded checksum
+   against its file on this node):
+
+   ```bash
+   kubectl --context default get addon -A \
+       -o jsonpath='{range .items[*]}{.metadata.name}|{.spec.source}|{.spec.checksum}{"\n"}{end}' |
+     ssh "$target" 'while IFS="|" read -r n src ck; do
+       if [ -e "$src" ]; then a=$(sha256sum "$src" | cut -d" " -f1); else a=MISSING; fi
+       if [ "$a" = "$ck" ]; then echo "MATCH $n"; else echo "STALE $n"; fi
+     done'
+   ```
+
+   Require every Addon `MATCH` and no `DANGLING` link. On a `DANGLING`
+   link or a `STALE`/`MISSING` Addon, **stop**: the controller is
+   already frozen. Fix it as its own change (etcd snapshot first, remove
+   the dangling link on every server node, expect the backlog to apply
+   at once), then start over. Remove each `STALE` link (target alive
+   but no longer in the system closure, so the GC will collect it) by
+   hand now with `ssh "$target" rm -- <link>`; RKE2 does not delete
+   anything the removed manifest had deployed. Rerun both checks:
+   only `ok` lines and all `MATCH`.
+
+   **Then check the GC timer's stamp.** systemd keeps the stamp of a
+   removed timer, and automatic GC was on until `storeCache` replaced it
+   (2026-11-03). The stage sets `nix.gc.persistent = false` (asserted),
+   so the returning `nix-gc.timer` should not catch up on a missed run;
+   remove a leftover stamp anyway so a later revert of that setting
+   cannot start an unscheduled full GC on the etcd disk:
+
+   ```bash
+   ssh "$target" 'ls -l /var/lib/systemd/timers/stamp-nix-gc.timer 2>/dev/null &&
+     rm -v /var/lib/systemd/timers/stamp-nix-gc.timer || echo "no nix-gc stamp"'
+   ```
+
+   After the switch, `ssh "$target" systemctl is-active nix-gc.service`
+   must not print `active`/`activating`. The first collection must be
+   step 4's chunked one, but the timer's first daily run (00:00, no
+   random delay) would be an unchunked `--delete-older-than 10d` GC. So
+   right after the switch run `ssh "$target" systemctl stop
+   nix-gc.timer` and start it again only after step 4 (a reboot or a
+   change to the timer also restarts it, so finish step 4 before
+   either).
+
+   Switch the node from the pinned stage revision and run the health
+   and allocatable checks. Verify the two host units and the node slot
+   are absent. The runner's `storeCache` overrides and
+   `nix-prune-generations` timer are gone; the ordinary `nix-gc` timer
+   and `rke2-clean-dangling-store-links.timer` are back/new.
+3. Delete the **persistent** runner row named `$node` on **each** forge,
+   from manjo's **User settings → Actions → Runners** (or **Site
+   Administration → Actions → Runners**). Match the UUID to
+   `vars/per-machine/$node/forgejo-runner-ugalabugala/uuid/value` on
+   `forge.ugalabugala.org` and the `forgejo-runner-noosphere/uuid/value`
+   under the same node on `forge.noosphere.uk`. Confirm both exact rows
+   are gone. Delete, don't rotate or touch any `eph-*` rows. Commit the
+   removal of the two matching per-machine vars:
+
+   ```bash
+   git rm -r -- "vars/per-machine/$node/forgejo-runner-ugalabugala" \
+     "vars/per-machine/$node/forgejo-runner-noosphere"
+   ```
+
+   Keep shared credentials for hosts that still declare them. Review
+   obsolete recipient links separately; deleting links or ciphertext
+   does not revoke keys a host already read (PR 15 rotates them).
+
+   With both rows deleted, remove the retired runners' state from the
+   node: the `.runner` registration files and checkouts, and each
+   forge's `CARGO_HOME` with job-written executables. The slot cannot
+   see them (it shares only `/nix/store`), but nothing else removes
+   them. They are `DynamicUser` state directories, so the data is under
+   `/var/lib/private`:
+
+   ```bash
+   ssh "$target" bash -s <<'EOF'
+   set -euo pipefail
+   for forge in ugalabugala noosphere; do
+     for dir in "forgejo-runner/$forge" "forgejo-runner-cargo-$forge"; do
+       rm -rf -- "/var/lib/$dir" "/var/lib/private/$dir"
+     done
+   done
+   rmdir --ignore-fail-on-non-empty /var/lib/forgejo-runner /var/lib/private/forgejo-runner 2>/dev/null || true
+   ls -d /var/lib/forgejo-runner* /var/lib/private/forgejo-runner* 2>/dev/null || echo 'runner state gone'
+   EOF
+   ```
+
+   Require `runner state gone`. On rollback the restored runners start
+   with fresh state.
+4. On the staged node, as root, review GC roots
+   (`sudo nix-store --gc --print-roots`), including user profiles,
+   result links, pinned outputs and retained system closures. A slot
+   reads the **entire** host store; GC cannot remove rooted private CI
+   output or plaintext secrets. Audit what the retained closures
+   reference and remove obsolete roots before enabling. If an essential
+   root retains private output, **stop** until the exposure is resolved.
+   With operator approval to delete old generations (rollback will
+   use a pinned rebuild rather than a deleted generation), delete them
+   (`ssh "$target" nix-env --profile /nix/var/nix/profiles/system
+   --delete-generations old`, and likewise for any other profile the
+   root review keeps), but do **not** run one big `nix-collect-garbage
+   -d`: weeks of CI store unlink hundreds of GB and millions of files on
+   the root ext4 that holds etcd's WAL. Collect off-hours, in 20 GiB
+   chunks, with the etcd gate on all three servers between chunks.
+   Define `fsync_p99` from the canary's **etcd and memory gates** below
+   and take its idle baseline first:
+
+   ```bash
+   while :; do
+     # Measure the chunk itself: the 10-minute windows start before it.
+     for n in luna sol terra; do fsync_p99 "$n" & done
+     sleep 5
+     summary=$(ssh "$target" 'nix-store --gc --max-freed 20G 2>&1 | tail -n 1') || { wait; break; }
+     printf '%s\n' "$summary"   # "N store paths deleted, X MiB freed"
+     ssh "$target" systemctl start rke2-clean-dangling-store-links
+     wait   # p99 and the before/after leader counts cover the chunk
+     read -rp 'All three p99 within the canary limits and no leader change? [y/N] ' ok
+     [[ $ok == y ]] || break
+     [[ $summary == "0 store paths deleted"* ]] && break
+   done
+   ```
+
+   Stop on the canary's limits (any p99 bound above `0.016` s, more
+   than one bucket above baseline, or a `leader` count on stderr that
+   rose from the window's start to its end) and resume later. If a chunk
+   ever runs longer than the 600 s window, lengthen the window in
+   `fsync_p99`, not the chunk size.
+   Verify no private CI output remains and `df -B1 --output=avail
+   /mnt/storage` gives at least `300647710720` bytes (280 GiB: the
+   images, 10 GiB margin and 100 GiB for Garage and swap; the slot
+   refuses to claim below that).
+
+   Right after the GC (a manual GC does not trigger the cleanup unit;
+   only `nix-gc.service` does, plus its 15-minute timer; the loop above
+   starts it after each chunk), require that no RKE2 store link dangles
+   and that the deploy controller is not failing:
+
+   ```bash
+   ssh "$target" 'find /var/lib/rancher/rke2/{server/manifests,server/static/charts,agent/images,agent/etc/containerd} \
+     -xdev -xtype l 2>/dev/null'
+   ssh "$target" "journalctl -u rke2-server --since -2min | grep -c 'Failed to process config'"
+   ```
+
+   The first must print nothing and the second `0`. Otherwise run
+   `ssh "$target" systemctl start rke2-clean-dangling-store-links` and
+   read what it removed in its journal, repeat both checks and the
+   Addon diagnostic from step 2 (all `MATCH`), and find out which link
+   step 2 missed before the next node. From now on the unit removes
+   such links after every GC and logs each one
+   (`journalctl -u rke2-clean-dangling-store-links | grep Removed`); it
+   never restarts or touches `rke2-server`.
+
+**Enable and isolate the canary.**
+
+1. Commit `slotsEnabled = true` for just this node on top of the stage
+   and var-cleanup commits, and pin this enable revision. Globally
+   pause the dispatcher (`sudo install -d -m 0700 /run/forgejo-ephemeral`
+   then `sudo touch /run/forgejo-ephemeral/pause`) and complete all the
+   [drain checks](#ryza-one-job-pilot-nix-eph) under **Pause before
+   maintenance**. Keep this flag through the guard and dispatcher
+   switches; restore it after a reboot before allowing dispatch.
+2. Switch the guard first, then the dispatcher if separate, both using
+   `clan machines update --flake "$flake" <host>` from the enable
+   revision (one Cerberus switch today). Before switching the node,
+   confirm `caddy.service` is active and inspect the live guard config
+   (`grep -A3 '@blockedEphemeral' /etc/caddy/caddy_config` and
+   `grep -A2 '^s3.main.garage.noosphere.uk' /etc/caddy/caddy_config`).
+   The new untrusted source must be in `@blockedEphemeral`, limited to
+   both forges and ncps; its trusted source must be in
+   `@blockedEphemeralTrusted`, limited to those three plus the exact S3,
+   Harbor and ntfy hosts in PR 8. The S3 site's source allowlist must
+   include the trusted source and exclude the untrusted one. Keep all
+   existing restrictions. Verify the new
+   `forgejo-ephemeral-dispatcher@$slot.service` is paused, carries
+   `--trusted-jobs` and `--trusted-egress`, and uses the intended slot
+   host. Do not start the guest or its trusted-egress unit by hand.
+   Startup may refuse the slot SSH command until the node is switched.
+3. Switch only the current node from that same pinned revision, using
+   the drift, health, allocatable and `uplink_snapshot` gates above
+   (enp1s0 unchanged, its `/24` first). Verify
+   `forgejo-ephemeral-snat.service` is active and both /32s are on the
+   dummy only (`ip -4 -o address show dev dummy-ci-snat`, `ip -4 route
+   show dev dummy-ci-snat` prints nothing), that
+   `kubectl --context default get node "$node" -o
+   jsonpath='{.status.addresses}'` still lists only the primary IP, and
+   that Calico still uses it (`kubectl --context default get
+   node "$node" -o jsonpath='{.metadata.annotations.projectcalico\.org/IPv4Address}'`
+   is the primary `/24`, not a `/32`). Check
+   `forgejo-ephemeral-firewall.service` and the tap's rules during the
+   canary. With the dispatcher still paused, use the PR 8
+   `curl --interface` checks, substituting the node's two sources:
+   the forge and ncps endpoints must work, and the guard must return
+   403 to untrusted requests for Harbor, S3 and ntfy. Verify trusted
+   Harbor and S3 reach their intended upstreams. Stop if any check
+   fails; a rendered matcher alone does not prove the live policy.
+   After the node switch, use the pinned SSH `observe` check from the
+   remote dispatcher rollout for this slot. Require idle, no staged
+   run, and no recurring dispatcher restarts before unpausing.
+4. To make pickup deterministic, set the `--pause-file` on **every
+   other** dispatcher instance before removing the global pause. Also
+   drain and temporarily stop any remaining host runners that serve
+   the canary's labels on its forge. Host runners do not honor the pause
+   file. Record the units/flags changed so only those are restored
+   after the canary. Check for competing pending jobs before approval,
+   and verify the exact slot name and attempt in the dispatcher
+   journal; a green run on a different runner proves nothing.
+
+**Reviewed fork probe, on this slot only.** In the dispatched upstream
+pilot repo, manually approve a fully reviewed fork PR using
+`pull_request`, `runs-on: nix`, no secrets, no checkout of other
+unreviewed code and no broader approval changes. Reuse the
+[Ryza isolation probe](#ryza-one-job-pilot-nix-eph) with dynamic routing
+enabled; keep the credential, mount, forge/ncps, direct VIP and Caddy
+403 checks. Replace the host control endpoints with known listeners for
+this node. Add the following step with reviewed literal values:
+
+- `NODE_IP`: the primary node LAN IP (`nix eval --raw "$flake#lib.hosts.$node"`);
+- `OTHER_NODE_IP`: another server node's LAN IP (`lib.hosts.<other>`);
+- `SNAT_IP`: this node's untrusted SNAT address
+  (`nix eval --raw "$flake#lib.lan.$node-eph"`); it is a local address
+  of the node, so the firewall's open ports and NodePorts answer on it
+  from the LAN;
+- `NODEPORT`: a NodePort of a Service with ready endpoints
+  (`kubectl --context default get svc -A | grep NodePort`);
+- `POD_IP` and `POD_PORT`: a current listening pod (not a Service or a
+  host-network pod) from `kubectl --context default get pods -A -o wide`.
+
+Every guard rule is a DROP, never a REJECT, so a flow the guard stopped
+can only **time out** (`timeout` exits 124). A refusal (exit 1: RST or
+ICMP unreachable) means the SYN got **past** the guard to something
+that answered, such as a kube-proxy `REJECT` for a Service without
+endpoints, Calico, or a closed port, and fails the probe like a
+connection does.
+
+```bash
+set -euo pipefail
+: "${NODE_IP:?}" "${OTHER_NODE_IP:?}" "${SNAT_IP:?}" "${NODEPORT:?}" "${POD_IP:?}" "${POD_PORT:?}"
+gateway=10.99.2.1  # this slot's tap gateway (index 1), the node itself
+for endpoint in "10.43.0.1 443" "$NODE_IP 2379" "$NODE_IP 10250" \
+                "$NODE_IP 6443" "$NODE_IP 9345" "$NODE_IP $NODEPORT" \
+                "$OTHER_NODE_IP 6443" "$OTHER_NODE_IP 2379" \
+                "$SNAT_IP 6443" "$SNAT_IP $NODEPORT" "$gateway 22" \
+                "192.168.1.250 443" "192.168.1.251 443" "$POD_IP $POD_PORT"; do
+  read -r ip port <<<"$endpoint"
+  rc=0
+  timeout 4 bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$ip" "$port" || rc=$?
+  case "$rc" in
+    124) printf 'TCP blocked: %s:%s\n' "$ip" "$port" ;;
+    1) printf 'Isolation check failed (reached past guard): %s:%s\n' "$ip" "$port" >&2; exit 1 ;;
+    *) printf 'Isolation check failed (%s): %s:%s\n' "$rc" "$ip" "$port" >&2; exit 1 ;;
+  esac
+done
+```
+
+From a permitted **non-slot** source before and after the run, prove TCP
+connects to every very same IP/port (use the node or a permitted cluster
+probe for cluster-only targets, and another LAN host for `SNAT_IP`).
+Check that the pod is still Ready and
+listening. A refused connection on both sources, a dead pod, an
+unreachable endpoint from the control, or a TLS/authentication error
+after the slot connects is **not** proof of isolation. In the guest,
+require the successful direct HTTPS requests through the guard from the
+existing probe, plus Caddy 403 on forbidden pinned vhosts. Do not dump
+credentials. Require the dispatcher to report an untrusted fork
+verdict with credentials withheld and verify runner and image cleanup.
+
+**Why both firewall layers matter.** The slot enters the host from its
+tap. IPv4 PREROUTING (kube-proxy NAT) can DNAT the ClusterIP, NodePort or
+MetalLB VIP *before* routing chooses INPUT or FORWARD. The node's mangle
+INPUT and FORWARD hooks run after that DNAT but before Calico or
+kube-proxy filter-chain accepts. The tap guard drops DNATed flows and
+also enforces the existing private-destination, port and output-interface
+restrictions there. Direct node etcd/kubelet traffic takes INPUT; a
+routed pod takes FORWARD even without translation. IPv6 from the tap is
+dropped early too. The ordinary filter allowlist and POSTROUTING SNAT
+still apply; permitted guard traffic is restricted further by Caddy.
+Use the live probe, not a later filter rule or a firewall unit's status
+alone, as the isolation gate. The `forgejo-ephemeral-node-firewall` flake
+check is a regression test of the generated scripts in a veth model
+(stand-in DNAT and filter ACCEPTs, no real Calico or kube-proxy chains,
+no competing POSTROUTING rules, the stock firewall off). It is **not**
+proof of the Kubernetes path: that rests on the analysis above plus the
+live probe and the Caddy 403 checks, which stay mandatory. A
+MASQUERADE to a node IP would slip past Caddy's source matcher, and
+only those live 403s would catch it.
+
+**Trusted acceptance.** Keeping the canary isolated, dispatch **Machines**
+on `forge.ugalabugala.org` → `manjo/omnissiah` as manjo on the protected
+default branch, `machines: enginseer`, `update: no`. Check that the
+`nix-machines` build lands on this large slot, that its journal records
+trusted credential delivery and PR 8 trusted egress, and that **Confirm
+the closure is in ncps** logs HTTP 200 for the Enginseer toplevel narinfo.
+Confirm the upload for this run in the hook log (or verify a fresh
+output and its `ci.noosphere.uk-1` signature as in the Ryza trust
+probe; a previously cached closure alone is not proof of upload).
+Afterwards confirm the VM, credentials and images are gone, its
+registration is deleted, and the trusted-egress unit, rule and flows are
+gone (PR 8 cleanup checks with this slot's IP/source). Repeat Ready,
+etcd and allocatable checks under/after load; stop on regression.
+
+**etcd and memory gates during that build.** The slot's images are on
+`/mnt/storage`, but it reads the host store from the etcd disk, and
+`etcdctl endpoint health` does not show slow disks. etcd is not scraped
+by Prometheus (`kubeEtcd.enabled = false`), so read its local metrics
+endpoint (RKE2 serves it on `127.0.0.1:2381`) on **every** server node.
+Take a 10-minute idle baseline before dispatching, then sample every
+10 minutes while the Enginseer build runs:
+
+```bash
+fsync_p99() {  # usage: fsync_p99 <node>; prints the p99 bucket bound of the last 10 min
+  ssh "root@$(nix eval --raw "$flake#lib.hosts.$1")" bash -s <<'EOF'
+set -euo pipefail
+m() { curl -sf http://127.0.0.1:2381/metrics |
+  awk '/^etcd_disk_wal_fsync_duration_seconds_bucket/ { match($0, /le="[^"]*"/); print substr($0, RSTART + 4, RLENGTH - 5), $2 }
+       /^etcd_server_leader_changes_seen_total/ { print "leader", $2 > "/dev/stderr" }'; }
+a=$(m); sleep 600; b=$(m)
+paste <(printf '%s\n' "$a") <(printf '%s\n' "$b") |
+  awk '{ d[NR] = $4 - $2; le[NR] = $1; n = NR } END {
+         for (i = 1; i <= n; i++) if (d[i] >= 0.99 * d[n]) { print "p99 <= " le[i] "s of " d[n]; exit } }'
+EOF
+}
+for n in luna sol terra; do fsync_p99 "$n" & done; wait
+```
+
+Stop the canary (cancel the run, pause) if any node's p99 bound goes
+above `0.016` s, rises more than one bucket above its baseline, or the
+`leader` count it prints on stderr increases between samples. etcd
+recommends a WAL fsync p99 under 10 ms. Off-hours, `etcdctl check perf`
+in the etcd pod (the `etcdctl` flags from PR 11's health check) is an
+alternative baseline; it writes load itself, so never run it during the
+canary. On the slot node also record the slice's memory behaviour after
+the build: `systemctl show -p MemoryHigh -p MemoryMax forgejo-ephemeral.slice`
+(bytes: `4026531840`/`4294967296`, i.e. 3840M/4G, on Luna;
+`5100273664`/`5368709120`, i.e. 4864M/5G, elsewhere), `cat
+/sys/fs/cgroup/forgejo-ephemeral.slice/memory.events` (`high` counts
+throttling in the last 256 MiB under the cap: a few are fine, a count
+climbing all build long means the overhead lives at the cap, so record
+it with the build time; `oom_kill` must be `0`), and `journalctl -k
+-b | grep -i -E 'oom|out of memory'` (nothing). A slot OOM-killed under
+global pressure fails its job, not etcd; record it and stop.
+Restore the drained host runners and only the per-slot pauses you set
+when both canaries pass. Then proceed to the next node.
+
+If Ryza's `nix` was not added before Luna (see **Capacity**), add it now,
+before Terra, as described in
+[Ryza takeover](#ryza-takeover-hom-32-pr-12-operator-flip). With trust
+and trusted egress already verified, pause and drain, then switch Ryza
+and the dispatcher from the same pinned revision. This keeps general
+`nix` capacity on every user-pool slot; `nix-machines` remains large only.
+
+**Rollback one node.** Pause immediately on the dispatcher, drain
+globally, and verify registration, VM/support, image, trust and PR 8 rule
+and flow cleanup **before** removing any units. Leave Caddy's matchers
+in place until both slot sources are gone from the node. Commit a
+rollback revision for just this node with `slotsEnabled = false`,
+`trustedEgress = false`, `hostRunnerEnabled = true` and
+`untrustedTakeover = false`; retain the other live nodes' gates.
+
+If the persistent rows or vars were deleted, prepare the replacement
+before switching. In a clean checkout of the rollback configuration,
+generate missing vars (`CLAN_NO_COMMIT=1 clan vars generate "$node"
+--generator forgejo-runner-ugalabugala`, then the same for
+`forgejo-runner-noosphere`). If a deleted row's vars still exist,
+regenerate that forge's vars with `--regenerate` instead. Use fresh
+credentials for deleted rows; don't restore revoked tokens from Git.
+If recipient links were removed, use
+`CLAN_NO_COMMIT=1 clan vars fix "$node" --generator <generator>` for
+`nix-ci-signing-key`, `ncps-upload-auth` and `sccache-garage-key` as
+needed, and verify the node can decrypt the shared vars. Commit the var
+changes and pin the resulting revision. From a clean checkout of that
+same SHA run `nix run .#forgejo-runner-register -- "$node"` before the
+switch (the helper reads the working checkout); skip re-enrollment
+only for intact identities. Don't start the restored runners while
+unreviewed fork jobs are queued on their labels.
+
+Run the pinned PR 11 drift gate and switch the node **first**, then run
+Ready, etcd and allocatable checks, and the `uplink_snapshot` comparison
+(the rollback must not change enp1s0 either). Verify
+`forgejo-ephemeral-snat.service`, `dummy-ci-snat` with both /32s and the
+slot are gone, and both restored runner units declare `nix` and
+`nix-machines` on the correct rows. Remove the slot's leftover state:
+`ssh "$target" rm -rf /mnt/storage/microvms`. The cleanup unit for
+dangling RKE2 links goes with the restored `storeCache` (automatic GC
+off again). Switch the still-paused dispatcher/guard from that
+same revision, now safe to remove this slot's matcher sources and
+dispatcher instance. Verify remaining sources, dispatchers and cluster
+health before unpausing. Persistent runner credentials are again
+available to jobs on that node: keep fork approvals manual and fully
+reviewed. If disabling trust separately while any other node runner is
+off, first restore those runners or explicitly acknowledge degradation
+with `untrustedTakeover = true` for each affected node.
 
 ### Hermes on Cerberus Forgejo
 
