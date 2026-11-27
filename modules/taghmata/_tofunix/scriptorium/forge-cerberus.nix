@@ -54,6 +54,16 @@
   manageKey = manageBot && builtins.pathExists publicKey;
   forkCredential = "tofunix-hermes-forgejo-forks";
   manageForks = manageBot && builtins.pathExists (vars.shared forkCredential forkCredential);
+
+  # advisory-bot opens the template's nightly advisory pull requests from its
+  # own fork (rust-app-template RT-122), so it can read the base repository but
+  # not write it. A write collaborator outside the trusted-CI users makes every
+  # master run untrusted (HOM-32). The read grant applies without the
+  # credential; the fork and the job's secret wait for it.
+  advisoryBot = "advisory-bot";
+  advisoryRepo = repos.rust-app-template.name;
+  advisoryCredential = "tofunix-advisory-bot-forgejo";
+  manageAdvisory = builtins.pathExists (vars.shared advisoryCredential advisoryCredential);
 in {
   reliquary.ntfy_access = {
     generator = "ntfy-access";
@@ -95,6 +105,25 @@ in {
   provider.gitea.hermes = lib.mkIf manageForks {
     inherit (config.provider.gitea.cerberus) base_url;
     token = relic "hermes_fork_secrets" "forgejo_token";
+  };
+
+  # One PAT for both of advisory-bot's jobs: forking here, and pushing to the
+  # fork and opening the pull request in the nightly. It needs the same power
+  # for both.
+  reliquary.advisory_bot_secrets = lib.mkIf manageAdvisory {
+    generator = advisoryCredential;
+  };
+  provider.gitea.advisory = lib.mkIf manageAdvisory {
+    inherit (config.provider.gitea.cerberus) base_url;
+    token = relic "advisory_bot_secrets" "forgejo_token";
+  };
+
+  resource.forgejo_repository_actions_secret."${advisoryRepo}-advisory-pr-token" = lib.mkIf manageAdvisory {
+    provider = "forgejo.cerberus";
+    inherit owner;
+    repository = advisoryRepo;
+    name = "ADVISORY_PR_TOKEN";
+    data = relic "advisory_bot_secrets" "forgejo_token";
   };
 
   # NTFY_TOKEN lets the Machines workflow announce the "render manifests" pull
@@ -144,7 +173,18 @@ in {
         permission = "read";
       })
     repos
-  );
+  )
+  // {
+    # Already a collaborator (with write); creating this downgrades it in place.
+    "${advisoryRepo}-advisory-bot" = {
+      provider = "gitea.cerberus";
+      depends_on = ["gitea_repository_branch_protection.${advisoryRepo}"];
+      inherit owner;
+      repo = advisoryRepo;
+      username = advisoryBot;
+      permission = "read";
+    };
+  };
 
   # Omit the alias and resources together before enrollment. If the credential
   # is later removed, OpenTofu cannot delete stateful forks via another alias.
@@ -157,7 +197,16 @@ in {
       lifecycle.prevent_destroy = true;
     })
     repos
-  );
+  )
+  // lib.optionalAttrs manageAdvisory {
+    "${advisoryRepo}-advisory-bot" = {
+      provider = "gitea.advisory";
+      depends_on = ["gitea_repository_collaborator.${advisoryRepo}-advisory-bot"];
+      inherit owner;
+      repo = advisoryRepo;
+      lifecycle.prevent_destroy = true;
+    };
+  };
 
   resource.gitea_repository_branch_protection =
     lib.mapAttrs (_: repo: {
