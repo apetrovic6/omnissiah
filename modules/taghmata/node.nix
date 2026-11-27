@@ -20,6 +20,7 @@
     snatAddresses = builtins.filter (address: address != null) [slot.egressAddress slot.egressTrustedAddress];
     ip = lib.getExe' pkgs.iproute2 "ip";
     arping = lib.getExe' pkgs.iputils "arping";
+    uplinkDevice = "sys-subsystem-net-devices-${uplink}.device";
     cleanup = "rke2-clean-dangling-store-links";
   in {
     imports = [
@@ -49,15 +50,30 @@
     systemd.services.forgejo-ephemeral-snat = lib.mkIf state.slotsEnabled {
       description = "Claim the CI SNAT addresses on ${interface}";
       wantedBy = ["multi-user.target"];
+      # network-online.target alone does not wait for the uplink here
+      # (networkd wait-online off, the NICs NetworkManager-unmanaged).
       wants = ["network-online.target"];
-      after = ["network-online.target"];
+      bindsTo = [uplinkDevice];
+      after = ["network-online.target" uplinkDevice];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        # Boot races (no address yet, ARP probe failing) retry rather than
+        # leave the slot refusing every job until a manual restart.
+        Restart = "on-failure";
+        RestartSec = 10;
         OOMScoreAdjust = 1000;
       };
       script = ''
         set -eu
+        for _ in $(seq 60); do
+          [[ -n $(${ip} -4 -o address show dev ${uplink} scope global) ]] && break
+          sleep 1
+        done
+        if [[ -z $(${ip} -4 -o address show dev ${uplink} scope global) ]]; then
+          echo "CI SNAT: ${uplink} has no IPv4 address after 60 s" >&2
+          exit 1
+        fi
         # A dummy cannot perform link-layer ACD on the LAN. Probe on the
         # physical interface before binding, and require weak-host ARP.
         for dev in all ${uplink}; do
@@ -134,6 +150,11 @@
     systemd.services.nix-gc = lib.mkIf config.nix.gc.automatic {
       unitConfig.OnSuccess = ["${cleanup}.service"];
     };
+    # No catch-up run when the timer returns at the stage switch: a stamp
+    # left from before storeCache (2026-11-03) would start a full GC of
+    # weeks of CI store on the etcd root disk right away. The first,
+    # chunked GC is the operator's (README step 4).
+    nix.gc.persistent = lib.mkIf config.nix.gc.automatic false;
     networking.defaultGateway = {
       address = self.lib.lan.gateway;
       interface = "enp1s0";

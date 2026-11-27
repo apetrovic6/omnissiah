@@ -2657,31 +2657,68 @@ separate roles. Check `dispatcher.host` and `guard` in
 | Sol | `sol-eph-1` | 4 / 5 GiB | `192.168.1.244` / `192.168.1.245` |
 | Terra | `terra-eph-1` | 4 / 5 GiB | `192.168.1.246` / `192.168.1.247` |
 
-Each node gets one 2-vCPU slot with 150 + 20 GiB sparse images; allow at
-least 180 GiB free (including 10 GiB margin) on `/mnt/storage`, the
-second ext4 NVMe also used by Longhorn, Garage and swap. Slot state and
-images live in `/mnt/storage/microvms`; the slot requires the mount so
-it cannot fall back to the root device holding etcd. `IOWeight` is not
-a bandwidth limit (NVMe uses no IO scheduler), so the job's image
-writes compete with Longhorn and Garage on that disk instead. The slot
-still **reads** the host store on the root NVMe through virtiofs, so the
-canary gates on etcd's WAL fsync latency (below).
+Each node gets one 2-vCPU slot with 150 + 20 GiB sparse images. A job
+is claimed only with at least 280 GiB free on `/mnt/storage`: the
+images, a 10 GiB margin, and 100 GiB for the disk's other tenants
+(Garage's local-path data and the 50 GiB swapfile), which keep growing
+during a 5-hour job, partly from that job's own ncps uploads. Slot
+state and images live in `/mnt/storage/microvms`; the slot requires
+the mount so it cannot fall back to the root device holding etcd.
+`IOWeight` is not a bandwidth limit (NVMe uses no IO scheduler), so the
+job's image writes compete with Garage on that disk instead.
+
+The claim-time check does not see growth during the job. A disk-full
+alert for `/mnt/storage` already exists generically: the nodes are
+scraped by kube-prometheus-stack's node-exporter DaemonSet
+(`job="node-exporter"`; `prometheus-stack/nodes.nix` leaves taghmata
+machines to it), and its bundled `NodeFilesystemSpaceFillingUp`
+(15 %/10 % left and predicted to fill) and
+`NodeFilesystemAlmostOutOfSpace` (5 % warning, 3 % critical, `for:
+30m`; rendered `prometheus-grafana/PrometheusRule-prometheus-node-exporter.yaml`)
+match every mount point, so `/mnt/storage` too, and reach ntfy through
+the per-severity receivers. **Follow-up:** confirm in Prometheus that
+`node_filesystem_avail_bytes{mountpoint="/mnt/storage"}` exists for all
+three nodes, and consider a tighter absolute threshold there (Garage has
+no alerting of its own, and 30 minutes at 3 % is late for a disk that
+also holds Garage's data).
+
+Longhorn is most likely **not** on `/mnt/storage`, despite the disko
+comment: the longhorn-manager DaemonSet mounts the hostPath
+`/var/lib/longhorn/` (rendered `longhorn/DaemonSet-longhorn-manager.yaml`),
+nothing in the repo overrides `defaultDataPath`, and the
+prometheus-stack storage comment counts "~1.6TB free on
+/var/lib/longhorn", i.e. the root NVMe that also holds etcd. Check
+before staging:
+
+```bash
+kubectl --context default -n longhorn-system get nodes.longhorn.io \
+  -o jsonpath='{range .items[*]}{.metadata.name}{": "}{range .spec.disks.*}{.path}{" "}{end}{"\n"}{end}'
+```
+
+`/var/lib/longhorn/` means Longhorn replicas share the etcd disk with
+the host store the slot **reads** through virtiofs (the image writes do
+not go there). That makes the read-side etcd gate during the canary
+(etcd WAL fsync latency, below) the one that matters most.
 
 Kubelet's `system-reserved` and allocatable stay unchanged. The guest
 is the node's existing runner memory reservation
 (`services.imperium.forgejoRunner.resources.memory`: 3 GiB on Luna and
 4 GiB on Sol/Terra, the same value as `system-reserved`, asserted at
-evaluation). The slice applies `MemoryHigh` at that reservation and
-`MemoryMax` 1 GiB higher for QEMU and support processes. That extra GiB
-is **not reserved**; it can put pods under pressure. Slot VM and support
-processes have `OOMScoreAdjust=1000`, making the slot the first target
-under global OOM rather than etcd (Burstable etcd and apiserver pods sit
-around 930–970). Once the guest has touched all its memory, QEMU's own
-overhead keeps the slice just above `MemoryHigh`, so the kernel reclaims
-page cache from QEMU and virtiofsd first and throttles their further
-allocations. Expect slower store reads late in a big build; it is the
-price of not touching etcd. The canary records the slice's `high`
-events (below). **Follow-up, not in this rollout:** raise
+evaluation). The slice's `MemoryMax` is 1 GiB above the guest, for QEMU
+and support processes. That extra GiB is **not reserved**; it can put
+pods under pressure. What protects etcd is `MemoryMax` (a hard cap) and
+`OOMScoreAdjust=1000` on the slot VM and every support process, making
+the slot the first target under global OOM rather than etcd (Burstable
+etcd and apiserver pods sit around 930–970). `MemoryHigh` is 256 MiB
+under `MemoryMax` (guest + 768 MiB, e.g. 3840M on Luna): it only
+throttles QEMU, virtiofsd and page-cache overhead in the last 256 MiB
+before the cap. It must stay above the guest size: the guest's memfd is
+charged to the slice and cannot be reclaimed, so with `high` at the
+guest size a guest that has touched its RAM keeps the slice over `high`
+for good and every further charge (virtiofsd's store reads, image
+writes through the page cache) is throttled to a crawl (measured: cold
+reads from about 2 GiB/s to under 1 MiB/s). The canary records the
+slice's `high` events (below). **Follow-up, not in this rollout:** raise
 `system-reserved` by 1 GiB per node, as its own one-node-at-a-time RKE2
 change (it restarts `rke2-server`), so the extra GiB is reserved too.
 Large slots replace both user pools' (`ugalabugala` and `noosphere-user`)
@@ -2706,7 +2743,10 @@ manifests job also uses ntfy, which needs trusted egress.
 
 Before staging the first node, opt Ryza into
 `dispatcher.protectStdSlots = true` in `_ci-slots.nix` (default off so
-the merge does not change Ryza). With Ryza trust and trusted egress
+the merge does not change Ryza). It is safe to flip now that
+`MemoryHigh` sits above the guest (4864M for Ryza's 4 GiB guests, 5G
+cap); Ryza's slots get `OOMScoreAdjust=1000` and that throttle only.
+With Ryza trust and trusted egress
 verified, also add `nix` to `takeoverLabels` as in
 [Ryza takeover](#ryza-takeover-hom-32-pr-12-operator-flip). Pause and
 drain, switch Ryza and then the dispatcher from the same pinned
@@ -2758,12 +2798,15 @@ leaves the physical uplink's configuration and addresses untouched.
 The node answers ARP on `enp1s0` with those sysctls, and iptables
 [`SNAT --to-source`](https://man7.org/linux/man-pages/man8/iptables-extensions.8.html#SNAT)
 does not require the address on the outbound interface. The dummy has
-no routes and is not required for network-online. [Calico v3.31.5
-first-found](https://github.com/projectcalico/calico/blob/v3.31.5/node/pkg/lifecycle/startup/autodetection/autodetection_methods.go)
-excludes `^dummy.*`; [k3s `GetHostnameAndIPs`](https://github.com/k3s-io/k3s/blob/v1.35.0%2Bk3s1/pkg/util/net.go)
+no routes and is not required for network-online. RKE2
+v1.35.10+rke2r1 (the evaluated `services.rke2.package`) bundles
+rke2-calico v3.32.200 (Calico v3.32.2), whose [first-found
+defaults](https://github.com/projectcalico/calico/blob/v3.32.2/node/pkg/lifecycle/startup/autodetection/autodetection_linux.go)
+exclude `^dummy.*`; [k3s `GetHostnameAndIPs`](https://github.com/k3s-io/k3s/blob/v1.35.0%2Bk3s1/pkg/util/net.go)
 falls back to [apimachinery's default-route address selection](https://github.com/kubernetes/apimachinery/blob/v0.35.0/pkg/util/net/interface.go),
-so it cannot choose this routeless dummy. The [RKE2 Calico chart](https://github.com/rancher/rke2-charts/blob/main/charts/rke2-calico/rke2-calico/v3.31.500/values.yaml)
-does not override first-found. Slot start and the PR 8 trusted-egress
+so it cannot choose this routeless dummy. The [RKE2 Calico chart](https://github.com/rancher/rke2-charts/tree/main/charts/rke2-calico/rke2-calico/v3.32.200)
+sets `firstFound: true` when autodetection is unset, and the repo's
+`rke2-calico` HelmChartConfig only pins the MTU. Slot start and the PR 8 trusted-egress
 preflight check presence on the dummy and probe for duplicates via
 `enp1s0`; trusted egress also watches the dummy and withdraws its rule
 if the address disappears. Ryza keeps its existing uplink behavior.
@@ -2839,26 +2882,42 @@ addresses=$(ip -4 -o addr show dev enp1s0)
 printf '%s\n' "$addresses"
 awk 'NR == 1 { ok = ($3 == "inet" && $4 ~ /\/24$/) }
      END { exit !ok }' <<<"$addresses"
-ip route show table all dev enp1s0
-routes=$(ip route)
-printf 'proto 80 routes: '
-awk '/ proto 80( |$)/ { n++ } END { print n+0 }' <<<"$routes"
-SYSTEMD_COLORS=0 networkctl --no-pager --lines=0 status enp1s0
+routes=$(ip route show table all dev enp1s0)
+printf '%s\n' "$routes"
+# Felix (proto 80) never routes via enp1s0 in VXLAN mode: must be 0.
+awk '/ proto 80( |$)/ { n++ } END { print "enp1s0 proto 80 routes:", n+0; exit n > 0 }' <<<"$routes"
+SYSTEMD_COLORS=0 networkctl --no-pager --lines=0 status enp1s0 |
+  awk '$1 == "State:" || $1 == "Online" { print }'
 EOF
 }
-uplink_before=$(uplink_snapshot)
+# Pod churn changes this all the time: information only, never diffed.
+felix_routes() {
+  ssh "$target" "ip route show table all | awk '/ proto 80( |\$)/ { n++ } END { print \"all proto 80 routes (info):\", n+0 }'"
+}
+uplink_before=$(uplink_snapshot) && felix_routes
 ```
 
 Stop if any comparison or capture fails. Switch the one node with
 `clan machines update --flake "$flake" "$node"`. Immediately capture
 again (also after any reboot); require the primary `/24` first and no
-change in physical addresses, routes, Felix `proto 80` route count or
-network status:
+change in enp1s0's IPv4 addresses, its routes in every table, or its
+networkd State/Online lines (IPv6 addresses and the node-wide Felix
+route count are deliberately left out):
 
 ```bash
 uplink_after=$(uplink_snapshot) &&
   diff -u <(printf '%s\n' "$uplink_before") <(printf '%s\n' "$uplink_after")
 ```
+
+On a node with its slot enabled, after the enable switch and after any
+reboot also require
+`ssh "$target" systemctl is-active forgejo-ephemeral-snat` to print
+`active` (and `ip -4 -o addr show dev dummy-ci-snat` to list both /32s).
+The unit waits up to 60 s for enp1s0's IPv4 address, is bound to the
+enp1s0 device and retries every 10 s on failure; `activating` that
+never settles means its ARP probe keeps finding a duplicate (read
+`journalctl -u forgejo-ephemeral-snat`). Until it is active the guard
+cannot start and the slot refuses every job.
 
 Run PR 11's `kubectl wait` for `Ready` and `etcdctl endpoint health
 --cluster` commands, then compare `allocatable` to `before`:
@@ -2975,6 +3034,27 @@ No RKE2 restart is expected.
    anything the removed manifest had deployed. Rerun both checks:
    only `ok` lines and all `MATCH`.
 
+   **Then check the GC timer's stamp.** systemd keeps the stamp of a
+   removed timer, and automatic GC was on until `storeCache` replaced it
+   (2026-11-03). The stage sets `nix.gc.persistent = false` (asserted),
+   so the returning `nix-gc.timer` should not catch up on a missed run;
+   remove a leftover stamp anyway so a later revert of that setting
+   cannot start an unscheduled full GC on the etcd disk:
+
+   ```bash
+   ssh "$target" 'ls -l /var/lib/systemd/timers/stamp-nix-gc.timer 2>/dev/null &&
+     rm -v /var/lib/systemd/timers/stamp-nix-gc.timer || echo "no nix-gc stamp"'
+   ```
+
+   After the switch, `ssh "$target" systemctl is-active nix-gc.service`
+   must not print `active`/`activating`. The first collection must be
+   step 4's chunked one, but the timer's first daily run (00:00, no
+   random delay) would be an unchunked `--delete-older-than 10d` GC. So
+   right after the switch run `ssh "$target" systemctl stop
+   nix-gc.timer` and start it again only after step 4 (a reboot or a
+   change to the timer also restarts it, so finish step 4 before
+   either).
+
    Switch the node from the pinned stage revision and run the health
    and allocatable checks. Verify the two host units and the node slot
    are absent. The runner's `storeCache` overrides and
@@ -3028,15 +3108,39 @@ No RKE2 restart is expected.
    reference and remove obsolete roots before enabling. If an essential
    root retains private output, **stop** until the exposure is resolved.
    With operator approval to delete old generations (rollback will
-   use a pinned rebuild rather than a deleted generation), run
-   `sudo nix-collect-garbage -d` on the node. Verify no private CI
-   output remains and `df -B1 --output=avail /mnt/storage` gives at
-   least `193273528320` bytes (180 GiB) for `/mnt/storage/microvms`.
+   use a pinned rebuild rather than a deleted generation), delete them
+   (`ssh "$target" nix-env --profile /nix/var/nix/profiles/system
+   --delete-generations old`, and likewise for any other profile the
+   root review keeps), but do **not** run one big `nix-collect-garbage
+   -d`: weeks of CI store unlink hundreds of GB and millions of files on
+   the root ext4 that holds etcd's WAL. Collect off-hours, in 20 GiB
+   chunks, with the etcd gate on all three servers between chunks.
+   Define `fsync_p99` from the canary's **etcd and memory gates** below
+   and take its idle baseline first:
+
+   ```bash
+   while :; do
+     summary=$(ssh "$target" 'nix-store --gc --max-freed 20G 2>&1 | tail -n 1') || break
+     printf '%s\n' "$summary"   # "N store paths deleted, X MiB freed"
+     ssh "$target" systemctl start rke2-clean-dangling-store-links
+     for n in luna sol terra; do fsync_p99 "$n" & done; wait
+     read -rp 'All three p99 within the canary limits and no leader change? [y/N] ' ok
+     [[ $ok == y ]] || break
+     [[ $summary == "0 store paths deleted"* ]] && break
+   done
+   ```
+
+   Stop on the canary's limits (any p99 bound above `0.016` s, more
+   than one bucket above baseline, or a leader change) and resume later.
+   Verify no private CI output remains and `df -B1 --output=avail
+   /mnt/storage` gives at least `300647710720` bytes (280 GiB: the
+   images, 10 GiB margin and 100 GiB for Garage and swap; the slot
+   refuses to claim below that).
 
    Right after the GC (a manual GC does not trigger the cleanup unit;
-   only `nix-gc.service` does, plus its 15-minute timer), require that
-   no RKE2 store link dangles and that the deploy controller is not
-   failing:
+   only `nix-gc.service` does, plus its 15-minute timer; the loop above
+   starts it after each chunk), require that no RKE2 store link dangles
+   and that the deploy controller is not failing:
 
    ```bash
    ssh "$target" 'find /var/lib/rancher/rke2/{server/manifests,server/static/charts,agent/images,agent/etc/containerd} \
@@ -3233,9 +3337,12 @@ in the etcd pod (the `etcdctl` flags from PR 11's health check) is an
 alternative baseline; it writes load itself, so never run it during the
 canary. On the slot node also record the slice's memory behaviour after
 the build: `systemctl show -p MemoryHigh -p MemoryMax forgejo-ephemeral.slice`
-(`3G`/`4G` on Luna, `4G`/`5G` elsewhere), `cat
+(bytes: `4026531840`/`4294967296`, i.e. 3840M/4G, on Luna;
+`5100273664`/`5368709120`, i.e. 4864M/5G, elsewhere), `cat
 /sys/fs/cgroup/forgejo-ephemeral.slice/memory.events` (`high` counts
-throttling events, expected; `oom_kill` must be `0`), and `journalctl -k
+throttling in the last 256 MiB under the cap: a few are fine, a count
+climbing all build long means the overhead lives at the cap, so record
+it with the build time; `oom_kill` must be `0`), and `journalctl -k
 -b | grep -i -E 'oom|out of memory'` (nothing). A slot OOM-killed under
 global pressure fails its job, not etcd; record it and stop.
 Restore the drained host runners and only the per-slot pauses you set

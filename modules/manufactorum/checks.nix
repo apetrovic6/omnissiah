@@ -1038,20 +1038,30 @@
             assert lib.all (kind: lib.hasInfix (addr kind) snat.script) ["" "-trusted"];
             assert lib.all (part: lib.hasInfix part snat.script) ["arping -q -D -c 2 -w 3 -I enp1s0" "link add ${dummy} type dummy" "/32\" dev ${dummy}" "arp_ignore arp_filter"];
             assert lib.hasInfix "link delete ${dummy}" snat.preStop;
+            # N3: tied to the uplink device, waits for its IPv4, retries.
+            assert lib.all (unit: builtins.elem "sys-subsystem-net-devices-enp1s0.device" snat.${unit}) ["bindsTo" "after"];
+            assert snat.serviceConfig.Restart == "on-failure" && snat.serviceConfig.RestartSec == 10;
+            assert lib.all (part: lib.hasInfix part snat.script) ["seq 60" "-4 -o address show dev enp1s0 scope global"];
             assert lib.all (unit: builtins.elem "forgejo-ephemeral-snat.service" enabled.systemd.services.forgejo-ephemeral-firewall.${unit}) ["bindsTo" "after"];
             assert lib.all (kind: lib.hasInfix (addr kind) matcher) ["" "-trusted"];
-            # M1: guest = kubelet's CI reservation; throttled above it, capped
-            # one GiB higher, and the first OOM victim on every slot unit.
+            # M1: guest = kubelet's CI reservation; capped one GiB higher,
+            # throttled only in the last 256 MiB, and the first OOM victim on
+            # every slot unit.
             assert enabled.microvm.vms.${slot}.config.config.microvm.mem == memory * 1024;
             assert enabled.services.imperium.forgejoRunner.resources.memory == memory;
             assert refuses "a node slot's memory is services.imperium.forgejoRunner.resources.memory" resized;
             assert lib.all (unit: oom enabled unit == 1000) slotUnits;
-            assert (sliceOf enabled "forgejo-ephemeral").MemoryHigh == "${toString memory}G";
+            # N1: MemoryHigh only throttles the overhead above the guest.
+            assert (sliceOf enabled "forgejo-ephemeral").MemoryHigh == "${toString (memory * 1024 + 768)}M";
             assert (sliceOf enabled "forgejo-ephemeral").MemoryMax == "${toString (memory + 1)}G";
             # M5: images on the second NVMe, never on the etcd root device.
             assert enabled.microvm.stateDir == "/mnt/storage/microvms" && staged.microvm.stateDir == beforeNode.microvm.stateDir;
             assert enabled.systemd.services."install-microvm-${slot}".unitConfig.AssertPathIsMountPoint == "/mnt/storage";
             assert enabled.fileSystems."/mnt/storage".fsType == "ext4" && enabled.fileSystems."/".device != enabled.fileSystems."/mnt/storage".device;
+            # N5: 100 GiB above the images for Garage and swap on that disk.
+            assert enabled.services.imperium.forgejoEphemeral.internal.slotctlSlots.${slot}.min_free_bytes == (150 + 20 + 10 + 100) * 1024 * 1024 * 1024;
+            # N2: the returning timer never catches up on a stale stamp.
+            assert lib.all (cfg: !cfg.nix.gc.persistent && !cfg.systemd.timers.nix-gc.timerConfig.Persistent) [staged enabled];
             # H1: dangling RKE2 store links are cleaned from the stage on (when
             # the automatic GC returns), never before, never touching rke2.
             assert !(hasCleanup beforeNode) && !(beforeNode.systemd.services ? ${cleanupUnit}) && !(beforeNode.systemd.services.nix-gc.unitConfig ? OnSuccess);
@@ -1105,8 +1115,10 @@
           assert ryzaOk sc ["ryza-eph-1" "ryza-eph-2"];
           assert !on.dispatcher.protectStdSlots;
           assert lib.all (s: s.oom == [null null null null] && s.high == null && s.MemoryMax == "5G") (ryzaProtection sc);
+          # Ryza's free-space floor is unchanged (std overlay + /var + 10 GiB).
+          assert lib.all (spec: sc.services.imperium.forgejoEphemeral.internal.slotctlSlots.${spec}.min_free_bytes == (50 + on.hosts.ryza.slots.${spec}.var + 10) * 1024 * 1024 * 1024) ["ryza-eph-1" "ryza-eph-2"];
           assert ryzaOk protectedRyza ["ryza-eph-1" "ryza-eph-2"];
-          assert lib.all (s: s.oom == [1000 1000 1000 1000] && s.high == "4G" && s.MemoryMax == "5G") (ryzaProtection protectedRyza);
+          assert lib.all (s: s.oom == [1000 1000 1000 1000] && s.high == "4864M" && s.MemoryMax == "5G") (ryzaProtection protectedRyza);
           # Ryza keeps its SNAT addresses on its uplink: no dummy, no extra unit.
           assert !(protectedRyza.systemd.services ? forgejo-ephemeral-snat) && !(on.hosts.ryza.egress ? interface);
           assert cerberusOk cc ["ryza-eph-1" "ryza-eph-2"] ["nix-vm" "nix-eph"];

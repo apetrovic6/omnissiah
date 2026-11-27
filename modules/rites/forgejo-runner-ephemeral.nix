@@ -536,6 +536,10 @@ in {
       spec = declared // lib.optionalAttrs nodeSlot {memory = declared.memory or reservedMemory;};
       protectSlot = nodeSlot || (fleet.protectStdSlots or false);
       slotOOM = lib.optionalAttrs protectSlot {OOMScoreAdjust = 1000;};
+      nodeFloorGiB =
+        if nodeSlot
+        then 100
+        else 0;
       snatUnit = "forgejo-ephemeral-snat.service";
       class = classFor spec;
       # Keep index 1's names. Later slices are siblings, not children of
@@ -886,7 +890,9 @@ in {
           fixed_pilot = fixedPilot;
           user = slotUser;
           group = slotUser;
-          min_free_bytes = (class.overlayGiB + spec.var + 10) * 1024 * 1024 * 1024;
+          # A node's /mnt/storage also holds Garage data and swap, which can
+          # grow during a long job: leave them 100 GiB more there.
+          min_free_bytes = (class.overlayGiB + spec.var + 10 + nodeFloorGiB) * 1024 * 1024 * 1024;
           expiry_minutes = expiryMinutes;
         }
         # Only with a second source: `egress trusted` and its cleanup in withdraw/scrub.
@@ -1161,8 +1167,11 @@ in {
       };
       # The guest's vCPUs, and its memory plus one GiB for QEMU and virtiofsd.
       # Protected slots (every node slot; Ryza after `protectStdSlots`) are
-      # throttled above the guest size and are the first OOM victims
-      # (OOMScoreAdjust below): on a node that extra GiB is not reserved.
+      # the first OOM victims (OOMScoreAdjust below): on a node that extra
+      # GiB is not reserved. Their MemoryHigh sits 256 MiB under MemoryMax,
+      # so it throttles only QEMU/virtiofsd overhead above the guest. At the
+      # guest size the touched memfd alone would keep the slice over `high`
+      # and every later charge (store reads, image writes) would crawl.
       systemd.slices.${sliceName}.sliceConfig =
         {
           CPUQuota = "${toString (spec.vcpu * 100)}%";
@@ -1171,7 +1180,7 @@ in {
           IOWeight = 20;
         }
         // lib.optionalAttrs protectSlot {
-          MemoryHigh = "${toString spec.memory}G";
+          MemoryHigh = "${toString (spec.memory * 1024 + 768)}M";
         };
       systemd.services = lib.mapAttrs (_: service: service // {serviceConfig = (service.serviceConfig or {}) // slotOOM;}) (
         {
