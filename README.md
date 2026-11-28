@@ -54,6 +54,7 @@ with `_` are skipped and must be imported explicitly.
 | `terra`, `luna`, `sol` | Bare-metal `taghmata` nodes: control plane and workloads. terra founded the cluster |
 | `mars` | `taghmata` control-plane node (Proxmox VM) that takes no workloads |
 | `servitor` | Banana Pi BPI-M5 single-board computer; not part of the cluster |
+| `ryza` | General-purpose Proxmox VM next to `mars`: the CI runners for both forges and the always-on Hermes agent; strict ephemeral root |
 | `stygies` | Persistent Proxmox dev VM for the operator and the unprivileged Hermes SSH user |
 
 ### The taghmata cluster roles
