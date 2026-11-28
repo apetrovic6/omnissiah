@@ -72,7 +72,10 @@
 # does not start a slot or claim either SNAT address.
 {
   takeover ? true,
-  takeoverLabels ? ["nix-vm" "nix-eph"],
+  # PR 13 prep (README "Large slots on Luna, Sol and Terra"): ryza's std slots
+  # also take general `nix`, beside the node host runners, before any node
+  # retires its runner. Trusted, with trusted egress (asserted).
+  takeoverLabels ? ["nix" "nix-vm" "nix-eph"],
   untrustedTakeover ? false,
   ryzaSlots ? 2,
   nodes ? {},
