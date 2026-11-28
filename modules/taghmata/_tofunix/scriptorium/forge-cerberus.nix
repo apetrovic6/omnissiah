@@ -161,52 +161,54 @@ in {
     };
   };
 
-  resource.gitea_repository_collaborator = lib.optionalAttrs manageBot (
-    lib.mapAttrs' (name: repo:
-      lib.nameValuePair "${name}-hermes" {
+  resource.gitea_repository_collaborator =
+    lib.optionalAttrs manageBot (
+      lib.mapAttrs' (name: repo:
+        lib.nameValuePair "${name}-hermes" {
+          provider = "gitea.cerberus";
+          # Keep the default branch protected before admitting the bot.
+          depends_on = lib.optional (repo.protect or true) "gitea_repository_branch_protection.${name}";
+          inherit owner;
+          repo = repo.name;
+          inherit (ref.gitea_user.hermes) username;
+          permission = "read";
+        })
+      repos
+    )
+    // {
+      # Already a collaborator (with write); creating this downgrades it in place.
+      "${advisoryRepo}-advisory-bot" = {
         provider = "gitea.cerberus";
-        # Keep the default branch protected before admitting the bot.
-        depends_on = lib.optional (repo.protect or true) "gitea_repository_branch_protection.${name}";
+        depends_on = ["gitea_repository_branch_protection.${advisoryRepo}"];
         inherit owner;
-        repo = repo.name;
-        inherit (ref.gitea_user.hermes) username;
+        repo = advisoryRepo;
+        username = advisoryBot;
         permission = "read";
-      })
-    repos
-  )
-  // {
-    # Already a collaborator (with write); creating this downgrades it in place.
-    "${advisoryRepo}-advisory-bot" = {
-      provider = "gitea.cerberus";
-      depends_on = ["gitea_repository_branch_protection.${advisoryRepo}"];
-      inherit owner;
-      repo = advisoryRepo;
-      username = advisoryBot;
-      permission = "read";
+      };
     };
-  };
 
   # Omit the alias and resources together before enrollment. If the credential
   # is later removed, OpenTofu cannot delete stateful forks via another alias.
-  resource.gitea_fork = lib.optionalAttrs manageForks (
-    lib.mapAttrs (name: repo: {
-      provider = "gitea.hermes";
-      depends_on = ["gitea_repository_collaborator.${name}-hermes"];
-      inherit owner;
-      repo = repo.name;
-      lifecycle.prevent_destroy = true;
-    })
-    repos
-  )
-  // lib.optionalAttrs manageAdvisory {
-    "${advisoryRepo}-advisory-bot" = {
-      provider = "gitea.advisory";
-      depends_on = ["gitea_repository_collaborator.${advisoryRepo}-advisory-bot"];
-      inherit owner;
-      repo = advisoryRepo;
-      lifecycle.prevent_destroy = true;
+  resource.gitea_fork =
+    lib.optionalAttrs manageForks (
+      lib.mapAttrs (name: repo: {
+        provider = "gitea.hermes";
+        depends_on = ["gitea_repository_collaborator.${name}-hermes"];
+        inherit owner;
+        repo = repo.name;
+        lifecycle.prevent_destroy = true;
+      })
+      repos
+    )
+    // lib.optionalAttrs manageAdvisory {
+      "${advisoryRepo}-advisory-bot" = {
+        provider = "gitea.advisory";
+        depends_on = ["gitea_repository_collaborator.${advisoryRepo}-advisory-bot"];
+        inherit owner;
+        repo = advisoryRepo;
+        lifecycle.prevent_destroy = true;
+      };
     };
-  };
 
   resource.gitea_repository_branch_protection =
     lib.mapAttrs (_: repo: {

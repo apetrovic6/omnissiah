@@ -139,41 +139,41 @@ in {
 
         spec.containers = [
           ({
-            name = "${name}";
+              name = "${name}";
 
-            image = "lscr.io/linuxserver/${name}:latest";
-            volumeMounts =
-              [
-                {
-                  name = "config";
-                  mountPath = "/config";
-                }
-              ]
-              ++ lib.optionals mediaLibrary [
-                {
-                  name = "data";
-                  mountPath = "/data";
-                }
-              ];
+              image = "lscr.io/linuxserver/${name}:latest";
+              volumeMounts =
+                [
+                  {
+                    name = "config";
+                    mountPath = "/config";
+                  }
+                ]
+                ++ lib.optionals mediaLibrary [
+                  {
+                    name = "data";
+                    mountPath = "/data";
+                  }
+                ];
 
-            env =
-              lib.optionals mediaLibrary [
-                {
-                  name = "PUID";
-                  value = "1031";
-                }
-                {
-                  name = "PGID";
-                  value = "65537";
-                }
-              ]
-              ++ dbEnvs.${dbEnv};
+              env =
+                lib.optionals mediaLibrary [
+                  {
+                    name = "PUID";
+                    value = "1031";
+                  }
+                  {
+                    name = "PGID";
+                    value = "65537";
+                  }
+                ]
+                ++ dbEnvs.${dbEnv};
 
-            ports = [{containerPort = port;}];
-          }
-          // lib.optionalAttrs (resources != null) {
-            inherit resources;
-          })
+              ports = [{containerPort = port;}];
+            }
+            // lib.optionalAttrs (resources != null) {
+              inherit resources;
+            })
         ];
       };
     };
