@@ -21,6 +21,29 @@
   inherit (config.services.imperium.hermes.stygies) knownHosts;
   hasHostPin = knownHosts != "";
   hostKeyAlgorithm = builtins.head (lib.splitString " " knownHosts);
+  # Code-graph MCP server (stdio). It runs on stygies, beside the repositories Hermes edits, because
+  # its indexer and file watcher read the files; Hermes only speaks MCP to it through ssh, with the
+  # same key and host as the terminal. Hermes 0.23.0 supports stdio servers (`command` + `args`, tools/
+  # mcp_tool_transport.py _stdio_launch). Store paths are absolute: the ssh and the remote binary
+  # (stygies installs this package) need no PATH. Tested 2026-11-28 on auspex and omnissiah clones:
+  # indexes Rust, Nix and the k8s manifests. Without the host pin the terminal is off, so is this
+  # (accept-new would trust an unknown host).
+  cbmPackage = self.inputs.codebase-memory-mcp.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  codebaseMemoryMcp = {
+    command = lib.getExe pkgs.openssh;
+    args = [
+      "-i"
+      sshTerminal.ssh_key
+      "-o"
+      "IdentitiesOnly=yes"
+      "-o"
+      "BatchMode=yes"
+      "-l"
+      sshTerminal.ssh_user
+      sshTerminal.ssh_host
+      "${lib.getExe cbmPackage} --tool-profile=analysis"
+    ];
+  };
   coderRegistry = import ./_coder-projects.nix;
   inherit (coderRegistry) forges;
   projects = coderRegistry.check config.services.imperium.hermes.coderProjects;
@@ -381,6 +404,8 @@ in {
           auth = "oauth";
           oauth.redirect_port = 28431;
         };
+        # The coder profile is enabled only with the host pin, so no condition here.
+        settings.mcp_servers.codebase-memory = codebaseMemoryMcp;
       };
       profiles.work = {
         # Always enabled, pin or not. Disabling it would drop its routes, and
@@ -425,20 +450,25 @@ in {
           # land in the work profile's mcp-tokens/. Fixed redirect ports, next
           # to Kaneo's 28431, for the phalanx-to-ryza SSH tunnel used by
           # `hermes -p work mcp login <name> --flow browser` (README).
-          mcp_servers = {
-            # Jira and Confluence: every Atlassian site the signed-in work
-            # account can see. The same endpoint nautili uses on the PC.
-            atlassian = {
-              url = "https://mcp.atlassian.com/v1/mcp";
-              auth = "oauth";
-              oauth.redirect_port = 28432;
+          mcp_servers =
+            {
+              # Jira and Confluence: every Atlassian site the signed-in work
+              # account can see. The same endpoint nautili uses on the PC.
+              atlassian = {
+                url = "https://mcp.atlassian.com/v1/mcp";
+                auth = "oauth";
+                oauth.redirect_port = 28432;
+              };
+              opsee = {
+                url = "https://mcp.api.opsee.ai/mcp";
+                auth = "oauth";
+                oauth.redirect_port = 28433;
+              };
+            }
+            // lib.optionalAttrs hasHostPin {
+              # Follows the terminal: no pin, no ssh (see codebaseMemoryMcp).
+              codebase-memory = codebaseMemoryMcp;
             };
-            opsee = {
-              url = "https://mcp.api.opsee.ai/mcp";
-              auth = "oauth";
-              oauth.redirect_port = 28433;
-            };
-          };
         };
       };
       dashboard = {

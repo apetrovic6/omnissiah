@@ -26,6 +26,12 @@
 
     nix-jetbrains-plugins.url = "github:nix-community/nix-jetbrains-plugins";
 
+    # Code-graph MCP server (tree-sitter + SQLite). Runs on stygies for Hermes (machines/ryza/hermes.nix).
+    codebase-memory-mcp = {
+      url = "github:DeusData/codebase-memory-mcp/v0.12.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     clan-core = {
       url = "https://git.clan.lol/clan/clan-core/archive/main.tar.gz";
       # inputs.nixpkgs.follows = "nixpkgs";
