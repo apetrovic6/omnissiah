@@ -689,6 +689,10 @@ with lib; let
           description = "The references to the session key";
           type = types.nullOr (submoduleOf "postgresql.cnpg.io.v1.BackupStatusS3CredentialsSessionToken");
         };
+        "sseCustomerKey" = mkOption {
+          description = "Reference to the secret holding the key for Server-Side Encryption with\nCustomer-provided keys (SSE-C): a base64-encoded 256-bit AES key.\nbarman-cloud uses it to encrypt the objects it uploads and to read them\nback. Meant for S3-compatible providers that only support SSE-C\n(e.g. Hetzner Object Storage). Cannot be combined with `encryption`.\nWorks with any authentication method. Changing the key makes the\nexisting objects unreadable: use a new `destinationPath` or `serverName`.";
+          type = types.nullOr (submoduleOf "postgresql.cnpg.io.v1.BackupStatusS3CredentialsSseCustomerKey");
+        };
       };
 
       config = {
@@ -697,6 +701,7 @@ with lib; let
         "region" = mkOverride 1002 null;
         "secretAccessKey" = mkOverride 1002 null;
         "sessionToken" = mkOverride 1002 null;
+        "sseCustomerKey" = mkOverride 1002 null;
       };
     };
     "postgresql.cnpg.io.v1.BackupStatusS3CredentialsAccessKeyId" = {
@@ -742,6 +747,20 @@ with lib; let
       config = {};
     };
     "postgresql.cnpg.io.v1.BackupStatusS3CredentialsSessionToken" = {
+      options = {
+        "key" = mkOption {
+          description = "The key to select";
+          type = types.str;
+        };
+        "name" = mkOption {
+          description = "Name of the referent.";
+          type = types.str;
+        };
+      };
+
+      config = {};
+    };
+    "postgresql.cnpg.io.v1.BackupStatusS3CredentialsSseCustomerKey" = {
       options = {
         "key" = mkOption {
           description = "The key to select";
@@ -2295,6 +2314,18 @@ with lib; let
           description = "HistoryTags is a list of key value pairs that will be passed to the\nBarman --history-tags option.";
           type = types.nullOr (types.attrsOf types.str);
         };
+        "s3AddressingStyle" = mkOption {
+          description = "How bucket names appear in S3 requests: `virtual` (bucket.endpoint/key),\n`path` (endpoint/bucket/key) or `auto` (boto3 decides, same as unset).\nRequires s3Credentials and Barman 3.18 or later.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "auto"
+                "virtual"
+                "path"
+              ]
+            )
+          );
+        };
         "s3Credentials" = mkOption {
           description = "The credentials to use to upload data to S3";
           type = (
@@ -2322,6 +2353,7 @@ with lib; let
         "endpointURL" = mkOverride 1002 null;
         "googleCredentials" = mkOverride 1002 null;
         "historyTags" = mkOverride 1002 null;
+        "s3AddressingStyle" = mkOverride 1002 null;
         "s3Credentials" = mkOverride 1002 null;
         "serverName" = mkOverride 1002 null;
         "tags" = mkOverride 1002 null;
@@ -2444,7 +2476,7 @@ with lib; let
           type = types.nullOr (types.listOf types.str);
         };
         "compression" = mkOption {
-          description = "Compress a backup file (a tar file per tablespace) while streaming it\nto the object store. Available options are empty string (no\ncompression, default), `gzip`, `bzip2`, `lz4`, and `snappy`.";
+          description = "Compress a backup file (a tar file per tablespace) while streaming it\nto the object store. Available options are empty string (no\ncompression, default), `gzip`, `bzip2`, `lz4`, `snappy`, and `zstd`.";
           type = (
             types.nullOr (
               types.enum [
@@ -2452,6 +2484,7 @@ with lib; let
                 "gzip"
                 "lz4"
                 "snappy"
+                "zstd"
               ]
             )
           );
@@ -2577,6 +2610,14 @@ with lib; let
             )
           );
         };
+        "sseCustomerKey" = mkOption {
+          description = "Reference to the secret holding the key for Server-Side Encryption with\nCustomer-provided keys (SSE-C): a base64-encoded 256-bit AES key.\nbarman-cloud uses it to encrypt the objects it uploads and to read them\nback. Meant for S3-compatible providers that only support SSE-C\n(e.g. Hetzner Object Storage). Cannot be combined with `encryption`.\nWorks with any authentication method. Changing the key makes the\nexisting objects unreadable: use a new `destinationPath` or `serverName`.";
+          type = (
+            types.nullOr (
+              submoduleOf "postgresql.cnpg.io.v1.ClusterSpecBackupBarmanObjectStoreS3CredentialsSseCustomerKey"
+            )
+          );
+        };
       };
 
       config = {
@@ -2585,6 +2626,7 @@ with lib; let
         "region" = mkOverride 1002 null;
         "secretAccessKey" = mkOverride 1002 null;
         "sessionToken" = mkOverride 1002 null;
+        "sseCustomerKey" = mkOverride 1002 null;
       };
     };
     "postgresql.cnpg.io.v1.ClusterSpecBackupBarmanObjectStoreS3CredentialsAccessKeyId" = {
@@ -2630,6 +2672,20 @@ with lib; let
       config = {};
     };
     "postgresql.cnpg.io.v1.ClusterSpecBackupBarmanObjectStoreS3CredentialsSessionToken" = {
+      options = {
+        "key" = mkOption {
+          description = "The key to select";
+          type = types.str;
+        };
+        "name" = mkOption {
+          description = "Name of the referent.";
+          type = types.str;
+        };
+      };
+
+      config = {};
+    };
+    "postgresql.cnpg.io.v1.ClusterSpecBackupBarmanObjectStoreS3CredentialsSseCustomerKey" = {
       options = {
         "key" = mkOption {
           description = "The key to select";
@@ -3974,6 +4030,18 @@ with lib; let
           description = "HistoryTags is a list of key value pairs that will be passed to the\nBarman --history-tags option.";
           type = types.nullOr (types.attrsOf types.str);
         };
+        "s3AddressingStyle" = mkOption {
+          description = "How bucket names appear in S3 requests: `virtual` (bucket.endpoint/key),\n`path` (endpoint/bucket/key) or `auto` (boto3 decides, same as unset).\nRequires s3Credentials and Barman 3.18 or later.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "auto"
+                "virtual"
+                "path"
+              ]
+            )
+          );
+        };
         "s3Credentials" = mkOption {
           description = "The credentials to use to upload data to S3";
           type = (
@@ -4005,6 +4073,7 @@ with lib; let
         "endpointURL" = mkOverride 1002 null;
         "googleCredentials" = mkOverride 1002 null;
         "historyTags" = mkOverride 1002 null;
+        "s3AddressingStyle" = mkOverride 1002 null;
         "s3Credentials" = mkOverride 1002 null;
         "serverName" = mkOverride 1002 null;
         "tags" = mkOverride 1002 null;
@@ -4127,7 +4196,7 @@ with lib; let
           type = types.nullOr (types.listOf types.str);
         };
         "compression" = mkOption {
-          description = "Compress a backup file (a tar file per tablespace) while streaming it\nto the object store. Available options are empty string (no\ncompression, default), `gzip`, `bzip2`, `lz4`, and `snappy`.";
+          description = "Compress a backup file (a tar file per tablespace) while streaming it\nto the object store. Available options are empty string (no\ncompression, default), `gzip`, `bzip2`, `lz4`, `snappy`, and `zstd`.";
           type = (
             types.nullOr (
               types.enum [
@@ -4135,6 +4204,7 @@ with lib; let
                 "gzip"
                 "lz4"
                 "snappy"
+                "zstd"
               ]
             )
           );
@@ -4260,6 +4330,14 @@ with lib; let
             )
           );
         };
+        "sseCustomerKey" = mkOption {
+          description = "Reference to the secret holding the key for Server-Side Encryption with\nCustomer-provided keys (SSE-C): a base64-encoded 256-bit AES key.\nbarman-cloud uses it to encrypt the objects it uploads and to read them\nback. Meant for S3-compatible providers that only support SSE-C\n(e.g. Hetzner Object Storage). Cannot be combined with `encryption`.\nWorks with any authentication method. Changing the key makes the\nexisting objects unreadable: use a new `destinationPath` or `serverName`.";
+          type = (
+            types.nullOr (
+              submoduleOf "postgresql.cnpg.io.v1.ClusterSpecExternalClustersBarmanObjectStoreS3CredentialsSseCustomerKey"
+            )
+          );
+        };
       };
 
       config = {
@@ -4268,6 +4346,7 @@ with lib; let
         "region" = mkOverride 1002 null;
         "secretAccessKey" = mkOverride 1002 null;
         "sessionToken" = mkOverride 1002 null;
+        "sseCustomerKey" = mkOverride 1002 null;
       };
     };
     "postgresql.cnpg.io.v1.ClusterSpecExternalClustersBarmanObjectStoreS3CredentialsAccessKeyId" = {
@@ -4313,6 +4392,20 @@ with lib; let
       config = {};
     };
     "postgresql.cnpg.io.v1.ClusterSpecExternalClustersBarmanObjectStoreS3CredentialsSessionToken" = {
+      options = {
+        "key" = mkOption {
+          description = "The key to select";
+          type = types.str;
+        };
+        "name" = mkOption {
+          description = "Name of the referent.";
+          type = types.str;
+        };
+      };
+
+      config = {};
+    };
+    "postgresql.cnpg.io.v1.ClusterSpecExternalClustersBarmanObjectStoreS3CredentialsSseCustomerKey" = {
       options = {
         "key" = mkOption {
           description = "The key to select";
@@ -14713,11 +14806,11 @@ with lib; let
       options = {
         "name" = mkOption {
           description = "name allows you to identify the responder responding to the Eviction.\n\nIt must be a valid domain-prefixed key (such as \"acme.io/foo\").\nDomain names *.k8s.io and *.kubernetes.io are reserved.\nThis field must be unique for each responder.\nThis field is required.";
-          type = types.str;
+          type = types.withMinLength 1 types.str;
         };
         "priority" = mkOption {
           description = "priority for this responder. Higher priorities are selected first by the evictionrequest-controller.\nIf there are responders with the same priority, the responder whose domain name comes first in the\nalphabetical higher domain order, will be picked. This means that the top domain labels are compared\nalphabetically first, followed by the lower domain labels. The key is compared last.\n\nThe responder that is the managing controller of the pod should set the value of\nthis field to 10000 to allow both for preemption or fallback registration by other\nresponders.\n\nThe minimum value is 0 and the maximum value is 100000.\nThe interval 0-999 is reserved for responders with *.k8s.io suffix.\nThis field is required.";
-          type = types.int;
+          type = types.withMaximum 100000 (types.withMinimum 0 types.int);
         };
       };
 
