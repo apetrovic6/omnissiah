@@ -313,6 +313,9 @@ jobs:
         with:
           ref: ${{ needs.update.outputs.ref }}
 
+      # For a workstation this is a variant without the private nautili
+      # packages, which CI cannot fetch (modules/manufactorum/checks.nix,
+      # `machineCheck`); the closure it warms is otherwise the real one.
       - name: Build the system toplevel
         run: |
           set -euo pipefail
