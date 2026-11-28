@@ -173,6 +173,15 @@ in {
         type = "http";
         url = "https://kaneo.${self.lib.lab.domain}/api/mcp";
       };
+      # Code graph (tree-sitter + SQLite) of the repo Claude Code runs in:
+      # calls, imports, Nix bindings, k8s resources; a watcher keeps it current.
+      # Here and not in programs.mcp: pi and omp get it from magos already.
+      # The analysis profile keeps the tool list short.
+      codebase-memory = {
+        type = "stdio";
+        command = lib.getExe' self.inputs.codebase-memory-mcp.packages.${pkgs.stdenv.hostPlatform.system}.default "codebase-memory-mcp";
+        args = ["--tool-profile=analysis"];
+      };
     };
   };
 
