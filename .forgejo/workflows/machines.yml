@@ -261,15 +261,17 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Same identity and credential as the flake.lock commit above. The
+          # identity first: --no-push commits as well.
+          git config user.name "Forgejo CI"
+          git config user.email "ci@noosphere.uk"
+
           if [ -z "${CI_PUSH_TOKEN:-}" ]; then
             echo "::warning::CI_PUSH_TOKEN is not set (tofunix manages it); rendering without opening a pull request"
             ./rituals/render-manifests-pr.sh --no-push
             exit 0
           fi
 
-          # Same identity and credential as the flake.lock commit above.
-          git config user.name "Forgejo CI"
-          git config user.email "ci@noosphere.uk"
           git config credential.helper \
             '!f() { echo "username=ci-bot"; echo "password=$CI_PUSH_TOKEN"; }; f'
 

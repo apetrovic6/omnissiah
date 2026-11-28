@@ -1258,6 +1258,19 @@ Without `CI_PUSH_TOKEN` the workflow warns, opens no pull request and builds
 `master`. To rotate the PAT: `nix run .#tofunix -- apply
 -replace=gitea_token.ci-bot-omnissiah`.
 
+**Don't regenerate the password var on its own.** The account keeps its
+password (`ignore_changes`), and the minting provider logs in on **every**
+tofunix plan, so a var that no longer matches breaks every plan of the
+project (Harbor, Pocket ID, both forges), not just this one. To rotate it,
+set the new password on the account first (Site Administration → User
+Accounts → ci-bot), or regenerate and apply
+`-replace=gitea_user.ci-bot -replace=gitea_token.ci-bot-omnissiah` in one go.
+
+AGit sets a pull request's title and description only when it creates it.
+A later run's force-push replaces the commits of a pull request still open,
+but the manifests pull request keeps its first run's summary of apps and
+charts: read the commits, not the description.
+
 #### Ryza one-job pilot (`nix-eph`)
 
 Ryza ships with one slot, `ryza-eph-1`, serving three pools on `nix-eph`:
