@@ -2450,7 +2450,7 @@ get 3 h on Cerberus (6 h after PR 11) and 6 h on noosphere. A slot allows
 | uga fishing (8) | ci | `nix` | push master, PR | `REGISTRY_TOKEN` to `vars.REGISTRY` (the forge registry), ncps upload | degrades; breaks if `REGISTRY` is not a forge |
 | uga nopresh (7) | build-and-push | `nix` | push master | `REGISTRY_TOKEN` to the forge registry, ncps upload | degrades |
 | uga magos (6) | update-flake | `nix` | cron 04:00, dispatch | the job token pushes `flake.lock` to the forge | works |
-| uga omnissiah (1) | machines `update`/`manifests`/`build` | `nix`, PR 11 → `nix-machines` | cron, dispatch | push, ntfy, ncps; 120/60/300 min | must not land: **asserted** |
+| uga omnissiah (1) | machines `update`/`manifests`/`build` | `nix`, PR 11 → `nix-machines` | cron, dispatch | AGit PRs (flake.lock, manifests), ntfy, ncps; 120/60/300 min | must not land: **asserted** |
 | noo auspex (221) | ci `ci-pure` | `nix` | push master, PR | ncps upload | degrades |
 | | ci `ci-impure` | `nix` | push master, PR | ncps upload; `publish` skips unless HARBOR_* are set by hand (auspex is not in `_products.nix`) | degrades |
 | | advisories | `nix` | cron, dispatch | `ADVISORY_PR_TOKEN` (forge.noosphere.uk) | degrades |
@@ -2749,7 +2749,9 @@ preconditions there, including default-branch contents and protection,
 writers, and deploy keys. Omnissiah schedules are opted into trust only
 when a node slot is enabled and still go through the same checks. The
 Machines workflow needs trust for ncps upload and the closure check;
-`update` can push `flake.lock` using its workflow credentials, and the
+`update` opens a `flake.lock` pull request (AGit, topic `ci-flake-update`)
+with its workflow credentials, because master is protected (tofunix
+`scriptorium/forge-cerberus.nix`: pushes and merges by manjo only), and the
 manifests job also uses ntfy, which needs trusted egress.
 
 Before staging the first node, opt Ryza into

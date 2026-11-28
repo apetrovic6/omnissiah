@@ -22,10 +22,9 @@
   repos = {
     # omnissiah = {
     #   name = "omnissiah";
-    #   # No branch rule: manjo and the scheduled flake.lock job push master
-    #   # directly, and no workflow runs on pull_request. Hermes only reads it
-    #   # and pushes to its fork.
-    #   protect = false;
+    #   # Its master rule is the standalone one at the end of this file, so
+    #   # Hermes gets nothing there. Enrolling it here means moving that rule
+    #   # in: branch = "master"; directPush = true; checks = [];
     # };
     rust-app-template = {
       name = "rust-app-template";
@@ -225,5 +224,26 @@ in {
       required_approvals = 0;
       status_check_patterns = repo.checks;
     })
-    (lib.filterAttrs (_: repo: repo.protect or true) repos);
+    (lib.filterAttrs (_: repo: repo.protect or true) repos)
+    // {
+      # omnissiah, not in `repos`: no Hermes grant or fork. The HOM-32
+      # dispatcher trusts its runs (uploads to ncps, the Machines closure
+      # check) only while master has exactly this kind of rule: pushes and
+      # merges by manjo alone. manjo keeps pushing master directly, vars
+      # commits included; the Machines workflow's flake.lock goes through a
+      # pull request (.forgejo/workflows/machines.yml), because the Actions
+      # token is not on the push list. No status checks: no workflow runs on
+      # pull_request.
+      omnissiah = {
+        provider = "gitea.cerberus";
+        name = "omnissiah";
+        username = owner;
+        rule_name = "master";
+        enable_push = true;
+        push_whitelist_users = [owner];
+        merge_whitelist_users = [owner];
+        required_approvals = 0;
+        status_check_patterns = [];
+      };
+    };
 }
