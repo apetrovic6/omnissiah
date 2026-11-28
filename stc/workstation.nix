@@ -27,9 +27,12 @@
       self.nixosModules.virtualisation
       self.inputs.nix-index-database.nixosModules.default
       # Declared in an imported module so the rest of this one stays plain
-      # config. Per instance: a second `workstation` instance would declare
-      # it twice and needs it moved to a shared module (there is one).
+      # config. This module is per instance (today there is only one
+      # instance); the fixed `key` makes the module system import it once
+      # per machine, so a second `workstation` instance cannot declare the
+      # option twice.
       {
+        key = "imperium-workstation-nautili-option";
         options.services.imperium.workstation.nautili.enable = lib.mkOption {
           type = lib.types.bool;
           default = true;
@@ -39,6 +42,12 @@
             ssh. Only the Machines CI check variant
             (modules/manufactorum/checks.nix) turns it off: CI has no access
             to that repository and must not get any.
+
+            Every consumer of magos's `nautili` input (including magos
+            packages that wrap it, like `magos.packages.<system>.nautili`)
+            must sit behind this option. One outside it makes the
+            workstation checks fetch the private input again, and the
+            Machines workflow fails on phalanx and enginseer.
           '';
         };
       }
