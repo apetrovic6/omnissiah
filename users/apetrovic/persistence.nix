@@ -23,6 +23,10 @@
         ".android"
         ".config/attic"
         ".config/herdr"
+        # herdr's worktrees (~/.herdr/worktrees) and agent notes
+        # (~/.herdr/notes). Without this a reboot deletes uncommitted work
+        # in every agent worktree.
+        ".herdr"
         ".config/pangolin"
         ".config/secretspec"
         ".config/Bitwarden"
