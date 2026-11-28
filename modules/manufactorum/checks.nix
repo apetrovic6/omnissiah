@@ -810,6 +810,9 @@
                   remote = true;
                   host = "cerberus";
                   sccacheCi = false;
+                  # The default-flip state this fixture models; the live
+                  # fleet turned it on in #86, and protectedRyza covers that.
+                  protectStdSlots = false;
                 };
               hosts = lib.recursiveUpdate inventory.hosts {ryza.egress.trusted = null;};
             };
