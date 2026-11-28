@@ -76,7 +76,10 @@ in {
   # never fails the switch: a refusal is printed in the deploy output and logged
   # to the journal (`journalctl -t hermes-workspace-migrate`); the task commands
   # refuse until the move is done. `sudo hermes-workspace-migrate` re-runs it.
-  environment.systemPackages = [hermesWorkspaceMigrate];
+  # codebase-memory-mcp: Hermes (on ryza) starts it over SSH as the hermes user
+  # (machines/ryza/hermes.nix), so the index sits next to the repositories, in
+  # ~/.cache/codebase-memory-mcp. /home is persistent here (no impermanence).
+  environment.systemPackages = [hermesWorkspaceMigrate self.inputs.codebase-memory-mcp.packages.${pkgs.stdenv.hostPlatform.system}.default];
   system.activationScripts.hermes-workspace-migrate = {
     deps = ["users"];
     text = ''

@@ -247,6 +247,27 @@
         "url": "https://git.clan.lol/clan/clan-core/archive/main.tar.gz"
       }
     },
+    "codebase-memory-mcp": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792186688,
+        "narHash": "sha256-qmLm6jALuPUh6+gSEmWzECWL7AC8HOHAbUHDpYOJlbs=",
+        "owner": "DeusData",
+        "repo": "codebase-memory-mcp",
+        "rev": "a7158ac2f48ca646b4527341b76f930f2aeff87e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "DeusData",
+        "ref": "v0.12.1",
+        "repo": "codebase-memory-mcp",
+        "type": "github"
+      }
+    },
     "connect-hx": {
       "inputs": {
         "flake-parts": "flake-parts_3",
@@ -4068,6 +4089,7 @@
       "inputs": {
         "brew-src": "brew-src",
         "clan-core": "clan-core",
+        "codebase-memory-mcp": "codebase-memory-mcp",
         "darwin": "darwin",
         "flake-parts": "flake-parts_2",
         "garage-operator": "garage-operator",
