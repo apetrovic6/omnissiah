@@ -149,11 +149,37 @@
     # Strata's own default is off), 32K context (decode unchanged: the expert
     # pool, not the KV, fills the card) and STRATA_INK_DEC_PCIE_SHARE (no
     # effect; STRATA_INK_EXACT picks the lane).
+    # 256K like Qwen (2026-11-28; was 128K). The global KV beyond the first
+    # 4K tokens lives in host RAM anyway (~4GB per 128K), so the cost is RAM,
+    # and a cold re-read of a full 256K conversation (~6 min at ~700 tok/s).
     inkling = {
       enable = true;
       pack = "SQ-15";
-      maxContext = 131072;
+      maxContext = 262144;
       drafting = "off";
+    };
+
+    # TENCENT HY4-FLASH (220B, 12B active), SQ-64 pack + 67.6GB Engram, on
+    # strata-hy4. Measured 2026-11-28, GPU1, 128K, a 17K-token prompt:
+    #
+    #   prefill 146-160 tok/s, decode 14.4-18.4 tok/s, ready after 24-71 s
+    #   GPU1 9.35GB (5.5GB trunk + 2.6GB hot experts), RAM ~56GB of experts
+    #   computed by 16 CPU threads, Engram read from disk via a 664MB cache
+    #
+    # 7x slower to read and 4x slower to write than Qwen; worth it only if
+    # the bigger model's answers are clearly better. DFly2 drafting is left to
+    # the engine: it accepts ~0.85 drafts per step but backs off to plain
+    # decode most of the time (verify 96-100 ms/step vs 71-73 plain).
+    # The conversation cache is what makes it usable for agents: without it,
+    # turn 2 re-read 17,007 of 17,007 tokens; with it, 23 (module default).
+    # 256K like Qwen and Inkling (2026-11-28). The feared VRAM growth of the KV
+    # did not show: a 73K-token pi session sat at 9,389MB on GPU1 against
+    # 9,350MB right after load. The cost is a cold read: a full 256K is ~28 min
+    # at ~155 tok/s, paid only on a cache miss (first turn, restart).
+    hy4 = {
+      enable = true;
+      pack = "SQ-64";
+      maxContext = 262144;
     };
   };
 }

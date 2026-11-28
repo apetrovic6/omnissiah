@@ -39,7 +39,7 @@
       configFile = pkgs.writeText "${name}.json" (builtins.toJSON runConfig);
       launcher = pkgs.writeShellScript "strata-${name}" ''
         set -eu
-        mkdir -p ${stateDir}/${name}/tokenizer
+        mkdir -p ${stateDir}/${name}/tokenizer ${stateDir}/${name}/conv-cache
         # Neither HOME nor XDG_* exist for a DynamicUser; keep anything the
         # server writes under its own state.
         export HOME=${stateDir} XDG_CONFIG_HOME=${stateDir}/.config XDG_CACHE_HOME=${stateDir}/.cache
@@ -122,6 +122,45 @@
       tokenizer = "${stateDir}/${ink.modelName}/tokenizer";
       model_name = ink.modelName;
       log = "${stateDir}/${ink.modelName}/engine.log";
+      lib_dirs = [];
+      inherit (cfg) gpu;
+      gpus_asked = true;
+    };
+
+    # ---- Tencent Hy4-Flash (.strata pack + Engram), the `strata-hy4` engine ----
+    hy = cfg.hy4;
+    hyDir = "${cfg.dataDir}/models/hy4-flash";
+    hy4Config = {
+      exe = engineExe "strata-hy4";
+      # serve/hy4_kind.py routes by this.
+      arch = "hy4flash";
+      args =
+        [
+          "--native"
+          "${hyDir}/Hy4-Flash-${hy.pack}.strata"
+          "--engram"
+          "${hyDir}/Hy4-Flash-Engram-Q8.strata"
+          "--max-context"
+          (toString hy.maxContext)
+          # Keep the KV of a prompt that extends the last one.
+          "--session-reuse"
+          "1"
+        ]
+        ++ lib.optionals hy.vision ["--vision" "${hyDir}/Hy4-Flash-Vision.strata"]
+        # Without it the engine cannot rewind: a harness that drops the old
+        # turn's thinking makes the next prompt a non-extension, and every turn
+        # re-reads the whole conversation (measured 2026-11-28: 17,007 of
+        # 17,007 tokens re-read; with the cache, 23).
+        ++ lib.optionals (hy.conversationCacheGiB > 0) [
+          "--conversation-cache-dir"
+          "${stateDir}/${hy.modelName}/conv-cache"
+          "--conversation-cache-gib"
+          (toString hy.conversationCacheGiB)
+        ];
+      cwd = "${stateDir}/${hy.modelName}";
+      tokenizer = "${stateDir}/${hy.modelName}/tokenizer";
+      model_name = hy.modelName;
+      log = "${stateDir}/${hy.modelName}/engine.log";
       lib_dirs = [];
       inherit (cfg) gpu;
       gpus_asked = true;
@@ -238,6 +277,43 @@
           description = "Idle seconds before llama-swap unloads the model.";
         };
       };
+
+      hy4 = {
+        enable = mkEnableOption "Tencent Hy4-Flash on the strata-hy4 engine";
+        pack = mkOption {
+          type = types.enum ["SQ-64" "SQ-96" "SQ-128"];
+          default = "SQ-64";
+          description = "Strata's own .strata build, in dataDir/models/hy4-flash beside the shared Engram file.";
+        };
+        modelName = mkOption {
+          type = types.str;
+          default = "hy4-flash-${lib.toLower hy.pack}";
+          description = "Model ID, both the llama-swap entry and the API's.";
+        };
+        maxContext = mkOption {
+          type = types.ints.positive;
+          default = 131072;
+          description = "Maximum token context (upstream's default is 128K).";
+        };
+        vision = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Load Hy4-Flash-Vision.strata for image input.";
+        };
+        conversationCacheGiB = mkOption {
+          type = types.ints.unsigned;
+          default = 16;
+          description = ''
+            Size of the on-disk conversation cache in the state dir; 0 turns it
+            off. Needed for KV reuse whenever a client rewrites history.
+          '';
+        };
+        ttl = mkOption {
+          type = types.ints.unsigned;
+          default = 900;
+          description = "Idle seconds before llama-swap unloads the model.";
+        };
+      };
     };
 
     config = mkIf cfg.enable {
@@ -270,9 +346,20 @@
             runConfig = inklingConfig;
             inherit (ink) ttl;
           };
+        }
+        // lib.optionalAttrs hy.enable {
+          ${hy.modelName} = mkEntry {
+            name = hy.modelName;
+            runConfig = hy4Config;
+            inherit (hy) ttl;
+          };
         };
 
-      systemd.services.llama-swap.serviceConfig.StateDirectory = "llama-swap";
+      systemd.services.llama-swap.serviceConfig =
+        {StateDirectory = "llama-swap";}
+        # strata-hy4 mlocks its ~56GB RAM expert store ("mlock=yes" in its
+        # log); the service default of 8MB would refuse that.
+        // lib.optionalAttrs hy.enable {LimitMEMLOCK = "infinity";};
     };
   };
 }
