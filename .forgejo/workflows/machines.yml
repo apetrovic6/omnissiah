@@ -25,14 +25,22 @@ on:
   # 04:00 keeps out of the way of the 02:00 CNPG backups and the 03:00 ncps fsck.
   schedule:
     - cron: "0 4 */3 * *"
+  # Every input needs a `type`: Forgejo's Run workflow form renders only
+  # boolean, number, string and choice, and shows "Invalid input type" with
+  # no field for an input without one.
   workflow_dispatch:
     inputs:
       update:
         description: "'yes' also updates the flake inputs and opens a flake.lock pull request (the cron always does)"
+        type: choice
+        options:
+          - "no"
+          - "yes"
         required: false
         default: "no"
       machines:
         description: "Space-separated machine names, empty = every check"
+        type: string
         required: false
         default: ""
 
