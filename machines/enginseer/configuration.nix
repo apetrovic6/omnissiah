@@ -16,6 +16,7 @@ in {
     # revert the commit that swapped them, or boot the previous generation.
     self.inputs.magos.nixosModules.nixarchy
     ./llama-swap.nix
+    ./strata.nix
   ];
 
   magos.nixarchy = {

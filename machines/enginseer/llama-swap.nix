@@ -11,8 +11,8 @@
 # on the GPU and spills experts to RAM. KV is cheap: only 10 of 40 layers are
 # full attention, ~11KB/token at q8_0, ~1.4GB at 128K.
 #
-# The laptop runs no Strata: its Coder pack was never prepared, and on an 8GB
-# card Strata's docs expect most of its experts to stream from the SSD.
+# Inkling 2 Mini (SQ-10) runs beside it as a Strata entry; see ./strata.nix.
+# Strata's Qwen/Coder pack is not used here (never prepared).
 {
   config,
   lib,
