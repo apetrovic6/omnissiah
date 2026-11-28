@@ -21,6 +21,9 @@
         nixd
         garage_2
         self'.packages.tofunix
+        # Structural search and rewrite by syntax tree, Nix included
+        # (`ast-grep run -l nix -p 'lib.mkIf $C $B'`); see the ast-grep skill.
+        ast-grep
       ];
     };
   };
