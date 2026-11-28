@@ -26,6 +26,22 @@
       self.nixosModules.bluetooth
       self.nixosModules.virtualisation
       self.inputs.nix-index-database.nixosModules.default
+      # Declared in an imported module so the rest of this one stays plain
+      # config. Per instance: a second `workstation` instance would declare
+      # it twice and needs it moved to a shared module (there is one).
+      {
+        options.services.imperium.workstation.nautili.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = ''
+            Install nautili and nautili-desktop. Both come from magos's
+            `nautili` input, a private company GitHub repository fetched over
+            ssh. Only the Machines CI check variant
+            (modules/manufactorum/checks.nix) turns it off: CI has no access
+            to that repository and must not get any.
+          '';
+        };
+      }
     ];
 
     # AWS CLI profiles, one clan vars secret each (modules/rites/awscli.nix).
@@ -261,6 +277,7 @@
 
     environment.systemPackages = with pkgs; let
       inherit (self.inputs.nix-jetbrains-plugins.lib) buildIdeWithPlugins;
+      nautili = config.services.imperium.workstation.nautili.enable;
 
       commonPlugins = [
         "IdeaVIM"
@@ -269,108 +286,117 @@
       intellijPlugins = [
         "com.jetbrains.kmm"
       ];
-    in [
-      # The sccache wrapper (modules/rites/sccache.nix) under the name
-      # `sccache`, NOT the bare binary: a plain `sccache --show-stats` in a
-      # fresh shell autostarts the daemon on 127.0.0.1:4226, and a bare
-      # binary would start it WITHOUT the Garage credentials (or worse,
-      # with the ambient AWS_* of the omnissiah .envrc, which reqsign's env
-      # provider prefers) -- and that server then serves every later client,
-      # cargo included, until its idle timeout. The wrapper defaults
-      # AWS_SHARED_CREDENTIALS_FILE to the deployed var file, so every
-      # invocation is credentialed.
-      config.services.imperium.sccache.wrapper
+    in
+      [
+        # The sccache wrapper (modules/rites/sccache.nix) under the name
+        # `sccache`, NOT the bare binary: a plain `sccache --show-stats` in a
+        # fresh shell autostarts the daemon on 127.0.0.1:4226, and a bare
+        # binary would start it WITHOUT the Garage credentials (or worse,
+        # with the ambient AWS_* of the omnissiah .envrc, which reqsign's env
+        # provider prefers) -- and that server then serves every later client,
+        # cargo included, until its idle timeout. The wrapper defaults
+        # AWS_SHARED_CREDENTIALS_FILE to the deployed var file, so every
+        # invocation is credentialed.
+        config.services.imperium.sccache.wrapper
 
-      thunar
-      zathura
-      file-roller
-      obsidian
+        thunar
+        zathura
+        file-roller
+        obsidian
 
-      bluetuith
-      brave
-      librewolf
-      libreoffice
+        bluetuith
+        brave
+        librewolf
+        libreoffice
 
-      vlc
+        vlc
 
-      vesktop
+        vesktop
 
-      freerdp
+        freerdp
 
-      plex-desktop
-      plex-htpc
-      plexamp
-      bitwarden-desktop
+        plex-desktop
+        plex-htpc
+        plexamp
+        bitwarden-desktop
 
-      wiremix
+        wiremix
 
-      virt-manager
-      qemu
+        virt-manager
+        qemu
 
-      k9s
-      kubectl
-      kubectx
-      kubectl-cnpg
+        k9s
+        kubectl
+        kubectx
+        kubectl-cnpg
 
-      signal-desktop
+        signal-desktop
 
-      claude-code
-      claude-monitor
-      # The Omarchy agents widget reads ChatGPT plan limits through
-      # `codex app-server` (signed in once with `codex login`); those limits
-      # also cover omp's openai-codex usage.
-      codex
+        claude-code
+        claude-monitor
+        # The Omarchy agents widget reads ChatGPT plan limits through
+        # `codex app-server` (signed in once with `codex login`); those limits
+        # also cover omp's openai-codex usage.
+        codex
 
-      exercism
+        exercism
 
-      obs-studio
-      xwayland
+        obs-studio
+        xwayland
 
-      herdr
-      herdr-desktop
-      (self.inputs.magos.packages.${system}.opencode)
-      (self.inputs.magos.packages.${system}.nautili)
-      (self.inputs.magos.inputs.llm-agents.packages.${system}.hermes-desktop)
+        herdr
+        herdr-desktop
+        (self.inputs.magos.packages.${system}.opencode)
+      ]
+      # Both nautili packages reach the private input (magos's `nautili` wraps
+      # it), so they sit behind services.imperium.workstation.nautili.enable.
+      # They keep their old places in the list: system-path's derivation
+      # depends on the order, and the real toplevels must not change.
+      ++ lib.optional nautili self.inputs.magos.packages.${system}.nautili
+      ++ [
+        (self.inputs.magos.inputs.llm-agents.packages.${system}.hermes-desktop)
+      ]
       # Not re-exported by magos (it only wraps the CLI), so straight from
       # magos's own nautili input, which keeps the two on the same rev.
-      (self.inputs.magos.inputs.nautili.packages.${system}.nautili-desktop)
-      python3Packages.huggingface-hub
+      ++ lib.optional nautili self.inputs.magos.inputs.nautili.packages.${system}.nautili-desktop
+      ++ [
+        python3Packages.huggingface-hub
 
-      # neomutt
-      proton-vpn-cli
-      pangolin-cli
-      element-desktop
+        # neomutt
+        proton-vpn-cli
+        pangolin-cli
+        element-desktop
 
-      helix
+        helix
 
-      google-chrome
-      chromium
-      slack
+        google-chrome
+        chromium
+        slack
 
-      openscad
+        openscad
 
-      quickemu
-      evtest
-      librepods
-      alacritty
-      nfs-utils
-      (buildIdeWithPlugins pkgs "idea" commonPlugins)
-      (buildIdeWithPlugins pkgs "rust-rover" commonPlugins)
-      (buildIdeWithPlugins pkgs "goland" commonPlugins)
-      (buildIdeWithPlugins pkgs "datagrip" commonPlugins)
-      jetbrains-toolbox
+        quickemu
+        evtest
+        librepods
+        alacritty
+        nfs-utils
+        (buildIdeWithPlugins pkgs "idea" commonPlugins)
+        (buildIdeWithPlugins pkgs "rust-rover" commonPlugins)
+        (buildIdeWithPlugins pkgs "goland" commonPlugins)
+        (buildIdeWithPlugins pkgs "datagrip" commonPlugins)
+        jetbrains-toolbox
 
-      (
-        pkgs.writeShellApplication {
-          name = "ns";
-          runtimeInputs = with pkgs; [
-            fzf
-            nix-search-tv
-          ];
-          text = builtins.readFile "${pkgs.nix-search-tv.src}/nixpkgs.sh";
-        }
-      )
-    ];
+        (
+          pkgs.writeShellApplication {
+            name = "ns";
+            runtimeInputs = with pkgs; [
+              fzf
+              nix-search-tv
+            ];
+            text = builtins.readFile "${pkgs.nix-search-tv.src}/nixpkgs.sh";
+          }
+        )
+      ];
 
     services.spice-vdagentd.enable = true;
 

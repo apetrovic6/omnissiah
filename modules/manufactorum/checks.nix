@@ -52,12 +52,28 @@
       };
     nodeHosts = lib.genAttrs largeNodes (node: nodeEval node (nodeOn node) true);
     nodeDispatchers = lib.genAttrs largeNodes (node: nodeEval self.lib.ciDispatcher.host (nodeOn node) true);
+    # Every machine with the workstation role (stc/workstation.nix declares
+    # the option) installs nautili from magos's private company input, which
+    # CI cannot fetch and must never get credentials for. Its check is that
+    # machine with services.imperium.workstation.nautili.enable off. Only the
+    # small top-level derivations (system-path, etc, the toplevel) differ from
+    # the real system; the kernel, the desktop, Strata, llama.cpp and the rest
+    # of the expensive closure are the same paths, so they still land in ncps
+    # before a deploy. The workflow's "Confirm the closure is in ncps" step
+    # checks this variant's toplevel, which is what CI built.
+    machineCheck = machine:
+      if lib.hasAttrByPath ["services" "imperium" "workstation" "nautili" "enable"] machine.options
+      then
+        (machine.extendModules {
+          modules = [{services.imperium.workstation.nautili.enable = false;}];
+        }).config.system.build.toplevel
+      else machine.config.system.build.toplevel;
   in {
     # Every NixOS machine built for this system, so a new machine is
     # covered without being listed here. The Machines workflow
     # (.forgejo/workflows/machines.yml) builds `checks.x86_64-linux`.
     checks =
-      lib.mapAttrs (_: machine: machine.config.system.build.toplevel)
+      lib.mapAttrs (_: machineCheck)
       (lib.filterAttrs
         (_: machine: machine.pkgs.stdenv.hostPlatform.system == system)
         self.nixosConfigurations)
