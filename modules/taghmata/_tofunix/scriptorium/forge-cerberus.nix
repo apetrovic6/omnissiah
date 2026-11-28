@@ -22,10 +22,9 @@
   repos = {
     # omnissiah = {
     #   name = "omnissiah";
-    #   # No branch rule: manjo and the scheduled flake.lock job push master
-    #   # directly, and no workflow runs on pull_request. Hermes only reads it
-    #   # and pushes to its fork.
-    #   protect = false;
+    #   # Its master rule is the standalone one at the end of this file, so
+    #   # Hermes gets nothing there. Enrolling it here means moving that rule
+    #   # in: branch = "master"; directPush = true; checks = [];
     # };
     rust-app-template = {
       name = "rust-app-template";
@@ -64,6 +63,21 @@
   advisoryRepo = repos.rust-app-template.name;
   advisoryCredential = "tofunix-advisory-bot-forgejo";
   manageAdvisory = builtins.pathExists (vars.shared advisoryCredential advisoryCredential);
+
+  # ci-bot opens omnissiah's CI pull requests (flake.lock, rendered
+  # manifests) with an AGit push. The Actions token can't: Forgejo 15's AGit
+  # looks the pusher up with GetUserByID (services/agit/agit.go), which has
+  # no row for the Actions user (-2). ci-bot reads omnissiah and writes
+  # nothing there, so the HOM-32 trust check still sees manjo as its only
+  # writer. Its PAT is minted here, logged in as ci-bot with the generated
+  # password, and goes straight into the CI_PUSH_TOKEN secret.
+  #
+  # First apply: the provider logs in when it is configured, so create the
+  # account alone first (README, "Machines pull requests"):
+  #   nix run .#tofunix -- apply -target=gitea_user.ci-bot
+  ciBot = "ci-bot";
+  ciCredential = "tofunix-ci-bot-forgejo-password";
+  manageCiBot = builtins.pathExists (vars.shared ciCredential ciCredential);
 in {
   reliquary.ntfy_access = {
     generator = "ntfy-access";
@@ -75,25 +89,68 @@ in {
     generator = passwordCredential;
   };
 
-  resource.gitea_user = lib.optionalAttrs manageBot {
-    hermes = {
-      provider = "gitea.cerberus";
-      username = bot;
-      login_name = bot;
-      email = "hermes@forge.ugalabugala.org";
-      password = relic "hermes_password" "password";
-      restricted = true;
-      admin = false;
-      active = true;
-      # One fork per repo in `repos`, so adding a repo there is all it takes.
-      max_repo_creation = builtins.length (builtins.attrNames repos);
-      allow_create_organization = false;
-      allow_git_hook = false;
-      allow_import_local = false;
-      send_notification = false;
-      must_change_password = false;
-      # Forgejo never returns passwords; the provider only sets this on create.
-      lifecycle.ignore_changes = ["password"];
+  resource.gitea_user =
+    lib.optionalAttrs manageBot {
+      hermes = {
+        provider = "gitea.cerberus";
+        username = bot;
+        login_name = bot;
+        email = "hermes@forge.ugalabugala.org";
+        password = relic "hermes_password" "password";
+        restricted = true;
+        admin = false;
+        active = true;
+        # One fork per repo in `repos`, so adding a repo there is all it takes.
+        max_repo_creation = builtins.length (builtins.attrNames repos);
+        allow_create_organization = false;
+        allow_git_hook = false;
+        allow_import_local = false;
+        send_notification = false;
+        must_change_password = false;
+        # Forgejo never returns passwords; the provider only sets this on create.
+        lifecycle.ignore_changes = ["password"];
+      };
+    }
+    // lib.optionalAttrs manageCiBot {
+      ${ciBot} = {
+        provider = "gitea.cerberus";
+        username = ciBot;
+        login_name = ciBot;
+        email = "ci-bot@forge.ugalabugala.org";
+        password = relic "ci_bot_password" "password";
+        # Restricted: it sees only the repositories it is a collaborator of.
+        restricted = true;
+        admin = false;
+        active = true;
+        max_repo_creation = 0;
+        allow_create_organization = false;
+        allow_git_hook = false;
+        allow_import_local = false;
+        send_notification = false;
+        must_change_password = false;
+        lifecycle.ignore_changes = ["password"];
+      };
+    };
+
+  reliquary.ci_bot_password = lib.mkIf manageCiBot {
+    generator = ciCredential;
+  };
+  # Logs in as ci-bot (basic auth) only to mint its token. Configuring it
+  # fails until the account exists, hence the targeted first apply.
+  provider.gitea.ci_bot = lib.mkIf manageCiBot {
+    inherit (config.provider.gitea.cerberus) base_url;
+    username = ciBot;
+    password = relic "ci_bot_password" "password";
+  };
+  # write:repository is what a push needs, AGit included (Forgejo checks
+  # it in githttp for receive-pack); nothing else. The account's read grant
+  # bounds it to opening pull requests on omnissiah.
+  resource.gitea_token = lib.optionalAttrs manageCiBot {
+    ci-bot-omnissiah = {
+      provider = "gitea.ci_bot";
+      depends_on = ["gitea_repository_collaborator.omnissiah-ci-bot"];
+      name = "omnissiah-machines-ci";
+      scopes = ["write:repository"];
     };
   };
 
@@ -141,6 +198,16 @@ in {
     data = "\${yamldecode(data.sops_file.ntfy_access.raw).spec.secretTemplates[0].stringData.token}";
   };
 
+  # ci-bot's token for the Machines workflow's AGit pull requests. Read only
+  # from tofunix state: rotating it is `-replace=gitea_token.ci-bot-omnissiah`.
+  resource.forgejo_repository_actions_secret.omnissiah-ci-push-token = lib.mkIf manageCiBot {
+    provider = "forgejo.cerberus";
+    inherit (config.scriptorium) owner;
+    repository = "omnissiah";
+    name = "CI_PUSH_TOKEN";
+    data = "\${gitea_token.ci-bot-omnissiah.token}";
+  };
+
   # The public key is absent until stygies has generated its Clan vars.
   variable = lib.optionalAttrs manageKey {
     hermes_forgejo_public_key = {
@@ -185,6 +252,21 @@ in {
         username = advisoryBot;
         permission = "read";
       };
+    }
+    // lib.optionalAttrs manageCiBot {
+      # Read is all AGit needs; anything more would make ci-bot a writer and
+      # every omnissiah run untrusted.
+      omnissiah-ci-bot = {
+        provider = "gitea.cerberus";
+        depends_on = [
+          "gitea_user.${ciBot}"
+          "gitea_repository_branch_protection.omnissiah"
+        ];
+        inherit owner;
+        repo = "omnissiah";
+        username = ciBot;
+        permission = "read";
+      };
     };
 
   # Omit the alias and resources together before enrollment. If the credential
@@ -225,5 +307,28 @@ in {
       required_approvals = 0;
       status_check_patterns = repo.checks;
     })
-    (lib.filterAttrs (_: repo: repo.protect or true) repos);
+    (lib.filterAttrs (_: repo: repo.protect or true) repos)
+    # Enrolling omnissiah in `repos` would make this rule silently replace
+    # the generic one: move it there instead.
+    // lib.throwIf (repos ? omnissiah) "forge-cerberus.nix: omnissiah has a standalone branch rule; move it into `repos` before enrolling it there" {
+      # omnissiah, not in `repos`: no Hermes grant or fork. The HOM-32
+      # dispatcher trusts its runs (uploads to ncps, the Machines closure
+      # check) only while master has exactly this kind of rule: pushes and
+      # merges by manjo alone. manjo keeps pushing master directly, vars
+      # commits included; the Machines workflow's flake.lock goes through a
+      # pull request opened by ci-bot (.forgejo/workflows/machines.yml).
+      # Forgejo also refuses every force push to a protected branch, manjo's
+      # included. No status checks: no workflow runs on pull_request.
+      omnissiah = {
+        provider = "gitea.cerberus";
+        name = "omnissiah";
+        username = owner;
+        rule_name = "master";
+        enable_push = true;
+        push_whitelist_users = [owner];
+        merge_whitelist_users = [owner];
+        required_approvals = 0;
+        status_check_patterns = [];
+      };
+    };
 }

@@ -1,10 +1,13 @@
-# Every third day: update the flake's inputs, commit the new flake.lock, then
-# build every machine in `checks` (modules/manufactorum/checks.nix) so the results
-# land in the ncps binary cache (taghmata nixidy apps/scriptorium/ncps) before the machines
-# pull them at their own next deploy.
+# Every third day: update the flake's inputs, commit the new flake.lock into a
+# pull request (topic ci-flake-update), then build every machine in `checks`
+# (modules/manufactorum/checks.nix) against that commit so the results land in
+# the ncps binary cache (taghmata nixidy apps/scriptorium/ncps) before the
+# machines pull them at their own next deploy. Nothing here pushes to master:
+# it is protected (only manjo pushes and merges), which the HOM-32 dispatcher
+# requires before it trusts this repository's runs.
 #
 # A second job re-renders the cluster manifests against the new lock and puts
-# the result in a pull request; it never pushes them to master itself.
+# the result in its own pull request.
 #
 # Jobs use nix-machines. Before HOM-32 PR 13 flips, they run on remaining
 # host runners; afterwards they run in the nodes' large one-job slots.
@@ -25,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       update:
-        description: "'yes' also updates the flake inputs and commits flake.lock (the cron always does)"
+        description: "'yes' also updates the flake inputs and opens a flake.lock pull request (the cron always does)"
         required: false
         default: "no"
       machines:
@@ -35,7 +38,7 @@ on:
 
 concurrency:
   # A scheduled run must not overlap the previous one: they would race on the
-  # flake.lock push and duplicate builds across the runners.
+  # flake.lock pull request and duplicate builds across the runners.
   group: machines-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
@@ -44,7 +47,7 @@ permissions:
   # block states what this workflow actually needs rather than depending on a
   # default.
   contents: write
-  # The manifests job opens a pull request by pushing to refs/for/master.
+  # Both pull requests are opened by pushing to refs/for/master.
   pull-requests: write
 
 jobs:
@@ -54,18 +57,14 @@ jobs:
     timeout-minutes: 120
     outputs:
       machines: ${{ steps.out.outputs.machines }}
+      ref: ${{ steps.commit.outputs.ref }}
     env:
-      # Nothing to configure for the push: Forgejo mints a per-run token and
-      # exports it into the environment of every step as FORGEJO_TOKEN (with
-      # GITHUB_TOKEN as an alias), and it has write permission on this
-      # repository -- pushing commits included. Changes authored with it also
-      # trigger no workflow, so this job's flake.lock commit cannot start a
-      # second run.
-      #
-      # Define a CI_PUSH_TOKEN secret only if you want the commit authored by a
-      # dedicated account (an access token scoped to this repo); it wins here.
-      # FORGEJO_TOKEN is not a name you can define yourself -- it is reserved by
-      # the automatic token.
+      # ci-bot's PAT (write:repository; ci-bot only reads this repository),
+      # minted and set as this repository's secret by tofunix
+      # (_tofunix/scriptorium/forge-cerberus.nix). It opens the pull
+      # requests. Never put manjo's token here: a manjo token in a secret is
+      # a manjo credential in every non-fork run, and a writer's would make
+      # the HOM-32 dispatcher distrust every run of this repository.
       CI_PUSH_TOKEN: ${{ secrets.CI_PUSH_TOKEN }}
       # A scheduled run has no inputs, so both arrive empty and the defaults
       # below apply: the cron always updates the lock. `inputs.` is the newer
@@ -73,7 +72,11 @@ jobs:
       UPDATE_INPUT: ${{ github.event.inputs.update || inputs.update }}
       REQUESTED: ${{ github.event.inputs.machines || inputs.machines }}
     steps:
+      # No Actions token in .git/config: git would send it before asking the
+      # credential helper below, and it can't open an AGit pull request.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Update every flake input
         run: |
@@ -133,58 +136,72 @@ jobs:
             exit 1
           }
 
-      - name: Commit and push flake.lock
+      - id: commit
+        name: Commit flake.lock into a pull request
         run: |
           set -uo pipefail
+
+          # `ref` is what the later jobs check out: the new commit, or without
+          # one the tree this job started from.
 
           # -u, not -A: only tracked files, so a stray result symlink or a
           # leftover build artifact can never end up in the commit.
           git add -u
           if git diff --staged --quiet; then
             echo "nothing changed (no input moved, no formatting fix)"
+            echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # The credential: the run's automatic FORGEJO_TOKEN unless a
-          # CI_PUSH_TOKEN secret overrides it. Single quotes keep the expansion
+          # Without ci-bot's token nothing can open the pull request, so build
+          # what is on master instead of a commit the forge never sees.
+          if [ -z "${CI_PUSH_TOKEN:-}" ]; then
+            echo "::warning::CI_PUSH_TOKEN is not set (tofunix manages it, README \"Machines pull requests\"); no flake.lock pull request, building master's lock"
+            echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # The credential: ci-bot's token. Single quotes keep the expansion
           # inside the helper, so the token only ever reaches git's stdin -- not
           # a URL in .git/config, not the runner's process list -- and that
-          # .git/config is deleted with the workspace.
+          # .git/config is deleted with the workspace. The checkout keeps no
+          # Actions token (persist-credentials: false); git would send that
+          # one first and never ask this helper.
           git config user.name "Forgejo CI"
           git config user.email "ci@noosphere.uk"
           git config credential.helper \
-            '!f() { echo "username=x-access-token"; echo "password=${CI_PUSH_TOKEN:-$FORGEJO_TOKEN}"; }; f'
+            '!f() { echo "username=ci-bot"; echo "password=$CI_PUSH_TOKEN"; }; f'
 
           git commit -m "chore(flake): update inputs (Forgejo CI)"
-
-          # Machines push `vars: update via generator ...` commits to master on
-          # their own schedule, so this push is routinely non-fast-forward: fetch
-          # deeper (the checkout is shallow at depth 1) and rebase onto the tip.
-          pushed=0
-          for attempt in 1 2 3; do
-            if git push origin HEAD:master; then
-              pushed=1
-              break
-            fi
-            echo "push rejected (attempt $attempt), rebasing onto the current master"
-            git fetch --depth 50 origin master || true
-            if ! git rebase FETCH_HEAD; then
-              git rebase --abort
-              echo "::error::flake.lock conflicts with what landed on master; leaving it to a human"
-              exit 1
-            fi
-          done
-          if [ "$pushed" = 0 ]; then
-            echo "::warning::could not push; the builds below run against the lock that IS in master"
-          fi
+          echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           git log --oneline -1
+
+          # Into a pull request, never onto master. master is protected
+          # (tofunix, scriptorium/forge-cerberus.nix): only manjo pushes or
+          # merges there, which is what lets the HOM-32 dispatcher trust this
+          # repository's runs. AGit (refs/for/master) needs only read, which is
+          # all ci-bot has; the Actions token can't do it at all (Forgejo 15's
+          # AGit has no user row for it). The fixed topic plus force-push
+          # replaces the previous run's lock while that pull request is still
+          # open, the same way rituals/render-manifests-pr.sh keeps one
+          # manifests PR.
+          # A push that fails (the forge down, the token refused) is an error:
+          # the builds below would warm a lock nobody can merge.
+          git push origin "HEAD:refs/for/master" \
+            -o topic=ci-flake-update \
+            -o "title=chore(flake): update inputs (Forgejo CI)" \
+            -o "description=The Machines workflow's input update. The same run builds every machine against this lock and checks the closures are in ncps, so merging it deploys from a warm cache." \
+            -o force-push=true || {
+            echo "::error::could not open the flake.lock pull request"
+            exit 1
+          }
 
       - id: out
         name: What to build
         run: |
           set -euo pipefail
 
-          # Read the matrix from the tree just committed to master: a machine
+          # Read the matrix from the tree just committed: a machine
           # removed from `checks` must not get a build job here. `treefmt` is a
           # check as well, but it is a formatter gate, not a machine -- `nix fmt`
           # above already ran it, so it gets no job of its own.
@@ -229,20 +246,34 @@ jobs:
       NTFY_URL: https://ntfy.ugalabugala.org/homelab-alerts
       NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
     steps:
-      # master as it is now, with the lock the update job just pushed.
+      # The update job's commit, so the render uses the new lock. Its pull
+      # request stays separate from the flake.lock one (a chart upgrade is
+      # read on its own): it is based on master and carries the lock commit
+      # too until the flake.lock pull request is merged. Merging this one
+      # first lands the lock as well and leaves the flake.lock pull request
+      # empty until the next run replaces it.
       - uses: actions/checkout@v4
         with:
-          ref: master
+          ref: ${{ needs.update.outputs.ref }}
+          persist-credentials: false
 
       - name: Render and open the pull request
         run: |
           set -euo pipefail
 
-          # Same identity and credential as the flake.lock commit above.
+          # Same identity and credential as the flake.lock commit above. The
+          # identity first: --no-push commits as well.
           git config user.name "Forgejo CI"
           git config user.email "ci@noosphere.uk"
+
+          if [ -z "${CI_PUSH_TOKEN:-}" ]; then
+            echo "::warning::CI_PUSH_TOKEN is not set (tofunix manages it); rendering without opening a pull request"
+            ./rituals/render-manifests-pr.sh --no-push
+            exit 0
+          fi
+
           git config credential.helper \
-            '!f() { echo "username=x-access-token"; echo "password=${CI_PUSH_TOKEN:-$FORGEJO_TOKEN}"; }; f'
+            '!f() { echo "username=ci-bot"; echo "password=$CI_PUSH_TOKEN"; }; f'
 
           ./rituals/render-manifests-pr.sh
 
@@ -265,13 +296,14 @@ jobs:
       matrix:
         machine: ${{ fromJSON(needs.update.outputs.machines) }}
     steps:
-      # master as it is when this job starts, which is the tip the update job
-      # just pushed (or its successor). Pinning the run's own start commit would
-      # build a tree whose flake.lock no longer exists after that push, and the
-      # store paths it caches would then match nothing.
+      # The update job's commit: the lock in its pull request, so merging that
+      # pull request deploys what this job put in ncps. Without an update it
+      # is the commit the run started from. A bare SHA: the commit sits only
+      # under the pull request's refs/pull/<n>/head, and Forgejo serves
+      # fetches by SHA (uploadpack.allowAnySHA1InWant).
       - uses: actions/checkout@v4
         with:
-          ref: master
+          ref: ${{ needs.update.outputs.ref }}
 
       - name: Build the system toplevel
         run: |
