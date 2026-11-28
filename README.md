@@ -1221,6 +1221,43 @@ jobs wait; Forgejo's `cancel_abandoned_jobs` cancels jobs waiting over 24 hours.
 The runner's Nix daemon signs and uploads builds via its post-build hook.
 PR 14 removes the workflow's `nix copy` fallback.
 
+#### Machines pull requests
+
+`manjo/omnissiah`'s `master` is protected (tofunix,
+`_tofunix/scriptorium/forge-cerberus.nix`): only manjo pushes or merges
+there. The HOM-32 dispatcher trusts the repository's runs (ncps uploads,
+the closure check) only under such a rule. Forgejo also refuses every force
+push to a protected branch, manjo's included.
+
+The Machines workflow therefore never pushes `master`. `update` commits
+`flake.lock` and opens or updates a pull request with an AGit push (topic
+`ci-flake-update`), and `build` and `manifests` check out that commit; the
+manifests job opens its own pull request (topic `ci-rendered-manifests`).
+Both are pushed by **ci-bot**, a restricted account with read access to
+omnissiah only. The Actions token can't open an AGit pull request in Forgejo
+15 (AGit looks the pusher up as a user row, and the Actions user has none),
+and a writer would make every run untrusted. Merge the flake.lock pull
+request; the run already put its closures in ncps.
+
+tofunix creates ci-bot, its read grant, its PAT (`write:repository`, minted
+by logging in as ci-bot) and the repository's `CI_PUSH_TOKEN` secret. No
+PAT is made by hand. Once:
+
+1. `clan vars generate terra --generator tofunix-ci-bot-forgejo-password`,
+   then commit and push the var.
+2. `nix run .#tofunix -- apply -target=gitea_user.ci-bot`: the provider that
+   mints the PAT logs in as ci-bot while it is configured, so the account
+   has to exist before any full plan.
+3. `nix run .#tofunix -- plan`, review (the branch rule, the read grant, the
+   token and the secret), apply.
+4. Dispatch Machines on `master` with `update: yes` and `machines: cerberus`.
+   Check that a `chore(flake): update inputs` pull request by ci-bot appears
+   (if any input moved) and that the build checked out its commit.
+
+Without `CI_PUSH_TOKEN` the workflow warns, opens no pull request and builds
+`master`. To rotate the PAT: `nix run .#tofunix -- apply
+-replace=gitea_token.ci-bot-omnissiah`.
+
 #### Ryza one-job pilot (`nix-eph`)
 
 Ryza ships with one slot, `ryza-eph-1`, serving three pools on `nix-eph`:
@@ -2450,7 +2487,7 @@ get 3 h on Cerberus (6 h after PR 11) and 6 h on noosphere. A slot allows
 | uga fishing (8) | ci | `nix` | push master, PR | `REGISTRY_TOKEN` to `vars.REGISTRY` (the forge registry), ncps upload | degrades; breaks if `REGISTRY` is not a forge |
 | uga nopresh (7) | build-and-push | `nix` | push master | `REGISTRY_TOKEN` to the forge registry, ncps upload | degrades |
 | uga magos (6) | update-flake | `nix` | cron 04:00, dispatch | the job token pushes `flake.lock` to the forge | works |
-| uga omnissiah (1) | machines `update`/`manifests`/`build` | `nix`, PR 11 → `nix-machines` | cron, dispatch | AGit PRs (flake.lock, manifests), ntfy, ncps; 120/60/300 min | must not land: **asserted** |
+| uga omnissiah (1) | machines `update`/`manifests`/`build` | `nix`, PR 11 → `nix-machines` | cron, dispatch | AGit PRs as ci-bot (`CI_PUSH_TOKEN`), ntfy, ncps; 120/60/300 min | must not land: **asserted** |
 | noo auspex (221) | ci `ci-pure` | `nix` | push master, PR | ncps upload | degrades |
 | | ci `ci-impure` | `nix` | push master, PR | ncps upload; `publish` skips unless HARBOR_* are set by hand (auspex is not in `_products.nix`) | degrades |
 | | advisories | `nix` | cron, dispatch | `ADVISORY_PR_TOKEN` (forge.noosphere.uk) | degrades |
@@ -2749,10 +2786,9 @@ preconditions there, including default-branch contents and protection,
 writers, and deploy keys. Omnissiah schedules are opted into trust only
 when a node slot is enabled and still go through the same checks. The
 Machines workflow needs trust for ncps upload and the closure check;
-`update` opens a `flake.lock` pull request (AGit, topic `ci-flake-update`)
-with its workflow credentials, because master is protected (tofunix
-`scriptorium/forge-cerberus.nix`: pushes and merges by manjo only), and the
-manifests job also uses ntfy, which needs trusted egress.
+`update` opens a `flake.lock` pull request as ci-bot instead of pushing,
+because master is protected ([Machines pull requests](#machines-pull-requests)),
+and the manifests job also uses ntfy, which needs trusted egress.
 
 Before staging the first node, opt Ryza into
 `dispatcher.protectStdSlots = true` in `_ci-slots.nix` (default off so

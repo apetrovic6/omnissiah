@@ -12,8 +12,9 @@
 # one for the regenerated CRD option modules.
 #
 # The pull request is created by pushing to refs/for/<branch> (Forgejo's AGit
-# flow), which needs push access and no API token. The topic is fixed, so a
-# pull request that is still open is updated in place, not duplicated.
+# flow), which needs read access and no API token; in CI it pushes as ci-bot.
+# The topic is fixed, so a pull request that is still open is updated in
+# place, not duplicated.
 #
 # Usage:  ./rituals/render-manifests-pr.sh [--no-push]
 #   --no-push   make the commits and print the description, push nothing
@@ -144,11 +145,14 @@ fi
 
 # force-push: every run starts from the current tip of the target branch, so
 # an open pull request from an earlier run is replaced, not appended to.
+# The description is base64: git refuses a push option with a newline in it
+# ("push options must not have new line characters"), and Forgejo decodes the
+# {base64} prefix.
 push_log=$(mktemp)
 git push origin "HEAD:refs/for/$TARGET" \
   -o "topic=$TOPIC" \
   -o "title=chore(taghmata): render manifests" \
-  -o "description=$description" \
+  -o "description={base64}$(printf %s "$description" | base64 -w0)" \
   -o force-push=true 2>&1 | tee "$push_log"
 
 # Forgejo answers the push with the pull request's address.

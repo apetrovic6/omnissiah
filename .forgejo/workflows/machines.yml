@@ -59,19 +59,12 @@ jobs:
       machines: ${{ steps.out.outputs.machines }}
       ref: ${{ steps.commit.outputs.ref }}
     env:
-      # Nothing to configure for the push: Forgejo mints a per-run token and
-      # exports it into the environment of every step as FORGEJO_TOKEN (with
-      # GITHUB_TOKEN as an alias). It can open a pull request with an AGit push
-      # to refs/for/master; master's protection keeps it off master itself.
-      # Changes authored with it trigger no workflow, so this job's flake.lock
-      # commit cannot start a second run.
-      #
-      # Define a CI_PUSH_TOKEN secret only if you want the pull request opened
-      # by a dedicated account (an access token scoped to this repo); it wins
-      # here. Never manjo's: a manjo token in a secret is a manjo credential in
-      # every non-fork run.
-      # FORGEJO_TOKEN is not a name you can define yourself -- it is reserved by
-      # the automatic token.
+      # ci-bot's PAT (write:repository; ci-bot only reads this repository),
+      # minted and set as this repository's secret by tofunix
+      # (_tofunix/scriptorium/forge-cerberus.nix). It opens the pull
+      # requests. Never put manjo's token here: a manjo token in a secret is
+      # a manjo credential in every non-fork run, and a writer's would make
+      # the HOM-32 dispatcher distrust every run of this repository.
       CI_PUSH_TOKEN: ${{ secrets.CI_PUSH_TOKEN }}
       # A scheduled run has no inputs, so both arrive empty and the defaults
       # below apply: the cron always updates the lock. `inputs.` is the newer
@@ -79,7 +72,11 @@ jobs:
       UPDATE_INPUT: ${{ github.event.inputs.update || inputs.update }}
       REQUESTED: ${{ github.event.inputs.machines || inputs.machines }}
     steps:
+      # No Actions token in .git/config: git would send it before asking the
+      # credential helper below, and it can't open an AGit pull request.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Update every flake input
         run: |
@@ -156,15 +153,24 @@ jobs:
             exit 0
           fi
 
-          # The credential: the run's automatic FORGEJO_TOKEN unless a
-          # CI_PUSH_TOKEN secret overrides it. Single quotes keep the expansion
+          # Without ci-bot's token nothing can open the pull request, so build
+          # what is on master instead of a commit the forge never sees.
+          if [ -z "${CI_PUSH_TOKEN:-}" ]; then
+            echo "::warning::CI_PUSH_TOKEN is not set (tofunix manages it, README \"Machines pull requests\"); no flake.lock pull request, building master's lock"
+            echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # The credential: ci-bot's token. Single quotes keep the expansion
           # inside the helper, so the token only ever reaches git's stdin -- not
           # a URL in .git/config, not the runner's process list -- and that
-          # .git/config is deleted with the workspace.
+          # .git/config is deleted with the workspace. The checkout keeps no
+          # Actions token (persist-credentials: false); git would send that
+          # one first and never ask this helper.
           git config user.name "Forgejo CI"
           git config user.email "ci@noosphere.uk"
           git config credential.helper \
-            '!f() { echo "username=x-access-token"; echo "password=${CI_PUSH_TOKEN:-$FORGEJO_TOKEN}"; }; f'
+            '!f() { echo "username=ci-bot"; echo "password=$CI_PUSH_TOKEN"; }; f'
 
           git commit -m "chore(flake): update inputs (Forgejo CI)"
           echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -173,10 +179,12 @@ jobs:
           # Into a pull request, never onto master. master is protected
           # (tofunix, scriptorium/forge-cerberus.nix): only manjo pushes or
           # merges there, which is what lets the HOM-32 dispatcher trust this
-          # repository's runs. AGit (refs/for/master) needs no branch and no
-          # write on master. The fixed topic plus force-push replaces the
-          # previous run's lock while that pull request is still open, the same
-          # way rituals/render-manifests-pr.sh keeps one manifests PR.
+          # repository's runs. AGit (refs/for/master) needs only read, which is
+          # all ci-bot has; the Actions token can't do it at all (Forgejo 15's
+          # AGit has no user row for it). The fixed topic plus force-push
+          # replaces the previous run's lock while that pull request is still
+          # open, the same way rituals/render-manifests-pr.sh keeps one
+          # manifests PR.
           # A push that fails (the forge down, the token refused) is an error:
           # the builds below would warm a lock nobody can merge.
           git push origin "HEAD:refs/for/master" \
@@ -241,20 +249,29 @@ jobs:
       # The update job's commit, so the render uses the new lock. Its pull
       # request stays separate from the flake.lock one (a chart upgrade is
       # read on its own): it is based on master and carries the lock commit
-      # too until the flake.lock pull request is merged.
+      # too until the flake.lock pull request is merged. Merging this one
+      # first lands the lock as well and leaves the flake.lock pull request
+      # empty until the next run replaces it.
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.update.outputs.ref }}
+          persist-credentials: false
 
       - name: Render and open the pull request
         run: |
           set -euo pipefail
 
+          if [ -z "${CI_PUSH_TOKEN:-}" ]; then
+            echo "::warning::CI_PUSH_TOKEN is not set (tofunix manages it); rendering without opening a pull request"
+            ./rituals/render-manifests-pr.sh --no-push
+            exit 0
+          fi
+
           # Same identity and credential as the flake.lock commit above.
           git config user.name "Forgejo CI"
           git config user.email "ci@noosphere.uk"
           git config credential.helper \
-            '!f() { echo "username=x-access-token"; echo "password=${CI_PUSH_TOKEN:-$FORGEJO_TOKEN}"; }; f'
+            '!f() { echo "username=ci-bot"; echo "password=$CI_PUSH_TOKEN"; }; f'
 
           ./rituals/render-manifests-pr.sh
 
