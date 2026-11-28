@@ -8,13 +8,15 @@ metadata:
     app.kubernetes.io/instance: garage-operator
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-operator
-    app.kubernetes.io/version: 0.9.0
+    app.kubernetes.io/version: 0.9.3
     control-plane: controller-manager
-    helm.sh/chart: garage-operator-0.9.0
+    helm.sh/chart: garage-operator-0.9.3
   name: garagekeys.garage.rajsingh.info
 spec:
   group: garage.rajsingh.info
   names:
+    categories:
+      - garage
     kind: GarageKey
     listKind: GarageKeyList
     plural: garagekeys
@@ -36,6 +38,7 @@ spec:
           type: string
         - jsonPath: .status.keyId
           name: KeyID
+          priority: 1
           type: string
         - jsonPath: .status.accessKeyId
           name: AccessKeyID
@@ -188,12 +191,14 @@ spec:
                       x-kubernetes-map-type: atomic
                     name:
                       description: Name of the GarageCluster resource.
+                      maxLength: 253
                       type: string
                     namespace:
                       description: |-
                         Namespace of the GarageCluster. Defaults to the referencing resource's namespace.
                         Cross-namespace references require a GarageReferenceGrant where supported by
                         the owning resource. GarageNode and GarageAdminToken reject them.
+                      maxLength: 63
                       type: string
                   required:
                     - name
@@ -217,6 +222,7 @@ spec:
                         accept only "GK" followed by 24 hex characters and reject anything else
                         with a 400 that is reported in the Ready condition.
                         Use secretRef instead to avoid storing credentials in the CR.
+                      maxLength: 256
                       type: string
                     accessKeyIdKey:
                       description: |-
@@ -231,6 +237,7 @@ spec:
                         hex characters and reject anything else with a 400 that is reported in the
                         Ready condition.
                         Use secretRef instead to avoid storing credentials in the CR.
+                      maxLength: 512
                       type: string
                     secretAccessKeyKey:
                       description: |-
@@ -261,7 +268,7 @@ spec:
                   description: |-
                     NeverExpires explicitly marks this key as having no expiration.
                     Sets the Garage key expiration to "never" rather than leaving it unset.
-                    Mutually exclusive with expiration.
+                    Mutually exclusive with expiresAt.
                   type: boolean
                 permissions:
                   description: |-
@@ -386,6 +393,13 @@ spec:
               required:
                 - clusterRef
               type: object
+              x-kubernetes-validations:
+                - message: clusterRef.name is immutable after creation
+                  rule: self.clusterRef.name == oldSelf.clusterRef.name
+                - message: clusterRef.namespace is immutable after creation
+                  rule: '!has(self.clusterRef.__namespace__) || !has(oldSelf.clusterRef.__namespace__) || self.clusterRef.__namespace__ == oldSelf.clusterRef.__namespace__'
+                - message: importKey is immutable after creation
+                  rule: has(self.importKey) == has(oldSelf.importKey) && (!has(self.importKey) || self.importKey == oldSelf.importKey)
             status:
               description: GarageKeyStatus defines the observed state of GarageKey
               properties:
@@ -493,6 +507,8 @@ spec:
                   description: |-
                     EffectivePermissions is retained for API compatibility but is not currently
                     populated. Status.Buckets reports Garage's authoritative effective bucket access.
+
+                    Deprecated: never populated by the operator. It will be removed in the next API version.
                   items:
                     description: EffectivePermission shows the resolved permission for a bucket
                     properties:

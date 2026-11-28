@@ -7,9 +7,9 @@ metadata:
     app.kubernetes.io/instance: garage-operator
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: garage-operator
-    app.kubernetes.io/version: 0.9.0
+    app.kubernetes.io/version: 0.9.3
     control-plane: controller-manager
-    helm.sh/chart: garage-operator-0.9.0
+    helm.sh/chart: garage-operator-0.9.3
   name: garage-operator-validating
 webhooks:
   - admissionReviewVersions:
@@ -196,4 +196,24 @@ webhooks:
           - UPDATE
         resources:
           - garagereferencegrants
+    sideEffects: None
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: garage-operator-webhook
+        namespace: garage-operator
+        path: /validate-garage-rajsingh-info-v1beta1-garagereplication
+    failurePolicy: Fail
+    name: vgaragereplication.kb.io
+    rules:
+      - apiGroups:
+          - garage.rajsingh.info
+        apiVersions:
+          - v1beta1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - garagereplications
     sideEffects: None
