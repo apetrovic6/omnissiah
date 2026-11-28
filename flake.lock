@@ -268,6 +268,28 @@
         "type": "github"
       }
     },
+    "codebase-memory-mcp_2": {
+      "inputs": {
+        "nixpkgs": [
+          "magos",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792186688,
+        "narHash": "sha256-qmLm6jALuPUh6+gSEmWzECWL7AC8HOHAbUHDpYOJlbs=",
+        "owner": "DeusData",
+        "repo": "codebase-memory-mcp",
+        "rev": "a7158ac2f48ca646b4527341b76f930f2aeff87e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "DeusData",
+        "ref": "v0.12.1",
+        "repo": "codebase-memory-mcp",
+        "type": "github"
+      }
+    },
     "connect-hx": {
       "inputs": {
         "flake-parts": "flake-parts_3",
@@ -2251,6 +2273,7 @@
     },
     "magos": {
       "inputs": {
+        "codebase-memory-mcp": "codebase-memory-mcp_2",
         "connect-hx": "connect-hx",
         "elephant": "elephant",
         "flake-parts": "flake-parts_4",
@@ -2283,11 +2306,11 @@
         "wrapper-modules": "wrapper-modules"
       },
       "locked": {
-        "lastModified": 1795798955,
-        "narHash": "sha256-DvBVJivZ/4QWh5M1znooH5AEIjYhVJLapaLQ79j1EHI=",
+        "lastModified": 1795872040,
+        "narHash": "sha256-RMd2HUQh7yDCGMp+q0lF8oODw4jeBGag+UW6boCvSvI=",
         "owner": "apetrovic6",
         "repo": "magos",
-        "rev": "92971ee37105d6bc4a3b9be201386c7b72fbf1d2",
+        "rev": "08ec9a8cd95df61d78013bf9089cdc39f95c9f58",
         "type": "github"
       },
       "original": {
