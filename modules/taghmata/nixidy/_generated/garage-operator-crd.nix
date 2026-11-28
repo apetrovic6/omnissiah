@@ -236,483 +236,6 @@ with lib; let
         "metadata" = mkOverride 1002 null;
       };
     };
-    "garage.rajsingh.info.v1alpha1.GarageBucket" = {
-      options = {
-        "apiVersion" = mkOption {
-          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
-          type = types.nullOr types.str;
-        };
-        "kind" = mkOption {
-          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
-          type = types.nullOr types.str;
-        };
-        "metadata" = mkOption {
-          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
-          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
-        };
-        "spec" = mkOption {
-          description = "GarageBucketSpec defines the desired state of GarageBucket";
-          type = submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketSpec";
-        };
-        "status" = mkOption {
-          description = "GarageBucketStatus defines the observed state of GarageBucket";
-          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketStatus");
-        };
-      };
-
-      config = {
-        "apiVersion" = mkOverride 1002 null;
-        "kind" = mkOverride 1002 null;
-        "metadata" = mkOverride 1002 null;
-        "status" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketSpec" = {
-      options = {
-        "clusterRef" = mkOption {
-          description = "ClusterRef references the GarageCluster this bucket belongs to";
-          type = submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketSpecClusterRef";
-        };
-        "deletionPolicy" = mkOption {
-          description = "DeletionPolicy controls whether deleting this resource also deletes the\ncorresponding Garage bucket. The default is Delete.";
-          type = (
-            types.nullOr (
-              types.enum [
-                "Delete"
-                "Retain"
-              ]
-            )
-          );
-        };
-        "globalAlias" = mkOption {
-          description = "GlobalAlias is the global alias for this bucket (optional)\nIf not set, the bucket name from metadata.name is used";
-          type = types.nullOr types.str;
-        };
-        "keyPermissions" = mkOption {
-          description = "KeyPermissions grants access to specific GarageKeys.\n\nNote: Permissions can be granted from either direction:\n- Here (GarageBucket.keyPermissions): Grant keys access to this bucket\n- On GarageKey (GarageKey.bucketPermissions): Grant the key access to buckets\n\nBoth approaches are equivalent and result in the same Garage API calls.\nUse whichever is more convenient for your workflow:\n- Bucket-centric: Define all key access on the bucket\n- Key-centric: Define all bucket access on the key\n\nIf the same permission is defined in both places, they are merged (not conflicting).";
-          type = (
-            types.nullOr (
-              types.listOf (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketSpecKeyPermissions")
-            )
-          );
-        };
-        "localAliases" = mkOption {
-          description = "LocalAliases are per-key local aliases for this bucket";
-          type = (
-            types.nullOr (
-              types.listOf (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketSpecLocalAliases")
-            )
-          );
-        };
-        "quotas" = mkOption {
-          description = "Quotas configures bucket quotas";
-          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketSpecQuotas");
-        };
-        "website" = mkOption {
-          description = "Website configures static website hosting for this bucket.\nNote: Only indexDocument and errorDocument are supported via the Admin API.\nFor advanced features (routing rules, redirectAll), use S3 PutBucketWebsite API directly.";
-          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketSpecWebsite");
-        };
-      };
-
-      config = {
-        "deletionPolicy" = mkOverride 1002 null;
-        "globalAlias" = mkOverride 1002 null;
-        "keyPermissions" = mkOverride 1002 null;
-        "localAliases" = mkOverride 1002 null;
-        "quotas" = mkOverride 1002 null;
-        "website" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketSpecClusterRef" = {
-      options = {
-        "kubeConfigSecretRef" = mkOption {
-          description = "KubeConfigSecretRef references a secret containing kubeconfig for a remote cluster.\nOnly used for cross-cluster references in multi-cluster federation scenarios.";
-          type = (
-            types.nullOr (
-              submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketSpecClusterRefKubeConfigSecretRef"
-            )
-          );
-        };
-        "name" = mkOption {
-          description = "Name of the GarageCluster";
-          type = types.str;
-        };
-        "namespace" = mkOption {
-          description = "Namespace of the GarageCluster (defaults to the same namespace as the referencing resource)";
-          type = types.nullOr types.str;
-        };
-      };
-
-      config = {
-        "kubeConfigSecretRef" = mkOverride 1002 null;
-        "namespace" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketSpecClusterRefKubeConfigSecretRef" = {
-      options = {
-        "key" = mkOption {
-          description = "The key of the secret to select from.  Must be a valid secret key.";
-          type = types.str;
-        };
-        "name" = mkOption {
-          description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
-          type = types.nullOr types.str;
-        };
-        "optional" = mkOption {
-          description = "Specify whether the Secret or its key must be defined";
-          type = types.nullOr types.bool;
-        };
-      };
-
-      config = {
-        "name" = mkOverride 1002 null;
-        "optional" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketSpecKeyPermissions" = {
-      options = {
-        "keyRef" = mkOption {
-          description = "KeyRef references the GarageKey by name";
-          type = types.str;
-        };
-        "owner" = mkOption {
-          description = "Owner allows bucket owner operations";
-          type = types.nullOr types.bool;
-        };
-        "read" = mkOption {
-          description = "Read allows reading objects";
-          type = types.nullOr types.bool;
-        };
-        "write" = mkOption {
-          description = "Write allows writing objects";
-          type = types.nullOr types.bool;
-        };
-      };
-
-      config = {
-        "owner" = mkOverride 1002 null;
-        "read" = mkOverride 1002 null;
-        "write" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketSpecLocalAliases" = {
-      options = {
-        "alias" = mkOption {
-          description = "Alias is the local alias name";
-          type = types.str;
-        };
-        "keyRef" = mkOption {
-          description = "KeyRef references the GarageKey";
-          type = types.str;
-        };
-      };
-
-      config = {};
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketSpecQuotas" = {
-      options = {
-        "maxObjects" = mkOption {
-          description = "MaxObjects is the maximum number of objects";
-          type = types.nullOr types.int;
-        };
-        "maxSize" = mkOption {
-          description = "MaxSize is the maximum bucket size in bytes";
-          type = types.nullOr (types.either types.int types.str);
-        };
-      };
-
-      config = {
-        "maxObjects" = mkOverride 1002 null;
-        "maxSize" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketSpecWebsite" = {
-      options = {
-        "enabled" = mkOption {
-          description = "Enabled enables static website hosting";
-          type = types.nullOr types.bool;
-        };
-        "errorDocument" = mkOption {
-          description = "ErrorDocument is the error document to serve for 404s";
-          type = types.nullOr types.str;
-        };
-        "indexDocument" = mkOption {
-          description = "IndexDocument is the default index document (default: index.html)";
-          type = types.nullOr types.str;
-        };
-      };
-
-      config = {
-        "enabled" = mkOverride 1002 null;
-        "errorDocument" = mkOverride 1002 null;
-        "indexDocument" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketStatus" = {
-      options = {
-        "bucketId" = mkOption {
-          description = "BucketID is the internal Garage bucket ID";
-          type = types.nullOr types.str;
-        };
-        "conditions" = mkOption {
-          description = "Conditions represent the current state";
-          type = (
-            types.nullOr (
-              types.listOf (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketStatusConditions")
-            )
-          );
-        };
-        "createdAt" = mkOption {
-          description = "CreatedAt is when the bucket was created in Garage";
-          type = types.nullOr types.str;
-        };
-        "globalAlias" = mkOption {
-          description = "GlobalAlias is the assigned global alias";
-          type = types.nullOr types.str;
-        };
-        "incompleteUploadBytes" = mkOption {
-          description = "IncompleteUploadBytes is the total bytes in incomplete multipart uploads";
-          type = types.nullOr types.int;
-        };
-        "incompleteUploadParts" = mkOption {
-          description = "IncompleteUploadParts is the count of parts in incomplete multipart uploads";
-          type = types.nullOr types.int;
-        };
-        "incompleteUploads" = mkOption {
-          description = "IncompleteUploads is the count of incomplete multipart uploads";
-          type = types.nullOr types.int;
-        };
-        "keys" = mkOption {
-          description = "Keys contains keys with access to this bucket";
-          type = (
-            types.nullOr (
-              coerceAttrsOfSubmodulesToListByKey "garage.rajsingh.info.v1alpha1.GarageBucketStatusKeys" "name" []
-            )
-          );
-          apply = attrsToList;
-        };
-        "localAliases" = mkOption {
-          description = "LocalAliases tracks per-key local aliases for this bucket";
-          type = (
-            types.nullOr (
-              types.listOf (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketStatusLocalAliases")
-            )
-          );
-        };
-        "objectCount" = mkOption {
-          description = "ObjectCount is the current object count";
-          type = types.nullOr types.int;
-        };
-        "observedGeneration" = mkOption {
-          description = "ObservedGeneration is the last observed generation";
-          type = types.nullOr types.int;
-        };
-        "phase" = mkOption {
-          description = "Phase represents the current phase";
-          type = types.nullOr types.str;
-        };
-        "quotaUsage" = mkOption {
-          description = "QuotaUsage shows current quota consumption";
-          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketStatusQuotaUsage");
-        };
-        "size" = mkOption {
-          description = "Size is the current bucket size";
-          type = types.nullOr types.str;
-        };
-        "websiteConfig" = mkOption {
-          description = "WebsiteConfig shows the current website configuration details";
-          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketStatusWebsiteConfig");
-        };
-        "websiteEnabled" = mkOption {
-          description = "WebsiteEnabled indicates if website hosting is currently enabled";
-          type = types.nullOr types.bool;
-        };
-        "websiteUrl" = mkOption {
-          description = "WebsiteURL is the computed website URL (if website hosting is enabled)";
-          type = types.nullOr types.str;
-        };
-      };
-
-      config = {
-        "bucketId" = mkOverride 1002 null;
-        "conditions" = mkOverride 1002 null;
-        "createdAt" = mkOverride 1002 null;
-        "globalAlias" = mkOverride 1002 null;
-        "incompleteUploadBytes" = mkOverride 1002 null;
-        "incompleteUploadParts" = mkOverride 1002 null;
-        "incompleteUploads" = mkOverride 1002 null;
-        "keys" = mkOverride 1002 null;
-        "localAliases" = mkOverride 1002 null;
-        "objectCount" = mkOverride 1002 null;
-        "observedGeneration" = mkOverride 1002 null;
-        "phase" = mkOverride 1002 null;
-        "quotaUsage" = mkOverride 1002 null;
-        "size" = mkOverride 1002 null;
-        "websiteConfig" = mkOverride 1002 null;
-        "websiteEnabled" = mkOverride 1002 null;
-        "websiteUrl" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketStatusConditions" = {
-      options = {
-        "lastTransitionTime" = mkOption {
-          description = "lastTransitionTime is the last time the condition transitioned from one status to another.\nThis should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.";
-          type = types.str;
-        };
-        "message" = mkOption {
-          description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
-          type = types.withMaxLength 32768 types.str;
-        };
-        "observedGeneration" = mkOption {
-          description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
-          type = types.nullOr (types.withMinimum 0 types.int);
-        };
-        "reason" = mkOption {
-          description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
-          type = types.withMaxLength 1024 (types.withMinLength 1 types.str);
-        };
-        "status" = mkOption {
-          description = "status of the condition, one of True, False, Unknown.";
-          type = (
-            types.enum [
-              "True"
-              "False"
-              "Unknown"
-            ]
-          );
-        };
-        "type" = mkOption {
-          description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
-          type = types.withMaxLength 316 types.str;
-        };
-      };
-
-      config = {
-        "observedGeneration" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketStatusKeys" = {
-      options = {
-        "keyId" = mkOption {
-          description = "KeyID is the access key ID";
-          type = types.nullOr types.str;
-        };
-        "name" = mkOption {
-          description = "Name is the key name";
-          type = types.nullOr types.str;
-        };
-        "permissions" = mkOption {
-          description = "Permissions granted to this key";
-          type = (
-            types.nullOr (submoduleOf "garage.rajsingh.info.v1alpha1.GarageBucketStatusKeysPermissions")
-          );
-        };
-      };
-
-      config = {
-        "keyId" = mkOverride 1002 null;
-        "name" = mkOverride 1002 null;
-        "permissions" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketStatusKeysPermissions" = {
-      options = {
-        "owner" = mkOption {
-          description = "Owner permission";
-          type = types.nullOr types.bool;
-        };
-        "read" = mkOption {
-          description = "Read permission";
-          type = types.nullOr types.bool;
-        };
-        "write" = mkOption {
-          description = "Write permission";
-          type = types.nullOr types.bool;
-        };
-      };
-
-      config = {
-        "owner" = mkOverride 1002 null;
-        "read" = mkOverride 1002 null;
-        "write" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketStatusLocalAliases" = {
-      options = {
-        "alias" = mkOption {
-          description = "Alias is the local alias name";
-          type = types.nullOr types.str;
-        };
-        "keyId" = mkOption {
-          description = "KeyID is the access key ID that owns this alias";
-          type = types.nullOr types.str;
-        };
-        "keyName" = mkOption {
-          description = "KeyName is the friendly name of the key";
-          type = types.nullOr types.str;
-        };
-      };
-
-      config = {
-        "alias" = mkOverride 1002 null;
-        "keyId" = mkOverride 1002 null;
-        "keyName" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketStatusQuotaUsage" = {
-      options = {
-        "objectCount" = mkOption {
-          description = "ObjectCount is the current object count";
-          type = types.nullOr types.int;
-        };
-        "objectLimit" = mkOption {
-          description = "ObjectLimit is the configured object limit (0 = unlimited)";
-          type = types.nullOr types.int;
-        };
-        "objectPercent" = mkOption {
-          description = "ObjectPercent is the percentage of object quota used";
-          type = types.nullOr types.int;
-        };
-        "sizeBytes" = mkOption {
-          description = "SizeBytes is the current size in bytes";
-          type = types.nullOr types.int;
-        };
-        "sizeLimit" = mkOption {
-          description = "SizeLimit is the configured size limit in bytes (0 = unlimited)";
-          type = types.nullOr types.int;
-        };
-        "sizePercent" = mkOption {
-          description = "SizePercent is the percentage of size quota used";
-          type = types.nullOr types.int;
-        };
-      };
-
-      config = {
-        "objectCount" = mkOverride 1002 null;
-        "objectLimit" = mkOverride 1002 null;
-        "objectPercent" = mkOverride 1002 null;
-        "sizeBytes" = mkOverride 1002 null;
-        "sizeLimit" = mkOverride 1002 null;
-        "sizePercent" = mkOverride 1002 null;
-      };
-    };
-    "garage.rajsingh.info.v1alpha1.GarageBucketStatusWebsiteConfig" = {
-      options = {
-        "errorDocument" = mkOption {
-          description = "ErrorDocument is the configured error document";
-          type = types.nullOr types.str;
-        };
-        "indexDocument" = mkOption {
-          description = "IndexDocument is the configured index document";
-          type = types.nullOr types.str;
-        };
-      };
-
-      config = {
-        "errorDocument" = mkOverride 1002 null;
-        "indexDocument" = mkOverride 1002 null;
-      };
-    };
     "garage.rajsingh.info.v1alpha1.GarageCluster" = {
       options = {
         "apiVersion" = mkOption {
@@ -855,11 +378,11 @@ with lib; let
         };
         "name" = mkOption {
           description = "Name of the GarageCluster resource.";
-          type = types.str;
+          type = types.withMaxLength 253 types.str;
         };
         "namespace" = mkOption {
           description = "Namespace of the GarageCluster. Defaults to the referencing resource's namespace.\nCross-namespace references require a GarageReferenceGrant where supported by\nthe owning resource. GarageNode and GarageAdminToken reject them.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 63 types.str);
         };
       };
 
@@ -897,7 +420,7 @@ with lib; let
         };
         "endpointKey" = mkOption {
           description = "EndpointKey is the key name for the admin endpoint";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 253 types.str);
         };
         "includeEndpoint" = mkOption {
           description = "IncludeEndpoint includes the admin API endpoint in the secret\nDefaults to true if not specified";
@@ -909,11 +432,11 @@ with lib; let
         };
         "name" = mkOption {
           description = "Name is the name of the secret to create\nDefaults to the GarageAdminToken name";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 253 types.str);
         };
         "tokenKey" = mkOption {
           description = "TokenKey is the key name for the admin token in the secret";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 253 types.str);
         };
       };
 
@@ -1153,11 +676,11 @@ with lib; let
         };
         "name" = mkOption {
           description = "Name of the GarageCluster resource.";
-          type = types.str;
+          type = types.withMaxLength 253 types.str;
         };
         "namespace" = mkOption {
           description = "Namespace of the GarageCluster. Defaults to the referencing resource's namespace.\nCross-namespace references require a GarageReferenceGrant where supported by\nthe owning resource. GarageNode and GarageAdminToken reject them.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 63 types.str);
         };
       };
 
@@ -1998,7 +1521,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "neverExpires" = mkOption {
-          description = "NeverExpires explicitly marks this key as having no expiration.\nSets the Garage key expiration to \"never\" rather than leaving it unset.\nMutually exclusive with expiration.";
+          description = "NeverExpires explicitly marks this key as having no expiration.\nSets the Garage key expiration to \"never\" rather than leaving it unset.\nMutually exclusive with expiresAt.";
           type = types.nullOr types.bool;
         };
         "permissions" = mkOption {
@@ -2109,11 +1632,11 @@ with lib; let
         };
         "name" = mkOption {
           description = "Name of the GarageCluster resource.";
-          type = types.str;
+          type = types.withMaxLength 253 types.str;
         };
         "namespace" = mkOption {
           description = "Namespace of the GarageCluster. Defaults to the referencing resource's namespace.\nCross-namespace references require a GarageReferenceGrant where supported by\nthe owning resource. GarageNode and GarageAdminToken reject them.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 63 types.str);
         };
       };
 
@@ -2147,7 +1670,7 @@ with lib; let
       options = {
         "accessKeyId" = mkOption {
           description = "AccessKeyID is the existing Garage access key ID. Garage v2.3 and newer\naccept at least 8 characters from ASCII letters, digits, '-', '_' and '.'\n(so keys from other S3 providers can be migrated). Garage v2.0 to v2.2\naccept only \"GK\" followed by 24 hex characters and reject anything else\nwith a 400 that is reported in the Ready condition.\nUse secretRef instead to avoid storing credentials in the CR.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 256 types.str);
         };
         "accessKeyIdKey" = mkOption {
           description = "AccessKeyIDKey is the key name within secretRef for the access key ID.\nDefaults to \"access-key-id\". Only valid when secretRef is set.";
@@ -2155,7 +1678,7 @@ with lib; let
         };
         "secretAccessKey" = mkOption {
           description = "SecretAccessKey is the existing secret access key. Garage v2.3 and newer\naccept at least 16 graphic ASCII characters (U+0021 to U+007E: no spaces,\ncontrol characters or non-ASCII text). Garage v2.0 to v2.2 accept only 64\nhex characters and reject anything else with a 400 that is reported in the\nReady condition.\nUse secretRef instead to avoid storing credentials in the CR.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 512 types.str);
         };
         "secretAccessKeyKey" = mkOption {
           description = "SecretAccessKeyKey is the key name within secretRef for the secret access key.\nDefaults to \"secret-access-key\". Only valid when secretRef is set.";
@@ -2338,7 +1861,7 @@ with lib; let
           type = types.nullOr types.str;
         };
         "effectivePermissions" = mkOption {
-          description = "EffectivePermissions is retained for API compatibility but is not currently\npopulated. Status.Buckets reports Garage's authoritative effective bucket access.";
+          description = "EffectivePermissions is retained for API compatibility but is not currently\npopulated. Status.Buckets reports Garage's authoritative effective bucket access.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = (
             types.nullOr (
               types.listOf (submoduleOf "garage.rajsingh.info.v1beta1.GarageKeyStatusEffectivePermissions")
@@ -2694,7 +2217,7 @@ with lib; let
         };
         "kubernetesNodeName" = mkOption {
           description = "KubernetesNodeName is the name of the Kubernetes node this GarageNode\nrepresents. Required when backing is NodeLocalPool: node_id discovery\nselects the managed node-local-pool Pod scheduled on this Kubernetes node.\nImmutable for node-local-pool-backed GarageNodes.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 253 types.str);
         };
         "logging" = mkOption {
           description = "Logging overrides cluster-level spec.logging for this node. A non-nil field\nhere wins over the cluster value; a nil field falls through to the cluster.";
@@ -2714,7 +2237,7 @@ with lib; let
         };
         "nodeLocalPoolName" = mkOption {
           description = "NodeLocalPoolName is the name of the parent GarageCluster's\nspec.storage.nodeLocalPools entry that owns this node. Required and\nimmutable when backing is NodeLocalPool; omitted for StatefulSet-backed and\nexternal GarageNodes.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 63 types.str);
         };
         "nodeSelector" = mkOption {
           description = "NodeSelector overrides node selection constraints.\nIf not specified, inherits from GarageCluster.";
@@ -3662,11 +3185,11 @@ with lib; let
         };
         "name" = mkOption {
           description = "Name of the GarageCluster resource.";
-          type = types.str;
+          type = types.withMaxLength 253 types.str;
         };
         "namespace" = mkOption {
           description = "Namespace of the GarageCluster. Defaults to the referencing resource's namespace.\nCross-namespace references require a GarageReferenceGrant where supported by\nthe owning resource. GarageNode and GarageAdminToken reject them.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 63 types.str);
         };
       };
 
@@ -4145,11 +3668,11 @@ with lib; let
         };
         "name" = mkOption {
           description = "Name of the GarageCluster resource.";
-          type = types.str;
+          type = types.withMaxLength 253 types.str;
         };
         "namespace" = mkOption {
           description = "Namespace of the GarageCluster. Defaults to the referencing resource's namespace.\nCross-namespace references require a GarageReferenceGrant where supported by\nthe owning resource. GarageNode and GarageAdminToken reject them.";
-          type = types.nullOr types.str;
+          type = types.nullOr (types.withMaxLength 63 types.str);
         };
       };
 
@@ -5286,11 +4809,11 @@ with lib; let
           type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageNodeStatusDataPartition");
         };
         "dbEngine" = mkOption {
-          description = "DBEngine is retained for API compatibility but is not currently populated;\nGarage's node-status API does not report the active database engine.";
+          description = "DBEngine is the metadata database engine reported by the node's GetNodeInfo API (e.g., lmdb, sqlite, fjall).";
           type = types.nullOr types.str;
         };
         "garageFeatures" = mkOption {
-          description = "GarageFeatures is retained for API compatibility but is not currently\npopulated because Garage's node-status API does not report build features.";
+          description = "GarageFeatures lists the Cargo build features reported by the node's GetNodeInfo API (e.g., webadmin, k2v, metrics).";
           type = types.nullOr (types.listOf types.str);
         };
         "hostname" = mkOption {
@@ -5607,12 +5130,13 @@ with lib; let
     "garage.rajsingh.info.v1beta1.GarageReferenceGrantSpecFrom" = {
       options = {
         "kind" = mkOption {
-          description = "Kind is the resource kind allowed to make cross-namespace references.\nGarageAdminToken remains in the schema for compatibility, but the static\ncredential path is namespace-local and does not accept cross-namespace grants.";
+          description = "Kind is the resource kind allowed to make cross-namespace references.\nGarageAdminToken remains in the schema for compatibility, but the static\ncredential path is namespace-local and does not accept cross-namespace grants.\nGarageReplication may reference a GarageCluster in another namespace.";
           type = (
             types.enum [
               "GarageKey"
               "GarageBucket"
               "GarageAdminToken"
+              "GarageReplication"
             ]
           );
         };
@@ -5681,7 +5205,7 @@ with lib; let
     "garage.rajsingh.info.v1beta1.GarageReferenceGrantSpecTo" = {
       options = {
         "bucketScope" = mkOption {
-          description = "BucketScope limits which buckets of this GarageCluster resources from\nanother namespace may reach through the grant.\n  - Referenced (default): only buckets backed by a GarageBucket the\n    source could reference by bucketRef: in its own namespace, or in\n    another namespace through a GarageBucket grant. GarageKey allBuckets,\n    and bucketId/globalAlias that do not resolve to such a GarageBucket,\n    are denied. A GarageBucket may not adopt an untracked bucket through\n    spec.bucketId.\n  - Cluster: every bucket in the cluster, including buckets created\n    outside Kubernetes (the behavior before v0.10).\nSame-namespace references are not affected.";
+          description = "BucketScope limits which buckets of this GarageCluster resources from\nanother namespace may reach through the grant.\n  - Referenced (default): only buckets backed by a GarageBucket the\n    source could reference by bucketRef: in its own namespace, or in\n    another namespace through a GarageBucket grant. GarageKey allBuckets,\n    and bucketId/globalAlias that do not resolve to such a GarageBucket,\n    are denied. A GarageBucket may not adopt an untracked bucket through\n    spec.bucketId.\n  - Cluster: every bucket in the cluster, including buckets created\n    outside Kubernetes (the behavior before v0.9.1).\nSame-namespace references are not affected.";
           type = (
             types.nullOr (
               types.enum [
@@ -5798,6 +5322,1841 @@ with lib; let
         "kind" = mkOverride 1002 null;
         "name" = mkOverride 1002 null;
         "namespace" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplication" = {
+      options = {
+        "apiVersion" = mkOption {
+          description = "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources";
+          type = types.nullOr types.str;
+        };
+        "kind" = mkOption {
+          description = "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds";
+          type = types.nullOr types.str;
+        };
+        "metadata" = mkOption {
+          description = "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata";
+          type = types.nullOr (globalSubmoduleOf "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta");
+        };
+        "spec" = mkOption {
+          description = "GarageReplicationSpec defines the desired state of GarageReplication.\n\nGarageReplication copies objects between two independent Garage clusters\nthrough their S3 APIs, for replication and migration. It is not a backup:\nthere are no point-in-time snapshots and no restore, and in mode Mirror a\ndeletion or an overwrite on the source reaches the destination on the next\nrun. Each run executes one Kubernetes Job per bucket in the\nGarageReplication's namespace, so the Jobs need network access to both S3\nendpoints. Only objects (and their user metadata) are copied: buckets, keys,\npermissions, quotas, website and lifecycle configuration are not. Deleting a\nGarageReplication never deletes object data on either side.";
+          type = submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpec";
+        };
+        "status" = mkOption {
+          description = "GarageReplicationStatus defines the observed state of GarageReplication.";
+          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationStatus");
+        };
+      };
+
+      config = {
+        "apiVersion" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "metadata" = mkOverride 1002 null;
+        "status" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpec" = {
+      options = {
+        "buckets" = mkOption {
+          description = "Buckets lists the buckets to replicate, keyed by destination bucket.";
+          type = types.listOf (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecBuckets");
+        };
+        "destination" = mkOption {
+          description = "Destination is the cluster objects are written to. Its credentials need\nread and write permission on the destination buckets. Destination\nbuckets must already exist: replication never creates buckets. A\ndestination bucket can be written by only one GarageReplication.";
+          type = submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestination";
+        };
+        "failedJobsHistoryLimit" = mkOption {
+          description = "FailedJobsHistoryLimit is the number of finished failed Jobs to keep.";
+          type = types.nullOr (types.withMaximum 50 (types.withMinimum 0 types.int));
+        };
+        "mirror" = mkOption {
+          description = "Mirror configures mode Mirror. Required when mode is Mirror and\nrejected otherwise.";
+          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecMirror");
+        };
+        "mode" = mkOption {
+          description = "Mode controls whether changes on the source can remove data on the\ndestination.\n  - Copy: copy new and changed objects. Source deletions are not\n    propagated. Changed objects are overwritten on the destination.\n  - Mirror: the destination reflects the source, including deletions,\n    capped by mirror.maxDeletes per bucket and run. The first run waits\n    for the trigger-sync annotation.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Copy"
+                "Mirror"
+              ]
+            )
+          );
+        };
+        "podTemplate" = mkOption {
+          description = "PodTemplate customizes the replication Pods.";
+          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplate");
+        };
+        "resources" = mkOption {
+          description = "Resources for the replication container.";
+          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecResources");
+        };
+        "retry" = mkOption {
+          description = "Retry bounds retries and duration of each per-bucket Job.";
+          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecRetry");
+        };
+        "schedule" = mkOption {
+          description = "Schedule is a cron expression (standard 5-field syntax, descriptors\nsuch as @hourly, optional CRON_TZ= prefix; UTC otherwise). Without a\nschedule, runs happen only through the garage.rajsingh.info/trigger-sync\nannotation (one-shot mode, e.g. for migrations).";
+          type = types.nullOr (types.withMaxLength 128 types.str);
+        };
+        "source" = mkOption {
+          description = "Source is the cluster objects are read from. Its credentials only need\nread permission on the source buckets.";
+          type = submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecSource";
+        };
+        "successfulJobsHistoryLimit" = mkOption {
+          description = "SuccessfulJobsHistoryLimit is the number of finished successful Jobs to\nkeep.";
+          type = types.nullOr (types.withMaximum 50 (types.withMinimum 0 types.int));
+        };
+        "suspend" = mkOption {
+          description = "Suspend stops starting new runs. A run already in progress finishes;\ndelete its Jobs to stop it immediately.";
+          type = types.nullOr types.bool;
+        };
+        "transfer" = mkOption {
+          description = "Transfer tunes the copy.";
+          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecTransfer");
+        };
+        "verification" = mkOption {
+          description = "Verification runs a comparison of source and destination after each\nsuccessful copy. Check compares sizes and MD5 hashes (size only for\nmultipart objects without a stored MD5) and fails the run on any\ndifference.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "None"
+                "Check"
+              ]
+            )
+          );
+        };
+      };
+
+      config = {
+        "failedJobsHistoryLimit" = mkOverride 1002 null;
+        "mirror" = mkOverride 1002 null;
+        "mode" = mkOverride 1002 null;
+        "podTemplate" = mkOverride 1002 null;
+        "resources" = mkOverride 1002 null;
+        "retry" = mkOverride 1002 null;
+        "schedule" = mkOverride 1002 null;
+        "successfulJobsHistoryLimit" = mkOverride 1002 null;
+        "suspend" = mkOverride 1002 null;
+        "transfer" = mkOverride 1002 null;
+        "verification" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecBuckets" = {
+      options = {
+        "destination" = mkOption {
+          description = "Destination is the bucket name (global alias) on the destination\ncluster. It is the list key, so destinations are unique.";
+          type = types.withMaxLength 63 (types.withMinLength 3 types.str);
+        };
+        "source" = mkOption {
+          description = "Source is the bucket name (global alias) on the source cluster.";
+          type = types.withMaxLength 63 (types.withMinLength 3 types.str);
+        };
+      };
+
+      config = {};
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestination" = {
+      options = {
+        "clusterRef" = mkOption {
+          description = "ClusterRef references a GarageCluster (operator-managed or a\nmanagement handle). The S3 endpoint and region are resolved from it.\nA cross-namespace reference requires a GarageReferenceGrant in the\ncluster's namespace that allows kind GarageReplication.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationClusterRef")
+          );
+        };
+        "credentialsSecretRef" = mkOption {
+          description = "CredentialsSecretRef references a Secret in the GarageReplication's\nnamespace holding an S3 access key. The Secret must carry the label\ngarage.rajsingh.info/replication-credentials: \"true\" (for a GarageKey,\nset it in spec.secretTemplate.labels). The access key ID is sent to the\nendpoint, so without this opt-in the right to create a GarageReplication\nwould amount to reading any Secret, or using any other application's\nkey. The default data keys match the Secret generated for a GarageKey.";
+          type = (
+            submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationCredentialsSecretRef"
+          );
+        };
+        "endpoint" = mkOption {
+          description = "Endpoint is an S3 endpoint of any Garage cluster, inside or outside\nKubernetes.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationEndpoint")
+          );
+        };
+      };
+
+      config = {
+        "clusterRef" = mkOverride 1002 null;
+        "endpoint" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationClusterRef" = {
+      options = {
+        "kubeConfigSecretRef" = mkOption {
+          description = "KubeConfigSecretRef is reserved for a future remote Kubernetes client integration.\nIt is currently rejected by admission because the operator does not use it.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationClusterRefKubeConfigSecretRef"
+            )
+          );
+        };
+        "name" = mkOption {
+          description = "Name of the GarageCluster resource.";
+          type = types.withMaxLength 253 types.str;
+        };
+        "namespace" = mkOption {
+          description = "Namespace of the GarageCluster. Defaults to the referencing resource's namespace.\nCross-namespace references require a GarageReferenceGrant where supported by\nthe owning resource. GarageNode and GarageAdminToken reject them.";
+          type = types.nullOr (types.withMaxLength 63 types.str);
+        };
+      };
+
+      config = {
+        "kubeConfigSecretRef" = mkOverride 1002 null;
+        "namespace" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationClusterRefKubeConfigSecretRef" = {
+      options = {
+        "key" = mkOption {
+          description = "The key of the secret to select from.  Must be a valid secret key.";
+          type = types.str;
+        };
+        "name" = mkOption {
+          description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
+          type = types.nullOr types.str;
+        };
+        "optional" = mkOption {
+          description = "Specify whether the Secret or its key must be defined";
+          type = types.nullOr types.bool;
+        };
+      };
+
+      config = {
+        "name" = mkOverride 1002 null;
+        "optional" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationCredentialsSecretRef" = {
+      options = {
+        "accessKeyIdKey" = mkOption {
+          description = "AccessKeyIDKey is the data key holding the access key ID.";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+        "name" = mkOption {
+          description = "Name of the Secret in the GarageReplication's namespace.";
+          type = types.withMaxLength 253 (types.withMinLength 1 types.str);
+        };
+        "secretAccessKeyKey" = mkOption {
+          description = "SecretAccessKeyKey is the data key holding the secret access key.";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = {
+        "accessKeyIdKey" = mkOverride 1002 null;
+        "secretAccessKeyKey" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationEndpoint" = {
+      options = {
+        "caBundleRef" = mkOption {
+          description = "CABundleRef references a ConfigMap holding a PEM CA bundle used, in\naddition to the system trust store, to verify the endpoint's TLS\ncertificate.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationEndpointCaBundleRef"
+            )
+          );
+        };
+        "region" = mkOption {
+          description = "Region is the Garage s3_region used for request signing.";
+          type = types.nullOr (types.withMaxLength 128 (types.withMinLength 1 types.str));
+        };
+        "url" = mkOption {
+          description = "URL of the S3 API: scheme and host (with an optional port) only, e.g.\nhttps://s3.example.com or http://garage.ns.svc:3900. Buckets are\naddressed path-style below it, so it has no path, query, fragment or\ncredentials.";
+          type = types.withMaxLength 2048 (types.withMinLength 1 types.str);
+        };
+      };
+
+      config = {
+        "caBundleRef" = mkOverride 1002 null;
+        "region" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecDestinationEndpointCaBundleRef" = {
+      options = {
+        "key" = mkOption {
+          description = "Key of the ConfigMap holding the PEM bundle.";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+        "name" = mkOption {
+          description = "Name of the ConfigMap.";
+          type = types.withMaxLength 253 (types.withMinLength 1 types.str);
+        };
+      };
+
+      config = {
+        "key" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecMirror" = {
+      options = {
+        "maxDeleteSize" = mkOption {
+          description = "MaxDeleteSize caps the total size of the destination objects one run\nmay delete per bucket, in bytes with an optional K, M, G or T suffix\n(binary multiples: KiB, MiB, GiB, TiB), e.g. \"10G\". Once reached the run\nstops and fails with reason MaxDeletesExceeded, like maxDeletes. Empty\nmeans no size cap.";
+          type = types.nullOr (types.withMaxLength 32 types.str);
+        };
+        "maxDeletes" = mkOption {
+          description = "MaxDeletes caps the number of destination objects one run may delete\nper bucket. Once reached the run stops and fails with reason\nMaxDeletesExceeded; deletions done before that point are kept.";
+          type = types.withMinimum 1 types.int;
+        };
+      };
+
+      config = {
+        "maxDeleteSize" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplate" = {
+      options = {
+        "affinity" = mkOption {
+          description = "Affinity for the Pods.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinity")
+          );
+        };
+        "annotations" = mkOption {
+          description = "Annotations added to the Pods.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "labels" = mkOption {
+          description = "Labels added to the Pods.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "nodeSelector" = mkOption {
+          description = "NodeSelector for the Pods.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "priorityClassName" = mkOption {
+          description = "PriorityClassName for the Pods.";
+          type = types.nullOr (types.withMaxLength 253 types.str);
+        };
+        "tolerations" = mkOption {
+          description = "Tolerations for the Pods.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateTolerations"
+              )
+            )
+          );
+        };
+      };
+
+      config = {
+        "affinity" = mkOverride 1002 null;
+        "annotations" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
+        "nodeSelector" = mkOverride 1002 null;
+        "priorityClassName" = mkOverride 1002 null;
+        "tolerations" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinity" = {
+      options = {
+        "nodeAffinity" = mkOption {
+          description = "Describes node affinity scheduling rules for the pod.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinity"
+            )
+          );
+        };
+        "podAffinity" = mkOption {
+          description = "Describes pod affinity scheduling rules (e.g. co-locate this pod in the same node, zone, etc. as some other pod(s)).";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinity"
+            )
+          );
+        };
+        "podAntiAffinity" = mkOption {
+          description = "Describes pod anti-affinity scheduling rules (e.g. avoid putting this pod in the same node, zone, etc. as some other pod(s)).";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinity"
+            )
+          );
+        };
+      };
+
+      config = {
+        "nodeAffinity" = mkOverride 1002 null;
+        "podAffinity" = mkOverride 1002 null;
+        "podAntiAffinity" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinity" = {
+      options = {
+        "preferredDuringSchedulingIgnoredDuringExecution" = mkOption {
+          description = "The scheduler will prefer to schedule pods to nodes that satisfy\nthe affinity expressions specified by this field, but it may choose\na node that violates one or more of the expressions. The node that is\nmost preferred is the one with the greatest sum of weights, i.e.\nfor each node that meets all of the scheduling requirements (resource\nrequest, requiredDuringScheduling affinity expressions, etc.),\ncompute a sum by iterating through the elements of this field and adding\n\"weight\" to the sum if the node matches the corresponding matchExpressions; the\nnode(s) with the highest sum are the most preferred.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecution"
+              )
+            )
+          );
+        };
+        "requiredDuringSchedulingIgnoredDuringExecution" = mkOption {
+          description = "If the affinity requirements specified by this field are not met at\nscheduling time, the pod will not be scheduled onto the node.\nIf the affinity requirements specified by this field cease to be met\nat some point during pod execution (e.g. due to an update), the system\nmay or may not try to eventually evict the pod from its node.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecution"
+            )
+          );
+        };
+      };
+
+      config = {
+        "preferredDuringSchedulingIgnoredDuringExecution" = mkOverride 1002 null;
+        "requiredDuringSchedulingIgnoredDuringExecution" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecution" = {
+      options = {
+        "preference" = mkOption {
+          description = "A node selector term, associated with the corresponding weight.";
+          type = (
+            submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreference"
+          );
+        };
+        "weight" = mkOption {
+          description = "Weight associated with matching the corresponding nodeSelectorTerm, in the range 1-100.";
+          type = types.int;
+        };
+      };
+
+      config = {};
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreference" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "A list of node selector requirements by node's labels.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchFields" = mkOption {
+          description = "A list of node selector requirements by node's fields.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchFields"
+              )
+            )
+          );
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchFields" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "The label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "Represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "An array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. If the operator is Gt or Lt, the values\narray must have a single element, which will be interpreted as an integer.\nThis array is replaced during a strategic merge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityPreferredDuringSchedulingIgnoredDuringExecutionPreferenceMatchFields" = {
+      options = {
+        "key" = mkOption {
+          description = "The label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "Represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "An array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. If the operator is Gt or Lt, the values\narray must have a single element, which will be interpreted as an integer.\nThis array is replaced during a strategic merge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecution" = {
+      options = {
+        "nodeSelectorTerms" = mkOption {
+          description = "Required. A list of node selector terms. The terms are ORed.";
+          type = (
+            types.listOf (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTerms"
+            )
+          );
+        };
+      };
+
+      config = {};
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTerms" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "A list of node selector requirements by node's labels.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchFields" = mkOption {
+          description = "A list of node selector requirements by node's fields.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchFields"
+              )
+            )
+          );
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchFields" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "The label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "Represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "An array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. If the operator is Gt or Lt, the values\narray must have a single element, which will be interpreted as an integer.\nThis array is replaced during a strategic merge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityNodeAffinityRequiredDuringSchedulingIgnoredDuringExecutionNodeSelectorTermsMatchFields" = {
+      options = {
+        "key" = mkOption {
+          description = "The label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "Represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "An array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. If the operator is Gt or Lt, the values\narray must have a single element, which will be interpreted as an integer.\nThis array is replaced during a strategic merge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinity" = {
+      options = {
+        "preferredDuringSchedulingIgnoredDuringExecution" = mkOption {
+          description = "The scheduler will prefer to schedule pods to nodes that satisfy\nthe affinity expressions specified by this field, but it may choose\na node that violates one or more of the expressions. The node that is\nmost preferred is the one with the greatest sum of weights, i.e.\nfor each node that meets all of the scheduling requirements (resource\nrequest, requiredDuringScheduling affinity expressions, etc.),\ncompute a sum by iterating through the elements of this field and adding\n\"weight\" to the sum if the node has pods which matches the corresponding podAffinityTerm; the\nnode(s) with the highest sum are the most preferred.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecution"
+              )
+            )
+          );
+        };
+        "requiredDuringSchedulingIgnoredDuringExecution" = mkOption {
+          description = "If the affinity requirements specified by this field are not met at\nscheduling time, the pod will not be scheduled onto the node.\nIf the affinity requirements specified by this field cease to be met\nat some point during pod execution (e.g. due to a pod label update), the\nsystem may or may not try to eventually evict the pod from its node.\nWhen there are multiple elements, the lists of nodes corresponding to each\npodAffinityTerm are intersected, i.e. all terms must be satisfied.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecution"
+              )
+            )
+          );
+        };
+      };
+
+      config = {
+        "preferredDuringSchedulingIgnoredDuringExecution" = mkOverride 1002 null;
+        "requiredDuringSchedulingIgnoredDuringExecution" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecution" = {
+      options = {
+        "podAffinityTerm" = mkOption {
+          description = "Required. A pod affinity term, associated with the corresponding weight.";
+          type = (
+            submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTerm"
+          );
+        };
+        "weight" = mkOption {
+          description = "weight associated with matching the corresponding podAffinityTerm,\nin the range 1-100.";
+          type = types.int;
+        };
+      };
+
+      config = {};
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTerm" = {
+      options = {
+        "labelSelector" = mkOption {
+          description = "A label query over a set of resources, in this case pods.\nIf it's null, this PodAffinityTerm matches with no Pods.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelector"
+            )
+          );
+        };
+        "matchLabelKeys" = mkOption {
+          description = "MatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with `labelSelector` as `key in (value)`\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both matchLabelKeys and labelSelector.\nAlso, matchLabelKeys cannot be set when labelSelector isn't set.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "mismatchLabelKeys" = mkOption {
+          description = "MismatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with `labelSelector` as `key notin (value)`\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both mismatchLabelKeys and labelSelector.\nAlso, mismatchLabelKeys cannot be set when labelSelector isn't set.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "namespaceSelector" = mkOption {
+          description = "A label query over the set of namespaces that the term applies to.\nThe term is applied to the union of the namespaces selected by this field\nand the ones listed in the namespaces field.\nnull selector and null or empty namespaces list means \"this pod's namespace\".\nAn empty selector ({}) matches all namespaces.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelector"
+            )
+          );
+        };
+        "namespaces" = mkOption {
+          description = "namespaces specifies a static list of namespace names that the term applies to.\nThe term is applied to the union of the namespaces listed in this field\nand the ones selected by namespaceSelector.\nnull or empty namespaces list and null namespaceSelector means \"this pod's namespace\".";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "topologyKey" = mkOption {
+          description = "This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching\nthe labelSelector in the specified namespaces, where co-located is defined as running on a node\nwhose value of the label with key topologyKey matches that of any node on which any of the\nselected pods is running.\nEmpty topologyKey is not allowed.";
+          type = types.str;
+        };
+      };
+
+      config = {
+        "labelSelector" = mkOverride 1002 null;
+        "matchLabelKeys" = mkOverride 1002 null;
+        "mismatchLabelKeys" = mkOverride 1002 null;
+        "namespaceSelector" = mkOverride 1002 null;
+        "namespaces" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelector" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelector" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecution" = {
+      options = {
+        "labelSelector" = mkOption {
+          description = "A label query over a set of resources, in this case pods.\nIf it's null, this PodAffinityTerm matches with no Pods.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelector"
+            )
+          );
+        };
+        "matchLabelKeys" = mkOption {
+          description = "MatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with `labelSelector` as `key in (value)`\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both matchLabelKeys and labelSelector.\nAlso, matchLabelKeys cannot be set when labelSelector isn't set.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "mismatchLabelKeys" = mkOption {
+          description = "MismatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with `labelSelector` as `key notin (value)`\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both mismatchLabelKeys and labelSelector.\nAlso, mismatchLabelKeys cannot be set when labelSelector isn't set.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "namespaceSelector" = mkOption {
+          description = "A label query over the set of namespaces that the term applies to.\nThe term is applied to the union of the namespaces selected by this field\nand the ones listed in the namespaces field.\nnull selector and null or empty namespaces list means \"this pod's namespace\".\nAn empty selector ({}) matches all namespaces.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelector"
+            )
+          );
+        };
+        "namespaces" = mkOption {
+          description = "namespaces specifies a static list of namespace names that the term applies to.\nThe term is applied to the union of the namespaces listed in this field\nand the ones selected by namespaceSelector.\nnull or empty namespaces list and null namespaceSelector means \"this pod's namespace\".";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "topologyKey" = mkOption {
+          description = "This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching\nthe labelSelector in the specified namespaces, where co-located is defined as running on a node\nwhose value of the label with key topologyKey matches that of any node on which any of the\nselected pods is running.\nEmpty topologyKey is not allowed.";
+          type = types.str;
+        };
+      };
+
+      config = {
+        "labelSelector" = mkOverride 1002 null;
+        "matchLabelKeys" = mkOverride 1002 null;
+        "mismatchLabelKeys" = mkOverride 1002 null;
+        "namespaceSelector" = mkOverride 1002 null;
+        "namespaces" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelector" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelector" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinity" = {
+      options = {
+        "preferredDuringSchedulingIgnoredDuringExecution" = mkOption {
+          description = "The scheduler will prefer to schedule pods to nodes that satisfy\nthe anti-affinity expressions specified by this field, but it may choose\na node that violates one or more of the expressions. The node that is\nmost preferred is the one with the greatest sum of weights, i.e.\nfor each node that meets all of the scheduling requirements (resource\nrequest, requiredDuringScheduling anti-affinity expressions, etc.),\ncompute a sum by iterating through the elements of this field and subtracting\n\"weight\" from the sum if the node has pods which matches the corresponding podAffinityTerm; the\nnode(s) with the highest sum are the most preferred.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecution"
+              )
+            )
+          );
+        };
+        "requiredDuringSchedulingIgnoredDuringExecution" = mkOption {
+          description = "If the anti-affinity requirements specified by this field are not met at\nscheduling time, the pod will not be scheduled onto the node.\nIf the anti-affinity requirements specified by this field cease to be met\nat some point during pod execution (e.g. due to a pod label update), the\nsystem may or may not try to eventually evict the pod from its node.\nWhen there are multiple elements, the lists of nodes corresponding to each\npodAffinityTerm are intersected, i.e. all terms must be satisfied.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecution"
+              )
+            )
+          );
+        };
+      };
+
+      config = {
+        "preferredDuringSchedulingIgnoredDuringExecution" = mkOverride 1002 null;
+        "requiredDuringSchedulingIgnoredDuringExecution" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecution" = {
+      options = {
+        "podAffinityTerm" = mkOption {
+          description = "Required. A pod affinity term, associated with the corresponding weight.";
+          type = (
+            submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTerm"
+          );
+        };
+        "weight" = mkOption {
+          description = "weight associated with matching the corresponding podAffinityTerm,\nin the range 1-100.";
+          type = types.int;
+        };
+      };
+
+      config = {};
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTerm" = {
+      options = {
+        "labelSelector" = mkOption {
+          description = "A label query over a set of resources, in this case pods.\nIf it's null, this PodAffinityTerm matches with no Pods.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelector"
+            )
+          );
+        };
+        "matchLabelKeys" = mkOption {
+          description = "MatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with `labelSelector` as `key in (value)`\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both matchLabelKeys and labelSelector.\nAlso, matchLabelKeys cannot be set when labelSelector isn't set.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "mismatchLabelKeys" = mkOption {
+          description = "MismatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with `labelSelector` as `key notin (value)`\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both mismatchLabelKeys and labelSelector.\nAlso, mismatchLabelKeys cannot be set when labelSelector isn't set.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "namespaceSelector" = mkOption {
+          description = "A label query over the set of namespaces that the term applies to.\nThe term is applied to the union of the namespaces selected by this field\nand the ones listed in the namespaces field.\nnull selector and null or empty namespaces list means \"this pod's namespace\".\nAn empty selector ({}) matches all namespaces.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelector"
+            )
+          );
+        };
+        "namespaces" = mkOption {
+          description = "namespaces specifies a static list of namespace names that the term applies to.\nThe term is applied to the union of the namespaces listed in this field\nand the ones selected by namespaceSelector.\nnull or empty namespaces list and null namespaceSelector means \"this pod's namespace\".";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "topologyKey" = mkOption {
+          description = "This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching\nthe labelSelector in the specified namespaces, where co-located is defined as running on a node\nwhose value of the label with key topologyKey matches that of any node on which any of the\nselected pods is running.\nEmpty topologyKey is not allowed.";
+          type = types.str;
+        };
+      };
+
+      config = {
+        "labelSelector" = mkOverride 1002 null;
+        "matchLabelKeys" = mkOverride 1002 null;
+        "mismatchLabelKeys" = mkOverride 1002 null;
+        "namespaceSelector" = mkOverride 1002 null;
+        "namespaces" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelector" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermLabelSelectorMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelector" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityPreferredDuringSchedulingIgnoredDuringExecutionPodAffinityTermNamespaceSelectorMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecution" = {
+      options = {
+        "labelSelector" = mkOption {
+          description = "A label query over a set of resources, in this case pods.\nIf it's null, this PodAffinityTerm matches with no Pods.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelector"
+            )
+          );
+        };
+        "matchLabelKeys" = mkOption {
+          description = "MatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with `labelSelector` as `key in (value)`\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both matchLabelKeys and labelSelector.\nAlso, matchLabelKeys cannot be set when labelSelector isn't set.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "mismatchLabelKeys" = mkOption {
+          description = "MismatchLabelKeys is a set of pod label keys to select which pods will\nbe taken into consideration. The keys are used to lookup values from the\nincoming pod labels, those key-value labels are merged with `labelSelector` as `key notin (value)`\nto select the group of existing pods which pods will be taken into consideration\nfor the incoming pod's pod (anti) affinity. Keys that don't exist in the incoming\npod labels will be ignored. The default value is empty.\nThe same key is forbidden to exist in both mismatchLabelKeys and labelSelector.\nAlso, mismatchLabelKeys cannot be set when labelSelector isn't set.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "namespaceSelector" = mkOption {
+          description = "A label query over the set of namespaces that the term applies to.\nThe term is applied to the union of the namespaces selected by this field\nand the ones listed in the namespaces field.\nnull selector and null or empty namespaces list means \"this pod's namespace\".\nAn empty selector ({}) matches all namespaces.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelector"
+            )
+          );
+        };
+        "namespaces" = mkOption {
+          description = "namespaces specifies a static list of namespace names that the term applies to.\nThe term is applied to the union of the namespaces listed in this field\nand the ones selected by namespaceSelector.\nnull or empty namespaces list and null namespaceSelector means \"this pod's namespace\".";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "topologyKey" = mkOption {
+          description = "This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching\nthe labelSelector in the specified namespaces, where co-located is defined as running on a node\nwhose value of the label with key topologyKey matches that of any node on which any of the\nselected pods is running.\nEmpty topologyKey is not allowed.";
+          type = types.str;
+        };
+      };
+
+      config = {
+        "labelSelector" = mkOverride 1002 null;
+        "matchLabelKeys" = mkOverride 1002 null;
+        "mismatchLabelKeys" = mkOverride 1002 null;
+        "namespaceSelector" = mkOverride 1002 null;
+        "namespaces" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelector" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionLabelSelectorMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelector" = {
+      options = {
+        "matchExpressions" = mkOption {
+          description = "matchExpressions is a list of label selector requirements. The requirements are ANDed.";
+          type = (
+            types.nullOr (
+              types.listOf (
+                submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions"
+              )
+            )
+          );
+        };
+        "matchLabels" = mkOption {
+          description = "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels\nmap is equivalent to an element of matchExpressions, whose key field is \"key\", the\noperator is \"In\", and the values array contains only \"value\". The requirements are ANDed.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+      };
+
+      config = {
+        "matchExpressions" = mkOverride 1002 null;
+        "matchLabels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateAffinityPodAntiAffinityRequiredDuringSchedulingIgnoredDuringExecutionNamespaceSelectorMatchExpressions" = {
+      options = {
+        "key" = mkOption {
+          description = "key is the label key that the selector applies to.";
+          type = types.str;
+        };
+        "operator" = mkOption {
+          description = "operator represents a key's relationship to a set of values.\nValid operators are In, NotIn, Exists and DoesNotExist.";
+          type = types.str;
+        };
+        "values" = mkOption {
+          description = "values is an array of string values. If the operator is In or NotIn,\nthe values array must be non-empty. If the operator is Exists or DoesNotExist,\nthe values array must be empty. This array is replaced during a strategic\nmerge patch.";
+          type = types.nullOr (types.listOf types.str);
+        };
+      };
+
+      config = {
+        "values" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecPodTemplateTolerations" = {
+      options = {
+        "effect" = mkOption {
+          description = "Effect indicates the taint effect to match. Empty means match all taint effects.\nWhen specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.";
+          type = types.nullOr types.str;
+        };
+        "key" = mkOption {
+          description = "Key is the taint key that the toleration applies to. Empty means match all taint keys.\nIf the key is empty, operator must be Exists; this combination means to match all values and all keys.";
+          type = types.nullOr types.str;
+        };
+        "operator" = mkOption {
+          description = "Operator represents a key's relationship to the value.\nValid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.\nExists is equivalent to wildcard for value, so that a pod can\ntolerate all taints of a particular category.\nLt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).";
+          type = types.nullOr types.str;
+        };
+        "tolerationSeconds" = mkOption {
+          description = "TolerationSeconds represents the period of time the toleration (which must be\nof effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,\nit is not set, which means tolerate the taint forever (do not evict). Zero and\nnegative values will be treated as 0 (evict immediately) by the system.";
+          type = types.nullOr types.int;
+        };
+        "value" = mkOption {
+          description = "Value is the taint value the toleration matches to.\nIf the operator is Exists, the value should be empty, otherwise just a regular string.";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "effect" = mkOverride 1002 null;
+        "key" = mkOverride 1002 null;
+        "operator" = mkOverride 1002 null;
+        "tolerationSeconds" = mkOverride 1002 null;
+        "value" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecResources" = {
+      options = {
+        "claims" = mkOption {
+          description = "Claims lists the names of resources, defined in spec.resourceClaims,\nthat are used by this container.\n\nThis field depends on the\nDynamicResourceAllocation feature gate.\n\nThis field is immutable. It can only be set for containers.";
+          type = (
+            types.nullOr (
+              coerceAttrsOfSubmodulesToListByKey
+              "garage.rajsingh.info.v1beta1.GarageReplicationSpecResourcesClaims"
+              "name"
+              ["name"]
+            )
+          );
+          apply = attrsToList;
+        };
+        "limits" = mkOption {
+          description = "Limits describes the maximum amount of compute resources allowed.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/";
+          type = types.nullOr (types.attrsOf (types.either types.int types.str));
+        };
+        "requests" = mkOption {
+          description = "Requests describes the minimum amount of compute resources required.\nIf Requests is omitted for a container, it defaults to Limits if that is explicitly specified,\notherwise to an implementation-defined value. Requests cannot exceed Limits.\nMore info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/";
+          type = types.nullOr (types.attrsOf (types.either types.int types.str));
+        };
+      };
+
+      config = {
+        "claims" = mkOverride 1002 null;
+        "limits" = mkOverride 1002 null;
+        "requests" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecResourcesClaims" = {
+      options = {
+        "name" = mkOption {
+          description = "Name must match the name of one entry in pod.spec.resourceClaims of\nthe Pod where this field is used. It makes that resource available\ninside a container.";
+          type = types.str;
+        };
+        "request" = mkOption {
+          description = "Request is the name chosen for a request in the referenced claim.\nIf empty, everything from the claim is made available, otherwise\nonly the result of this request.";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "request" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecRetry" = {
+      options = {
+        "activeDeadlineSeconds" = mkOption {
+          description = "ActiveDeadlineSeconds bounds the duration of a per-bucket Job.";
+          type = types.nullOr (types.withMinimum 60 types.int);
+        };
+        "backoffLimit" = mkOption {
+          description = "BackoffLimit is the number of Pod retries of a per-bucket Job. Each\nretry restarts the bucket's comparison; already copied objects are\nskipped.";
+          type = types.nullOr (types.withMaximum 10 (types.withMinimum 0 types.int));
+        };
+      };
+
+      config = {
+        "activeDeadlineSeconds" = mkOverride 1002 null;
+        "backoffLimit" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecSource" = {
+      options = {
+        "clusterRef" = mkOption {
+          description = "ClusterRef references a GarageCluster (operator-managed or a\nmanagement handle). The S3 endpoint and region are resolved from it.\nA cross-namespace reference requires a GarageReferenceGrant in the\ncluster's namespace that allows kind GarageReplication.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceClusterRef")
+          );
+        };
+        "credentialsSecretRef" = mkOption {
+          description = "CredentialsSecretRef references a Secret in the GarageReplication's\nnamespace holding an S3 access key. The Secret must carry the label\ngarage.rajsingh.info/replication-credentials: \"true\" (for a GarageKey,\nset it in spec.secretTemplate.labels). The access key ID is sent to the\nendpoint, so without this opt-in the right to create a GarageReplication\nwould amount to reading any Secret, or using any other application's\nkey. The default data keys match the Secret generated for a GarageKey.";
+          type = submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceCredentialsSecretRef";
+        };
+        "endpoint" = mkOption {
+          description = "Endpoint is an S3 endpoint of any Garage cluster, inside or outside\nKubernetes.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceEndpoint")
+          );
+        };
+      };
+
+      config = {
+        "clusterRef" = mkOverride 1002 null;
+        "endpoint" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceClusterRef" = {
+      options = {
+        "kubeConfigSecretRef" = mkOption {
+          description = "KubeConfigSecretRef is reserved for a future remote Kubernetes client integration.\nIt is currently rejected by admission because the operator does not use it.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceClusterRefKubeConfigSecretRef"
+            )
+          );
+        };
+        "name" = mkOption {
+          description = "Name of the GarageCluster resource.";
+          type = types.withMaxLength 253 types.str;
+        };
+        "namespace" = mkOption {
+          description = "Namespace of the GarageCluster. Defaults to the referencing resource's namespace.\nCross-namespace references require a GarageReferenceGrant where supported by\nthe owning resource. GarageNode and GarageAdminToken reject them.";
+          type = types.nullOr (types.withMaxLength 63 types.str);
+        };
+      };
+
+      config = {
+        "kubeConfigSecretRef" = mkOverride 1002 null;
+        "namespace" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceClusterRefKubeConfigSecretRef" = {
+      options = {
+        "key" = mkOption {
+          description = "The key of the secret to select from.  Must be a valid secret key.";
+          type = types.str;
+        };
+        "name" = mkOption {
+          description = "Name of the referent.\nThis field is effectively required, but due to backwards compatibility is\nallowed to be empty. Instances of this type with an empty value here are\nalmost certainly wrong.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names";
+          type = types.nullOr types.str;
+        };
+        "optional" = mkOption {
+          description = "Specify whether the Secret or its key must be defined";
+          type = types.nullOr types.bool;
+        };
+      };
+
+      config = {
+        "name" = mkOverride 1002 null;
+        "optional" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceCredentialsSecretRef" = {
+      options = {
+        "accessKeyIdKey" = mkOption {
+          description = "AccessKeyIDKey is the data key holding the access key ID.";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+        "name" = mkOption {
+          description = "Name of the Secret in the GarageReplication's namespace.";
+          type = types.withMaxLength 253 (types.withMinLength 1 types.str);
+        };
+        "secretAccessKeyKey" = mkOption {
+          description = "SecretAccessKeyKey is the data key holding the secret access key.";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = {
+        "accessKeyIdKey" = mkOverride 1002 null;
+        "secretAccessKeyKey" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceEndpoint" = {
+      options = {
+        "caBundleRef" = mkOption {
+          description = "CABundleRef references a ConfigMap holding a PEM CA bundle used, in\naddition to the system trust store, to verify the endpoint's TLS\ncertificate.";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceEndpointCaBundleRef"
+            )
+          );
+        };
+        "region" = mkOption {
+          description = "Region is the Garage s3_region used for request signing.";
+          type = types.nullOr (types.withMaxLength 128 (types.withMinLength 1 types.str));
+        };
+        "url" = mkOption {
+          description = "URL of the S3 API: scheme and host (with an optional port) only, e.g.\nhttps://s3.example.com or http://garage.ns.svc:3900. Buckets are\naddressed path-style below it, so it has no path, query, fragment or\ncredentials.";
+          type = types.withMaxLength 2048 (types.withMinLength 1 types.str);
+        };
+      };
+
+      config = {
+        "caBundleRef" = mkOverride 1002 null;
+        "region" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecSourceEndpointCaBundleRef" = {
+      options = {
+        "key" = mkOption {
+          description = "Key of the ConfigMap holding the PEM bundle.";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+        "name" = mkOption {
+          description = "Name of the ConfigMap.";
+          type = types.withMaxLength 253 (types.withMinLength 1 types.str);
+        };
+      };
+
+      config = {
+        "key" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationSpecTransfer" = {
+      options = {
+        "bandwidthLimit" = mkOption {
+          description = "BandwidthLimit caps the transfer rate of each per-bucket Job in bytes\nper second, with an optional K, M, G suffix (binary multiples: KiB/s,\nMiB/s, GiB/s), e.g. \"50M\". Empty means unlimited.";
+          type = types.nullOr (types.withMaxLength 32 types.str);
+        };
+        "checkers" = mkOption {
+          description = "Checkers is the number of objects compared in parallel per bucket.";
+          type = types.nullOr (types.withMaximum 128 (types.withMinimum 1 types.int));
+        };
+        "concurrency" = mkOption {
+          description = "Concurrency is the number of objects transferred in parallel per bucket.";
+          type = types.nullOr (types.withMaximum 64 (types.withMinimum 1 types.int));
+        };
+        "maxConcurrentBuckets" = mkOption {
+          description = "MaxConcurrentBuckets is the number of buckets replicated in parallel.";
+          type = types.nullOr (types.withMaximum 50 (types.withMinimum 1 types.int));
+        };
+      };
+
+      config = {
+        "bandwidthLimit" = mkOverride 1002 null;
+        "checkers" = mkOverride 1002 null;
+        "concurrency" = mkOverride 1002 null;
+        "maxConcurrentBuckets" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationStatus" = {
+      options = {
+        "buckets" = mkOption {
+          description = "Buckets reports per-bucket results, keyed by destination bucket.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationStatusBuckets")
+            )
+          );
+        };
+        "conditions" = mkOption {
+          description = "Conditions: Ready (configuration resolved; reasons include\nCredentialsNotAllowed and DestinationConflict), Synced (every bucket\nsucceeded in the last run on the current configuration), Suspended.";
+          type = (
+            types.nullOr (
+              types.listOf (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationStatusConditions")
+            )
+          );
+        };
+        "currentRun" = mkOption {
+          description = "CurrentRun describes the run in progress.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationStatusCurrentRun")
+          );
+        };
+        "lastOperation" = mkOption {
+          description = "LastOperation records the outcome of the last trigger-sync annotation.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationStatusLastOperation")
+          );
+        };
+        "lastRun" = mkOption {
+          description = "LastRun describes the most recent finished run.";
+          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationStatusLastRun");
+        };
+        "lastScheduleTime" = mkOption {
+          description = "LastScheduleTime is the start time of the most recent run.";
+          type = types.nullOr types.str;
+        };
+        "lastSuccessfulSyncTime" = mkOption {
+          description = "LastSuccessfulSyncTime is when the most recent run in which every\nbucket succeeded finished.";
+          type = types.nullOr types.str;
+        };
+        "lastSyncTime" = mkOption {
+          description = "LastSyncTime is when the most recent run finished, whatever its result.";
+          type = types.nullOr types.str;
+        };
+        "nextSyncTime" = mkOption {
+          description = "NextSyncTime is when the next scheduled run starts. Unset without a\nschedule or while suspended.";
+          type = types.nullOr types.str;
+        };
+        "observedGeneration" = mkOption {
+          description = "ObservedGeneration is the last observed generation.";
+          type = types.nullOr types.int;
+        };
+        "phase" = mkOption {
+          description = "Phase summarizes the state.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Pending"
+                "Idle"
+                "Syncing"
+                "Suspended"
+                "Failed"
+              ]
+            )
+          );
+        };
+      };
+
+      config = {
+        "buckets" = mkOverride 1002 null;
+        "conditions" = mkOverride 1002 null;
+        "currentRun" = mkOverride 1002 null;
+        "lastOperation" = mkOverride 1002 null;
+        "lastRun" = mkOverride 1002 null;
+        "lastScheduleTime" = mkOverride 1002 null;
+        "lastSuccessfulSyncTime" = mkOverride 1002 null;
+        "lastSyncTime" = mkOverride 1002 null;
+        "nextSyncTime" = mkOverride 1002 null;
+        "observedGeneration" = mkOverride 1002 null;
+        "phase" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationStatusBuckets" = {
+      options = {
+        "activeJob" = mkOption {
+          description = "ActiveJob is the Job currently replicating this bucket.";
+          type = types.nullOr types.str;
+        };
+        "destination" = mkOption {
+          description = "Destination bucket; the list key.";
+          type = types.str;
+        };
+        "hold" = mkOption {
+          description = "Hold is set when this bucket must not run again without a person\nasking. Scheduled runs skip a held bucket. Only the trigger-sync\nannotation releases it; editing the spec does not.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "SourceEmpty"
+                "MaxDeletesExceeded"
+                "AwaitingTrigger"
+              ]
+            )
+          );
+        };
+        "lastCompletionTime" = mkOption {
+          description = "LastCompletionTime is when LastJob finished.";
+          type = types.nullOr types.str;
+        };
+        "lastError" = mkOption {
+          description = "LastError is a fixed reason for a failed LastJob.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "AuthFailed"
+                "BucketNotFound"
+                "EndpointUnreachable"
+                "SourceEmpty"
+                "MaxDeletesExceeded"
+                "VerificationFailed"
+                "DeadlineExceeded"
+                "TransferErrors"
+                "Unknown"
+              ]
+            )
+          );
+        };
+        "lastJob" = mkOption {
+          description = "LastJob is the last finished Job recorded for this bucket.";
+          type = types.nullOr types.str;
+        };
+        "lastMode" = mkOption {
+          description = "LastMode is the mode LastJob ran in. A Mirror bucket whose last Job\ndid not run in Mirror mode waits for a trigger-sync (hold\nAwaitingTrigger) before its first Mirror run.";
+          type = types.nullOr types.str;
+        };
+        "lastResult" = mkOption {
+          description = "LastResult is the outcome of LastJob.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Succeeded"
+                "Failed"
+                "Cancelled"
+              ]
+            )
+          );
+        };
+        "lastRunId" = mkOption {
+          description = "LastRunID is the run of LastJob.";
+          type = types.nullOr types.str;
+        };
+        "lastStatistics" = mkOption {
+          description = "LastStatistics are the copy engine's counters for LastJob. Unset when\nthe engine reported none (e.g. the Pod was killed).";
+          type = (
+            types.nullOr (
+              submoduleOf "garage.rajsingh.info.v1beta1.GarageReplicationStatusBucketsLastStatistics"
+            )
+          );
+        };
+        "lastSuccessfulTime" = mkOption {
+          description = "LastSuccessfulTime is when the last successful Job for this bucket finished.";
+          type = types.nullOr types.str;
+        };
+        "lastVerification" = mkOption {
+          description = "LastVerification is the verification outcome when verification ran.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Passed"
+                "Failed"
+              ]
+            )
+          );
+        };
+        "source" = mkOption {
+          description = "Source bucket.";
+          type = types.str;
+        };
+      };
+
+      config = {
+        "activeJob" = mkOverride 1002 null;
+        "hold" = mkOverride 1002 null;
+        "lastCompletionTime" = mkOverride 1002 null;
+        "lastError" = mkOverride 1002 null;
+        "lastJob" = mkOverride 1002 null;
+        "lastMode" = mkOverride 1002 null;
+        "lastResult" = mkOverride 1002 null;
+        "lastRunId" = mkOverride 1002 null;
+        "lastStatistics" = mkOverride 1002 null;
+        "lastSuccessfulTime" = mkOverride 1002 null;
+        "lastVerification" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationStatusBucketsLastStatistics" = {
+      options = {
+        "bytes" = mkOption {
+          description = "Bytes is the number of bytes written to the destination.";
+          type = types.int;
+        };
+        "checks" = mkOption {
+          description = "Checks is the number of objects compared and found up to date.";
+          type = types.int;
+        };
+        "deletes" = mkOption {
+          description = "Deletes is the number of destination objects deleted (Mirror).";
+          type = types.int;
+        };
+        "differences" = mkOption {
+          description = "Differences is the number of differences found by verification.";
+          type = types.nullOr types.int;
+        };
+        "elapsedSeconds" = mkOption {
+          description = "ElapsedSeconds is the duration of the copy.";
+          type = types.int;
+        };
+        "errors" = mkOption {
+          description = "Errors is the number of errors.";
+          type = types.int;
+        };
+        "transfers" = mkOption {
+          description = "Transfers is the number of objects written to the destination.";
+          type = types.int;
+        };
+      };
+
+      config = {
+        "differences" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationStatusConditions" = {
+      options = {
+        "lastTransitionTime" = mkOption {
+          description = "lastTransitionTime is the last time the condition transitioned from one status to another.\nThis should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.";
+          type = types.str;
+        };
+        "message" = mkOption {
+          description = "message is a human readable message indicating details about the transition.\nThis may be an empty string.";
+          type = types.withMaxLength 32768 types.str;
+        };
+        "observedGeneration" = mkOption {
+          description = "observedGeneration represents the .metadata.generation that the condition was set based upon.\nFor instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\nwith respect to the current state of the instance.";
+          type = types.nullOr (types.withMinimum 0 types.int);
+        };
+        "reason" = mkOption {
+          description = "reason contains a programmatic identifier indicating the reason for the condition's last transition.\nProducers of specific condition types may define expected values and meanings for this field,\nand whether the values are considered a guaranteed API.\nThe value should be a CamelCase string.\nThis field may not be empty.";
+          type = types.withMaxLength 1024 (types.withMinLength 1 types.str);
+        };
+        "status" = mkOption {
+          description = "status of the condition, one of True, False, Unknown.";
+          type = (
+            types.enum [
+              "True"
+              "False"
+              "Unknown"
+            ]
+          );
+        };
+        "type" = mkOption {
+          description = "type of condition in CamelCase or in foo.example.com/CamelCase.";
+          type = types.withMaxLength 316 types.str;
+        };
+      };
+
+      config = {
+        "observedGeneration" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationStatusCurrentRun" = {
+      options = {
+        "buckets" = mkOption {
+          description = "Buckets lists the destination buckets taking part in the run.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "completionTime" = mkOption {
+          description = "CompletionTime is when the run finished.";
+          type = types.nullOr types.str;
+        };
+        "id" = mkOption {
+          description = "ID identifies the run; it is part of the Job names.";
+          type = types.str;
+        };
+        "reason" = mkOption {
+          description = "Reason is why the run started.";
+          type = (
+            types.enum [
+              "Initial"
+              "Scheduled"
+              "Triggered"
+            ]
+          );
+        };
+        "result" = mkOption {
+          description = "Result is Succeeded when every bucket of the run succeeded, else Failed.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Succeeded"
+                "Failed"
+                "Cancelled"
+              ]
+            )
+          );
+        };
+        "specHash" = mkOption {
+          description = "SpecHash identifies the configuration the run started with.";
+          type = types.nullOr types.str;
+        };
+        "startTime" = mkOption {
+          description = "StartTime is when the run started.";
+          type = types.str;
+        };
+        "trigger" = mkOption {
+          description = "Trigger is the trigger-sync annotation value that started the run.";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "buckets" = mkOverride 1002 null;
+        "completionTime" = mkOverride 1002 null;
+        "result" = mkOverride 1002 null;
+        "specHash" = mkOverride 1002 null;
+        "trigger" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationStatusLastOperation" = {
+      options = {
+        "error" = mkOption {
+          description = "Error contains the error message when Succeeded is false";
+          type = types.nullOr types.str;
+        };
+        "succeeded" = mkOption {
+          description = "Succeeded indicates the operation completed without error";
+          type = types.nullOr types.bool;
+        };
+        "triggeredAt" = mkOption {
+          description = "TriggeredAt is when the operation was triggered";
+          type = types.nullOr types.str;
+        };
+        "type" = mkOption {
+          description = "Type is the operation type (e.g. \"Snapshot\", \"Repair:Blocks\", \"Scrub:start\")";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "error" = mkOverride 1002 null;
+        "succeeded" = mkOverride 1002 null;
+        "triggeredAt" = mkOverride 1002 null;
+        "type" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta1.GarageReplicationStatusLastRun" = {
+      options = {
+        "buckets" = mkOption {
+          description = "Buckets lists the destination buckets taking part in the run.";
+          type = types.nullOr (types.listOf types.str);
+        };
+        "completionTime" = mkOption {
+          description = "CompletionTime is when the run finished.";
+          type = types.nullOr types.str;
+        };
+        "id" = mkOption {
+          description = "ID identifies the run; it is part of the Job names.";
+          type = types.str;
+        };
+        "reason" = mkOption {
+          description = "Reason is why the run started.";
+          type = (
+            types.enum [
+              "Initial"
+              "Scheduled"
+              "Triggered"
+            ]
+          );
+        };
+        "result" = mkOption {
+          description = "Result is Succeeded when every bucket of the run succeeded, else Failed.";
+          type = (
+            types.nullOr (
+              types.enum [
+                "Succeeded"
+                "Failed"
+                "Cancelled"
+              ]
+            )
+          );
+        };
+        "specHash" = mkOption {
+          description = "SpecHash identifies the configuration the run started with.";
+          type = types.nullOr types.str;
+        };
+        "startTime" = mkOption {
+          description = "StartTime is when the run started.";
+          type = types.str;
+        };
+        "trigger" = mkOption {
+          description = "Trigger is the trigger-sync annotation value that started the run.";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "buckets" = mkOverride 1002 null;
+        "completionTime" = mkOverride 1002 null;
+        "result" = mkOverride 1002 null;
+        "specHash" = mkOverride 1002 null;
+        "trigger" = mkOverride 1002 null;
       };
     };
     "garage.rajsingh.info.v1beta2.GarageCluster" = {
@@ -6050,6 +7409,10 @@ with lib; let
           description = "TraceSink is the OpenTelemetry collector address for tracing.";
           type = types.nullOr types.str;
         };
+        "webUI" = mkOption {
+          description = "WebUI exposes Garage's web admin UI (served on this Admin API port by\nGarage v2.6.0 and newer) through a generated Ingress or HTTPRoute. It\ncontrols exposure only; Garage always serves the UI on the admin port\nand the operator cannot turn it off. Unset exposes nothing. Not\nsupported on management handles (spec.connectTo without storage or\ngateway), which run no Garage workload.";
+          type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminWebUI");
+        };
       };
 
       config = {
@@ -6059,6 +7422,7 @@ with lib; let
         "metricsRequireToken" = mkOverride 1002 null;
         "metricsTokenSecretRef" = mkOverride 1002 null;
         "traceSink" = mkOverride 1002 null;
+        "webUI" = mkOverride 1002 null;
       };
     };
     "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminAdminTokenSecretRef" = {
@@ -6101,6 +7465,133 @@ with lib; let
       config = {
         "name" = mkOverride 1002 null;
         "optional" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminWebUI" = {
+      options = {
+        "gateway" = mkOption {
+          description = "Gateway configures a generated Gateway API HTTPRoute. Mutually exclusive\nwith Ingress. Requires the Gateway API CRDs and the operator's Gateway API\nsupport (chart value gatewayAPI.enabled); otherwise WebUIExposed is False with\nreason GatewayAPIUnavailable.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminWebUIGateway")
+          );
+        };
+        "hostname" = mkOption {
+          description = "Hostname is the external hostname the UI is served on. Wildcards are\nnot supported.";
+          type = types.withMaxLength 253 (types.withMinLength 1 types.str);
+        };
+        "ingress" = mkOption {
+          description = "Ingress configures a generated Kubernetes Ingress. Mutually exclusive\nwith Gateway. Requires the operator's Ingress support (chart value\ningress.enabled); otherwise WebUIExposed is False with reason\nIngressDisabled.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminWebUIIngress")
+          );
+        };
+        "scheme" = mkOption {
+          description = "Scheme is the URL scheme published in status.endpoints.webUI.external.\nIt does not configure TLS. When unset it is https if\ningress.tlsSecretName is set and http otherwise; set it to https when\nTLS is terminated elsewhere (for example on the Gateway listener).";
+          type = (
+            types.nullOr (
+              types.enum [
+                "http"
+                "https"
+              ]
+            )
+          );
+        };
+      };
+
+      config = {
+        "gateway" = mkOverride 1002 null;
+        "ingress" = mkOverride 1002 null;
+        "scheme" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminWebUIGateway" = {
+      options = {
+        "annotations" = mkOption {
+          description = "Annotations to add to the HTTPRoute.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "labels" = mkOption {
+          description = "Labels to add to the HTTPRoute. Operator-managed labels take precedence\non conflict.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "parentRefs" = mkOption {
+          description = "ParentRefs are passed through verbatim to the HTTPRoute's\nspec.parentRefs (Gateway names, optional sectionName, and optional\ncross-namespace references). A parentRef without a namespace refers to\nthe cluster's namespace. At least one is required.";
+          type = (
+            coerceAttrsOfSubmodulesToListByKey
+            "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminWebUIGatewayParentRefs"
+            "name"
+            []
+          );
+          apply = attrsToList;
+        };
+      };
+
+      config = {
+        "annotations" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminWebUIGatewayParentRefs" = {
+      options = {
+        "group" = mkOption {
+          description = "Group is the group of the referent.\nWhen unspecified, \"gateway.networking.k8s.io\" is inferred.\nTo set the core API group (such as for a \"Service\" kind referent),\nGroup must be explicitly set to \"\" (empty string).\n\nSupport: Core";
+          type = types.nullOr (types.withMaxLength 253 types.str);
+        };
+        "kind" = mkOption {
+          description = "Kind is kind of the referent.\n\nThere are two kinds of parent resources with \"Core\" support:\n\n* Gateway (Gateway conformance profile)\n* Service (Mesh conformance profile, ClusterIP Services only)\n\nSupport for other resources is Implementation-Specific.";
+          type = types.nullOr (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+        "name" = mkOption {
+          description = "Name is the name of the referent.\n\nSupport: Core";
+          type = types.withMaxLength 253 (types.withMinLength 1 types.str);
+        };
+        "namespace" = mkOption {
+          description = "Namespace is the namespace of the referent. When unspecified, this refers\nto the local namespace of the Route.\n\nNote that there are specific rules for ParentRefs which cross namespace\nboundaries. Cross-namespace references are only valid if they are explicitly\nallowed by something in the namespace they are referring to. For example:\nGateway has the AllowedRoutes field, and ReferenceGrant provides a\ngeneric way to enable any other kind of cross-namespace reference.\n\n<gateway:experimental:description>\nParentRefs from a Route to a Service in the same namespace are \"producer\"\nroutes, which apply default routing rules to inbound connections from\nany namespace to the Service.\n\nParentRefs from a Route to a Service in a different namespace are\n\"consumer\" routes, and these routing rules are only applied to outbound\nconnections originating from the same namespace as the Route, for which\nthe intended destination of the connections are a Service targeted as a\nParentRef of the Route.\n</gateway:experimental:description>\n\nSupport: Core";
+          type = types.nullOr (types.withMaxLength 63 (types.withMinLength 1 types.str));
+        };
+        "port" = mkOption {
+          description = "Port is the network port this Route targets. It can be interpreted\ndifferently based on the type of parent resource.\n\nWhen the parent resource is a Gateway, this targets all listeners\nlistening on the specified port that also support this kind of Route(and\nselect this Route). It's not recommended to set `Port` unless the\nnetworking behaviors specified in a Route must apply to a specific port\nas opposed to a listener(s) whose port(s) may be changed. When both Port\nand SectionName are specified, the name and port of the selected listener\nmust match both specified values.\n\n<gateway:experimental:description>\nWhen the parent resource is a Service, this targets a specific port in the\nService spec. When both Port (experimental) and SectionName are specified,\nthe name and port of the selected port must match both specified values.\n</gateway:experimental:description>\n\nImplementations MAY choose to support other parent resources.\nImplementations supporting other types of parent resources MUST clearly\ndocument how/if Port is interpreted.\n\nFor the purpose of status, an attachment is considered successful as\nlong as the parent resource accepts it partially. For example, Gateway\nlisteners can restrict which Routes can attach to them by Route kind,\nnamespace, or hostname. If 1 of 2 Gateway listeners accept attachment\nfrom the referencing Route, the Route MUST be considered successfully\nattached. If no Gateway listeners accept attachment from this Route,\nthe Route MUST be considered detached from the Gateway.\n\nSupport: Extended";
+          type = types.nullOr (types.withMaximum 65535 (types.withMinimum 1 types.int));
+        };
+        "sectionName" = mkOption {
+          description = "SectionName is the name of a section within the target resource. In the\nfollowing resources, SectionName is interpreted as the following:\n\n* Gateway: Listener name. When both Port (experimental) and SectionName\nare specified, the name and port of the selected listener must match\nboth specified values.\n* Service: Port name. When both Port (experimental) and SectionName\nare specified, the name and port of the selected listener must match\nboth specified values.\n\nImplementations MAY choose to support attaching Routes to other resources.\nIf that is the case, they MUST clearly document how SectionName is\ninterpreted.\n\nWhen unspecified (empty string), this will reference the entire resource.\nFor the purpose of status, an attachment is considered successful if at\nleast one section in the parent resource accepts it. For example, Gateway\nlisteners can restrict which Routes can attach to them by Route kind,\nnamespace, or hostname. If 1 of 2 Gateway listeners accept attachment from\nthe referencing Route, the Route MUST be considered successfully\nattached. If no Gateway listeners accept attachment from this Route, the\nRoute MUST be considered detached from the Gateway.\n\nSupport: Core";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = {
+        "group" = mkOverride 1002 null;
+        "kind" = mkOverride 1002 null;
+        "namespace" = mkOverride 1002 null;
+        "port" = mkOverride 1002 null;
+        "sectionName" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterSpecAdminWebUIIngress" = {
+      options = {
+        "annotations" = mkOption {
+          description = "Annotations to add to the Ingress (for example cert-manager or\ningress-controller annotations).";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "ingressClassName" = mkOption {
+          description = "IngressClassName is the ingress class the Ingress must match\n(spec.ingressClassName). When empty, the Ingress is left without a\nclass so the cluster's default ingress controller picks it up.";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+        "labels" = mkOption {
+          description = "Labels to add to the Ingress. Operator-managed labels take precedence\non conflict.";
+          type = types.nullOr (types.attrsOf types.str);
+        };
+        "tlsSecretName" = mkOption {
+          description = "TLSSecretName is the name of a TLS Secret in the cluster's namespace,\nattached to the Ingress (spec.tls) for the hostname. The Secret must\nalready exist (or be issued by cert-manager from an annotation); the\noperator does not provision certificates.";
+          type = types.nullOr (types.withMaxLength 253 (types.withMinLength 1 types.str));
+        };
+      };
+
+      config = {
+        "annotations" = mkOverride 1002 null;
+        "ingressClassName" = mkOverride 1002 null;
+        "labels" = mkOverride 1002 null;
+        "tlsSecretName" = mkOverride 1002 null;
       };
     };
     "garage.rajsingh.info.v1beta2.GarageClusterSpecBlocks" = {
@@ -9285,11 +10776,16 @@ with lib; let
           description = "BindPort is the port to bind for K2V API.";
           type = types.nullOr (types.withMaximum 65535 (types.withMinimum 1 types.int));
         };
+        "publicEndpoint" = mkOption {
+          description = "PublicEndpoint is the public K2V URL advertised in auto-generated client\nconfigurations (Garage k2v_api.public_endpoint). Must be a complete URL\nwith a scheme and host, for example \"https://k2v.example.com\". There is\nno default. Rendered only for Garage v2.5.0 and newer; older tagged\nimages skip the key and admission warns.";
+          type = types.nullOr types.str;
+        };
       };
 
       config = {
         "bindAddress" = mkOverride 1002 null;
         "bindPort" = mkOverride 1002 null;
+        "publicEndpoint" = mkOverride 1002 null;
       };
     };
     "garage.rajsingh.info.v1beta2.GarageClusterSpecLayoutManagement" = {
@@ -9305,7 +10801,7 @@ with lib; let
           );
         };
         "minNodesHealthy" = mkOption {
-          description = "MinNodesHealthy is the minimum healthy nodes required before applying layout changes.";
+          description = "MinNodesHealthy is the minimum healthy nodes required before applying layout changes.\n\nDeprecated: MinNodesHealthy is currently a no-op and is ignored by the\ncontroller; it will be removed in the next API version.";
           type = types.nullOr types.int;
         };
         "redundancyVerification" = mkOption {
@@ -9888,6 +11384,14 @@ with lib; let
           description = "BindPort is the port to bind for S3 API.";
           type = types.nullOr (types.withMaximum 65535 (types.withMinimum 1 types.int));
         };
+        "publicEndpoint" = mkOption {
+          description = "PublicEndpoint is the public S3 URL advertised in auto-generated client\nconfigurations (Garage s3_api.public_endpoint). Must be a complete URL\nwith a scheme and host, for example \"https://s3.example.com\". There is no\ndefault. Rendered only for Garage v2.5.0 and newer; older tagged images\nskip the key and admission warns.";
+          type = types.nullOr types.str;
+        };
+        "publicEndpointPathStyle" = mkOption {
+          description = "PublicEndpointPathStyle, when set, selects path-style (true) or\nvirtual-hosted (false) URLs in those auto-generated S3 client\nconfigurations (Garage s3_api.public_endpoint_path_style). Unset omits\nthe key so Garage applies its own default. Setting false requires\nrootDomain; Garage v2.5.0+ will not start otherwise. Rendered only for\nGarage v2.5.0 and newer; older tagged images skip the key and admission\nwarns.";
+          type = types.nullOr types.bool;
+        };
         "region" = mkOption {
           description = "Region is the AWS S3 region name to use.";
           type = types.str;
@@ -9901,6 +11405,8 @@ with lib; let
       config = {
         "bindAddress" = mkOverride 1002 null;
         "bindPort" = mkOverride 1002 null;
+        "publicEndpoint" = mkOverride 1002 null;
+        "publicEndpointPathStyle" = mkOverride 1002 null;
         "rootDomain" = mkOverride 1002 null;
       };
     };
@@ -12941,7 +14447,7 @@ with lib; let
       options = {
         "hostPath" = mkOption {
           description = "HostPath is an absolute directory on each selected Kubernetes Node.";
-          type = types.str;
+          type = types.withMaxLength 4096 types.str;
         };
         "hostPathType" = mkOption {
           description = "HostPathType controls whether Kubernetes creates a missing directory.\nDirectory (the production default) also requires a pre-provisioned\n.garage-volume-id file inside HostPath. The pool workload mounts that\nmarker separately as HostPath type File, so an unmounted but still-present\nroot-filesystem directory cannot silently receive Garage data.\nDirectoryOrCreate skips this marker guarantee and is intended for tests or\nexplicitly ephemeral provisioning.";
@@ -13001,7 +14507,7 @@ with lib; let
       options = {
         "hostPath" = mkOption {
           description = "HostPath is an absolute directory on each selected Kubernetes Node.";
-          type = types.str;
+          type = types.withMaxLength 4096 types.str;
         };
         "hostPathType" = mkOption {
           description = "HostPathType controls whether Kubernetes creates a missing directory.\nDirectory (the production default) also requires a pre-provisioned\n.garage-volume-id file inside HostPath. The pool workload mounts that\nmarker separately as HostPath type File, so an unmounted but still-present\nroot-filesystem directory cannot silently receive Garage data.\nDirectoryOrCreate skips this marker guarantee and is intended for tests or\nexplicitly ephemeral provisioning.";
@@ -15405,7 +16911,7 @@ with lib; let
           );
         };
         "blockErrors" = mkOption {
-          description = "BlockErrors is the count of blocks with sync errors across all nodes.\nAbsent means not observed (Admin API unreachable, or a node that can\nhold blocks did not answer; silent capacityless gateways are ignored).\n0 means observed with no errors.";
+          description = "BlockErrors is the count of blocks with sync errors across all nodes:\nthe largest per-node count reported by the block resync workers, a\nlower bound when more than one node reports errors. Block hashes\n(blockErrorDetails.topErrors) are listed only while a requested\nverify-redundancy proof runs and the set has at most 4096 records;\nthe count is then the exact number of distinct blocks.\nAbsent means not observed (Admin API unreachable, or a node that can\nhold blocks did not answer; silent capacityless gateways are ignored).\n0 means observed with no errors.";
           type = types.nullOr types.int;
         };
         "buildInfo" = mkOption {
@@ -15467,7 +16973,7 @@ with lib; let
           type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusLayoutHistory");
         };
         "layoutPreview" = mkOption {
-          description = "LayoutPreview shows what would change if staged layout is applied.";
+          description = "LayoutPreview shows what would change if staged layout is applied.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusLayoutPreview");
         };
         "layoutVersion" = mkOption {
@@ -15560,11 +17066,11 @@ with lib; let
           type = types.str;
         };
         "stagedLayoutVersion" = mkOption {
-          description = "StagedLayoutVersion is the staged layout version pending application.";
+          description = "StagedLayoutVersion is the staged layout version pending application.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = types.nullOr types.int;
         };
         "stagedRoles" = mkOption {
-          description = "StagedRoles is the number of roles in the staged layout.";
+          description = "StagedRoles is the number of roles in the staged layout.\n\nDeprecated: never populated by the operator. It will be removed in the next API version.";
           type = types.nullOr types.int;
         };
         "storageDrain" = mkOption {
@@ -15864,6 +17370,12 @@ with lib; let
           description = "Web is the web hosting endpoint.";
           type = types.nullOr types.str;
         };
+        "webUI" = mkOption {
+          description = "WebUI is where Garage's web admin UI is reachable: the in-cluster URL\non the admin port and, when spec.admin.webUI exposes it, the external\nURL. Not set on management handles.";
+          type = (
+            types.nullOr (submoduleOf "garage.rajsingh.info.v1beta2.GarageClusterStatusEndpointsWebUI")
+          );
+        };
       };
 
       config = {
@@ -15873,6 +17385,24 @@ with lib; let
         "rpc" = mkOverride 1002 null;
         "s3" = mkOverride 1002 null;
         "web" = mkOverride 1002 null;
+        "webUI" = mkOverride 1002 null;
+      };
+    };
+    "garage.rajsingh.info.v1beta2.GarageClusterStatusEndpointsWebUI" = {
+      options = {
+        "external" = mkOption {
+          description = "External is the UI URL on spec.admin.webUI.hostname, published once\nthe generated Ingress or HTTPRoute is in place (WebUIExposed=True).";
+          type = types.nullOr types.str;
+        };
+        "inCluster" = mkOption {
+          description = "InCluster is the UI URL through the <cluster> Service's admin port,\nalways published for operator-managed clusters. Garage serves the UI\nthere only when it was built with the \"webadmin\" feature (official\nimages v2.6.0 and newer); see the WebUIAvailable condition.";
+          type = types.nullOr types.str;
+        };
+      };
+
+      config = {
+        "external" = mkOverride 1002 null;
+        "inCluster" = mkOverride 1002 null;
       };
     };
     "garage.rajsingh.info.v1beta2.GarageClusterStatusFactorMigration" = {
@@ -17050,17 +18580,6 @@ in {
           );
           default = {};
         };
-        "garage.rajsingh.info"."v1alpha1"."GarageBucket" = mkOption {
-          description = "GarageBucket is the Schema for the garagebuckets API";
-          type = (
-            types.attrsOf (
-              submoduleForDefinition "garage.rajsingh.info.v1alpha1.GarageBucket" "garagebuckets" "GarageBucket"
-              "garage.rajsingh.info"
-              "v1alpha1"
-            )
-          );
-          default = {};
-        };
         "garage.rajsingh.info"."v1alpha1"."GarageCluster" = mkOption {
           description = "";
           type = (
@@ -17152,6 +18671,18 @@ in {
           );
           default = {};
         };
+        "garage.rajsingh.info"."v1beta1"."GarageReplication" = mkOption {
+          description = "GarageReplication is the Schema for the garagereplications API.\nIt replicates objects between two independent Garage clusters.";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "garage.rajsingh.info.v1beta1.GarageReplication" "garagereplications"
+              "GarageReplication"
+              "garage.rajsingh.info"
+              "v1beta1"
+            )
+          );
+          default = {};
+        };
         "garage.rajsingh.info"."v1beta2"."GarageCluster" = mkOption {
           description = "GarageCluster is the Schema for the garageclusters API.";
           type = (
@@ -17233,6 +18764,18 @@ in {
           );
           default = {};
         };
+        "garageReplications" = mkOption {
+          description = "GarageReplication is the Schema for the garagereplications API.\nIt replicates objects between two independent Garage clusters.";
+          type = (
+            types.attrsOf (
+              submoduleForDefinition "garage.rajsingh.info.v1beta1.GarageReplication" "garagereplications"
+              "GarageReplication"
+              "garage.rajsingh.info"
+              "v1beta1"
+            )
+          );
+          default = {};
+        };
       };
   };
 
@@ -17248,13 +18791,6 @@ in {
         version = "v1alpha1";
         kind = "GarageAdminToken";
         attrName = "garageAdminTokens";
-      }
-      {
-        name = "garagebuckets";
-        group = "garage.rajsingh.info";
-        version = "v1alpha1";
-        kind = "GarageBucket";
-        attrName = "garageBuckets";
       }
       {
         name = "garageclusters";
@@ -17313,6 +18849,13 @@ in {
         attrName = "garageReferenceGrants";
       }
       {
+        name = "garagereplications";
+        group = "garage.rajsingh.info";
+        version = "v1beta1";
+        kind = "GarageReplication";
+        attrName = "garageReplications";
+      }
+      {
         name = "garageclusters";
         group = "garage.rajsingh.info";
         version = "v1beta2";
@@ -17336,6 +18879,9 @@ in {
       "garage.rajsingh.info"."v1beta1"."GarageReferenceGrant" =
         mkAliasDefinitions
         options.resources."garageReferenceGrants";
+      "garage.rajsingh.info"."v1beta1"."GarageReplication" =
+        mkAliasDefinitions
+        options.resources."garageReplications";
     };
 
     # make all namespaced resources default to the
@@ -17345,12 +18891,6 @@ in {
         group = "garage.rajsingh.info";
         version = "v1alpha1";
         kind = "GarageAdminToken";
-        default.metadata.namespace = lib.mkDefault config.namespace;
-      }
-      {
-        group = "garage.rajsingh.info";
-        version = "v1alpha1";
-        kind = "GarageBucket";
         default.metadata.namespace = lib.mkDefault config.namespace;
       }
       {
@@ -17399,6 +18939,12 @@ in {
         group = "garage.rajsingh.info";
         version = "v1beta1";
         kind = "GarageReferenceGrant";
+        default.metadata.namespace = lib.mkDefault config.namespace;
+      }
+      {
+        group = "garage.rajsingh.info";
+        version = "v1beta1";
+        kind = "GarageReplication";
         default.metadata.namespace = lib.mkDefault config.namespace;
       }
       {
